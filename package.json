@@ -1,0 +1,11 @@
+{
+  "name": "atlas",
+  "private": true,
+  "scripts": {
+    "db:push": "supabase db push --include-seed",
+    "db:diff": "supabase db diff"
+  },
+  "devDependencies": {
+    "supabase": "^2.118.0"
+  }
+}

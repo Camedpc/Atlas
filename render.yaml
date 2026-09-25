@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: atlas-api
+    runtime: python
+    rootDir: backend
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.5
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SECRET_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: MODELE_CHERCHEUR
+        value: claude-opus-5
+      - key: MODELE_VERIFICATEUR
+        value: claude-opus-5
+      - key: CORS_ORIGINS
+        sync: false

@@ -1,0 +1,82 @@
+[
+  {
+    "description": "Un nœud admis est établi, un nœud sans démonstration est ouvert",
+    "noeuds": [
+      { "id": "a", "nom": "A", "enonce": "", "admis": true, "demonstrations": [] },
+      { "id": "b", "nom": "B", "enonce": "", "admis": false, "demonstrations": [] }
+    ],
+    "attendu": { "a": "etabli", "b": "ouvert" }
+  },
+  {
+    "description": "Chaîne valide : établi par propagation",
+    "noeuds": [
+      { "id": "a", "nom": "A", "enonce": "", "admis": true, "demonstrations": [] },
+      { "id": "b", "nom": "B", "enonce": "", "admis": false, "demonstrations": [
+        { "nom_demonstration": "d", "justifie_par": ["a"], "demonstration": "", "validite": "valide", "auteur": "ia" }
+      ] },
+      { "id": "c", "nom": "C", "enonce": "", "admis": false, "demonstrations": [
+        { "nom_demonstration": "d", "justifie_par": ["b"], "demonstration": "", "validite": "valide", "auteur": "ia" }
+      ] }
+    ],
+    "attendu": { "a": "etabli", "b": "etabli", "c": "etabli" }
+  },
+  {
+    "description": "Un lemme tombe : ce qui en dépend passe en suspendu",
+    "noeuds": [
+      { "id": "a", "nom": "A", "enonce": "", "admis": true, "demonstrations": [] },
+      { "id": "b", "nom": "B", "enonce": "", "admis": false, "demonstrations": [
+        { "nom_demonstration": "d", "justifie_par": ["a"], "demonstration": "", "validite": "invalide", "auteur": "ia" }
+      ] },
+      { "id": "c", "nom": "C", "enonce": "", "admis": false, "demonstrations": [
+        { "nom_demonstration": "d", "justifie_par": ["b"], "demonstration": "", "validite": "valide", "auteur": "ia" }
+      ] },
+      { "id": "e", "nom": "E", "enonce": "", "admis": false, "demonstrations": [
+        { "nom_demonstration": "d", "justifie_par": ["c"], "demonstration": "", "validite": "valide", "auteur": "ia" }
+      ] }
+    ],
+    "attendu": { "a": "etabli", "b": "invalide", "c": "suspendu", "e": "suspendu" }
+  },
+  {
+    "description": "Deux démonstrations circulaires ne se valident pas l'une l'autre",
+    "noeuds": [
+      { "id": "p", "nom": "P", "enonce": "", "admis": false, "demonstrations": [
+        { "nom_demonstration": "d", "justifie_par": ["q"], "demonstration": "", "validite": "valide", "auteur": "ia" }
+      ] },
+      { "id": "q", "nom": "Q", "enonce": "", "admis": false, "demonstrations": [
+        { "nom_demonstration": "d", "justifie_par": ["p"], "demonstration": "", "validite": "valide", "auteur": "ia" }
+      ] }
+    ],
+    "attendu": { "p": "suspendu", "q": "suspendu" }
+  },
+  {
+    "description": "Une démonstration valide suffit, même si une autre est invalide ou à vérifier",
+    "noeuds": [
+      { "id": "a", "nom": "A", "enonce": "", "admis": true, "demonstrations": [] },
+      { "id": "x", "nom": "X", "enonce": "", "admis": false, "demonstrations": [] },
+      { "id": "b", "nom": "B", "enonce": "", "admis": false, "demonstrations": [
+        { "nom_demonstration": "fausse", "justifie_par": ["a"], "demonstration": "", "validite": "invalide", "auteur": "ia" },
+        { "nom_demonstration": "via_x", "justifie_par": ["x"], "demonstration": "", "validite": "valide", "auteur": "ia" },
+        { "nom_demonstration": "bonne", "justifie_par": ["a"], "demonstration": "", "validite": "valide", "auteur": "ia" }
+      ] },
+      { "id": "c", "nom": "C", "enonce": "", "admis": false, "demonstrations": [
+        { "nom_demonstration": "d1", "justifie_par": ["a"], "demonstration": "", "validite": "invalide", "auteur": "ia" },
+        { "nom_demonstration": "d2", "justifie_par": ["a"], "demonstration": "", "validite": "a_verifier", "auteur": "ia" }
+      ] }
+    ],
+    "attendu": { "a": "etabli", "x": "ouvert", "b": "etabli", "c": "a_verifier" }
+  },
+  {
+    "description": "Cycle avec une sortie établie : le cycle se débloque",
+    "noeuds": [
+      { "id": "a", "nom": "A", "enonce": "", "admis": true, "demonstrations": [] },
+      { "id": "p", "nom": "P", "enonce": "", "admis": false, "demonstrations": [
+        { "nom_demonstration": "via_q", "justifie_par": ["q"], "demonstration": "", "validite": "valide", "auteur": "ia" }
+      ] },
+      { "id": "q", "nom": "Q", "enonce": "", "admis": false, "demonstrations": [
+        { "nom_demonstration": "via_p", "justifie_par": ["p"], "demonstration": "", "validite": "valide", "auteur": "ia" },
+        { "nom_demonstration": "via_a", "justifie_par": ["a"], "demonstration": "", "validite": "valide", "auteur": "ia" }
+      ] }
+    ],
+    "attendu": { "a": "etabli", "p": "etabli", "q": "etabli" }
+  }
+]
