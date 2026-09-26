@@ -40,6 +40,8 @@ export interface Demonstration {
   demonstration: string
   validite: Validite
   auteur: string
+  cree_le: string
+  modifie_le: string
 }
 
 export interface Noeud {
@@ -50,6 +52,8 @@ export interface Noeud {
   parents: string[]
   enfants: string[]
   conversation_id: string | null
+  cree_le: string
+  modifie_le: string
   statut: Statut
   demonstrations: Demonstration[]
 }

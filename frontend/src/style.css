@@ -181,9 +181,27 @@ button:disabled {
   min-width: 0;
 }
 
-.sigma {
+.vue-graphe {
   position: absolute;
   inset: 0;
+}
+
+/* Le moteur a sa barre (2D / 3D, liens complets, cadrer, thème), son compteur en bas à gauche et le
+   gizmo en haut à droite : sa barre passe sous celle de l'application, la légende au-dessus du
+   compteur, et le gizmo s'efface derrière le détail d'un nœud. */
+.panneau-graphe:has(.detail:not([hidden])) .atlas-gizmo {
+  display: none;
+}
+
+.panneau-graphe .rsn-barre {
+  top: 3.2rem;
+  left: 0.6rem;
+  transform: none;
+}
+
+/* Panneau ☰ du moteur (développement seulement) : sous les deux barres. */
+.panneau-graphe .rsn-bouton-menu {
+  top: 6rem;
 }
 
 .barre {
@@ -205,7 +223,7 @@ button:disabled {
 
 .legende {
   position: absolute;
-  bottom: 0.6rem;
+  bottom: 3.4rem;
   left: 0.6rem;
   display: flex;
   gap: 0.8rem;

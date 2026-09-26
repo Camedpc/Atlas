@@ -11,6 +11,7 @@
     "test": "vitest run"
   },
   "devDependencies": {
+    "@tweakpane/core": "^2.0.5",
     "graphology-types": "^0.24.8",
     "oxlint": "^1.85.0",
     "typescript": "~6.0.2",
@@ -18,11 +19,15 @@
     "vitest": "^5.0.2"
   },
   "dependencies": {
+    "@dagrejs/dagre": "^3.1.1",
+    "@tweakpane/plugin-essentials": "^0.2.1",
     "ajv": "^8.20.0",
     "dompurify": "^3.4.16",
+    "elkjs": "^0.12.0",
     "graphology": "^0.26.0",
     "katex": "^0.18.9",
     "marked": "^18.0.14",
-    "sigma": "^3.0.3"
+    "sigma": "^3.0.3",
+    "tweakpane": "^4.0.5"
   }
 }
