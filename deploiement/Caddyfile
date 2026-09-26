@@ -1,0 +1,5 @@
+# HTTPS automatique (Let's Encrypt) devant le serveur Atlas.
+{$ATLAS_DOMAINE} {
+	encode gzip
+	reverse_proxy atlas:8000
+}

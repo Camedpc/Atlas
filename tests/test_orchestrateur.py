@@ -233,3 +233,21 @@ def test_verifications_d_ecriture():
         raise AssertionError("un nœud a été accepté comme sa propre prémisse")
     except ecriture.ErreurGraphe:
         pass
+
+
+def test_jeton_d_acces(monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from atlas.orchestrateur import config
+    from atlas.serveur import app
+
+    monkeypatch.setattr(conversations, "lister_conversations", lambda: [])
+    client = TestClient(app)
+
+    monkeypatch.setattr(config, "JETON_ACCES", None)
+    assert client.get("/api/conversations").status_code == 200  # dev local : pas de contrôle
+
+    monkeypatch.setattr(config, "JETON_ACCES", "secret")
+    assert client.get("/api/conversations").status_code == 401
+    assert client.get("/api/conversations", headers={"Authorization": "Bearer faux"}).status_code == 401
+    assert client.get("/api/conversations", headers={"Authorization": "Bearer secret"}).status_code == 200

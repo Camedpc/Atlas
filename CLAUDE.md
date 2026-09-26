@@ -37,6 +37,10 @@ migration reste triviale :
   `requirements-agents.txt`) ; le front ne doit dépendre que d'une URL d'API configurable ;
 - l'état persiste dans Supabase, pas sur disque local.
 
+Déploiement VM : `Dockerfile` + `docker-compose.yml` (Caddy) + `deploiement/` (script d'installation, guide).
+Sur la VM, `ATLAS_JETON_ACCES` est obligatoire : les routes `/api/conversations` lancent un agent qui exécute des
+commandes. Le front l'envoie en `Authorization: Bearer` (saisi une fois, gardé en localStorage, jamais dans le build).
+
 L'orchestrateur est Codex via son SDK Python officiel `openai-codex` (pas `openai-codex-sdk`, sans dépôt officiel) :
 `Sandbox.full_access` + `ApprovalMode.deny_all` (jamais de demande d'approbation), un thread par conversation.
 Isolation totale de la machine (produit destiné à une VM) : `CODEX_HOME` dédié (`espace/.codex`),

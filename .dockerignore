@@ -1,0 +1,15 @@
+.git
+.venv
+.env
+.env.*
+espace
+frontend
+prototypes
+AtlasVoice
+supabase
+tests
+node_modules
+**/__pycache__
+**/*.pyc
+.claude
+.vercel

@@ -5,6 +5,31 @@
 
 const BASE = import.meta.env.VITE_API_URL ?? ''
 
+// Jeton d'accès du serveur de l'orchestrateur (ATLAS_JETON_ACCES), saisi une fois et gardé dans ce navigateur.
+const CLE_JETON = 'atlas.jeton'
+
+export function lireJeton(): string | null {
+  try {
+    return localStorage.getItem(CLE_JETON)
+  } catch {
+    return null
+  }
+}
+
+export function enregistrerJeton(jeton: string) {
+  try {
+    localStorage.setItem(CLE_JETON, jeton)
+  } catch {
+    // navigation privée : le jeton ne tiendra que le temps de la page
+  }
+  jetonEnMemoire = jeton
+}
+
+let jetonEnMemoire = lireJeton()
+
+/** Le serveur a refusé le jeton (401) : l'interface doit en demander un. */
+export class JetonRequis extends Error {}
+
 export type Statut = 'etabli' | 'suspendu' | 'a_verifier' | 'invalide' | 'ouvert'
 export type Validite = 'a_verifier' | 'valide' | 'invalide'
 
@@ -70,10 +95,11 @@ export interface Message {
 }
 
 async function appel<T>(chemin: string, init?: RequestInit): Promise<T> {
-  const r = await fetch(BASE + chemin, {
-    ...init,
-    headers: init?.body ? { 'Content-Type': 'application/json' } : undefined,
-  })
+  const entetes: Record<string, string> = {}
+  if (init?.body) entetes['Content-Type'] = 'application/json'
+  if (jetonEnMemoire) entetes.Authorization = `Bearer ${jetonEnMemoire}`
+  const r = await fetch(BASE + chemin, { ...init, headers: entetes })
+  if (r.status === 401) throw new JetonRequis()
   if (!r.ok) throw new Error(`${chemin} : ${r.status} ${await r.text()}`)
   return r.json() as Promise<T>
 }

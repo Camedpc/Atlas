@@ -1,0 +1,29 @@
+# Production sur la VM : docker compose up -d --build   (voir deploiement/README.md)
+services:
+  atlas:
+    build: .
+    env_file: .env
+    volumes:
+      - donnees:/donnees
+    restart: unless-stopped
+    # Pas de port publié : seul Caddy le joint, par le réseau interne de Compose.
+    expose:
+      - "8000"
+
+  caddy:
+    image: caddy:2
+    depends_on:
+      - atlas
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      ATLAS_DOMAINE: ${ATLAS_DOMAINE:?renseigner ATLAS_DOMAINE dans .env}
+    volumes:
+      - ./deploiement/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy:/data
+    restart: unless-stopped
+
+volumes:
+  donnees:
+  caddy:

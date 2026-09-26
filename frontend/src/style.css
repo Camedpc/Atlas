@@ -293,3 +293,23 @@ button:disabled {
     border-bottom: 1px solid var(--bord);
   }
 }
+
+.jeton {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.jeton p {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.jeton input {
+  flex: 1;
+  background: var(--fond-2);
+  border: 1px solid var(--bord);
+  border-radius: 6px;
+  padding: 0.35rem 0.5rem;
+  color: inherit;
+}

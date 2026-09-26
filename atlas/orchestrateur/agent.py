@@ -69,8 +69,11 @@ def surcharges_thread(conversation_id: str) -> dict[str, Any]:
             }
         },
     }
-    if SOUS_AGENTS:
-        surcharges["agents"] = SOUS_AGENTS
+    agents: dict[str, Any] = dict(SOUS_AGENTS)
+    if config.MAX_SOUS_AGENTS:
+        agents["max_concurrent_threads_per_session"] = config.MAX_SOUS_AGENTS
+    if agents:
+        surcharges["agents"] = agents
     return surcharges
 
 
