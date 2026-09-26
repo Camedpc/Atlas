@@ -4,6 +4,7 @@ import asyncio
 import logging
 import os
 import sys
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -113,12 +114,15 @@ async def tour(
     execution_id: str,
     sur_tour: Callable[[AsyncTurnHandle], None],
     suivi: SuiviAgents | None = None,
+    effort: str | None = None,
+    modele: str | None = None,
 ) -> ResultatTour:
     """Fait travailler l'orchestrateur sur `texte` jusqu'à sa réponse finale.
 
     `sur_tour` reçoit le tour dès qu'il est lancé, pour pouvoir l'interrompre ou l'orienter ; il peut lever
     `Arret`. `suivi` est tenu à jour avec l'arbre des agents, et les items des sous-agents sont enregistrés
-    dans la conversation, rattachés à leur agent.
+    dans la conversation, rattachés à leur agent. `effort` et `modele` valent pour ce tour de l'orchestrateur
+    (par défaut ATLAS_EFFORT_ORCHESTRATEUR et le modèle du thread) ; les sous-agents gardent ceux de leur rôle.
     """
     suivi = suivi if suivi is not None else SuiviAgents()
     dossier = await asyncio.to_thread(bunker.preparer_session, conversation.id)
@@ -131,13 +135,13 @@ async def tour(
             await asyncio.to_thread(conversations.modifier_conversation, conversation.id, session_agent=thread.id)
             conversation.session_agent = thread.id
 
-        suivi.demarrer_racine(thread.id, config.MODELE)
+        suivi.demarrer_racine(thread.id, modele or config.MODELE)
         file: asyncio.Queue = asyncio.Queue()
         boucle = asyncio.get_running_loop()
         retirer_espion = _espionner(codex, lambda *n: boucle.call_soon_threadsafe(file.put_nowait, n))
         suiveur = asyncio.create_task(_suivre(codex, conversation.id, execution_id, suivi, file))
         try:
-            return await _derouler(thread, texte, conversation.id, execution_id, sur_tour)
+            return await _derouler(thread, texte, conversation.id, execution_id, sur_tour, effort, modele)
         finally:
             retirer_espion()
             file.put_nowait(None)
@@ -154,8 +158,10 @@ async def _derouler(
     conversation_id: str,
     execution_id: str,
     sur_tour: Callable[[AsyncTurnHandle], None],
+    effort: str | None,
+    modele: str | None,
 ) -> ResultatTour:
-    handle = await thread.turn(texte, effort=ReasoningEffort(config.EFFORT))
+    handle = await thread.turn(texte, effort=ReasoningEffort(effort or config.EFFORT), model=modele or None)
     sur_tour(handle)
 
     usage = None
@@ -263,6 +269,35 @@ async def _enrichir(codex: AsyncCodex, suivi: SuiviAgents, thread_id: str) -> No
             continue
         suivi.enrichir(thread_id, role=thread.agent_role, surnom=thread.agent_nickname, modele=thread.model)
         return
+
+
+# Modèles proposés par Codex, relus au plus toutes les DUREE_CACHE_MODELES secondes (lancer Codex coûte ~1 s).
+DUREE_CACHE_MODELES = 600
+_cache_modeles: tuple[float, list[dict[str, Any]]] | None = None
+
+
+async def modeles_disponibles() -> list[dict[str, Any]]:
+    """Modèles visibles du compte Codex, avec les niveaux d'effort que chacun accepte."""
+    global _cache_modeles
+    if _cache_modeles is not None and time.monotonic() - _cache_modeles[0] < DUREE_CACHE_MODELES:
+        return _cache_modeles[1]
+    async with AsyncCodex(config=config_codex()) as codex:
+        await _connecter(codex)
+        reponse = await codex.models()
+    modeles = [
+        {
+            "id": m.model,
+            "nom": m.display_name,
+            "description": m.description,
+            "par_defaut": m.is_default,
+            "effort_defaut": m.default_reasoning_effort.value,
+            "efforts": [e.reasoning_effort.value for e in m.supported_reasoning_efforts],
+        }
+        for m in reponse.data
+        if not m.hidden
+    ]
+    _cache_modeles = (time.monotonic(), modeles)
+    return modeles
 
 
 async def _connecter(codex: AsyncCodex) -> None:

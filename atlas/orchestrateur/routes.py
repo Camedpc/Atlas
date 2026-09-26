@@ -1,14 +1,15 @@
 """Routes des conversations avec l'orchestrateur."""
 
 import secrets
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, Field
 
 from .. import conversations
 from ..modeles import Conversation, Execution, Message
-from . import config
-from .gestionnaire import TourIndisponible, gestionnaire
+from . import agent, config
+from .gestionnaire import Reglages, TourIndisponible, gestionnaire
 
 
 def verifier_jeton(authorization: str | None = Header(default=None)) -> None:
@@ -19,6 +20,9 @@ def verifier_jeton(authorization: str | None = Header(default=None)) -> None:
 
 
 routeur = APIRouter(prefix="/api/conversations", tags=["conversations"], dependencies=[Depends(verifier_jeton)])
+routeur_modeles = APIRouter(prefix="/api/orchestrateur", tags=["conversations"], dependencies=[Depends(verifier_jeton)])
+
+Effort = Literal["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"]
 
 
 class NouvelleConversation(BaseModel):
@@ -29,6 +33,10 @@ class NouveauMessage(BaseModel):
     contenu: str = Field(min_length=1)
     agent: str | None = None
     """Chemin Codex du sous-agent destinataire (ex. /root/hydrures) ; absent = l'orchestrateur."""
+    effort: Effort | None = None
+    """Effort de raisonnement de l'orchestrateur pour ce tour ; absent = ATLAS_EFFORT_ORCHESTRATEUR."""
+    modele: str | None = None
+    """Modèle de l'orchestrateur pour ce tour ; absent = celui du thread (ATLAS_MODELE_ORCHESTRATEUR ou défaut)."""
 
 
 class EtatConversation(Conversation):
@@ -90,7 +98,8 @@ async def envoyer(conversation_id: str, corps: NouveauMessage) -> Execution:
     """
     conversation = _conversation(conversation_id)
     try:
-        return await gestionnaire.envoyer(conversation, corps.contenu, corps.agent)
+        reglages = Reglages(effort=corps.effort, modele=corps.modele)
+        return await gestionnaire.envoyer(conversation, corps.contenu, corps.agent, reglages)
     except TourIndisponible:
         raise HTTPException(409, "L'orchestrateur démarre ou termine son tour : réessaie dans un instant.") from None
 
@@ -100,3 +109,14 @@ async def arreter(conversation_id: str) -> dict:
     if not await gestionnaire.arreter(conversation_id):
         raise HTTPException(409, "Aucune exécution en cours dans cette conversation.")
     return {"ok": True}
+
+
+@routeur_modeles.get("/modeles")
+async def modeles() -> dict:
+    """Modèles proposés pour l'orchestrateur, avec leurs efforts, et les réglages par défaut du serveur."""
+    try:
+        disponibles = await agent.modeles_disponibles()
+    except Exception as e:
+        raise HTTPException(503, f"Liste des modèles indisponible : {e}") from None
+    defaut = config.MODELE or next((m["id"] for m in disponibles if m["par_defaut"]), None)
+    return {"modele_defaut": defaut, "effort_defaut": config.EFFORT, "modeles": disponibles}

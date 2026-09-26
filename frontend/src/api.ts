@@ -80,6 +80,22 @@ export interface Execution {
   usage: { total?: { totalTokens?: number } } | null
 }
 
+/** Un modèle proposé par Codex pour l'orchestrateur, avec les efforts qu'il accepte. */
+export interface ModeleCodex {
+  id: string
+  nom: string
+  description: string
+  par_defaut: boolean
+  effort_defaut: string
+  efforts: string[]
+}
+
+export interface Modeles {
+  modele_defaut: string | null
+  effort_defaut: string
+  modeles: ModeleCodex[]
+}
+
 export type EtatAgent = 'actif' | 'attend' | 'termine' | 'echec' | 'interrompu'
 
 /** Un agent de la conversation (atlas/orchestrateur/suivi_agents.py) : l'orchestrateur (/root) ou un sous-agent. */
@@ -138,10 +154,11 @@ export const api = {
     return appel<Message[]>(`/api/conversations/${id}/messages${requete ? `?${requete}` : ''}`)
   },
   agents: (id: string) => appel<Agent[]>(`/api/conversations/${id}/agents`),
-  envoyer: (id: string, contenu: string, agent?: string | null) =>
+  envoyer: (id: string, contenu: string, agent?: string | null, reglages: { modele?: string; effort?: string } = {}) =>
     appel<Execution>(`/api/conversations/${id}/messages`, {
       method: 'POST',
-      body: JSON.stringify(agent ? { contenu, agent } : { contenu }),
+      body: JSON.stringify({ contenu, ...(agent ? { agent } : {}), ...reglages }),
     }),
+  modeles: () => appel<Modeles>('/api/orchestrateur/modeles'),
   arreter: (id: string) => appel<unknown>(`/api/conversations/${id}/arreter`, { method: 'POST' }),
 }

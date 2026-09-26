@@ -6,6 +6,7 @@ import { RACINE, etat, formatTokens, nomAgent } from './agents'
 import { ArbreAgents } from './arbre'
 import { api, enregistrerJeton, JetonRequis, type Conversation, type EtatConversation, type Message } from './api'
 import { echapper, rendre } from './rendu'
+import { SelecteurModele } from './reglages'
 import { PanneauSessions } from './sessions'
 
 const INTERVALLE_SUIVI_MS = 1500
@@ -62,6 +63,7 @@ function decrireEtat(e: EtatConversation): string {
 export class PanneauConversation {
   private sessions: PanneauSessions
   private arbre: ArbreAgents
+  private selecteur: SelecteurModele
   private titre: HTMLElement
   private ariane: HTMLElement
   private fil: HTMLElement
@@ -112,6 +114,7 @@ export class PanneauConversation {
           <div class="saisie-pied">
             <span class="cible"></span>
             <span class="espace"></span>
+            <div class="selecteur"></div>
             <button class="arreter" type="button" hidden>Arrêter</button>
             <button class="envoyer" type="submit" title="Envoyer (Entrée)" aria-label="Envoyer">
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 13V3M3.5 7.5 8 3l4.5 4.5"/></svg>
@@ -127,6 +130,7 @@ export class PanneauConversation {
     this.cible = racine.querySelector('.cible')!
     this.envoyer = racine.querySelector('.envoyer')!
     this.arreter = racine.querySelector('.arreter')!
+    this.selecteur = new SelecteurModele(racine.querySelector('.selecteur')!)
     this.arbre = new ArbreAgents(
       racine.querySelector('.arbre')!,
       () => this.saisie.focus(),
@@ -167,6 +171,8 @@ export class PanneauConversation {
   async charger() {
     try {
       this.conversations = await api.conversations()
+      // Après la liste : le jeton d'accès est alors connu.
+      void this.selecteur.charger()
       this.majSessions()
       if (this.conversations.length) await this.ouvrir(this.courante ?? this.conversations[0].id)
       else this.ouvrirVide()
@@ -321,7 +327,7 @@ export class PanneauConversation {
     this.ajusterSaisie()
     if (!agent) etat.question = contenu
     try {
-      await api.envoyer(this.courante, contenu, agent)
+      await api.envoyer(this.courante, contenu, agent, this.selecteur.reglages)
     } catch (e) {
       const texte = e instanceof Error && e.message.includes(' 409 ') ? 'L’orchestrateur démarre ou termine son tour : réessaie dans un instant.' : String(e)
       this.contenu.insertAdjacentHTML('beforeend', `<div class="msg systeme">${echapper(texte)}</div>`)

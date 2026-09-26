@@ -999,3 +999,136 @@ body.sessions-repliees .deplier-sessions {
     display: none;
   }
 }
+
+/* ── Sélecteur de modèle et d'effort (saisie) ────────────── */
+
+.saisie {
+  position: relative;
+}
+
+.selecteur-modele {
+  position: relative;
+  flex: none;
+}
+
+.selecteur-modele[hidden] {
+  display: none;
+}
+
+.selecteur-bouton {
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  font-size: 12.5px;
+  color: var(--texte);
+  white-space: nowrap;
+}
+
+.selecteur-bouton:hover,
+.selecteur-bouton[aria-expanded='true'] {
+  background: var(--fond-2);
+}
+
+.selecteur-bouton .effort {
+  color: var(--texte-3);
+}
+
+.menu-modele {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  z-index: 40;
+  width: 300px;
+  padding: 6px;
+  background: var(--fond);
+  border: 1px solid var(--trait);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px -12px rgba(24, 24, 27, 0.28), 0 2px 6px rgba(24, 24, 27, 0.06);
+}
+
+.menu-modele[hidden] {
+  display: none;
+}
+
+.menu-modele hr {
+  margin: 4px 8px;
+  border: 0;
+  border-top: 1px solid var(--trait);
+}
+
+.menu-ligne,
+.menu-retour {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  text-align: left;
+  font-size: 13px;
+}
+
+button.menu-ligne:hover,
+button.menu-ligne:focus-visible,
+.menu-retour:hover {
+  background: var(--fond-2);
+  outline: none;
+}
+
+.menu-courant {
+  cursor: default;
+}
+
+.menu-texte {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.menu-texte b {
+  font-weight: 500;
+  color: var(--texte);
+}
+
+.menu-texte b small {
+  margin-left: 4px;
+  font-weight: 400;
+  font-size: 11px;
+  color: var(--texte-3);
+}
+
+.menu-texte span {
+  font-size: 12px;
+  color: var(--texte-2);
+}
+
+.menu-valeur {
+  font-size: 12.5px;
+  color: var(--texte-2);
+}
+
+.menu-ligne svg {
+  flex: none;
+  color: var(--texte-3);
+}
+
+.menu-ligne .coche {
+  color: var(--accent);
+}
+
+.menu-retour {
+  font-weight: 500;
+  color: var(--texte-2);
+}
+
+.menu-note {
+  margin: 4px 10px 4px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--texte-3);
+}

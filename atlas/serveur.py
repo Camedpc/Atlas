@@ -33,3 +33,4 @@ if config.CORS_ORIGINES:
     app.add_middleware(CORSMiddleware, allow_origins=config.CORS_ORIGINES, allow_methods=["*"], allow_headers=["*"])
 app.include_router(routes_lecture.routeur)
 app.include_router(routes.routeur)
+app.include_router(routes.routeur_modeles)

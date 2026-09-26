@@ -34,8 +34,9 @@ Servies seulement par `atlas.serveur` (pas sur Vercel) :
 | `GET /api/conversations/{id}` | Conversation, exécution en cours et dernière exécution |
 | `GET /api/conversations/{id}/messages?apres_id=&agent=` | Messages de l'orchestrateur, ou d'un sous-agent (`agent` = chemin Codex) |
 | `GET /api/conversations/{id}/agents` | Arbre des agents : en direct pendant un tour, sinon celui du dernier tour |
-| `POST /api/conversations/{id}/messages` | `{"contenu", "agent"?}` : lance un tour, ou s'injecte dans le tour en cours |
+| `POST /api/conversations/{id}/messages` | `{"contenu", "agent"?, "modele"?, "effort"?}` : lance un tour, ou s'injecte dans le tour en cours |
 | `POST /api/conversations/{id}/arreter` | Interrompt le tour en cours |
+| `GET /api/orchestrateur/modeles` | Modèles Codex proposés à l'orchestrateur, leurs efforts, et les réglages par défaut |
 
 Chaque nœud porte aussi `parents` (ses prémisses) et `enfants` (les nœuds qui le citent), maintenus par
 trigger à partir des démonstrations, et `conversation_id` (la conversation qui l'a créé).

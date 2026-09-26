@@ -7,6 +7,7 @@ Un message envoyé pendant une exécution n'en lance pas une autre : il est inje
 import asyncio
 import logging
 import time
+from dataclasses import dataclass
 
 from openai_codex import AsyncTurnHandle
 
@@ -19,6 +20,14 @@ from .suivi_agents import RACINE, SuiviAgents
 log = logging.getLogger(__name__)
 
 LONGUEUR_MAX_TITRE = 80
+
+
+@dataclass(frozen=True)
+class Reglages:
+    """Modèle et effort de l'orchestrateur pour un tour (None : ceux par défaut)."""
+
+    effort: str | None = None
+    modele: str | None = None
 
 
 class DejaEnCours(Exception):
@@ -52,15 +61,22 @@ class Gestionnaire:
         suivi = self._suivis.get(conversation_id)
         return suivi.instantane() if suivi is not None else None
 
-    async def envoyer(self, conversation: Conversation, texte: str, agent_cible: str | None = None) -> Execution:
+    async def envoyer(
+        self,
+        conversation: Conversation,
+        texte: str,
+        agent_cible: str | None = None,
+        reglages: Reglages | None = None,
+    ) -> Execution:
         """Message de Camille à l'orchestrateur (`agent_cible` None) ou à l'un de ses sous-agents.
 
-        Pendant une exécution, il est injecté dans le tour en cours ; sinon il lance un nouveau tour.
+        Pendant une exécution, il est injecté dans le tour en cours (dont le modèle et l'effort ne changent plus) ;
+        sinon il lance un nouveau tour avec `reglages`.
         """
         cible = None if agent_cible in (None, "", RACINE) else agent_cible
         cid = conversation.id
         if cid not in self._tours:
-            return await self.lancer(conversation, texte, agent_cible=cible)
+            return await self.lancer(conversation, texte, agent_cible=cible, reglages=reglages)
         tour = self._tours[cid]
         execution = self._executions.get(cid)
         if tour is None or execution is None:
@@ -75,7 +91,13 @@ class Gestionnaire:
         )
         return execution
 
-    async def lancer(self, conversation: Conversation, texte: str, agent_cible: str | None = None) -> Execution:
+    async def lancer(
+        self,
+        conversation: Conversation,
+        texte: str,
+        agent_cible: str | None = None,
+        reglages: Reglages | None = None,
+    ) -> Execution:
         cid = conversation.id
         if cid in self._tours:
             raise DejaEnCours(cid)
@@ -98,7 +120,7 @@ class Gestionnaire:
             raise
 
         consigne = relais(agent_cible, texte) if agent_cible else texte
-        tache = asyncio.create_task(self._executer(conversation, consigne, execution.id))
+        tache = asyncio.create_task(self._executer(conversation, consigne, execution.id, reglages or Reglages()))
         self._taches.add(tache)
         tache.add_done_callback(self._taches.discard)
         return execution
@@ -117,14 +139,20 @@ class Gestionnaire:
             raise agent.Arret
         self._tours[conversation_id] = tour
 
-    async def _executer(self, conversation: Conversation, texte: str, execution_id: str) -> None:
+    async def _executer(self, conversation: Conversation, texte: str, execution_id: str, reglages: Reglages) -> None:
         cid = conversation.id
         statut: StatutExecution = "erreur"
         erreur: str | None = None
         usage = None
         try:
             resultat = await agent.tour(
-                conversation, texte, execution_id, lambda t: self._brancher(cid, t), suivi=self._suivis[cid]
+                conversation,
+                texte,
+                execution_id,
+                lambda t: self._brancher(cid, t),
+                suivi=self._suivis[cid],
+                effort=reglages.effort,
+                modele=reglages.modele,
             )
             usage = resultat.usage
             if cid in self._arrets:

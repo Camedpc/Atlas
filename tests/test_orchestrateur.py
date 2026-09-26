@@ -7,7 +7,7 @@ from openai_codex.types import ThreadItem
 from atlas import conversations
 from atlas.modeles import Conversation, Execution
 from atlas.orchestrateur import agent, gestionnaire, pipeline
-from atlas.orchestrateur.gestionnaire import DejaEnCours, Gestionnaire, titre_depuis
+from atlas.orchestrateur.gestionnaire import DejaEnCours, Gestionnaire, Reglages, titre_depuis
 from atlas.orchestrateur.traduction import LONGUEUR_MAX_TEXTE, traduire
 
 T0 = datetime(2026, 9, 26)
@@ -315,3 +315,23 @@ def test_message_a_un_sous_agent_hors_tour_lance_un_tour_de_relais(monkeypatch):
     asyncio.run(scenario())
     assert "followup_task" in consignes[0] and "refais le calcul" in consignes[0]
     assert trace["messages"] == [("utilisateur", "refais le calcul", "/root/hydrures/calcul")]
+
+
+def test_reglages_du_tour_transmis_a_l_orchestrateur(monkeypatch):
+    _faux_supabase(monkeypatch)
+    recus: dict = {}
+
+    async def faux_tour(conversation, texte, execution_id, sur_tour, **kw):
+        recus.update(effort=kw.get("effort"), modele=kw.get("modele"))
+        return agent.ResultatTour("terminee")
+
+    monkeypatch.setattr(agent, "tour", faux_tour)
+    monkeypatch.setattr(pipeline, "ETAPES_APRES_RECHERCHE", [])
+
+    async def scenario():
+        g = Gestionnaire()
+        await g.envoyer(CONVERSATION.model_copy(), "question", None, Reglages(effort="xhigh", modele="gpt-6-sol"))
+        await _attendre(g)
+
+    asyncio.run(scenario())
+    assert recus == {"effort": "xhigh", "modele": "gpt-6-sol"}
