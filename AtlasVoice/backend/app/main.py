@@ -101,7 +101,7 @@ async def session_vocale(websocket: WebSocket) -> None:
     except auth.ErreurAuth as e:
         await websocket.close(code=4401, reason=str(e)[:120])
         return
-    await SessionVocale(websocket, app.state.registre, utilisateur).executer(debut)
+    await SessionVocale(websocket, app.state.registre, utilisateur, app.state.relais).executer(debut)
 
 
 @app.post("/llm/v1/chat/completions")

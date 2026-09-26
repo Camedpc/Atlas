@@ -64,3 +64,25 @@ def test_sante_et_metriques(client):
     assert client.get("/health").json()["registre"] == "memoire"
     m = client.get("/api/metriques").json()
     assert "latence_ms" in m and "taches_24h" in m
+
+
+def test_tache_navigateur_avec_l_ecran_du_relais(client):
+    import json as _json
+    from pathlib import Path
+
+    exemple = _json.loads((Path(__file__).resolve().parents[3] / "protocoles" / "exemples" / "p4-etat-affichage"
+                           / "valides" / "initial.json").read_text("utf-8"))
+    # Sans écran : pas d'affichage dans le contexte ; un affichage envoyé par le client est ignoré.
+    t = client.post("/api/taches", json={"type_agent": "navigateur", "titre": "lignée", "demande_brute": "montre la lignée",
+                                         "contexte": {"affichage": None, "graphe_actif": "g"}}).json()
+    assert t["type_agent"] == "navigateur" and t["contexte"]["affichage"] is None and t["extrait"] == "montre la lignée"
+    client.post("/api/affichage/ecrans", json={"ecran": "ecran_api"})
+    etat = {**exemple, "ecran": "ecran_api", "utilisateur_id": "anonyme"}
+    assert client.post("/api/affichage/ecrans/ecran_api/etat", json=etat).status_code == 204
+    t = client.post("/api/taches", json={"type_agent": "navigateur", "titre": "lignée", "demande_brute": "montre la lignée",
+                                         "extrait": "la lignée"}).json()
+    assert t["extrait"] == "la lignée"
+    assert t["contexte"]["affichage"]["ecran"] == "ecran_api"
+    assert [v["libelle"] for v in t["contexte"]["affichage"]["visibles"]] == ["Théorème principal", "Lemme de compacité"]
+    prise = client.post("/api/agents/prendre", json={"types_agent": ["navigateur"]}, headers=AGENT).json()
+    assert prise["id"] == t["id"] or prise["type_agent"] == "navigateur"

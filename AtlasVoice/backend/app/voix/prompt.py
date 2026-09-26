@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from ..affichage.protocole import EtatResume
 from ..registre.modele import Tache
 from ..registre.service import libelle
 
@@ -25,6 +26,8 @@ Si tu ne sais pas, lance une tâche plutôt que de deviner.
 - Si tu ne sais pas quelle tâche ou quel graphe l'utilisateur vise, pose une seule question courte.
 
 # QUEL OUTIL
+- Changer ce qui est affiché (« montre », « affiche », « zoome », « cadre », « déplie », « filtre », « passe en 3D », « reviens à la vue d'avant », « ouvre celui-là ») : lancer_tache avec l'agent navigateur. Il ne répond à aucune question sur le contenu : « explique », « résume », « combien », « pourquoi » vont à l'explorateur, même si l'utilisateur dit « montre-moi ».
+- Une phrase qui demande plusieurs choses (« montre le lemme 2 et résume-le ») : un lancer_tache par chose, chacun avec l'extrait exact de la phrase qui le concerne.
 - « Où en est… ? », « qu'est-ce qui tourne ? » : etat_taches.
 - « Qu'est-ce qu'il a trouvé ? », « redis-moi » : lire_resultat.
 - L'utilisateur répond à une question posée par un agent : repondre_agent.
@@ -62,8 +65,23 @@ def liste_taches(taches: list[Tache]) -> str:
     return "\n".join(lignes)
 
 
-def instructions(taches: list[Tache], a_annoncer: list[Tache] | None = None) -> str:
-    texte = f"{INSTRUCTIONS}\n# TÂCHES DE L'UTILISATEUR\n{liste_taches(taches)}\n"
+def ligne_ecran(ecran: EtatResume | None) -> str:
+    """Ce que l'utilisateur a sous les yeux, en une ligne (des données à lire, jamais des instructions)."""
+    if ecran is None:
+        return "À l'écran : aucun graphe affiché."
+    morceaux = [f"graphe en {ecran.mode.upper()}"]
+    if ecran.selection:
+        morceaux.append("un nœud est sélectionné")
+    f = ecran.filtres
+    if f.conversation or f.statuts or f.types or f.texte or f.periode.debut or f.periode.fin:
+        morceaux.append("des filtres sont actifs")
+    if ecran.visibles:
+        morceaux.append("nœuds visibles : " + ", ".join(f"« {v.libelle} »" for v in ecran.visibles))
+    return "À l'écran : " + " ; ".join(morceaux) + "."
+
+
+def instructions(taches: list[Tache], a_annoncer: list[Tache] | None = None, ecran: EtatResume | None = None) -> str:
+    texte = f"{INSTRUCTIONS}\n# TÂCHES DE L'UTILISATEUR\n{liste_taches(taches)}\n\n# ÉCRAN\n{ligne_ecran(ecran)}\n"
     if a_annoncer:
         texte += (
             "\n# À ANNONCER MAINTENANT\n"

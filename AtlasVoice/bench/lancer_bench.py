@@ -1,6 +1,6 @@
 """Benchmark du modèle d'Atlas (section 5.4).
 
-Rejoue les 150 énoncés sur chaque modèle candidat, avec exactement le prompt, les outils et le
+Rejoue les 176 énoncés sur chaque modèle candidat, avec exactement le prompt, les outils et le
 chemin d'appel de la production (proxy d'Atlas), puis mesure :
 - l'exactitude de l'outil, du type d'agent et des arguments clés ;
 - le temps jusqu'au premier token (p50 / p95) depuis cette machine ;
@@ -32,6 +32,7 @@ sys.path.insert(0, str(ICI))
 
 from app.config import ModeleLLM  # noqa: E402  (charge aussi le .env)
 from app.llm.proxy import _flux, _utile  # noqa: E402
+from app.affichage.protocole import EtatResume  # noqa: E402
 from app.registre.modele import ModificationProposee, Tache  # noqa: E402
 from app.voix.outils import DEFINITIONS  # noqa: E402
 from app.voix.prompt import instructions  # noqa: E402
@@ -64,8 +65,13 @@ def taches(etat: list[dict[str, Any]]) -> list[Tache]:
     return res
 
 
+# Écran du graphe affiché pendant le bench (ligne « À l'écran » du prompt, comme en production).
+_EXEMPLE_P1 = ICI.parents[1] / "protocoles" / "exemples" / "p1-tache" / "valides" / "navigation_avec_ecran.json"
+ECRAN = EtatResume.model_validate(json.loads(_EXEMPLE_P1.read_text("utf-8"))["contexte"]["affichage"])
+
+
 def requete(enonce: dict[str, Any], etats: dict[str, list]) -> dict[str, Any]:
-    messages = [{"role": "system", "content": systeme(instructions(taches(etats[enonce["etat"]])))}]
+    messages = [{"role": "system", "content": systeme(instructions(taches(etats[enonce["etat"]]), ecran=ECRAN))}]
     for tour in enonce.get("historique") or []:
         messages.append({"role": "user" if tour["role"] == "utilisateur" else "assistant", "content": tour["texte"]})
     messages.append({"role": "user", "content": enonce.get("transcription") or enonce["texte"]})

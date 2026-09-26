@@ -16,7 +16,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from .. import auth
-from ..registre.modele import TYPES_AGENT, Contexte, ModificationProposee, Tache
+from ..registre.modele import TYPES_AGENT, Contexte, ModificationProposee, Tache, TypeAgent
 from ..registre.service import ErreurRegistre, Registre
 
 routeur = APIRouter(prefix="/api")
@@ -36,9 +36,11 @@ def _http(e: ErreurRegistre) -> HTTPException:
 
 
 class NouvelleTache(BaseModel):
-    type_agent: Literal["explorateur", "editeur_graphe", "conversation"]
+    type_agent: TypeAgent
     titre: str = Field(min_length=1, max_length=120)
     demande_brute: str = Field(min_length=1)
+    # Segment de demande_brute pour cette tâche ; vérifié par le registre (sinon la demande entière).
+    extrait: str | None = None
     reformulation: str | None = None
     contexte: Contexte = Contexte()
     canal: Literal["vocal", "texte"] = "texte"
@@ -58,11 +60,15 @@ class Annulation(BaseModel):
 
 
 @routeur.post("/taches", status_code=201)
-async def creer(corps: NouvelleTache, u: str = Depends(auth.utilisateur), r: Registre = Depends(registre)) -> Tache:
+async def creer(corps: NouvelleTache, request: Request, u: str = Depends(auth.utilisateur),
+                r: Registre = Depends(registre)) -> Tache:
+    # L'écran vient toujours du relais, jamais du client.
+    relais = getattr(request.app.state, "relais", None)
+    contexte = corps.contexte.model_copy(update={"affichage": relais.resume_utilisateur(u) if relais else None})
     return await r.creer_tache(
         utilisateur_id=u, type_agent=corps.type_agent, titre=corps.titre,
         reformulation=corps.reformulation or corps.demande_brute, demande_brute=corps.demande_brute,
-        contexte=corps.contexte, canal=corps.canal,
+        extrait=corps.extrait, contexte=contexte, canal=corps.canal,
     )
 
 

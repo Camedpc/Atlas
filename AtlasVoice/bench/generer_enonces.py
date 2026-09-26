@@ -1,4 +1,4 @@
-"""Génère bench/enonces.jsonl : 150 énoncés annotés, dont 20 % de pièges (section 5.4).
+"""Génère bench/enonces.jsonl : 176 énoncés annotés, dont 20 % de pièges (section 5.4), navigation comprise.
 
 Chaque énoncé : texte (à remplacer par sa transcription Gradium, voir transcrire.py), état du
 registre au moment où il est dit, historique éventuel, et l'outil attendu avec ses arguments clés.
@@ -9,7 +9,7 @@ import json
 from pathlib import Path
 
 L: list[dict] = []
-X, G, C = "explorateur", "editeur_graphe", "conversation"
+X, G, C, N = "explorateur", "editeur_graphe", "conversation", "navigateur"
 
 
 def e(id_, texte, etat, outil, historique=None, **attendu):
@@ -208,8 +208,32 @@ for i, (t, etat, h, att, cat) in enumerate(T, 1):
         item["historique"] = h
     L.append(item)
 
-assert len(L) == 150, len(L)
-assert sum(x["piege"] for x in L) == 30
+# Navigation : changer ce qui est affiché (agent navigateur), sans rien expliquer ni modifier.
+NAV = [
+    "Montre-moi la lignée du lemme de compacité.", "Affiche le théorème principal.", "Zoome sur le lemme 2.",
+    "Passe en 3D.", "Reviens à la vue d'avant.", "Filtre pour ne garder que les nœuds suspendus.",
+    "Cadre tout le graphe.", "Déplie le graphe, je veux tout voir en détail.", "Ouvre la fiche de celui-là.",
+    "Montre ce qui dépend du choix de jauge.",
+    "Affiche seulement ce qu'on a fait dans la conversation sur l'énergie.", "Enlève les filtres.",
+    "Remets la vue en 2D.", "Montre-moi aussi les prémisses de contexte.", "Moins de détails, c'est illisible.",
+    "Surligne le lemme de Grönwall.", "Mets la vue de dessus.", "Efface la sélection.",
+    "Hey Atlas, recentre sur le théorème de convergence.", "Isole les nœuds à vérifier.",
+]
+for i, t in enumerate(NAV, 1):
+    e(f"N{i:02d}", t, "vide", "lancer_tache", type_agent=N)
+
+# Pièges navigation / explorateur / éditeur : des mots d'affichage, mais une question ou une modification.
+TN = [
+    ("Montre-moi un résumé du graphe.", X), ("Combien de nœuds sont affichés ?", X),
+    ("Explique-moi ce qu'on voit à l'écran.", X), ("Montre-moi comment on démontre le lemme 2.", X),
+    ("Ajoute un lien entre le lemme 2 et le théorème affiché.", G), ("Supprime le nœud sélectionné.", G),
+]
+for i, (t, agent) in enumerate(TN, 1):
+    L.append({"id": f"TN{i:02d}", "texte": t, "etat": "vide", "piege": True, "categorie": "navigation ou contenu",
+              "attendu": {"outil": "lancer_tache", "type_agent": agent}})
+
+assert len(L) == 176, len(L)
+assert sum(x["piege"] for x in L) == 36
 
 if __name__ == "__main__":
     sortie = Path(__file__).with_name("enonces.jsonl")

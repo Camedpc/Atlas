@@ -21,8 +21,9 @@ DEFINITIONS: list[dict[str, Any]] = [
         "name": "lancer_tache",
         "description": (
             "Confie un travail à un agent : lire, chercher, compter, résumer, expliquer des données, "
-            "modifier le graphe, créer une conversation ou y envoyer un message. Rend la main tout de suite ; "
-            "l'avancement et le résultat arrivent plus tard dans ce même appel."
+            "modifier le graphe, créer une conversation ou y envoyer un message, ou changer ce qui est affiché "
+            "à l'écran. Rend la main tout de suite ; l'avancement et le résultat arrivent plus tard dans ce même "
+            "appel. Une phrase qui demande plusieurs choses donne plusieurs appels, chacun avec son extrait."
         ),
         "parameters": {
             "type": "object",
@@ -33,7 +34,16 @@ DEFINITIONS: list[dict[str, Any]] = [
                     "description": (
                         "explorateur : consulter, chercher, compter, résumer, expliquer (ne modifie rien). "
                         "editeur_graphe : ajouter, modifier, supprimer des étapes ou des liens du graphe. "
-                        "conversation : créer une conversation ou envoyer un message dans une conversation."
+                        "conversation : créer une conversation ou envoyer un message dans une conversation. "
+                        "navigateur : changer l'affichage du graphe à l'écran, sans rien modifier ni expliquer "
+                        "(montrer, afficher, zoomer, cadrer, déplier, filtrer, passer en 3D, revenir à la vue d'avant)."
+                    ),
+                },
+                "extrait": {
+                    "type": "string",
+                    "description": (
+                        "Le morceau exact de la phrase de l'utilisateur qui concerne cette tâche, recopié mot pour mot "
+                        "(toute la phrase si elle ne demande qu'une chose)."
                     ),
                 },
                 "titre": {
@@ -45,7 +55,7 @@ DEFINITIONS: list[dict[str, Any]] = [
                     "description": "Ce que tu as compris de la demande, en une phrase.",
                 },
             },
-            "required": ["type_agent", "titre", "reformulation"],
+            "required": ["type_agent", "titre", "reformulation", "extrait"],
         },
     },
     {
@@ -157,7 +167,8 @@ class Outils:
                 raise ErreurRegistre("invalide", "Reformulation manquante.")
             tache = await self.registre.creer_tache(
                 utilisateur_id=u, type_agent=type_agent, titre=str(args.get("titre") or ""),
-                reformulation=reformulation, demande_brute=demande_brute, contexte=self.contexte(),
+                reformulation=reformulation, demande_brute=demande_brute, extrait=args.get("extrait"),
+                contexte=self.contexte(),
             )
             return Execution(rapport(tache, "tache_lancee"), a_suivre=tache)
 

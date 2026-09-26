@@ -103,3 +103,40 @@ async def test_confirmer_non_sans_correction(registre):
     exe = await outils(registre).executer("confirmer", {"decision": "non"}, "non")
     assert exe.a_suivre is None
     assert (await registre.tache_de("u1", tache.id)).statut == Statut.ANNULEE
+
+
+# ── P1 : navigation et découpage de la demande ───────────────────
+
+DEUX_DEMANDES = "Montre-moi la lignée du lemme de compacité, et résume la conversation sur l'énergie."
+
+
+async def lancer(registre, extrait, type_agent="navigateur"):
+    args = {"type_agent": type_agent, "titre": "lignée du lemme", "reformulation": "Afficher la lignée."}
+    if extrait is not None:
+        args["extrait"] = extrait
+    exe = await outils(registre).executer("lancer_tache", args, demande_brute=DEUX_DEMANDES)
+    assert exe.ok, exe.resultat
+    return await registre.tache_de("u1", exe.a_suivre.id)
+
+
+async def test_type_navigateur_et_extrait_valide(registre):
+    t = await lancer(registre, "montre-moi la lignée du lemme de compacite")
+    assert t.type_agent == "navigateur"
+    # Casse, accents et ponctuation près : l'extrait de l'utilisateur est gardé tel quel.
+    assert t.extrait == "montre-moi la lignée du lemme de compacite"
+    assert t.demande_brute == DEUX_DEMANDES
+    t2 = await lancer(registre, "résume la conversation sur l'énergie", type_agent="explorateur")
+    assert t2.extrait == "résume la conversation sur l'énergie"
+
+
+async def test_extrait_invente_ou_absent_remplace_par_la_demande(registre):
+    assert (await lancer(registre, "affiche le théorème principal")).extrait == DEUX_DEMANDES
+    assert (await lancer(registre, None)).extrait == DEUX_DEMANDES
+    assert (await lancer(registre, "   ")).extrait == DEUX_DEMANDES
+
+
+def test_definition_de_lancer_tache():
+    lancer_tache = next(d for d in DEFINITIONS if d["name"] == "lancer_tache")
+    proprietes = lancer_tache["parameters"]["properties"]
+    assert "navigateur" in proprietes["type_agent"]["enum"]
+    assert "extrait" in lancer_tache["parameters"]["required"]

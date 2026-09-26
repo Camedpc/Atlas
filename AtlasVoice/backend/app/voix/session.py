@@ -23,6 +23,8 @@ import gradbot
 from .. import config
 from ..observabilite.journal import JournalSession
 from ..observabilite.metriques import metriques
+from ..affichage.protocole import EtatResume
+from ..affichage.relais import Relais
 from ..registre.modele import STATUTS_A_ANNONCER, STATUTS_FINAUX, Contexte, Statut, Tache
 from ..registre.service import Registre
 from . import prompt
@@ -56,9 +58,12 @@ def _outils_gradbot() -> list[gradbot.ToolDef]:
 
 
 class SessionVocale:
-    def __init__(self, websocket: fastapi.WebSocket, registre: Registre, utilisateur_id: str) -> None:
+    def __init__(self, websocket: fastapi.WebSocket, registre: Registre, utilisateur_id: str,
+                 relais: Relais | None = None) -> None:
         self.ws = websocket
         self.registre = registre
+        # Relais d'affichage : l'écran du graphe de l'utilisateur (contexte des tâches, ligne « À l'écran »).
+        self.relais = relais
         self.utilisateur_id = utilisateur_id
         self.session_id = uuid.uuid4().hex[:16]
         self.journal = JournalSession(self.session_id, utilisateur_id)
@@ -80,7 +85,10 @@ class SessionVocale:
     # ── contexte transmis aux agents ──────────────────────────────
 
     def _contexte_courant(self) -> Contexte:
-        return self.contexte.model_copy(update={"derniers_echanges": list(self.echanges)})
+        return self.contexte.model_copy(update={"derniers_echanges": list(self.echanges), "affichage": self._ecran()})
+
+    def _ecran(self) -> EtatResume | None:
+        return self.relais.resume_utilisateur(self.utilisateur_id) if self.relais else None
 
     def _mettre_a_jour_contexte(self, donnees: dict[str, Any]) -> None:
         self.contexte = Contexte(
@@ -107,7 +115,7 @@ class SessionVocale:
     async def _demarrer_gradbot(self) -> gradbot.SessionOutputHandle:
         taches = await self.registre.taches_visibles(self.utilisateur_id)
         a_annoncer = await self.registre.a_annoncer(self.utilisateur_id)
-        cfg = self._config(prompt.instructions(taches, a_annoncer), parle_en_premier=bool(a_annoncer))
+        cfg = self._config(prompt.instructions(taches, a_annoncer, self._ecran()), parle_en_premier=bool(a_annoncer))
         for tache in a_annoncer:
             await self.registre.marquer_annoncee(tache)
         entree, sortie = await gradbot.run(
@@ -133,7 +141,7 @@ class SessionVocale:
             await asyncio.sleep(DELAI_MAJ_PROMPT_S)
             taches = await self.registre.taches_visibles(self.utilisateur_id)
             if self.entree is not None:
-                await self.entree.send_config(self._config(prompt.instructions(taches), parle_en_premier=False))
+                await self.entree.send_config(self._config(prompt.instructions(taches, ecran=self._ecran()), parle_en_premier=False))
 
         self._maj_prompt = self._lancer(maj())
 

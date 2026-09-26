@@ -116,3 +116,16 @@ en exige un).
 - `traduction.py` : la table fixe intention → commandes (section P3 du cahier des charges) et la pile des
   états (20 par écran) pour `revenir`.
 - Écran actif = le plus récent parmi les écrans connectés au relais.
+
+### Agent moyen 2 (`backend/app/agents/navigation/moyen2.py`)
+
+Processus distinct : `python -m app.agents.navigation.moyen2`. Il prend les tâches `navigateur` dès leur
+création (flux du registre) ; chacune avance seule.
+
+- Entrée : `extrait` (le segment de la phrase pour cette tâche, vérifié par le registre), `demande_brute`,
+  `contexte.affichage` (résumé de l'écran, rempli par le serveur depuis le relais).
+- Un petit modèle (`ATLAS_NAV_LLM_*`, par défaut celui d'Atlas) répond par un seul outil : `naviguer`
+  (intentions P2, vocabulaire fermé, validées avant envoi) ou `rien_a_afficher` (la tâche échoue avec la raison).
+- Compte rendu : `ok` → `terminer` avec « C'est affiché. » ; `ambigu` → `question` à l'utilisateur, puis
+  nouveau lot avec sa réponse (2 fois au plus) ; autre erreur → `echec` avec une phrase lisible.
+- Pas de confirmation ni de verrou : rien n'est écrit en base.

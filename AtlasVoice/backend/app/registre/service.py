@@ -11,6 +11,8 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import re
+import unicodedata
 from collections.abc import AsyncIterator, Callable
 from datetime import timedelta
 from typing import Any, Literal
@@ -36,6 +38,20 @@ DELAI_EXPIRATION = timedelta(minutes=2)
 FENETRE_RECENTES = timedelta(minutes=15)
 LONGUEUR_MAX_ORAL = 600
 
+
+
+def _normaliser(texte: str) -> str:
+    t = unicodedata.normalize("NFD", texte)
+    t = "".join(c for c in t if not unicodedata.combining(c)).lower()
+    return " ".join(re.sub(r"[^a-z0-9]+", " ", t).split())
+
+
+def extrait_valide(extrait: str | None, demande_brute: str) -> str:
+    """Le segment de la demande qui concerne une tâche (P1). Il doit se trouver dans la demande brute,
+    à la casse, aux accents et à la ponctuation près ; sinon (inventé, reformulé, absent) : la demande entière."""
+    extrait = (extrait or "").strip()
+    n = _normaliser(extrait)
+    return extrait if n and n in _normaliser(demande_brute) else demande_brute
 
 class ErreurRegistre(Exception):
     """Erreur destinée à être relue par Atlas : le message est formulé pour lui."""
@@ -145,20 +161,23 @@ class Registre:
         titre: str,
         reformulation: str,
         demande_brute: str,
+        extrait: str | None = None,
         contexte: Contexte | None = None,
         canal: Canal = "vocal",
         nature: Literal["travail", "retour_arriere"] = "travail",
         tache_cible_id: int | None = None,
     ) -> Tache:
         titre = titre.strip()[:120] or reformulation.strip()[:60]
+        # La phrase exacte fait foi : à défaut de transcription, on garde la reformulation.
+        brute = demande_brute.strip() or reformulation.strip()
         return await self.stockage.creer(
             {
                 "utilisateur_id": utilisateur_id,
                 "type_agent": type_agent,
                 "titre": titre,
                 "reformulation": reformulation.strip(),
-                # La phrase exacte fait foi : à défaut de transcription, on garde la reformulation.
-                "demande_brute": demande_brute.strip() or reformulation.strip(),
+                "demande_brute": brute,
+                "extrait": extrait_valide(extrait, brute),
                 "contexte": contexte or Contexte(),
                 "canal": canal,
                 "nature": nature,

@@ -204,7 +204,7 @@ class ContexteP1(Strict):
 class TacheP1(BaseModel):
     """Champs de la tâche concernés par P1 ; les autres champs de la tâche sont libres ici.
 
-    À fusionner dans `registre/modele.py` avec la brique B1.
+    Modèle du test de contrat ; la tâche du registre (`registre/modele.py`) porte les mêmes champs.
     """
 
     model_config = ConfigDict(extra="allow", strict=True)

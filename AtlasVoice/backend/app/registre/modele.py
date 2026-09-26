@@ -11,6 +11,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from ..affichage.protocole import EtatResume
+
 
 class Statut(StrEnum):
     EN_ATTENTE = "en_attente"
@@ -34,8 +36,8 @@ STATUTS_A_ANNONCER = frozenset(
 )
 
 # Liste fermée : ajouter une capacité = ajouter un agent côté serveur et une entrée ici.
-TypeAgent = Literal["explorateur", "editeur_graphe", "conversation"]
-TYPES_AGENT: tuple[str, ...] = ("explorateur", "editeur_graphe", "conversation")
+TypeAgent = Literal["explorateur", "editeur_graphe", "conversation", "navigateur"]
+TYPES_AGENT: tuple[str, ...] = ("explorateur", "editeur_graphe", "conversation", "navigateur")
 # Agents qui écrivent en base : leurs modifications passent par une confirmation.
 AGENTS_ECRIVAINS = frozenset({"editeur_graphe", "conversation"})
 
@@ -53,6 +55,8 @@ class Contexte(BaseModel):
     graphe_actif: str | None = None
     conversation_active: str | None = None
     derniers_echanges: list[dict[str, str]] = []
+    # Résumé de l'écran du graphe (P1), rempli par le serveur depuis le relais d'affichage ; None sans écran.
+    affichage: EtatResume | None = None
 
 
 class ModificationProposee(BaseModel):
@@ -69,6 +73,8 @@ class Tache(BaseModel):
     # Pour un retour en arrière : la tâche dont on annule la modification.
     tache_cible_id: int | None = None
     demande_brute: str
+    # Segment de demande_brute qui concerne cette tâche (découpage d'une phrase en plusieurs tâches).
+    extrait: str | None = None
     reformulation: str
     contexte: Contexte = Contexte()
     statut: Statut = Statut.EN_ATTENTE

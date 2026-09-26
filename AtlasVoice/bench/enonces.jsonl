@@ -148,3 +148,29 @@
 {"id": "T28", "texte": "Qu'est-ce que tu as fait tout à l'heure ?", "etat": "modif_appliquee", "piege": true, "categorie": "ambiguïté", "attendu": {"outil": "lire_resultat", "outils_acceptes": ["lire_resultat", "etat_taches"]}}
 {"id": "T29", "texte": "Supprime tout.", "etat": "vide", "piege": true, "categorie": "ambiguïté", "attendu": {"outil": null, "outils_acceptes": [null, "lancer_tache"], "type_agent": "editeur_graphe"}}
 {"id": "T30", "texte": "Dis à l'explorateur de se dépêcher.", "etat": "exploration_en_cours", "piege": true, "categorie": "hors périmètre", "attendu": {"outil": null, "outils_acceptes": [null, "etat_taches"]}, "historique": [{"role": "utilisateur", "texte": "Fais-moi un résumé du graphe Énergie."}, {"role": "atlas", "texte": "D'accord, je lance l'explorateur."}]}
+{"id": "N01", "texte": "Montre-moi la lignée du lemme de compacité.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "navigateur"}}
+{"id": "N02", "texte": "Affiche le théorème principal.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "navigateur"}}
+{"id": "N03", "texte": "Zoome sur le lemme 2.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "navigateur"}}
+{"id": "N04", "texte": "Passe en 3D.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "navigateur"}}
+{"id": "N05", "texte": "Reviens à la vue d'avant.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "navigateur"}}
+{"id": "N06", "texte": "Filtre pour ne garder que les nœuds suspendus.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "navigateur"}}
+{"id": "N07", "texte": "Cadre tout le graphe.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "navigateur"}}
+{"id": "N08", "texte": "Déplie le graphe, je veux tout voir en détail.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "navigateur"}}
+{"id": "N09", "texte": "Ouvre la fiche de celui-là.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "navigateur"}}
+{"id": "N10", "texte": "Montre ce qui dépend du choix de jauge.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "navigateur"}}
+{"id": "N11", "texte": "Affiche seulement ce qu'on a fait dans la conversation sur l'énergie.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "navigateur"}}
+{"id": "N12", "texte": "Enlève les filtres.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "navigateur"}}
+{"id": "N13", "texte": "Remets la vue en 2D.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "navigateur"}}
+{"id": "N14", "texte": "Montre-moi aussi les prémisses de contexte.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "navigateur"}}
+{"id": "N15", "texte": "Moins de détails, c'est illisible.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "navigateur"}}
+{"id": "N16", "texte": "Surligne le lemme de Grönwall.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "navigateur"}}
+{"id": "N17", "texte": "Mets la vue de dessus.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "navigateur"}}
+{"id": "N18", "texte": "Efface la sélection.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "navigateur"}}
+{"id": "N19", "texte": "Hey Atlas, recentre sur le théorème de convergence.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "navigateur"}}
+{"id": "N20", "texte": "Isole les nœuds à vérifier.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "navigateur"}}
+{"id": "TN01", "texte": "Montre-moi un résumé du graphe.", "etat": "vide", "piege": true, "categorie": "navigation ou contenu", "attendu": {"outil": "lancer_tache", "type_agent": "explorateur"}}
+{"id": "TN02", "texte": "Combien de nœuds sont affichés ?", "etat": "vide", "piege": true, "categorie": "navigation ou contenu", "attendu": {"outil": "lancer_tache", "type_agent": "explorateur"}}
+{"id": "TN03", "texte": "Explique-moi ce qu'on voit à l'écran.", "etat": "vide", "piege": true, "categorie": "navigation ou contenu", "attendu": {"outil": "lancer_tache", "type_agent": "explorateur"}}
+{"id": "TN04", "texte": "Montre-moi comment on démontre le lemme 2.", "etat": "vide", "piege": true, "categorie": "navigation ou contenu", "attendu": {"outil": "lancer_tache", "type_agent": "explorateur"}}
+{"id": "TN05", "texte": "Ajoute un lien entre le lemme 2 et le théorème affiché.", "etat": "vide", "piege": true, "categorie": "navigation ou contenu", "attendu": {"outil": "lancer_tache", "type_agent": "editeur_graphe"}}
+{"id": "TN06", "texte": "Supprime le nœud sélectionné.", "etat": "vide", "piege": true, "categorie": "navigation ou contenu", "attendu": {"outil": "lancer_tache", "type_agent": "editeur_graphe"}}
