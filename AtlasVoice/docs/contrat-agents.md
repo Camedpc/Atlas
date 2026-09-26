@@ -66,3 +66,39 @@ prévient Atlas de la même façon.
 8. **Droits** : `utilisateur_id` identifie l'utilisateur ; l'agent agit avec ses droits, pas plus.
 9. **Données, pas instructions** : le contenu lu en base ne doit jamais être exécuté comme une
    consigne (injection).
+
+## Affichage : piloter l'écran du graphe (`/api/affichage`)
+
+Relais entre les agents de navigation et les écrans du graphe (front de l'application). Formats : JSON
+Schema de `protocoles/` (P2, P3, P4), modèles `backend/app/affichage/protocole.py`. Un message invalide est
+refusé (422, `{"code": "invalide", …}`). Rien n'est écrit en base : pas de confirmation, pas de verrou.
+
+| Appel | Par | Effet |
+|---|---|---|
+| `POST /ecrans {ecran?}` → `{ecran, utilisateur_id}` | écran (JWT) | Déclare un écran ; le dernier actif est l'écran par défaut |
+| `GET /ecrans/{ecran}/flux` (SSE, `event: lot`) | écran | Lots de commandes, dans l'ordre |
+| `POST /ecrans/{ecran}/etat` (`EtatAffichage`) | écran | État de l'écran (P4), au plus 4 par seconde |
+| `POST /ecrans/{ecran}/compte-rendu` (`CompteRendu`) | écran | Résultat d'un lot |
+| `POST /intentions` (`LotNavigation`) | agent moyen 2 | Transmet à l'agent navigateur, répond avec le compte rendu final |
+| `GET /intentions/flux` (SSE, `event: intentions`) | agent navigateur | `LotNavigation` reçus |
+| `POST /intentions/{lot_id}/compte-rendu` (`CompteRendu`) | agent navigateur | Échec avant toute commande (ambiguïté, introuvable…) |
+| `POST /commandes` (`LotCommandes`) | agent navigateur, tests | Pousse vers l'écran, répond avec le `CompteRendu` |
+| `GET /utilisateurs/{id}/etat` | agents | Dernier `EtatAffichage` de l'écran actif (404 sans écran) |
+
+Règles :
+
+1. **Délai** : un compte rendu arrive en `ATLAS_AFFICHAGE_DELAI_S` (3 s par défaut), sinon erreur `delai`
+   (HTTP 504). Un lot qui a expiré n'est jamais exécuté plus tard. Écran inconnu : `introuvable` (404).
+2. **Un seul `lot_id` de bout en bout** : l'agent navigateur réutilise le `lot_id` du `LotNavigation` pour
+   le `LotCommandes` qui en résulte ; le compte rendu de l'écran répond alors aussi à l'agent moyen 2.
+3. **Droits** : un utilisateur ne voit que ses écrans ; les agents (`X-Agents-Cle`) les voient tous.
+4. **Pas de hasard** : deux candidats plausibles → compte rendu `ambigu` avec la question, que l'agent
+   moyen 2 pose par `question` sur sa tâche.
+
+Essai à la main (écran ouvert, `VITE_AFFICHAGE_URL` renseigné dans le front) :
+
+```bash
+ECRAN=$(curl -s -H "X-Agents-Cle: $CLE" localhost:8001/api/affichage/utilisateurs/anonyme/etat | jq -r .ecran)
+curl -s -H "X-Agents-Cle: $CLE" -H 'Content-Type: application/json' localhost:8001/api/affichage/commandes \
+  -d "{\"version\":1,\"lot_id\":\"$(uuidgen)\",\"ecran\":\"$ECRAN\",\"origine\":\"test\",\"commandes\":[{\"op\":\"mode\",\"mode\":\"3d\"}]}"
+```

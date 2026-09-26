@@ -9,6 +9,7 @@ Aucun appel à un modèle. Même suite de lots depuis le même état = même éc
 | `etat.ts` | Modèle pur : `appliquer(etat, commande, index)` → état visé + effet, ou `ErreurProtocole` ; `appliquerLot` (atomique) |
 | `adaptateur.ts` | `synchroniser(etat)`, `jouer(effet)`, `exporter()` ; seul endroit qui traduit id de nœud ↔ point du moteur |
 | `pilote.ts` | File des lots, validation, idempotence (`lot_id`), compte rendu, états vers les abonnés (≤ 4/s) |
+| `client.ts` | Relais d'AtlasVoice (`VITE_AFFICHAGE_URL`) : déclare l'écran, lit le flux des lots (fetch + SSE), renvoie comptes rendus et états ; reconnexion automatique |
 | `filtres.ts` | `EtatFiltres` appliqués par réducteur de point (`masquer` / `estomper`) |
 
 - Les actions de l'application (case « cette conversation », liens et fermeture du détail, panneau des

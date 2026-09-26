@@ -13,6 +13,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
 from . import auth, config
+from .affichage import api as affichage
+from .affichage.relais import Relais
 from .api import observabilite, taches
 from .llm.proxy import ErreurLLM, completer
 from .observabilite import journal
@@ -46,6 +48,7 @@ async def cycle_de_vie(app: FastAPI) -> AsyncIterator[None]:
     registre = Registre(_stockage())
     await registre.demarrer()
     app.state.registre = registre
+    app.state.relais = Relais()
     purge = asyncio.create_task(_purge_quotidienne())
     if not config.GRADIUM_API_KEY:
         log.warning("GRADIUM_API_KEY absent : les sessions vocales échoueront")
@@ -66,6 +69,7 @@ app.add_middleware(CORSMiddleware, allow_origins=config.CORS_ORIGINS,
 app.include_router(taches.routeur)
 app.include_router(taches.agents)
 app.include_router(observabilite.routeur)
+app.include_router(affichage.routeur)
 
 
 @app.get("/health")

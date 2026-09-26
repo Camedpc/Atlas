@@ -89,6 +89,8 @@ URL_INTERNE = _env("ATLAS_URL_INTERNE", "http://127.0.0.1:8001")
 SUPABASE_JWT_SECRET = _env("SUPABASE_JWT_SECRET")
 # Clé partagée des agents pour l'API /api/agents.
 AGENTS_API_KEY = _env("AGENTS_API_KEY")
+# Relais d'affichage : délai maximal d'un compte rendu (écran ou agent navigateur).
+AFFICHAGE_DELAI_S = float(_env("ATLAS_AFFICHAGE_DELAI_S", "3"))
 CORS_ORIGINS = [o.strip() for o in (_env("CORS_ORIGINS", "http://localhost:5173,http://localhost:5174") or "").split(",") if o.strip()]
 
 # ── Observabilité ──────────────────────────────────────────────
