@@ -171,3 +171,46 @@ def test_arret_demande_avant_le_lancement_du_tour(monkeypatch):
 
 def test_instance_partagee():
     assert isinstance(gestionnaire.gestionnaire, Gestionnaire)
+
+
+class _FauxCodex:
+    """Imite AsyncCodex.account() / login_api_key() pour tester le choix de connexion."""
+
+    def __init__(self, type_compte):
+        from openai_codex.types import GetAccountResponse
+
+        compte = {"type": type_compte} if type_compte == "apiKey" else None
+        if type_compte == "chatgpt":
+            compte = {"type": "chatgpt", "email": "c@exemple.fr", "planType": "plus"}
+        self.reponse = GetAccountResponse.model_validate({"account": compte, "requiresOpenaiAuth": True})
+        self.cles: list[str] = []
+
+    async def account(self):
+        return self.reponse
+
+    async def login_api_key(self, cle):
+        self.cles.append(cle)
+
+
+def _connecter(monkeypatch, type_compte, cle):
+    monkeypatch.setattr(agent.config, "OPENAI_API_KEY", cle)
+    codex = _FauxCodex(type_compte)
+    asyncio.run(agent._connecter(codex))
+    return codex.cles
+
+
+def test_compte_chatgpt_utilise_sans_cle(monkeypatch):
+    assert _connecter(monkeypatch, "chatgpt", None) == []
+
+
+def test_la_cle_api_remplace_le_compte_chatgpt(monkeypatch):
+    assert _connecter(monkeypatch, "chatgpt", "sk-test") == ["sk-test"]
+    assert _connecter(monkeypatch, "apiKey", "sk-test") == []
+
+
+def test_sans_compte_ni_cle_erreur_explicite(monkeypatch):
+    try:
+        _connecter(monkeypatch, None, None)
+        raise AssertionError("aucune erreur levée")
+    except agent.ConnexionManquante as e:
+        assert "atlas.orchestrateur.connexion" in str(e)

@@ -79,13 +79,18 @@ serveur MCP `atlas` (`lire_graphe`, `lire_noeud`), lancé par Codex. Il est isol
 - Étapes après chaque tour (textGrapher, vérificateur…) : `atlas/orchestrateur/pipeline.py`
 - Réglages : variables `ATLAS_*` et `OPENAI_API_KEY` dans `.env.example`
 
-Connexion : uniquement `OPENAI_API_KEY` (dans le `.env` du serveur).
+Connexion, dans le `CODEX_HOME` d'Atlas uniquement :
+
+- en dev, ton compte ChatGPT : `.venv/Scripts/python -m atlas.orchestrateur.connexion` (URL + code à saisir
+  dans le navigateur ; `--statut` affiche le compte utilisé) ;
+- en production, une clé API : renseigner `OPENAI_API_KEY` dans le `.env` suffit, elle est prioritaire.
 
 ### Passer sur une VM
 
 1. Installer Python 3.13 et cloner le dépôt.
 2. `python -m venv .venv && .venv/bin/pip install -r requirements-agents.txt`
-3. Copier le `.env` avec `OPENAI_API_KEY` et `ATLAS_CORS_ORIGINES` = l'URL du front.
+3. Copier le `.env` avec `OPENAI_API_KEY` (ou lancer `python -m atlas.orchestrateur.connexion` en SSH) et
+   `ATLAS_CORS_ORIGINES` = l'URL du front.
 4. `.venv/bin/python -m uvicorn atlas.serveur:app --host 0.0.0.0 --port 8000`
 
 Tout l'état utile est dans Supabase. Les threads Codex vivent dans `espace/.codex` : copier `espace/` sur la VM

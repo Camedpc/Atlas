@@ -139,12 +139,21 @@ async def tour(
 
 
 async def _connecter(codex: AsyncCodex) -> None:
-    compte = await codex.account()
-    if compte.account is not None or not compte.requires_openai_auth:
+    """Clé API si OPENAI_API_KEY est renseignée, sinon la connexion ChatGPT faite avec `connexion.py`.
+
+    Renseigner la clé suffit à basculer : elle remplace une connexion ChatGPT existante au tour suivant.
+    """
+    reponse = await codex.account()
+    type_compte = reponse.account.root.type if reponse.account is not None else None
+    if config.OPENAI_API_KEY:
+        if type_compte != "apiKey":
+            await codex.login_api_key(config.OPENAI_API_KEY)
         return
-    if not config.OPENAI_API_KEY:
-        raise ConnexionManquante("Codex n'est pas connecté : renseigner OPENAI_API_KEY dans le .env du serveur.")
-    await codex.login_api_key(config.OPENAI_API_KEY)
+    if type_compte is None and reponse.requires_openai_auth:
+        raise ConnexionManquante(
+            "Codex n'est pas connecté : lancer `python -m atlas.orchestrateur.connexion` (compte ChatGPT) "
+            "ou renseigner OPENAI_API_KEY dans le .env du serveur."
+        )
 
 
 async def _ouvrir_thread(

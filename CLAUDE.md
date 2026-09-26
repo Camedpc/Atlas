@@ -39,8 +39,9 @@ migration reste triviale :
 
 L'orchestrateur est Codex via son SDK Python officiel `openai-codex` (pas `openai-codex-sdk`, sans dépôt officiel) :
 `Sandbox.full_access` + `ApprovalMode.deny_all` (jamais de demande d'approbation), un thread par conversation.
-Isolation totale de la machine (produit destiné à une VM) : `CODEX_HOME` dédié (`espace/.codex`), connexion par
-`OPENAI_API_KEY` seulement, `project_root_markers = []` ; ne jamais retomber sur `~/.codex`.
+Isolation totale de la machine (produit destiné à une VM) : `CODEX_HOME` dédié (`espace/.codex`),
+`project_root_markers = []` ; ne jamais retomber sur `~/.codex`. Connexion : compte ChatGPT de Camille en dev
+(`python -m atlas.orchestrateur.connexion`), `OPENAI_API_KEY` en production — la clé, si présente, est prioritaire.
 Pas d'outils Python en process avec Codex : les outils Atlas passent par le serveur MCP stdio
 `atlas/orchestrateur/mcp_atlas.py`, déclaré dans `surcharges_thread()` avec `features.hooks = false` (les hooks
 de la machine ne doivent pas tourner pendant une recherche). Le paquet `mcp` est en 2.x : `MCPServer`, plus `FastMCP`.
