@@ -1,0 +1,13 @@
+{
+  "id": "r3-decisions",
+  "titre": "R3 · Arbre des décisions",
+  "resume": "Les décisions et les choix de modélisation forment la colonne vertébrale : bifurcations visibles, alternatives rejetées pâles, blocs de résultats proportionnels à ce que chaque choix a permis, mode « et si ? ».",
+  "idees": [
+    "Colonne vertébrale : décisions et choix de modélisation dans l'ordre logique, bifurcations et alternatives rejetées",
+    "Blocs « ce que ce choix a permis » : hauteur ∝ nombre de résultats, statut dominant, résultat vedette, dépliables",
+    "Survol d'un choix : sa portée ; clic : « et si ? » montre ce qui deviendrait suspendu",
+    "Contradiction résolue racontée en quatre temps, piste abandonnée menant à une impasse",
+    "Journal des décisions (date, auteur, humain / IA, raison) dans le panneau ☰"
+  ],
+  "ordre": 3
+}

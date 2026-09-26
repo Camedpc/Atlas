@@ -1,0 +1,13 @@
+{
+  "id": "r2-metro",
+  "titre": "R2 · Plan de métro des arguments",
+  "resume": "Le raisonnement dessiné comme un plan de métro : une ligne colorée par fil d'argument, les résultats clés en stations, les décisions en aiguillages, les hypothèses en terminus de départ, les choix de modélisation en zones tarifaires. Tracés octolinéaires, gauche → droite ; les étapes intermédiaires s'ouvrent au clic sur un tronçon.",
+  "idees": [
+    "33 arrêts visibles au lieu de 224 nœuds : 120 étapes rangées dans 45 tronçons (dépliables au clic), 27 impasses sous leur station",
+    "Géométrie octolinéaire (0°, 45°, 90°) : couches, points fictifs, relaxation isotone, lignes parallèles sur les tronçons partagés",
+    "Aiguillages avec voies rejetées en butoir ; la piste abandonnée finit en terminus barré, avec sa raison",
+    "Zones tarifaires imbriquées : choix de modélisation regroupés par portée, arrêts teintés",
+    "Survol d'une ligne ou de la légende : tout son parcours ressort ; 3D : profondeur = type"
+  ],
+  "ordre": 2
+}

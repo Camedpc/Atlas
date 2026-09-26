@@ -1,0 +1,110 @@
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: #fbfbfd;
+}
+#app {
+  position: fixed;
+  inset: 0;
+}
+.retour {
+  position: fixed;
+  top: 18px;
+  left: 56px;
+  font: 12px system-ui, sans-serif;
+  color: #5d6679;
+  text-decoration: none;
+  z-index: 5;
+}
+.retour:hover {
+  color: #3b5bdb;
+}
+body:has(.rsn-vue.panneau-ouvert) .retour {
+  display: none;
+}
+body:has(.rsn-vue[data-theme='sombre']) {
+  background: #0f1218;
+}
+
+/* Palette propre à la vision : une couleur par choix de modélisation, impasses grises. */
+.rsn-vue {
+  --r1-choix-0: #c2255c;
+  --r1-choix-1: #1c7ed6;
+  --r1-choix-2: #2b8a3e;
+  --r1-choix-3: #d9480f;
+  --r1-choix-4: #7048e8;
+  --r1-choix-5: #0b7285;
+  --r1-impasse: #98a0ad;
+}
+.rsn-vue[data-theme='sombre'] {
+  --r1-choix-0: #f06595;
+  --r1-choix-1: #4dabf7;
+  --r1-choix-2: #51cf66;
+  --r1-choix-3: #ff922b;
+  --r1-choix-4: #9775fa;
+  --r1-choix-5: #3bc9db;
+  --r1-impasse: #6b7385;
+  /* Lisibilité des sigles de validation sur fond sombre. */
+  --validation-ia-humain: #8fb3ff;
+  --validation-humain: #5aa9f0;
+}
+
+.r1-panneau {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12px;
+}
+.r1-niveaux {
+  display: flex;
+  gap: 4px;
+}
+.r1-niveaux .rsn-bouton {
+  margin: 0;
+  flex: 1;
+}
+.r1-niveaux .rsn-bouton.actif {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.r1-compte {
+  line-height: 1.55;
+}
+.r1-liste-choix {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.r1-choix {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.r1-puce {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex: none;
+}
+.r1-legende {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--texte-doux);
+  line-height: 1.45;
+}
+.r1-legende b {
+  color: var(--texte);
+}
+.r1-fiche-bandeau {
+  margin: -2px 0 8px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+  font-size: 11.5px;
+  font-weight: 600;
+}

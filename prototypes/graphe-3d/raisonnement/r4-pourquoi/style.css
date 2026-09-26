@@ -1,0 +1,741 @@
+/* R4 · Lecture progressive : pourquoi ? — habillage propre à la vision.
+   Les couleurs viennent des variables de .rsn-vue (thème clair par défaut, sombre via data-theme). */
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: #fbfbfd;
+}
+#app {
+  position: fixed;
+  inset: 0;
+}
+.retour {
+  position: fixed;
+  top: 20px;
+  left: 56px;
+  font: 12px system-ui, sans-serif;
+  color: #5d6679;
+  text-decoration: none;
+  z-index: 5;
+}
+.retour:hover {
+  color: #3b5bdb;
+}
+body:has(.rsn-vue.panneau-ouvert) .retour {
+  display: none;
+}
+body:has(.rsn-vue[data-theme='sombre']) .retour {
+  color: #9aa3b5;
+}
+.rsn-vue [hidden] {
+  display: none !important;
+}
+
+/* La barre partagée (2D / 3D, liens complets…) passe à droite, à côté du gizmo. */
+.rsn-vue .rsn-barre {
+  left: auto;
+  right: 112px;
+  transform: none;
+}
+
+/* ─── Outils (en haut à gauche) ─────────────────────────────────────────── */
+
+.r4-outils {
+  position: absolute;
+  top: 10px;
+  left: 148px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--bord);
+  border-radius: 10px;
+  box-shadow: var(--ombre);
+  z-index: 6;
+}
+.rsn-vue.panneau-ouvert .r4-outils {
+  left: 352px;
+}
+.r4-segment {
+  display: flex;
+  background: var(--surface-2);
+  border-radius: 7px;
+  padding: 2px;
+}
+.r4-outil {
+  font: 500 12.5px var(--police);
+  color: var(--texte);
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  padding: 6px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.r4-outil:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+.r4-segment .r4-outil.actif {
+  background: var(--surface);
+  color: var(--accent);
+  box-shadow: 0 1px 2px rgba(20, 25, 40, 0.12);
+  font-weight: 600;
+}
+.r4-outil.r4-principal {
+  color: #fff;
+  background: var(--accent);
+  font-weight: 600;
+}
+.r4-outil.r4-principal:hover:not(:disabled) {
+  background: var(--accent);
+  filter: brightness(1.08);
+}
+.r4-outil:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.r4-compteur {
+  font: 12px var(--police);
+  color: var(--texte-doux);
+  padding: 0 8px 0 4px;
+  font-variant-numeric: tabular-nums;
+}
+.r4-fleche {
+  font-weight: 700;
+}
+
+/* ─── Fil d'Ariane ─────────────────────────────────────────────────────── */
+
+.r4-ariane {
+  position: absolute;
+  top: 58px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: calc(100% - 40px);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  background: var(--surface);
+  border: 1px solid var(--bord);
+  border-radius: 10px;
+  box-shadow: var(--ombre);
+  font: 12.5px var(--police);
+  color: var(--texte);
+  overflow: hidden;
+  z-index: 5;
+}
+.r4-ariane-titre {
+  font: 600 10.5px var(--police);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--texte-doux);
+  margin-right: 4px;
+}
+.r4-ariane-aide {
+  color: var(--texte-doux);
+}
+.r4-ariane-aide b {
+  color: var(--accent);
+}
+.r4-miette {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  max-width: 230px;
+  font: 12.5px var(--police);
+  color: var(--texte);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 3px 7px;
+  cursor: pointer;
+}
+.r4-miette span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.r4-miette:hover {
+  background: var(--surface-2);
+}
+.r4-miette.actif {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+.r4-sep {
+  color: var(--texte-doux);
+  font-weight: 600;
+}
+.r4-ico {
+  display: inline-flex;
+  flex: none;
+}
+
+/* ─── Calque des étiquettes ───────────────────────────────────────────── */
+
+.r4-calque {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 3;
+  font-family: var(--police);
+  --taille: 13px;
+}
+.r4-unite {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  will-change: transform, opacity;
+}
+.r4-etiquette {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: max-content;
+  padding: 2px 6px 3px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--surface) 86%, transparent);
+  color: var(--texte);
+  font-size: var(--taille);
+  line-height: 1.25;
+  pointer-events: auto;
+  cursor: default;
+}
+.r4-unite[data-cote='dessus'] .r4-etiquette {
+  transform: translate(-50%, calc(-100% - var(--r) - 5px));
+  text-align: center;
+}
+.r4-unite[data-cote='gauche'] .r4-etiquette {
+  transform: translate(calc(-100% - var(--r) - 10px), -50%);
+  text-align: right;
+}
+.r4-unite[data-cote='droite'] .r4-etiquette {
+  transform: translate(calc(var(--r) + 10px), -50%);
+}
+.r4-meta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.72em;
+  line-height: 1.3;
+  color: var(--texte-doux);
+  letter-spacing: 0.03em;
+  font-variant-numeric: tabular-nums;
+}
+.r4-unite[data-cote='dessus'] .r4-meta {
+  justify-content: center;
+}
+.r4-unite[data-cote='gauche'] .r4-meta {
+  justify-content: flex-end;
+}
+.r4-type {
+  font-weight: 650;
+  text-transform: uppercase;
+}
+.r4-statut {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+}
+.r4-statut.statut-valide {
+  background: var(--statut-valide);
+}
+.r4-statut.statut-incertain {
+  background: var(--statut-incertain);
+}
+.r4-statut.statut-refute {
+  background: var(--statut-refute);
+}
+.r4-nom {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-weight: 500;
+}
+.r4-conclusion .r4-nom {
+  font-weight: 650;
+  font-size: 1.06em;
+}
+.r4-fondation .r4-nom {
+  -webkit-line-clamp: 1;
+  display: -webkit-box;
+}
+.r4-choix {
+  font-size: 0.8em;
+  line-height: 1.3;
+  color: var(--texte);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.r4-choix b {
+  color: var(--statut-valide);
+}
+.r4-fondation .r4-choix,
+.r4-unite[data-cote='dessus'] .r4-choix {
+  -webkit-line-clamp: 1;
+}
+.r4-decision .r4-etiquette {
+  box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--couleur) 55%, transparent);
+}
+.r4-abandon .r4-nom {
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--texte-doux) 60%, transparent);
+}
+.r4-focus .r4-etiquette {
+  outline: 1.5px solid var(--accent);
+  background: var(--surface);
+}
+.r4-doux {
+  color: var(--texte-doux);
+}
+
+/* Boutons au bout des fils : calque au-dessus de toutes les étiquettes. */
+.r4-calque-boutons {
+  z-index: 4;
+}
+.r4-fil-bouton {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: auto;
+  font: 600 11.5px var(--police);
+  white-space: nowrap;
+  padding: 3px 9px 4px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  background: var(--surface);
+  color: var(--accent);
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(20, 25, 40, 0.1);
+  transition: background 0.12s, color 0.12s;
+}
+.r4-fil-bouton:hover {
+  background: var(--accent);
+  color: #fff;
+}
+.r4-pourquoi {
+  transform: translate(calc(-100% - var(--r) - var(--fil)), -50%);
+}
+.r4-comment {
+  transform: translate(calc(var(--r) + var(--fil)), -50%);
+}
+.r4-comment.discret {
+  transform: translate(calc(var(--r) + 12px), -50%);
+  font-size: 10.5px;
+  font-weight: 500;
+  padding: 1px 7px 2px;
+  color: var(--texte-doux);
+  border-color: var(--bord);
+  box-shadow: none;
+  opacity: 0.85;
+}
+.r4-comment.discret:hover {
+  color: #fff;
+  opacity: 1;
+}
+.r4-unite[data-cote='droite'] .r4-comment:not(.discret) {
+  transform: translate(calc(var(--r) + 10px), 26px);
+}
+.r4-replier {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: auto;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  font: 600 13px/16px var(--police);
+  border-radius: 50%;
+  border: 1px solid var(--bord);
+  background: var(--surface);
+  color: var(--texte-doux);
+  cursor: pointer;
+  transform: translate(calc(-100% - var(--r) - 6px), calc(-50% + 16px));
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.r4-boutons.survol .r4-replier,
+.r4-boutons:hover .r4-replier,
+.r4-focus .r4-replier {
+  opacity: 1;
+}
+.r4-replier:hover {
+  color: var(--texte);
+  border-color: var(--texte-doux);
+}
+
+/* Encarts de décision : ancrés en bas au centre, reliés au nœud par un trait. */
+.r4-dock {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--hauteur-ruban, 74px) + 46px);
+  transform: translate(-50%, 12px);
+  display: flex;
+  gap: 10px;
+  width: max-content;
+  max-width: calc(100% - 40px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s, transform 0.25s;
+  z-index: 6;
+}
+.r4-dock.visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
+  pointer-events: auto;
+}
+.r4-encart {
+  position: relative;
+  width: 420px;
+  max-width: 100%;
+  padding: 8px 28px 9px 12px;
+  background: var(--surface);
+  border: 1px solid var(--bord);
+  border-top: 3px solid var(--couche-2);
+  border-radius: 8px;
+  box-shadow: var(--ombre);
+  font: 12.5px/1.45 var(--police);
+  color: var(--texte);
+}
+.r4-encart-titre {
+  font: 650 10.5px var(--police);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--couche-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.r4-encart-nom {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 11.5px;
+  color: var(--texte-doux);
+}
+.r4-encart-question {
+  font-weight: 600;
+  margin: 1px 0 2px;
+}
+.r4-encart-retenu b {
+  color: var(--statut-valide);
+}
+.r4-encart-rejete b,
+.r4-encart-raison b {
+  color: var(--texte-doux);
+  font-weight: 600;
+}
+.r4-encart-rejete span[title]:not([title='']) {
+  text-decoration: underline dotted color-mix(in srgb, var(--texte-doux) 60%, transparent);
+  text-underline-offset: 2px;
+  cursor: help;
+}
+.r4-encart-fermer {
+  position: absolute;
+  top: 5px;
+  right: 7px;
+  border: 0;
+  background: transparent;
+  color: var(--texte-doux);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+.r4-encart-ouvert .r4-etiquette {
+  outline: 1.5px solid var(--couche-2);
+  background: var(--surface);
+}
+
+/* ─── Lecture guidée ───────────────────────────────────────────────────── */
+
+.r4-guide {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--hauteur-ruban, 74px) + 46px);
+  transform: translate(-50%, 12px);
+  width: min(780px, calc(100% - 40px));
+  padding: 10px 14px 12px;
+  background: var(--surface);
+  border: 1px solid var(--bord);
+  border-radius: 12px;
+  box-shadow: var(--ombre);
+  font: 13px/1.45 var(--police);
+  color: var(--texte);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s, transform 0.25s;
+  z-index: 6;
+}
+.r4-guide.visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
+  pointer-events: auto;
+}
+.r4-guide-tete {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+  font-size: 12px;
+}
+.r4-guide-etiquette {
+  font: 650 10.5px var(--police);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--accent);
+}
+.r4-guide-pas {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.r4-guide-progression {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--surface-2);
+  cursor: pointer;
+  overflow: hidden;
+}
+.r4-guide-rempli {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 3px;
+  transition: width 0.25s;
+}
+.r4-guide-fermer {
+  border: 0;
+  background: transparent;
+  color: var(--texte-doux);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.r4-guide-question {
+  font-size: 12.5px;
+  color: var(--texte-doux);
+}
+.r4-guide-question b {
+  color: var(--texte);
+}
+.r4-guide-phrase {
+  font-size: 15px;
+  font-weight: 500;
+  margin: 2px 0 4px;
+}
+.r4-guide-contexte {
+  font-size: 12px;
+  color: var(--texte-doux);
+}
+.r4-guide-decision {
+  margin-top: 6px;
+  padding: 6px 10px;
+  border-left: 3px solid var(--couche-2);
+  background: color-mix(in srgb, var(--couche-2) 7%, var(--surface));
+  border-radius: 0 6px 6px 0;
+  font-size: 12.5px;
+}
+.r4-guide-boutons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 8px;
+}
+.r4-guide-boutons .r4-outil {
+  border: 1px solid var(--bord);
+}
+.r4-select {
+  font: 12px var(--police);
+  color: var(--texte);
+  background: var(--surface-2);
+  border: 1px solid var(--bord);
+  border-radius: 6px;
+  padding: 3px 6px;
+  max-width: 220px;
+}
+
+/* ─── Ruban de vue d'ensemble ─────────────────────────────────────────── */
+
+.r4-ruban {
+  position: absolute;
+  left: 12px;
+  right: 316px;
+  bottom: 12px;
+  height: calc(var(--hauteur-ruban, 74px) + 22px);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--bord);
+  border-radius: 10px;
+  box-shadow: var(--ombre);
+  z-index: 4;
+  overflow: visible;
+}
+.rsn-vue.panneau-ouvert .r4-ruban {
+  left: 352px;
+}
+.r4-ruban-texte {
+  font: 11.5px var(--police);
+  color: var(--texte-doux);
+  padding: 5px 12px 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.r4-ruban-texte b {
+  color: var(--texte);
+  font-weight: 600;
+}
+.r4-ruban-canvas {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  display: block;
+}
+.r4-ruban-bulle {
+  position: absolute;
+  left: 0;
+  top: 0;
+  padding: 3px 8px;
+  font: 12px var(--police);
+  color: var(--texte);
+  background: var(--surface);
+  border: 1px solid var(--bord);
+  border-radius: 6px;
+  box-shadow: var(--ombre);
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.1s;
+}
+.r4-ruban-bulle.visible {
+  opacity: 1;
+}
+
+/* ─── Fiche et panneau ─────────────────────────────────────────────────── */
+
+.r4-fiche-lecture {
+  margin: 6px 0 8px;
+  padding: 7px 9px;
+  background: var(--surface-2);
+  border-radius: 7px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.r4-fiche-phrase {
+  font-weight: 500;
+  color: var(--texte);
+}
+.r4-fiche-fils {
+  display: flex;
+  flex-direction: column;
+  margin-top: 3px;
+  color: var(--texte-doux);
+}
+.r4-fiche-fils b {
+  color: var(--accent);
+}
+.r4-panneau-aide {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--texte);
+}
+.r4-panneau-aide p {
+  margin: 0 0 6px;
+}
+.r4-panneau-aide ul {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--texte-doux);
+}
+.r4-panneau-aide b {
+  color: var(--texte);
+}
+.r4-decisions {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.r4-decision-ligne {
+  display: flex;
+  gap: 7px;
+  align-items: flex-start;
+  text-align: left;
+  font: 12px/1.4 var(--police);
+  color: var(--texte);
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  padding: 4px 6px;
+  cursor: pointer;
+}
+.r4-decision-ligne:hover {
+  background: var(--surface-2);
+}
+.r4-decision-ligne .r4-ico {
+  margin-top: 2px;
+}
+.r4-decision-nom {
+  font-weight: 600;
+}
+
+/* Bouton court (un voisin occupe la gauche) : sous le nœud, compteur dans le bouton. */
+.r4-compte {
+  display: none;
+  font-weight: 500;
+  opacity: 0.8;
+}
+.r4-pourquoi.compact {
+  position: static;
+  display: inline-block;
+  transform: none;
+  margin-top: 2px;
+  font-size: 10.5px;
+  padding: 0 7px 1px;
+  box-shadow: none;
+}
+.r4-pourquoi.compact .r4-compte {
+  display: inline;
+}
+/* Choix de modélisation dans la colonne des fondations : alternatives au survol seulement. */
+.r4-fondation .r4-alternatives {
+  display: none;
+}
+.r4-fondation:hover .r4-alternatives {
+  display: -webkit-box;
+}
+/* 3D : étiquettes réduites au nom (les couches séparent déjà les types). */
+.r4-3d .r4-meta,
+.r4-3d .r4-choix,
+.r4-3d .r4-fil-bouton,
+.r4-3d .r4-replier,
+.r4-3d .r4-encart {
+  display: none !important;
+}
+.r4-3d .r4-etiquette {
+  font-size: 11.5px;
+  padding: 1px 4px;
+}
+.r4-3d .r4-nom {
+  -webkit-line-clamp: 1;
+}
+.r4-conf-inline {
+  font-size: 0.78em;
+  color: var(--texte-doux);
+  font-variant-numeric: tabular-nums;
+}
+.r4-fondation .r4-nom .r4-statut {
+  display: inline-block;
+  vertical-align: 1px;
+}
