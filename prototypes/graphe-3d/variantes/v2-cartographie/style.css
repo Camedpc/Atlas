@@ -332,6 +332,7 @@ body:has(.atlas-vue[data-theme='sombre']) {
 .v2-mini {
   position: absolute;
   left: 72px;
+  width: 210px;
   bottom: 12px;
   background: var(--surface);
   border: 1px solid var(--bord);
@@ -356,6 +357,8 @@ body:has(.atlas-vue[data-theme='sombre']) {
   color: var(--texte-doux);
 }
 .v2-mini-niveau {
+  min-width: 0;
+  flex: 1;
   color: var(--texte);
   font-weight: 600;
   text-transform: uppercase;

@@ -40,7 +40,8 @@ export class MiniCarte {
     this.texteZoom = el('span', { class: 'v2-mini-zoom' })
     this.puceAuto = el('button', { class: 'v2-mini-auto', type: 'button', title: 'Zoom sémantique : la granularité suit le zoom (cliquer pour basculer automatique / manuel)' })
     this.puceAuto.addEventListener('click', () => zoom.definirMode(zoom.mode === 'manuel' ? 'paliers' : 'manuel'))
-    this.element = el('div', { class: 'v2-mini' }, this.canvas, el('div', { class: 'v2-mini-pied' }, this.texteNiveau, this.texteZoom, this.puceAuto))
+    // data-zone-sure : le cadrage du moteur évite la mini-carte.
+    this.element = el('div', { class: 'v2-mini', 'data-zone-sure': '' }, this.canvas, el('div', { class: 'v2-mini-pied' }, this.texteNiveau, this.texteZoom, this.puceAuto))
     parent.appendChild(this.element)
 
     this.canvas.addEventListener('pointerdown', (e) => {

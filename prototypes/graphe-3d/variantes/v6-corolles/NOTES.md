@@ -58,16 +58,14 @@ Les agrégats sont des **diagrammes** : on lit leur composition sans les survole
   anti-chevauchement, bordure = validation des feuilles, fond pointillé.
 - Corolles · éclosion : trajectoire (corolle ou celles du moteur), ordre, amplitude, arc, part
   « pétales », décalage en cascade, déroulé du parent. La durée et la courbe restent celles du
-  moteur (Transitions ; durée par défaut 1 200 ms ici).
+  moteur (Transitions ; 700 ms et courbe « sortie » ici depuis l’itération 2).
 - Corolles · survol : détachement des secteurs, aperçu des nœuds repliés, violon, largeur.
 - Corolles · regroupement : catégories / communautés, résolution Louvain, poids des liens de session.
 
 ## Extensions du moteur faites dans le dossier (pas de modification de `src/core`)
 
-- **Trajectoire par unité** : le moteur ne passe à la trajectoire que `graine`, pas l'unité.
-  `Corolle` remplace `h.graines[u]` par `u` (entier exact en Float32) et garde les graines
-  d'origine pour les trajectoires du moteur. Suggestion : ajouter `u` (et le parent) à
-  `PointTrajectoire`.
+- ~~Trajectoire par unité via `h.graines[u] = u`~~ : abandonné à l'itération 2, le moteur
+  fournit désormais `unite`, `parent`, `o` et `sens` à la trajectoire.
 - Le réglage moteur « trajectoire » est ignoré dès qu'une trajectoire perso est fournie : on le
   remplace par « Corolles · éclosion › trajectoire ».
 - `@sigma/node-piechart` n'est pas installé (et on ne modifie pas `package.json`) : dessin canvas.
@@ -111,3 +109,54 @@ Les agrégats sont des **diagrammes** : on lit leur composition sans les survole
   échelonner les ouvertures (cascade entre parents) aiderait.
 - Aperçu des graines limité à 400 nœuds ; le secteur « hors filtre » n'a pas d'aperçu.
 - Idée : un troisième anneau très fin pour l'intervalle de confiance moyen (arc = estimation).
+
+## Itération 2
+
+Retours traités (captures réelles Playwright, rAF actif, script `scratchpad/shots/capture-v6.mjs`,
+copie de `capture.mjs` dédiée à la variante ; sorties dans `out/v6-corolles-iter2/`).
+
+1. **Durée** : 700 ms par défaut (au lieu de 1 200), courbe `sortie` (départ immédiat), cascade
+   entre pétales ramenée à 0,12. La trajectoire lit `o` (linéaire dans le temps, fourni par le
+   moteur) et applique elle-même décalage puis courbe. Une petite migration oublie les anciennes
+   valeurs mémorisées (1 200 ms, `douce`, 0,3) pour que les nouveaux défauts s'appliquent.
+2. **Ouverture globale** : la corolle complète est réservée aux ouvertures locales (catégorie
+   surchargée = double-clic, arbre, bouton) et aux transitions de peu d'agrégats (réglage « corolle
+   si ≤ n agrégats », défaut 3). Sinon, variante sobre : trajet direct, et les parents partent en
+   **vague** de gauche à droite (réglage « vague », décalage 0,35 réparti entre les agrégats en
+   transition, ordre figé au départ). `Corolle.observer()` compte les catégories en transition à
+   chaque image.
+3. **Forte densité** : sous le seuil « compact si rayon < » (défaut 10 px, après anti-chevauchement),
+   l'anneau est remplacé en fondu par un **disque plein au statut dominant + fin liseré** découpé
+   par statut. Au survol, le plafond anti-chevauchement est levé et l'anneau complet revient ; en
+   zoomant, les distances grandissent et l'anneau revient seul.
+4. **Vues face et droite** : le moteur place l'anneau à la médiane ; ses capsules par défaut sont
+   désactivées (`etenduesParDefaut: false`) au profit d'un **ruban** propre (`dessinerRubans`,
+   calque dessous) : ligne min–max, capsule pâle q10–q90, et une barre empilée des statuts par
+   tranche (semaine en vue de face, couloir de type en vue de droite), hauteur ∝ √effectif,
+   perpendiculaire à l'axe. Même code couleur que l'anneau. Réglages « rubans » et « hauteur ».
+   Comptes (catégorie × tranche × statut, catégorie × type × statut) calculés avec les filtres.
+5. **Captures de l'éclosion à 25 / 50 / 75 %** (transition à 3 s, maximum du réglage, captures
+   chronométrées ; ouverture mesurée en regard) :
+   - `02-corolle-theme-25/50/75` (ouverture 0,27 / 0,55 / 0,80) : « Réseaux de neurones » ouvert
+     au double-clic ; à 25 % les trois sous-thèmes sont posés en couronne autour du parent qui se
+     déroule (secteurs écartés, pâlis) ; à 50 % ils glissent vers leur place ; à 75 % en place.
+   - `03-corolle-noeuds-25/50/75` (0,29 / 0,61 / 0,80) : « Opérateurs compacts » (46 nœuds) ; à
+     25 % les premiers nœuds forment un anneau de pétales autour de l'anneau pâli ; à 50 % tout
+     l'anneau de pétales est visible, trié par statut (vert, ambre, rose) ; à 75 % ils se
+     resserrent dans le sous-thème.
+   - `04-globale-25/50/75` (g = 1,32 / 1,56 / 1,81) : ouverture globale sobre, pas d'éventail, les
+     thèmes de gauche ont déjà fini quand ceux de droite commencent (vague).
+   - `06-dense-compact`, `07-dense-survol` : dézoom au niveau sous-thèmes, disques compacts et
+     anneau restitué au survol. `08-face`, `09-droite` : anneaux à la médiane + rubans de statuts.
+     `10-secteur` : bulle « 65 validés 52,4 % » et graines, la fiche s'efface pendant le survol
+     d'un secteur pour ne pas masquer la bulle.
+   - Aucune erreur console ; 60 images/s pendant l'orbite (`capture.mjs`).
+
+Autres ajustements : feuilles d'une corolle locale affichées franchement pendant l'éclosion
+(opacité ∝ √part visible), fiche masquée pendant le survol d'un secteur, `reglages.sauver()` avant
+la reconstruction catégories ↔ communautés.
+
+Limites restantes : la durée maximale du réglage (3 s) borne les captures au ralenti ; le ruban
+de la vue de droite est presque identique d'un thème à l'autre sur le jeu synthétique (tous les
+types sont présents partout) ; en vague, des disques compacts pâles apparaissent brièvement tant
+que les enfants sont proches de leur parent.

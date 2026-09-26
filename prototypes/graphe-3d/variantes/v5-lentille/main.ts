@@ -4,7 +4,7 @@
 // bordure / arc / badge, panneau en surimpression avec fil d'Ariane.
 
 import {
-  creerVue, el, rgba, NOMS_NIVEAUX,
+  creerVue, el, etendueTempsEcran, rgba, NOMS_NIVEAUX,
   type ContexteDessin, type Projection, type ReducteurNoeud,
 } from '../../src/core'
 import meta from './meta.json'
@@ -32,18 +32,21 @@ const vue = creerVue(document.getElementById('app')!, {
     { cle: 'delaiOuverture', defaut: 180, dossier: L, libelle: 'délai ouverture (ms)', min: 0, max: 1500, pas: 10 },
     { cle: 'delaiFermeture', defaut: 650, dossier: L, libelle: 'délai fermeture (ms)', min: 0, max: 3000, pas: 10 },
     { cle: 'hysteresis', defaut: 1.35, dossier: L, libelle: 'hystérésis (× rayon)', min: 1, max: 2.5, pas: 0.05 },
-    { cle: 'fisheye', defaut: 1.6, dossier: L, libelle: 'fisheye', min: 0, max: 6, pas: 0.1 },
+    { cle: 'fisheye', defaut: 1, dossier: L, libelle: 'fisheye (× centre − 1)', min: 0, max: 2, pas: 0.05 },
+    { cle: 'ancrageLentille', defaut: 'graphe', dossier: L, libelle: 'épinglée, ancrée à', options: { graphe: 'graphe', écran: 'ecran' } },
+    { cle: 'loupeNoeuds', defaut: true, dossier: L, libelle: 'loupe au niveau nœuds' },
+    { cle: 'grossissementLoupe', defaut: 1.1, dossier: L, libelle: 'grossissement loupe', min: 0, max: 3, pas: 0.05 },
     { cle: 'grossissement', defaut: 0.7, dossier: L, libelle: 'grossissement nœuds', min: 0, max: 2, pas: 0.05 },
     { cle: 'grossissementSurvol', defaut: 1.6, dossier: L, libelle: 'grossissement survol', min: 1, max: 3, pas: 0.05 },
-    { cle: 'estompeHors', defaut: 0.22, dossier: L, libelle: 'estompe hors lentille', min: 0, max: 0.9, pas: 0.01 },
+    { cle: 'estompeHors', defaut: 0.15, dossier: L, libelle: 'estompe hors lentille', min: 0, max: 0.9, pas: 0.01 },
     { cle: 'lissageLentille', defaut: 140, dossier: L, libelle: 'apparition (ms)', min: 0, max: 800, pas: 10 },
     { cle: 'cercleLentille', defaut: true, dossier: L, libelle: 'cercle' },
     { cle: 'opaciteCercle', defaut: 1, dossier: L, libelle: 'opacité cercle', min: 0, max: 1, pas: 0.05 },
     { cle: 'grilleLentille', defaut: true, dossier: L, libelle: 'trame de la loupe' },
     { cle: 'libellesLentille', defaut: true, dossier: L, libelle: 'libellés dans la lentille' },
     { cle: 'maxLibellesLentille', defaut: 16, dossier: L, libelle: 'max. libellés', min: 0, max: 80, pas: 1 },
-    { cle: 'teinteRemplissage', defaut: 0.5, dossier: C, libelle: 'remplissage adouci', min: 0, max: 0.9, pas: 0.01 },
-    { cle: 'bordureMin', defaut: 0.14, dossier: C, libelle: 'bordure min (incertain)', min: 0, max: 0.6, pas: 0.01 },
+    { cle: 'teinteRemplissage', defaut: 0.28, dossier: C, libelle: 'remplissage adouci', min: 0, max: 0.9, pas: 0.01 },
+    { cle: 'bordureMin', defaut: 0.18, dossier: C, libelle: 'bordure min (incertain)', min: 0, max: 0.6, pas: 0.01 },
     { cle: 'bordureMax', defaut: 0.5, dossier: C, libelle: 'bordure max (certain)', min: 0, max: 0.9, pas: 0.01 },
     { cle: 'arcConfiance', defaut: true, dossier: C, libelle: 'arc intervalle' },
     { cle: 'seuilArc', defaut: 5.5, dossier: C, libelle: 'arc dès (px)', min: 0, max: 30, pas: 0.5 },
@@ -62,16 +65,19 @@ detaille = vue.reglages.lire<boolean>('ficheDetaillee')
 
 const R = <T extends number | boolean>(cle: string) => vue.reglages.lire<T>(cle)
 const lentille = new Lentille(vue)
-const confiance = new Confiance(vue)
-
-// ─── Fisheye : déformer la projection juste avant que sigma ne lise les positions ──────────
-{
-  const positionner = vue.rendu.positionner.bind(vue.rendu)
-  vue.rendu.positionner = (p: Projection) => {
-    lentille.deformer(p, vue.h.nU)
-    positionner(p)
-  }
+/** Feuille sous la loupe (mode nœuds) : elle reçoit arc d'intervalle et badge même petite. */
+const sousLoupe = (f: number): boolean => {
+  if (!lentille.modeLoupe || !R<boolean>('loupeNoeuds') || lentille.intensite < 0.5) return false
+  const d = Math.hypot(vue.projection.x[f]! - lentille.x, vue.projection.y[f]! - lentille.y)
+  return d < lentille.rayon * 0.8
 }
+const confiance = new Confiance(vue, sousLoupe)
+
+// ─── Crochet après projection : suivre l'ancre (lentille épinglée au graphe), puis fisheye ──
+vue.ajouterApresProjection((p) => {
+  lentille.suivreAncre()
+  lentille.deformer(p, vue.h.nU)
+})
 
 // ─── Réducteur : grossissement dans la lentille, contexte estompé autour ───────────────────
 const reducteurLentille: ReducteurNoeud = (info, a) => {
@@ -82,11 +88,13 @@ const reducteurLentille: ReducteurNoeud = (info, a) => {
   if (I <= 0.001) return
   const r = lentille.rayon
   const d = Math.hypot(info.x - lentille.x, info.y - lentille.y) / r
+  const loupe = lentille.modeLoupe && R<boolean>('loupeNoeuds')
   if (d < 1) {
-    a.taille *= 1 + R<number>('grossissement') * (1 - d) * I
+    a.taille *= 1 + R<number>(loupe ? 'grossissementLoupe' : 'grossissement') * (1 - d) * I
     // Les libellés des feuilles de la lentille sont placés par notre calque (sans chevauchement).
     if (!info.estAgregat && R<boolean>('libellesLentille') && info.survol !== 'survole' && info.lignee !== 'selection') a.libelle = null
-  } else if (!a.surligne && info.survol !== 'survole' && info.survol !== 'voisin') {
+  } else if (!loupe && !a.surligne && info.survol !== 'survole' && info.survol !== 'voisin') {
+    // Hors lentille : contexte à peine atténué (et pas du tout en mode loupe, où tout est déjà ouvert).
     const rampe = Math.min(1, (d - 1) / 0.25)
     a.opacite *= 1 - R<number>('estompeHors') * I * rampe
   }
@@ -184,7 +192,11 @@ function dessinerEtiquette(ctx: CanvasRenderingContext2D, v: typeof vue, a: numb
   ctx.save()
   const base = Math.floor(v.granularite.globale + 1e-3)
   const jusque = Math.min(3, base + R<number>('profondeurLentille'))
-  const texte = `${epinglee ? 'épinglée · ' : ''}${NOMS_NIVEAUX[base]} → ${NOMS_NIVEAUX[jusque].toLowerCase()}`
+  const etat = epinglee ? (lentille.ancree ? 'épinglée au graphe · ' : 'épinglée · ') : ''
+  const role = lentille.modeLoupe
+    ? (R<boolean>('loupeNoeuds') ? 'loupe : libellés et confiance' : 'loupe')
+    : `${NOMS_NIVEAUX[base]} → ${NOMS_NIVEAUX[jusque].toLowerCase()}`
+  const texte = etat + role
   ctx.font = `500 10.5px ${pal.police}`
   const w = ctx.measureText(texte).width + 12
   const ang = -Math.PI / 4
@@ -215,7 +227,7 @@ function dessinerLibellesLentille(ctx: CanvasRenderingContext2D, v: typeof vue, 
   const candidats: number[] = []
   for (let f = 0; f < h.nF; f++) {
     if (op[f]! < 0.35 || f === v.survol) continue
-    if (Math.hypot(p.x[f]! - x, p.y[f]! - y) >= r * 0.98) continue
+    if (Math.hypot(p.x[f]! - x, p.y[f]! - y) >= r * 0.88) continue
     candidats.push(f)
   }
   candidats.sort((a, b) => taille[b]! - taille[a]! || h.importance[b]! - h.importance[a]!)
@@ -260,17 +272,35 @@ function dessinerLibellesLentille(ctx: CanvasRenderingContext2D, v: typeof vue, 
     places++
     ctx.globalAlpha = Math.min(1, op[f]! * 1.2) * I
     ctx.fillStyle = pal.texte
-    ctx.strokeText(nom, bx, fy)
-    ctx.fillText(nom, bx, fy)
+    // Ancrer le texte au nœud (et non à la largeur mesurée) : jamais de libellé qui flotte loin de son point.
+    const aGauche = bx < fx
+    ctx.textAlign = aGauche ? 'right' : 'left'
+    const ax = aGauche ? fx - rr - 5 : bx
+    ctx.strokeText(nom, ax, fy)
+    ctx.fillText(nom, ax, fy)
   }
   ctx.restore()
 }
+
+// Les largeurs mesurées avant le chargement de la police web seraient fausses : on les oublie ensuite.
+document.fonts?.ready.then(() => {
+  largeurs.clear()
+  vue.demanderRendu()
+})
 
 vue.ajouterDessin('dessous', dessinerLoupeDessous)
 vue.ajouterDessin('dessus', confiance.dessiner)
 vue.ajouterDessin('dessus', dessinerLoupeDessus)
 
 // ─── Boucle : lissage de l'intensité, logique d'ouverture ─────────────────────────────────
+vue.on('granularite', () => {
+  const loupe = lentille.modeLoupe
+  if (loupe !== dernierModeLoupe) {
+    dernierModeLoupe = loupe
+    majPuce()
+  }
+})
+let dernierModeLoupe = false
 vue.on('image', ({ dt }) => {
   if (lentille.lisser(dt)) vue.demanderRendu()
 })
@@ -285,6 +315,7 @@ vue.on('reglage', ({ cle, valeur }) => {
     rafraichirFiche()
   }
   if (cle === 'lentille' || cle === 'rayonLentille' || cle === 'profondeurLentille') majPuce()
+  if (cle === 'ancrageLentille' && lentille.epinglee) lentille.epingler(true)
 })
 
 // ─── Souris ───────────────────────────────────────────────────────────────────────────
@@ -368,9 +399,7 @@ const finAppui = (e: PointerEvent) => {
   appui = null
   if (lentille.tactile) {
     lentille.tactile = false
-    lentille.epinglee = true
-    lentille.notifier()
-    vue.demanderRendu()
+    lentille.epingler(true)
   }
 }
 window.addEventListener('pointerup', finAppui, { capture: true })
@@ -429,7 +458,7 @@ function majPuce(): void {
   const actif = R<boolean>('lentille')
   puceLentille.replaceChildren(
     el('i', { class: `v5-icone-lentille${lentille.epinglee ? ' epinglee' : ''}` }),
-    !actif ? 'Lentille désactivée' : lentille.epinglee ? 'Lentille épinglée' : 'Lentille : suit le curseur',
+    !actif ? 'Lentille désactivée' : lentille.epinglee ? (lentille.ancree ? 'Lentille ancrée au graphe' : 'Lentille épinglée') : lentille.modeLoupe ? 'Loupe : suit le curseur' : 'Lentille : suit le curseur',
     el('kbd', {}, 'L'),
   )
   puceLentille.classList.toggle('actif', actif && lentille.epinglee)
@@ -502,3 +531,4 @@ if (vue.ui.panneau) {
 // Pratique pour déboguer depuis la console.
 ;(window as unknown as { atlasVue: typeof vue; atlasLentille: Lentille }).atlasVue = vue
 ;(window as unknown as { atlasLentille: Lentille }).atlasLentille = lentille
+;(window as unknown as { atlasEtendueTempsEcran: typeof etendueTempsEcran }).atlasEtendueTempsEcran = etendueTempsEcran

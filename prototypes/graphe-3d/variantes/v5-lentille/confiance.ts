@@ -18,7 +18,7 @@ export class Confiance {
   private statutsCat: Int32Array
   private teintes = new Map<string, string>()
 
-  constructor(private vue: VueGraphe) {
+  constructor(private vue: VueGraphe, private sousLoupe: (f: number) => boolean = () => false) {
     this.statutsCat = new Int32Array(vue.h.nC * 3)
     this.recompter()
     vue.on('filtres', () => this.recompter())
@@ -64,7 +64,7 @@ export class Confiance {
   /** Vrai si la feuille f mérite ses détails même petite (survol, voisinage, sélection). */
   private misEnAvant(f: number): boolean {
     const v = this.vue
-    return v.survol === f || v.voisinsSurvol.has(f) || v.lignee.selection === f
+    return v.survol === f || v.voisinsSurvol.has(f) || v.lignee.selection === f || this.sousLoupe(f)
   }
 
   /** Calque dessus : arcs d'intervalle, anneaux d'agrégats, badges de validation. */
@@ -143,11 +143,12 @@ export class Confiance {
       const max = R.lire<number>('maxBadges')
       const liste: number[] = []
       const W = vue.rendu.largeur, H = vue.rendu.hauteur
+      const opMin = vue.survol !== null ? 0.6 : 0.3
       for (let f = 0; f < h.nF; f++) {
-        if (op[f]! < 0.3 || h.noeuds[f]!.validation === 'aucune') continue
+        if (op[f]! < opMin || h.noeuds[f]!.validation === 'aucune') continue
         const x = p.x[f]!, y = p.y[f]!
         if (x < 0 || y < 0 || x > W || y > H) continue
-        if (taille[f]! >= seuil || vue.survol === f || vue.voisinsSurvol.has(f) || vue.lignee.selection === f) liste.push(f)
+        if (taille[f]! >= seuil || vue.survol === f || vue.voisinsSurvol.has(f) || vue.lignee.selection === f || this.sousLoupe(f)) liste.push(f)
       }
       // Priorité : survolé, puis voisins, puis les plus gros.
       const rang = (f: number) => (vue.survol === f ? 1e6 : vue.voisinsSurvol.has(f) ? 1e5 : 0) + taille[f]!
@@ -155,12 +156,23 @@ export class Confiance {
       ctx.font = `600 9px ${palette.police}`
       ctx.textBaseline = 'middle'
       ctx.textAlign = 'center'
-      for (const f of liste.slice(0, max)) {
+      const places: number[] = []
+      let n = 0
+      for (const f of liste) {
+        if (n >= max) break
         const v = h.noeuds[f]!.validation
         const texte = TEXTE_BADGE[v]
         const r = taille[f]!
         const w = ctx.measureText(texte).width + 7, hh = 12
         const bx = p.x[f]! + r * 0.72 + 1, by = p.y[f]! - r * 0.72 - hh - 1
+        // Pas de badge qui en recouvre un autre : le survol et ses voisins passent en premier.
+        let libre = true
+        for (let i = 0; i < places.length && libre; i += 4) {
+          if (bx < places[i]! + places[i + 2]! + 1 && bx + w + 1 > places[i]! && by < places[i + 1]! + places[i + 3]! && by + hh > places[i + 1]!) libre = false
+        }
+        if (!libre) continue
+        places.push(bx, by, w, hh)
+        n++
         ctx.globalAlpha = Math.min(1, op[f]! * 1.2)
         ctx.fillStyle = palette.validation[v]
         ctx.strokeStyle = palette.fond

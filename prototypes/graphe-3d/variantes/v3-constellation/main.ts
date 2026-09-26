@@ -6,7 +6,7 @@
 // plus une enveloppe de `granularite.calculerPositions` (voir NOTES.md).
 
 import {
-  creerVue, el, melangerCouleurs, type ReducteurArete, type ReducteurNoeud, type Trajectoire, type VueGraphe,
+  COURBES, TRAJECTOIRES, creerVue, el, melangerCouleurs, type ReducteurArete, type ReducteurNoeud, type Trajectoire, type VueGraphe,
 } from '../../src/core'
 import meta from './meta.json'
 import { creerRenduFiche } from './fiche'
@@ -64,7 +64,8 @@ const reducteurConstellation: ReducteurNoeud = (info, a, vue) => {
     const ab = S.absorbes[u]!
     if (ab > 0) a.taille *= 1 + V.tailleCles * Math.sqrt(ab)
     if (vue.survol !== null && info.survol === 'autre' && voisinsSquelette.has(u)) {
-      a.opacite = Math.min(1, a.opacite / Math.max(V.opaciteEstompe, 0.25))
+      // Le moteur a atténué ce nœud comme « contexte » : on annule cette atténuation.
+      a.opacite = Math.min(1, a.opacite / Math.max(0.05, V.opaciteContexte ?? 0.3))
       a.zIndex += 4000
     }
   }
@@ -130,6 +131,15 @@ const vue = creerVue(document.getElementById('app')!, {
   reducteursNoeud: [reducteurConstellation],
   reducteursArete: [reducteurAreteSquelette],
   dessinerDessous: ({ temps }) => lumiere?.dessiner(temps),
+  // Nos propres « traînées de période » remplacent la capsule du moteur (lumiere.ts).
+  etenduesParDefaut: false,
+  // Après le moteur, on tire les feuilles repliées du squelette vers leur clé.
+  apresPositions: ({ positions, vue: v }) => {
+    const Rv = R(v)
+    const courbe = v.courbePerso ?? COURBES[Rv.courbe] ?? COURBES.sortie
+    const traj = v.trajectoirePerso ?? TRAJECTOIRES[Rv.trajectoire] ?? TRAJECTOIRES.droite
+    squelette?.appliquer(positions, courbe, traj)
+  },
   rendreFiche: creerRenduFiche(() => squelette),
 })
 vueCourante = vue
@@ -140,15 +150,8 @@ squelette = new Squelette(vue)
 lumiere = new Lumiere(vue, squelette)
 const S = squelette
 
-// Enveloppe du calcul des positions : après le moteur, on tire les feuilles repliées vers leur clé.
-{
-  const g = vue.granularite
-  const original = g.calculerPositions.bind(g)
-  g.calculerPositions = (base, sortie, courbe, trajectoire) => {
-    original(base, sortie, courbe, trajectoire)
-    S.appliquer(sortie, courbe, trajectoire)
-  }
-}
+S.modeAretes = V.aretesSquelette
+S.aretesParCle = V.aretesParCle
 
 const appliquerTrajectoire = () => (vue.trajectoirePerso = V.etincelles ? etincelle : null)
 appliquerTrajectoire()
@@ -222,6 +225,13 @@ vue.on('reglage', ({ cle }) => {
   switch (cle) {
     case 'agregation': appliquerAgregation(); break
     case 'seuilImportance': case 'garderLignee': relancerSquelette(false); break
+    case 'aretesSquelette': case 'aretesParCle':
+      S.modeAretes = V.aretesSquelette
+      S.aretesParCle = V.aretesParCle
+      S.retenirAretes()
+      vue.demanderRendu()
+      carte.maj()
+      break
     case 'poidsDescendants': case 'poidsCentralite': case 'bonusResultats': relancerSquelette(true); break
     case 'etincelles': appliquerTrajectoire(); break
     case 'fondDegrade': vue.racine.classList.toggle('v3-sans-degrade', !V.fondDegrade); break
@@ -287,7 +297,7 @@ const carte = (() => {
     boutons.forEach((b) => b.classList.toggle('actif', b.dataset.mode === V.agregation))
     curseur.value = String(V.seuilImportance)
     const ouvertes = S.ouvertes.size ? ` · ${S.ouvertes.size} ouverte(s)` : ''
-    compte.textContent = `${S.nbCles} clé(s) / ${vue.h.nF}${ouvertes}`
+    compte.textContent = `${S.nbCles} clé(s) / ${vue.h.nF} · ${S.aretesRetenues.size} arête(s)${ouvertes}`
   }
   return { element, maj }
 })()
@@ -370,6 +380,6 @@ Object.assign(window as unknown as Record<string, unknown>, {
     squelette: S,
     lumiere,
     /** Calcule une image complète du moteur à l'instant t (ms), utile quand rAF est suspendu. */
-    image: (t = performance.now()) => (vue as unknown as { image: (t: number) => void }).image(t),
+    image: (t = performance.now()) => vue.image(t),
   },
 })

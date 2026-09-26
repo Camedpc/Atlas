@@ -31,6 +31,7 @@ document.getElementById('catalogue')!.innerHTML = `
       .map(
         (v) => `
       <a class="carte" href="./variantes/${encodeURIComponent(v.dossier)}/index.html">
+        <img class="apercu" src="./apercus/${encodeURIComponent(v.dossier)}.jpg" alt="" loading="lazy" onerror="this.remove()">
         <div class="carte-entete"><h2>${echapper(v.titre)}</h2><span class="id">${echapper(v.id)}</span></div>
         <p>${echapper(v.resume)}</p>
         ${v.idees?.length ? `<ul>${v.idees.map((i) => `<li>${echapper(i)}</li>`).join('')}</ul>` : ''}

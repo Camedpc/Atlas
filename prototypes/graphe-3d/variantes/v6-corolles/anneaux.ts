@@ -8,7 +8,7 @@
 // Les feuilles gardent le rendu sigma ; au survol, un violon de confiance s'affiche dessous.
 
 import {
-  LIBELLES_VALIDATION, STATUTS, VALIDATIONS, clamp, formaterNombre, rgba,
+  LIBELLES_VALIDATION, STATUTS, TYPES_NOEUD, VALIDATIONS, centreCouloir, clamp, formaterNombre, poidsAxes, pointSurAxe, rgba,
   type ContexteDessin, type Statut, type Validation, type VueGraphe,
 } from '../../src/core'
 
@@ -61,6 +61,10 @@ export class Anneaux {
   validations: Int32Array
   actives: Int32Array
   total: Int32Array
+  /** Par (catégorie, tranche de temps, statut) et (catégorie, type, statut) : rubans des vues face / droite. */
+  tranchesStatut: Int32Array
+  typesStatut: Int32Array
+  readonly nbTranches: number
   /** Détachement animé (0…1) par unité, piloté par le survol. */
   private detache = new Map<number, number>()
   private geo = new Map<number, Geometrie>()
@@ -74,6 +78,9 @@ export class Anneaux {
     this.validations = new Int32Array(nC * 4)
     this.actives = new Int32Array(nC)
     this.total = new Int32Array(nC)
+    this.nbTranches = vue.etendues.nbTranches
+    this.tranchesStatut = new Int32Array(nC * this.nbTranches * 3)
+    this.typesStatut = new Int32Array(nC * TYPES_NOEUD.length * 3)
     this.recompter()
   }
 
@@ -88,6 +95,10 @@ export class Anneaux {
     this.validations.fill(0)
     this.actives.fill(0)
     this.total.fill(0)
+    this.tranchesStatut.fill(0)
+    this.typesStatut.fill(0)
+    const nT = this.nbTranches, nY = TYPES_NOEUD.length
+    const face = this.vue.dispositions.face
     for (let f = 0; f < h.nF; f++) {
       const n = h.noeuds[f]!
       const act = filtres.actives[f] === 1
@@ -99,6 +110,9 @@ export class Anneaux {
         this.actives[c]!++
         this.statuts[c * 3 + is]!++
         this.validations[c * 4 + iv]!++
+        const kt = Math.min(nT - 1, Math.max(0, Math.floor(((face[f * 3]! + 1) / 2) * nT)))
+        this.tranchesStatut[(c * nT + kt) * 3 + is]!++
+        this.typesStatut[(c * nY + TYPES_NOEUD.indexOf(n.type)) * 3 + is]!++
       }
     }
   }
@@ -188,6 +202,7 @@ export class Anneaux {
     const nomCentre = R.lire<boolean>('nomCentre')
     const tailleNom = R.lire<number>('tailleNom')
     const seuilNom = R.lire<number>('seuilNom')
+    const seuilCompact = R.lire<number>('seuilCompact')
     const estomper = vue.filtres.restrictif && vue.filtres.etat.mode === 'estomper'
     const lignee = vue.lignee
 
@@ -203,9 +218,18 @@ export class Anneaux {
     for (const u of ordre) {
       const ci = u - h.nF
       const cat = h.categories[ci]!
-      const op = vue.opaciteAffichee[u]! * (1 - 0.45 * g.ouverture[u - h.nF]! * Math.min(1, deroulement))
+      const opBase = vue.opaciteAffichee[u]! * (1 - 0.45 * g.ouverture[u - h.nF]! * Math.min(1, deroulement))
       const o = g.ouverture[ci]!
       const cx = projection.x[u]!, cy = projection.y[u]!
+      // Forte densité : sous le seuil, disque plein au statut dominant + liseré de composition.
+      // Fondu sur ±2 px autour du seuil ; l'agrégat survolé garde toujours son anneau.
+      const kc = seuilCompact > 0 && u !== vue.survol ? clamp((vue.tailleAffichee[u]! - (seuilCompact - 2)) / 4, 0, 1) : 1
+      if (kc < 1) this.dessinerCompact(ctx, u, cx, cy, vue.tailleAffichee[u]!, opBase * (1 - kc), pal)
+      const op = opBase * kc
+      if (op < 0.01) {
+        this.geo.set(u, { cx, cy, rExt: vue.tailleAffichee[u]!, rInt: 0, rValExt: 0, rValInt: 0, eclat: 0, segments: [] })
+        continue
+      }
       const rExt = vue.tailleAffichee[u]! * (1 + 0.25 * o * deroulement)
       // En se déroulant, l'anneau s'amincit et s'efface plus vite que la part visible seule.
       const ep = Math.max(2, rExt * epais * (1 - 0.55 * o * Math.min(1, deroulement)))
@@ -381,6 +405,148 @@ export class Anneaux {
       ctx.fillText(e.texte, e.x, e.y)
     }
     ctx.restore()
+  }
+
+  /** Représentation compacte : disque au statut dominant, fin liseré découpé par statut. */
+  private dessinerCompact(ctx: CanvasRenderingContext2D, u: number, cx: number, cy: number, r: number, op: number, pal: VueGraphe['palette']): void {
+    if (op < 0.01) return
+    const ci = u - this.vue.h.nF
+    const n = Math.max(1, this.actives[ci]!)
+    let dom = 0
+    for (let k = 1; k < 3; k++) if (this.statuts[ci * 3 + k]! > this.statuts[ci * 3 + dom]!) dom = k
+    ctx.save()
+    ctx.globalAlpha = op
+    ctx.fillStyle = pal.statut[STATUTS[dom]!]
+    ctx.beginPath()
+    ctx.arc(cx, cy, Math.max(2, r - 1.6), 0, TAU)
+    ctx.fill()
+    ctx.lineWidth = 1.4
+    let a = -Math.PI / 2
+    for (let k = 0; k < 3; k++) {
+      const m = this.statuts[ci * 3 + k]!
+      if (!m) continue
+      const da = (TAU * m) / n
+      ctx.strokeStyle = pal.statut[STATUTS[k]!]
+      ctx.beginPath()
+      ctx.arc(cx, cy, r, a, a + da)
+      ctx.stroke()
+      a += da
+    }
+    ctx.strokeStyle = pal.fond
+    ctx.lineWidth = 0.8
+    ctx.beginPath()
+    ctx.arc(cx, cy, r - 0.9, 0, TAU)
+    ctx.stroke()
+    ctx.restore()
+  }
+
+  // ─── Rubans des vues temps (face) et type (droite) ─────────────────────────
+
+  /**
+   * Même langage que l'anneau le long de l'axe : l'anneau reste à la médiane (placement du
+   * moteur) et, dessous, un ruban découpé en tranches (semaines en vue de face, couloirs de type
+   * en vue de droite) ; chaque tranche est une barre empilée des statuts, hauteur ∝ √effectif.
+   * Une capsule pâle q10–q90 et une ligne min–max rappellent l'étendue.
+   */
+  dessinerRubans({ ctx, vue }: ContexteDessin): void {
+    if (!this.R.lire<boolean>('rubans')) return
+    const w = poidsAxes(vue)
+    if (w.temps < 0.04 && w.couloirs < 0.04) return
+    const { h, palette: pal } = vue
+    const H = this.R.lire<number>('hauteurRuban')
+    const nT = this.nbTranches, nY = TYPES_NOEUD.length
+    ctx.save()
+    ctx.lineCap = 'round'
+    for (const c of h.categories) {
+      const u = c.unite
+      const op = vue.opaciteAffichee[u]!
+      if (op < 0.04) continue
+      const hU = H * Math.min(1, 0.45 + vue.tailleAffichee[u]! / 45)
+      if (w.temps >= 0.04) {
+        const q = vue.etendues.quantilesTemps(c.index)
+        const valeurs = Array.from({ length: nT }, (_, k) => -1 + (2 * (k + 0.5)) / nT)
+        this.ruban(ctx, vue, u, 'temps', valeurs, (k) => (c.index * nT + k) * 3, this.tranchesStatut, [q.min, q.max], [q.q10, q.q90], hU, op * Math.min(1, w.temps * 1.2), pal)
+      }
+      if (w.couloirs >= 0.04) {
+        let premier = -1, dernier = -1
+        for (let t = 0; t < nY; t++) {
+          const b = (c.index * nY + t) * 3
+          if (this.typesStatut[b]! + this.typesStatut[b + 1]! + this.typesStatut[b + 2]! === 0) continue
+          if (premier < 0) premier = t
+          dernier = t
+        }
+        if (premier < 0) continue
+        const valeurs = TYPES_NOEUD.map((_, t) => centreCouloir(t, 1))
+        const lim: [number, number] = [centreCouloir(premier, 1), centreCouloir(dernier, 1)]
+        this.ruban(ctx, vue, u, 'couloirs', valeurs, (k) => (c.index * nY + k) * 3, this.typesStatut, lim, lim, hU, op * Math.min(1, w.couloirs * 1.2), pal)
+      }
+    }
+    ctx.restore()
+  }
+
+  private ruban(
+    ctx: CanvasRenderingContext2D, vue: VueGraphe, u: number, axe: 'temps' | 'couloirs', valeurs: number[],
+    base: (k: number) => number, comptes: Int32Array, etendue: [number, number], capsule: [number, number],
+    H: number, alpha: number, pal: VueGraphe['palette'],
+  ): void {
+    const cam = vue.camera
+    const pr = (v: number) => cam.projeterPoint(pointSurAxe(vue, u, axe, v))
+    const a0 = pr(etendue[0]), a1 = pr(etendue[1])
+    if (!a0.visible || !a1.visible) return
+    // Ligne min–max et capsule pâle q10–q90.
+    ctx.globalAlpha = alpha
+    ctx.strokeStyle = rgba(pal.texteDoux, 0.4)
+    ctx.lineWidth = 1
+    ctx.beginPath()
+    ctx.moveTo(a0.x, a0.y)
+    ctx.lineTo(a1.x, a1.y)
+    ctx.stroke()
+    const c0 = pr(capsule[0]), c1 = pr(capsule[1])
+    ctx.strokeStyle = rgba(pal.texteDoux, 0.08)
+    ctx.lineWidth = H + 4
+    ctx.beginPath()
+    ctx.moveTo(c0.x, c0.y)
+    ctx.lineTo(c1.x, c1.y)
+    ctx.stroke()
+    // Tranches : barres empilées des statuts, perpendiculaires à l'axe.
+    let max = 1
+    for (let k = 0; k < valeurs.length; k++) {
+      const b = base(k)
+      max = Math.max(max, comptes[b]! + comptes[b + 1]! + comptes[b + 2]!)
+    }
+    const p0 = pr(valeurs[0]!), p1 = pr(valeurs[1] ?? valeurs[0]!)
+    const pas = valeurs.length > 1 ? Math.hypot(p1.x - p0.x, p1.y - p0.y) : 10
+    const larg = clamp(pas * 0.78, 1.5, 16)
+    for (let k = 0; k < valeurs.length; k++) {
+      const b = base(k)
+      const n = comptes[b]! + comptes[b + 1]! + comptes[b + 2]!
+      if (!n) continue
+      const p = pr(valeurs[k]!)
+      const q = pr(valeurs[k]! + 0.01)
+      let tx = q.x - p.x, ty = q.y - p.y
+      const l = Math.hypot(tx, ty) || 1
+      tx /= l
+      ty /= l
+      const nx = -ty, ny = tx
+      const hTot = Math.max(2, H * Math.sqrt(n / max))
+      let off = -hTot / 2
+      for (let s = 0; s < 3; s++) {
+        const m = comptes[b + s]!
+        if (!m) continue
+        const hs = (hTot * m) / n
+        ctx.fillStyle = pal.statut[STATUTS[s]!]
+        const x0 = p.x + nx * off, y0 = p.y + ny * off
+        ctx.beginPath()
+        ctx.moveTo(x0 - (tx * larg) / 2, y0 - (ty * larg) / 2)
+        ctx.lineTo(x0 + (tx * larg) / 2, y0 + (ty * larg) / 2)
+        ctx.lineTo(x0 + (tx * larg) / 2 + nx * hs, y0 + (ty * larg) / 2 + ny * hs)
+        ctx.lineTo(x0 - (tx * larg) / 2 + nx * hs, y0 - (ty * larg) / 2 + ny * hs)
+        ctx.closePath()
+        ctx.fill()
+        off += hs
+      }
+    }
+    ctx.globalAlpha = 1
   }
 
   /** Rayon où placer la bulle (au-delà de l'aperçu éventuel). */

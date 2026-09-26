@@ -103,3 +103,14 @@ footer {
   color: var(--texte-doux);
   font-size: 13px;
 }
+
+/* Aperçu capturé de chaque variante (public/apercus/<id>.jpg) */
+.carte .apercu {
+  display: block;
+  width: calc(100% + 2 * var(--marge-apercu, 0px));
+  aspect-ratio: 8 / 5;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  margin-bottom: 12px;
+}

@@ -194,7 +194,7 @@ export function construireEntete(p: Pilote): { element: HTMLElement; detruire: (
     panneauAide.classList.toggle('visible')
   })
 
-  const element = el('header', { class: 'v4-entete' },
+  const element = el('header', { class: 'v4-entete', 'data-zone-sure': '' },
     el('div', { class: 'v4-groupe' }, boutonPanneau, el('a', { class: 'v4-marque', href: '../../index.html', title: 'Retour au catalogue des variantes' }, el('b', {}, 'Atlas'), el('span', {}, 'instrument'))),
     el('div', { class: 'v4-groupe v4-menus' }, menuVue, menuSelection, menuGranularite),
     nom,

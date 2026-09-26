@@ -125,3 +125,78 @@ apparaissent au fil du zoom.
 - Survol d'un territoire vide : surligner la côte et afficher sa fiche.
 - Échelle graphique en bas de carte, rose des vents discrète, étiquettes le long des côtes.
 - Mettre en cache les champs entre deux images quand seules les opacités changent.
+
+## Itération 2
+
+Vérification : script Playwright du coordinateur (`node capture.mjs v2-cartographie`, rAF réel),
+plus deux scripts de mesure à moi dans le même dossier (`mesure-v2.mjs`, `profil2-v2.mjs`).
+Aucune erreur console, 61 images/s à la dernière capture (53 à 55 sur certaines exécutions : la
+machine est partagée ; en même temps et dans les mêmes conditions, v0 donne 61).
+
+1. **Bandes grises verticales** : le cadre en damier est supprimé. Il reste un liseré fin
+   (opacité 0,14), éloigné des données et **désactivé par défaut** (Couches › « Liseré de
+   feuille »). Le quadrillage s'efface hors vue de dessus : de face, il faisait un trait noir.
+2. **Vues face et droite** :
+   - les territoires en îlots ne s'affichent plus qu'en vue de dessus (poids de la face 7
+     lissé, 0,55 → 0,95) ;
+   - en **vue temps (1)**, chaque catégorie affichée devient une **rivière** : une bande
+     horizontale sur la ligne de son agrégat (placé par `pointSurAxe`, donc à la médiane), de sa
+     première à sa dernière semaine ;
+   - la largeur de la rivière suit l'effectif hebdomadaire lissé (`etendues.tranches`, noyau
+     1-2-3-2-1). Quand un thème s'ouvre, les rivières des sous-thèmes prennent le relais comme
+     des affluents, et le parent reste en lit pâle ;
+   - en **vue droite (3)**, même principe le long des couloirs de type (`etendues.types`) ;
+   - les capsules du moteur sont coupées (`etendues: 'aucune'`) puisque les rivières les
+     remplacent ; les segments par couloir du moteur restent pilotés par `etenduesCouloirs`.
+   - Réglages : « rivières », « largeur des rivières ».
+3. **Noms qui se chevauchent** : deux familles.
+   - **Actifs** (niveau affiché) : placés d'abord, sur le calque du dessus. Leur opacité ne
+     descend pas sous 0,6 même sur un petit territoire (c'était le cas de « Expériences »). Ils
+     essaient d'éviter les disques au-dessus ou au-dessous, sinon ils restent à leur place.
+   - **Filigranes** (catégories déjà ouvertes, par exemple les domaines quand on voit les
+     thèmes) : dessinés sur le calque du **dessous**, derrière nœuds et arêtes, uniquement s'ils
+     ne touchent ni un nom actif ni un disque visible. Trois positions sont essayées (centre,
+     au-dessus, au-dessous), sinon le nom est omis.
+   - Les noms suivent la projection affichée (agrégat à la médiane en vue temps).
+4. **Performance** : le poste coûteux était le remplissage des territoires (raster), pas le
+   calcul du champ. Corrections :
+   - le calque de la carte est mis en **cache hors écran**, clé = caméra, granularité, filtres,
+     réglages, thème, mise en avant et taille ; une image sans changement ne fait qu'un
+     `drawImage` ;
+   - en simple **déplacement orthographique**, l'image en cache est **décalée** au lieu d'être
+     recalculée, puis affinée 160 ms après l'arrêt ;
+   - **en mouvement** (zoom, orbite, transition) : rendu à 0,65 de la résolution
+     (« résolution en mouvement »), grille 1,7 fois plus grossière, traits pleins sans tirets,
+     pas de courbes de niveau ; une image affinée suit l'arrêt ;
+   - le budget adaptatif (« budget carte ») est conservé ;
+   - garde-fous en perspective proche : échelle des noyaux bornée à 3 ; halos limités à 60 px,
+     ignorés pour les nœuds énormes ou hors écran, surface totale plafonnée à 4 écrans ;
+   - résultat : carte ≤ 0,4 ms par image en orbite, 61 images/s en déplacement, zoom continu
+     et orbite type capture.
+5. **Cadrage** : la mini-carte porte `data-zone-sure` et est donc prise en compte par
+   `zoneSure()` du moteur, avec la barre et le bas. La recherche (« aller à ») passe
+   `vue.zoneSure()` à `camera.cadrer`. Dans les captures, le bas de la carte (« Processus
+   stochastiques ») n'est plus masqué. La mini-carte a une largeur fixe : son pied ne déborde
+   plus sur la granularité pendant une transition.
+
+Captures décrites (1600 × 1000) :
+- **01** : vue de dessus au niveau Thèmes, sans bandes. Filigranes de domaines déplacés hors des
+  disques (« PROBABILITÉS ET STATISTIQUE » au-dessus de son territoire).
+- **03** : vue temps, rivières horizontales teintées, noms au-dessus des disques à la médiane.
+- **04** : vue droite, bandes le long des couloirs de type.
+- **06** : transition vers les sous-thèmes, rendue à résolution réduite pendant le mouvement.
+- **08** et **09** : nœuds, survol avec fiche. Les autres sont estompés.
+- **11** : thème sombre.
+
+Moteur, bug constaté : dans `image(t)`, `dt = min(64, t − dernierT)` n'est pas borné à 0.
+Après un `vue.avancer(ms)` (temps synthétiques dans le futur), l'image rAF suivante reçoit un
+dt négatif. Le lissage de `camera.perspective` diverge alors (−10,6 observé) et la projection
+devient absurde. Correction suggérée : `dt = clamp(t − dernierT, 0, 64)`, ou recaler
+`dernierT` à la fin de `avancer`. Cela ne touche que les tests.
+
+Limites restantes :
+- le décalage en cache laisse brièvement une marge vide au bord pendant un grand déplacement ;
+- les rivières d'un même domaine en vue droite sont presque toutes pleine largeur, car chaque
+  thème a tous les types : l'information est dans les variations d'épaisseur, pas dans l'étendue ;
+- à granularité fine, beaucoup de filigranes de sous-thèmes sont omis faute de place, ce qui est
+  voulu.

@@ -1,0 +1,15 @@
+{
+  "id": "v7-synthese",
+  "titre": "V7 · Synthèse",
+  "resume": "Une proposition cohérente qui réunit le meilleur des six variantes : figure scientifique sur papier clair, agrégats à anneau de statuts discret, axes gradués et réticule dans les vues temps et type, lignée animée, fiche hiérarchisée, et un panneau gauche pensé comme l'application Atlas.",
+  "idees": [
+    "Base esthétique de V1 : papier, encre, Source Serif + Inter, noms de catégories posés sur les agrégats sans chevauchement",
+    "Agrégat = disque teinté du domaine + anneau fin segmenté par statut (V6, en discret)",
+    "Vues de face et de droite façon V4 : règles graduées propres à chaque face, réticule de lecture, étendues temporelles en barres d'erreur, couloirs de types nommés ; vue de dessus sans graduation",
+    "Clic : lignée animée par des impulsions sobres le long des arêtes (V3)",
+    "Fiche de survol hiérarchisée (V5) : titre, trois infos clés, détail dépliable avec Espace",
+    "Options : lentille focus + contexte (V5, désactivée), zoom sémantique (V2, manuel ou automatique), palette Ctrl + K (V5, active)",
+    "Panneau gauche « application » (☰ ou N) : Graphe, Nœud, Activité des agents (maquette), Réglages ; mode pousse ou surimpression"
+  ],
+  "ordre": -1
+}

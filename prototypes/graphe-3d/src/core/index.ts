@@ -556,7 +556,7 @@ export class VueGraphe {
       }
       this.versionCameraInitiale = -1
     }
-    const dt = this.dernierT ? Math.min(64, t - this.dernierT) : 16
+    const dt = this.dernierT ? Math.min(64, Math.max(0, t - this.dernierT)) : 16
     this.dernierT = t
     let bouge = this.animateur.mettreAJour(t)
     bouge = this.controles.mettreAJour(dt) || bouge

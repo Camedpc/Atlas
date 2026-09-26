@@ -33,8 +33,11 @@ const REGLAGES: DefinitionReglage[] = [
   { cle: 'seuilTerritoire', defaut: 0.42, dossier: TE, libelle: 'seuil du contour', min: 0.05, max: 2, pas: 0.01 },
   { cle: 'finesse', defaut: 3, dossier: TE, libelle: 'finesse de grille', min: 1.5, max: 8, pas: 0.1 },
   { cle: 'budgetCarte', defaut: 7, dossier: TE, libelle: 'budget carte (ms/image)', min: 2, max: 30, pas: 0.5 },
+  { cle: 'resolutionMouvement', defaut: 0.65, dossier: TE, libelle: 'résolution en mouvement', min: 0.25, max: 1, pas: 0.05 },
   { cle: 'epaisseurCote', defaut: 1, dossier: TE, libelle: 'épaisseur des côtes', min: 0, max: 3, pas: 0.05 },
-  { cle: 'territoiresHorsDessus', defaut: 0.35, dossier: TE, libelle: 'opacité hors vue 7', min: 0, max: 1, pas: 0.01 },
+  { cle: 'territoiresHorsDessus', defaut: 0, dossier: TE, libelle: 'opacité hors vue 7', min: 0, max: 1, pas: 0.01 },
+  { cle: 'rivieres', defaut: true, dossier: TE, libelle: 'rivières (vue temps)' },
+  { cle: 'largeurRivieres', defaut: 2.4, dossier: TE, libelle: 'largeur des rivières', min: 0.5, max: 8, pas: 0.1 },
   { cle: 'courbes', defaut: true, dossier: TE, libelle: 'courbes de niveau' },
   { cle: 'nbCourbes', defaut: 4, dossier: TE, libelle: 'nb de courbes', min: 1, max: 10, pas: 1 },
   { cle: 'rapportCourbes', defaut: 1.7, dossier: TE, libelle: 'rapport entre courbes', min: 1.15, max: 4, pas: 0.05 },
@@ -44,7 +47,7 @@ const REGLAGES: DefinitionReglage[] = [
   { cle: 'tailleToponymes', defaut: 12, dossier: TO, libelle: 'taille', min: 7, max: 24, pas: 0.5 },
   { cle: 'espacementToponymes', defaut: 0.2, dossier: TO, libelle: 'espacement lettres (em)', min: 0, max: 0.6, pas: 0.01 },
   { cle: 'opaciteToponymes', defaut: 0.95, dossier: TO, libelle: 'opacité', min: 0, max: 1, pas: 0.01 },
-  { cle: 'lisibiliteToponymes', defaut: 0.8, dossier: TO, libelle: 'place exigée', min: 0.1, max: 2, pas: 0.05 },
+  { cle: 'lisibiliteToponymes', defaut: 0.55, dossier: TO, libelle: 'place exigée', min: 0.1, max: 2, pas: 0.05 },
 
   { cle: 'halo', defaut: true, dossier: CO, libelle: 'halo de confiance' },
   { cle: 'intensiteHalo', defaut: 0.5, dossier: CO, libelle: 'intensité', min: 0, max: 1.5, pas: 0.01 },
@@ -54,7 +57,7 @@ const REGLAGES: DefinitionReglage[] = [
 
   { cle: 'graticule', defaut: true, dossier: FO, libelle: 'quadrillage' },
   { cle: 'opaciteGraticule', defaut: 0.06, dossier: FO, libelle: 'opacité quadrillage', min: 0, max: 0.4, pas: 0.005 },
-  { cle: 'cadre', defaut: true, dossier: FO, libelle: 'cadre de feuille' },
+  { cle: 'cadre', defaut: false, dossier: FO, libelle: 'liseré de feuille' },
   { cle: 'miniCarte', defaut: true, dossier: FO, libelle: 'mini-carte' },
 ]
 
@@ -78,7 +81,8 @@ const vue = creerVue(document.getElementById('app')!, {
   mode: '2d',
   vueInitiale: 'dessus',
   granularite: 1,
-  reglages: { tailleAgregat: 0.38, opaciteAretes: 0.16, densiteLibelles: 0.4, dureeTransition: 750 },
+  // Les rivières remplacent les capsules d'étendue du moteur (les segments par couloir restent).
+  reglages: { tailleAgregat: 0.38, opaciteAretes: 0.16, densiteLibelles: 0.4, etendues: 'aucune' },
   reglagesSupplementaires: REGLAGES,
   reducteursNoeud: [reducteurCarte],
   dessinerDessous: (c) => carte?.dessinerDessous(c),
@@ -113,16 +117,19 @@ function majRelies(): void {
   if (vue.survol !== null) {
     marquer(vue.survol)
     for (const v of vue.voisinsSurvol) marquer(v)
-    carte.relies = relies
+    carte.definirRelies(relies)
   } else if (vue.lignee.active) {
     const l = vue.lignee
     for (let f = 0; f < vue.h.nF; f++) if (l.graines[f] || l.ancetres[f] || l.descendants[f]) marquer(f)
-    carte.relies = relies
-  } else carte.relies = null
+    carte.definirRelies(relies)
+  } else carte.definirRelies(null)
   vue.demanderRendu()
 }
 vue.on('survol', majRelies)
 vue.on('selection', majRelies)
+// Tout réglage ou filtre invalide le cache de la carte.
+vue.on('reglage', () => carte?.invalider())
+vue.on('filtres', () => carte?.invalider())
 
 // ─── Panneau : rail d'icônes et onglets ──────────────────────────────────────
 
@@ -135,7 +142,7 @@ function allerA(u: number): void {
     unites = [u, ...h.premisses[u]!, ...h.utilisePar[u]!].filter((f) => h.chaine[f * 3 + 2] === st).slice(0, 24)
     if (zoom.mode === 'manuel') vue.ouvrir(h.parent(u))
   } else unites = [u, ...h.categorieDe(u)!.feuilles]
-  vue.camera.cadrer(vue.positionsBase, unites, vue.reglages.valeurs.dureeVues * 1.8, 1.35)
+  vue.camera.cadrer(vue.positionsBase, unites, vue.reglages.valeurs.dureeVues * 1.8, 1.35, vue.zoneSure())
   vue.demanderRendu()
 }
 

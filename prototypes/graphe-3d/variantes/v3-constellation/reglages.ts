@@ -12,6 +12,11 @@ export interface ReglagesV3 {
   haloIncertitude: number
   haloAgregats: number
   fusion: 'auto' | 'normal' | 'additif'
+  haloCoeur: number
+  plafondHalos: number
+  haloPleinPart: number
+  haloMinimal: number
+  haloContexte: number
   // Survol
   voisinsAllumes: number
   estompeHalos: number
@@ -49,6 +54,13 @@ export interface ReglagesV3 {
   bonusResultats: number
   tailleCles: number
   garderLignee: boolean
+  aretesSquelette: 'toutes' | 'fortes' | 'directes'
+  aretesParCle: number
+  // Territoires et vues temps / type
+  territoires: 'auto' | 'toujours' | 'jamais'
+  opaciteTerritoires: number
+  traineesTemps: boolean
+  intensiteTemps: number
   // Ambiance
   fondDegrade: boolean
   poussiere: number
@@ -64,14 +76,19 @@ const H = '✦ Halos', P = '✦ Profondeur de champ', C = '✦ Confiance', T = '
 export const DEFINITIONS_V3: DefinitionReglage[] = [
   { cle: 'halo', defaut: true, dossier: H, libelle: 'halos' },
   { cle: 'haloCouleur', defaut: 'statut', dossier: H, libelle: 'couleur', options: { statut: 'statut', domaine: 'domaine', origine: 'origine', unie: 'unie' } },
-  { cle: 'haloRayon', defaut: 3.2, dossier: H, libelle: 'rayon (× nœud)', min: 1, max: 10, pas: 0.1 },
-  { cle: 'haloIntensite', defaut: 0.45, dossier: H, libelle: 'intensité', min: 0, max: 1.5, pas: 0.01 },
-  { cle: 'haloFlou', defaut: 0.35, dossier: H, libelle: 'flou', min: 0, max: 1, pas: 0.01 },
+  { cle: 'haloRayon', defaut: 3.6, dossier: H, libelle: 'rayon (× nœud)', min: 1, max: 10, pas: 0.1 },
+  { cle: 'haloIntensite', defaut: 0.8, dossier: H, libelle: 'intensité', min: 0, max: 1.5, pas: 0.01 },
+  { cle: 'haloFlou', defaut: 0.3, dossier: H, libelle: 'flou', min: 0, max: 1, pas: 0.01 },
   { cle: 'haloIncertitude', defaut: 26, dossier: H, libelle: 'largeur ∝ incertitude (px)', min: 0, max: 80, pas: 1 },
-  { cle: 'haloAgregats', defaut: 1, dossier: H, libelle: 'nébuleuses agrégats', min: 0, max: 2, pas: 0.01 },
+  { cle: 'haloAgregats', defaut: 1.2, dossier: H, libelle: 'nébuleuses agrégats', min: 0, max: 2, pas: 0.01 },
   { cle: 'fusion', defaut: 'auto', dossier: H, libelle: 'mélange', options: { 'auto (clair : normal, sombre : additif)': 'auto', normal: 'normal', additif: 'additif' } },
+  { cle: 'haloCoeur', defaut: 0.65, dossier: H, libelle: 'cœur saturé (clair)', min: 0, max: 1, pas: 0.01 },
+  { cle: 'plafondHalos', defaut: 0.85, dossier: H, libelle: 'plafond de densité', min: 0.1, max: 1, pas: 0.01 },
+  { cle: 'haloPleinPart', defaut: 0.2, dossier: H, libelle: 'part des nœuds à halo plein', min: 0, max: 1, pas: 0.01 },
+  { cle: 'haloMinimal', defaut: 1.8, dossier: H, libelle: 'halo minimal (× nœud)', min: 0, max: 5, pas: 0.05 },
+  { cle: 'haloContexte', defaut: 0.5, dossier: H, libelle: 'halos du contexte (lignée)', min: 0, max: 1, pas: 0.01 },
   { cle: 'voisinsAllumes', defaut: 1.2, dossier: H, libelle: 'survol : voisins allumés', min: 0, max: 3, pas: 0.05 },
-  { cle: 'estompeHalos', defaut: 0.12, dossier: H, libelle: 'halos estompés', min: 0, max: 1, pas: 0.01 },
+  { cle: 'estompeHalos', defaut: 0.35, dossier: H, libelle: 'halos estompés', min: 0, max: 1, pas: 0.01 },
 
   { cle: 'profondeurChamp', defaut: 0.7, dossier: P, libelle: 'flou de profondeur', min: 0, max: 1, pas: 0.01 },
   { cle: 'miseAuPoint', defaut: 0.15, dossier: P, libelle: 'mise au point (0 = près)', min: 0, max: 1, pas: 0.01 },
@@ -107,6 +124,13 @@ export const DEFINITIONS_V3: DefinitionReglage[] = [
   { cle: 'tailleCles', defaut: 0.12, dossier: S, libelle: 'grossissement des clés', min: 0, max: 1, pas: 0.01 },
   { cle: 'garderLignee', defaut: true, dossier: S, libelle: 'la lignée sort du squelette' },
 
+  { cle: 'aretesSquelette', defaut: 'fortes', dossier: S, libelle: 'arêtes', options: { 'toutes (regroupées)': 'toutes', 'les plus fortes par clé': 'fortes', 'clé → clé directes': 'directes' } },
+  { cle: 'aretesParCle', defaut: 2, dossier: S, libelle: 'arêtes fortes par clé', min: 1, max: 12, pas: 1 },
+
+  { cle: 'territoires', defaut: 'auto', dossier: A, libelle: 'noms des territoires', options: { 'auto (niveau nœuds)': 'auto', toujours: 'toujours', jamais: 'jamais' } },
+  { cle: 'opaciteTerritoires', defaut: 0.72, dossier: A, libelle: 'opacité territoires', min: 0, max: 1, pas: 0.01 },
+  { cle: 'traineesTemps', defaut: true, dossier: A, libelle: 'traînées de période (vues 1 / 3)' },
+  { cle: 'intensiteTemps', defaut: 0.8, dossier: A, libelle: 'intensité traînées de période', min: 0, max: 2, pas: 0.01 },
   { cle: 'fondDegrade', defaut: true, dossier: A, libelle: 'fond dégradé' },
   { cle: 'poussiere', defaut: 0.6, dossier: A, libelle: 'poussière d’étoiles (sombre)', min: 0, max: 1, pas: 0.01 },
 ]

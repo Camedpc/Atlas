@@ -60,8 +60,8 @@ Démarrage en 3D isométrique, granularité 2 (sous-thèmes).
 
 ## Ce qui a été ajouté hors des points d'extension (dans ce dossier)
 
-- **Enveloppe de `granularite.calculerPositions`** (instance, pas le code du moteur) : après le moteur, les feuilles
-  repliées sont tirées vers leur clé. Pendant l'animation du squelette, un écouteur `image` incrémente
+- ~~Enveloppe de `granularite.calculerPositions`~~ (itération 1) → remplacée en itération 2 par le crochet
+  `apresPositions` du moteur : après le moteur, les feuilles repliées sont tirées vers leur clé. Pendant l'animation du squelette, un écouteur `image` incrémente
   `granularite.version` pour forcer le recalcul des positions à l'image suivante.
 - **Boucle rAF propre** dans `lumiere.ts` pour le scintillement, les impulsions et la fin des traînées : elle efface
   et redessine seulement les deux calques canvas (`rendu.preparerCalques()`), sans relancer sigma. Pas de double
@@ -112,3 +112,58 @@ Démarrage en 3D isométrique, granularité 2 (sous-thèmes).
 - Halos en WebGL (programme sigma) pour du vrai flou de profondeur sur le nœud lui-même.
 - Zoom sémantique : le seuil d'importance suit la distance caméra.
 - Mode « exposition longue » : accumuler les traînées pendant une orbite pour révéler la structure 3D.
+
+## Itération 2
+
+Vérifié avec le script Playwright du coordinateur (`node capture.mjs v3-constellation` : 61 images/s en orbite,
+aucune erreur) et une copie adaptée `capture-v3.mjs` (dans le scratchpad) pour les états propres à la variante :
+squelette, squelette + lignée, sortie du squelette à mi-transition, lignée au niveau feuilles en iso, clair et sombre.
+`npx tsc --noEmit -p .` : aucune erreur dans le dossier.
+
+**Moteur** : l'enveloppe de `granularite.calculerPositions` est retirée au profit de l'option `apresPositions`.
+La trajectoire du squelette reçoit maintenant `unite`, `parent` et `sens` (−1 quand une feuille rentre dans sa clé).
+Le réducteur qui rallume les voisins en mode squelette compense `opaciteContexte` (atténuation unique du moteur).
+`etenduesParDefaut: false` : nos traînées de période remplacent la capsule.
+
+1. **Halos plus présents en thème clair.** Sprites à cœur saturé : la teinte est resaturée et légèrement assombrie en HSL
+   au centre, puis se fond vers la teinte pastel (réglage `cœur saturé`). Le dégradé est plus long : traîne en
+   1/(1 + k r²). Nébuleuses d'agrégats ×1,35, plus nettes. Le flou de profondeur coûte moins d'opacité.
+   Défauts : intensité 0,8, rayon 3,6. En iso au niveau sous-thèmes, chaque agrégat a maintenant une vraie lueur colorée.
+2. **Plus de nappes.** Deux mécanismes :
+   - *Plafond de densité* : les halos s'accumulent dans un tampon hors écran. En `source-over`, l'alpha cumulé sature à 1 au
+     lieu de s'additionner. Le tampon est ensuite posé avec l'opacité `plafond de densité` (0,85), en additif pour le
+     thème sombre.
+   - *Halo plein réservé* : seuls les agrégats, les 20 % de nœuds les plus importants, le survol et ses voisins, la lignée
+     et les clés du squelette ont un halo plein. Les autres ont un halo minimal serré (`halo minimal`, 1,8 × nœud).
+     La couronne IA + humain ne s'affiche que sur les halos pleins.
+3. **Lignée au niveau feuilles.** Le contexte garde ses halos (`halos du contexte`, 0,5) sur l'atténuation unique du moteur.
+   Des **noms de territoires** apparaissent dès que les feuilles dominent (g > 2,5 ou squelette ; réglage `auto / toujours /
+   jamais`, opacité 0,72) : nom de chaque thème en capitales espacées, au barycentre écran de ses feuilles visibles,
+   couleur du domaine, contour couleur de fond, placement glouton sans chevauchement.
+4. **Arêtes du squelette.** Réglage `arêtes` :
+   - *toutes (regroupées)* : 675 paires ;
+   - *les plus fortes par clé* (défaut) : une paire reste si elle compte parmi les k plus fortes de l'une de ses
+     extrémités ; avec k = 2, 265 arêtes pour 180 clés ;
+   - *clé → clé directes* : seules les arêtes d'origine entre deux clés.
+   La carte Agrégation affiche le nombre d'arêtes.
+5. **Vues face (1) et droite (3).**
+   - En vue de face, chaque agrégat laisse une **traînée lumineuse le long de sa période** : un fil min–max, un chapelet
+     de lueurs étirées le long de l'axe, une par semaine, dont l'éclat et l'épaisseur suivent l'effectif, et un trait vif
+     q25–q75. Les semaines actives se lisent comme des nœuds plus brillants sur la traînée.
+   - En vue de droite, une lueur étirée par couloir de type, de longueur proportionnelle à l'effectif.
+   - Données : `vue.etendues` (tranches, types, quantiles), `pointSurAxe` et `poidsAxes` : le rendu apparaît en fondu près
+     de la face concernée et suit la granularité. Réglages `traînées de période` et `intensité`.
+
+Captures (décrites) :
+- `01-initial` (iso, sous-thèmes) : nébuleuses bleues, turquoise, violettes et grises nettement visibles.
+- `03-face` : traînées de période lumineuses.
+- `08-granularite-max` : amas sans nappe, avec les noms de territoires.
+- `10-lignee` : le contexte pastel reste lisible, avec ses territoires.
+- `s3-sortie-squelette` : étincelles courbes avec traînées.
+- `s5-sombre-lignee` : ancêtres orange, descendants violets, territoires colorés sur ciel profond.
+
+Limites restantes :
+- Dans le squelette, les libellés de sigma et les noms de territoires peuvent se chevaucher (deux systèmes de placement).
+- Le tampon des halos coûte un `drawImage` plein écran par image : négligeable ici, 61 images/s mesurées.
+- Vue de droite : la lueur par couloir reste dense quand beaucoup d'agrégats sont affichés. On pourrait n'afficher
+  que les couloirs des agrégats survolés.

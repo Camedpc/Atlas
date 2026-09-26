@@ -124,3 +124,72 @@ chercheur** : une lentille suit le curseur, et les agrégats qui passent dessous
 - Plusieurs lentilles épinglées (comparer deux régions), chacune avec sa couleur.
 - Lentille temporelle en vue de face : une bande verticale plutôt qu'un disque.
 - Mémoriser la dernière lentille épinglée par vue (dessus / face / droite).
+
+## Itération 2
+
+Vérification faite avec Playwright (requestAnimationFrame actif) : `capture.mjs v5-lentille` (61 images/s,
+aucune erreur) et mon script `scratchpad/shots/v5-scenarios.mjs` (captures dans
+`out/v5-lentille-scenarios/`). `npx tsc --noEmit -p .` : aucune erreur dans ce dossier.
+
+### Retours traités
+
+1. **Niveau Nœuds : la lentille devient une loupe.** Quand la granularité globale vaut Nœuds, il n'y a
+   plus rien à ouvrir. La lentille devient une loupe de lecture : fisheye, grossissement plus fort
+   (réglage `grossissementLoupe`), libellés placés sans chevauchement, et surtout l'**arc d'intervalle
+   et le badge de validation** pour chaque nœud sous la loupe, même petit. L'étiquette affiche
+   « loupe : libellés et confiance » et la puce « Loupe : suit le curseur ». Réglage `loupeNoeuds` pour
+   revenir à une loupe simple.
+   *Pourquoi ce choix.* La désactiver retirerait l'outil précisément quand le graphe est le plus dense,
+   alors que c'est là qu'un détail à la demande sert le plus. Ouvrir les démonstrations serait un
+   nouveau niveau de données (les démonstrations ne sont pas des unités du graphe) : ça demanderait
+   de nouvelles unités dans le moteur, et le panneau montre déjà les démonstrations de la sélection.
+   Au niveau Nœuds, la question du chercheur devient « que dit ce paquet et à quel point est-ce
+   sûr ? » : c'est exactement ce que la loupe affiche.
+2. **Contexte plus lisible hors lentille.** Le remplissage des nœuds est plus saturé
+   (`teinteRemplissage` 0,5 → 0,28), la bordure minimale plus épaisse (0,14 → 0,18) et l'estompe
+   hors lentille plus faible (0,22 → 0,15). En mode loupe, il n'y a **aucune** estompe hors du
+   disque : le graphe entier reste net. Le fisheye passe à un profil **doux**,
+   `d' = d(1 + k(1 − t)²)`, tangent à l'identité au bord : les nœuds ne se tassent plus contre le
+   cercle. L'ancien profil Sarkar-Brown y écrasait les nœuds sous un anneau de libellés.
+3. **Lentille ancrée au graphe** (réglage `ancrageLentille`, défaut `graphe`, commande dans la
+   palette). À l'épinglage, je convertis le centre écran en point monde (plan de la cible caméra).
+   Chaque image, dans le crochet `apresProjection`, je le reprojette avant d'appliquer le fisheye.
+   Vérifié : après un déplacement de caméra de (−220, +90) px, la lentille passe de (820, 470) à
+   (600, 560) (capture `09-ancree-apres-deplacement`). Le rayon reste en pixels (instrument
+   d'écran). L'appui long tactile épingle avec le même ancrage.
+4. **Palette, fiche et dépli vérifiés en capture réelle.**
+   - `04-palette-vide`, `05-palette-recherche` : « monte carlo » donne la catégorie puis 11
+     simulations, avec correspondances surlignées et ligne active marquée d'un filet bleu.
+   - `07-palette-actions` : `>filtre` liste les actions. À score égal, elles gardent leur ordre
+     logique.
+   - `02-fiche-noeud` : titre, « Validé » + mini-intervalle 0,92 [0,91–0,97], « Calcul · Ordinateur »
+     + badge IA+H, date · session.
+   - `03-fiche-noeud-detail` (après Espace) : chemin, validation, liens (2 prémisses · 135
+     descendants), preuves, énoncé.
+5. **Vues face et droite.** En vue de face (poids de l'axe temps > 0,3), un agrégat s'ouvre si la
+   lentille croise la **boîte de sa capsule** (q25 → q75 projetés, `etendueTempsEcran`), et pas
+   seulement son disque à la médiane. La fermeture utilise la même emprise (avec l'hystérésis).
+   Vérifié sur « Intégration » : la lentille posée sur q25, à 530 px de la médiane, l'ouvre
+   (`10-face-capsule`). En vue de droite, j'ai d'abord essayé la capsule des couloirs : chaque
+   thème couvre presque tous les types, donc 29 catégories s'ouvraient d'un coup. J'ai retiré cet
+   axe, et seuls le disque et la médiane comptent en vue de droite (`11-droite`).
+
+### Aussi corrigé
+
+- Des libellés de lentille « flottaient » loin de leur nœud. Le placement à gauche dépendait
+  d'une largeur mesurée avant le chargement de la police web. Le texte est maintenant ancré au
+  nœud (`textAlign: right`) et les largeurs sont remesurées après `document.fonts.ready`.
+- Les badges ne se chevauchent plus (placement glouton, survol et voisins d'abord). Pendant un
+  survol, il n'y a plus de badges sur les nœuds estompés.
+- Moteur : j'utilise maintenant `apresProjection` (au lieu d'envelopper `rendu.positionner`) et
+  `granularite.revenirAuGlobal(c)` (au lieu du cast vers la méthode privée).
+
+### Limites restantes
+
+- En vue de droite, la lentille n'utilise pas les étendues par type (décision ci-dessus). Une
+  meilleure piste : n'ouvrir que les tranches « catégorie × couloir » sous le disque, ce qui
+  demanderait des unités par couloir dans le moteur.
+- Le mode loupe s'active seulement si la granularité globale est entière à 3. Avec des ouvertures
+  locales complètes à un niveau inférieur, la lentille reste en mode ouverture (sans effet visible).
+- Une lentille ancrée hors écran (après un grand déplacement) n'est pas ramenée. Il faut appuyer
+  sur L pour la désépingler.

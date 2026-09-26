@@ -77,6 +77,7 @@ export function construireNPanel(p: Pilote, moteur: PanneauGauche, ouvertInitial
   const superpositions = el('div', { class: 'v4-cases' },
     caseReglage(vue, 'grille', 'Grilles des faces'),
     caseReglage(vue, 'facesTeintees', 'Faces teintées'),
+    caseReglage(vue, 'densiteAuto', 'Densité auto (faces vues de biais)'),
     caseReglage(vue, 'axesOrigine', "Axes d'origine (sol)"),
     caseReglage(vue, 'secteurs', 'Secteurs thématiques (dessus)'),
     caseReglage(vue, 'graduations', 'Règles graduées'),
@@ -84,6 +85,7 @@ export function construireNPanel(p: Pilote, moteur: PanneauGauche, ouvertInitial
     caseReglage(vue, 'reticule', 'Réticule de lecture'),
     caseReglage(vue, 'pastillesReticule', 'Valeurs lues sur les axes'),
     caseReglage(vue, 'crochetsAgregat', "Étendue d'un agrégat sur les axes"),
+    caseReglage(vue, 'etenduesPeriode', 'Étendue des agrégats (barre graduée)'),
     listeReglage(vue, 'barresErreur', "Barres d'erreur", { verticales: 'verticales', horizontales: 'horizontales', croix: 'croix', aucune: 'aucune' }),
     listeReglage(vue, 'libelles', 'Libellés', { automatiques: 'auto', 'agrégats seulement': 'agregats', aucun: 'aucun' }),
   )
@@ -140,7 +142,7 @@ export function construireNPanel(p: Pilote, moteur: PanneauGauche, ouvertInitial
   ))
 
   // ── Assemblage ──
-  const onglets = el('nav', { class: 'v4-onglets', 'aria-label': 'Onglets du panneau' })
+  const onglets = el('nav', { class: 'v4-onglets', 'aria-label': 'Onglets du panneau', 'data-zone-sure': '' })
   const contenu = el('div', { class: 'v4-npanel-contenu' })
   const boutons = new Map<Onglet, HTMLButtonElement>()
   for (const [id, titre] of ONGLETS) {
@@ -153,7 +155,7 @@ export function construireNPanel(p: Pilote, moteur: PanneauGauche, ouvertInitial
     c.dataset.onglet = id
     contenu.appendChild(c)
   }
-  const tiroir = el('div', { class: 'v4-tiroir' }, el('div', { class: 'v4-tiroir-entete' }, el('span', { class: 'v4-tiroir-titre' }), el('button', { type: 'button', class: 'v4-fermer', title: 'Fermer', onclick: () => basculer() }, '×')), contenu)
+  const tiroir = el('div', { class: 'v4-tiroir', 'data-zone-sure': '' }, el('div', { class: 'v4-tiroir-entete' }, el('span', { class: 'v4-tiroir-titre' }), el('button', { type: 'button', class: 'v4-fermer', title: 'Fermer', onclick: () => basculer() }, '×')), contenu)
   const element = el('aside', { class: 'v4-npanel' }, onglets, tiroir)
   vue.interface.appendChild(element)
 
@@ -174,7 +176,10 @@ export function construireNPanel(p: Pilote, moteur: PanneauGauche, ouvertInitial
       actif = o
       ouvert = true
     } else ouvert = !ouvert
+    const change = element.classList.contains('ouvert') !== ouvert
     appliquer()
+    // Le cube se recadre dans la zone sûre une fois le tiroir en place (fin de sa transition).
+    if (change && vue.reglages.lire<boolean>('recadrerPanneau')) window.setTimeout(() => vue.cadrerTout(), 260)
   }
   if (ouvertInitial) ouvert = true
   appliquer()

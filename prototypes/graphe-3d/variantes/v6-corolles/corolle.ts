@@ -1,12 +1,14 @@
-// Trajectoire « corolle » : à l'ouverture d'un agrégat, ses enfants éclosent en éventail
-// ordonné autour du parent (anneau de pétales dans le plan de l'écran), puis rejoignent leur
-// position ; à l'agrégation ils reviennent sur l'anneau et se replient vers le centre.
+// Trajectoire « corolle » : à l'ouverture LOCALE d'un agrégat (ou de peu d'agrégats), ses enfants
+// éclosent en éventail ordonné autour du parent (anneau de pétales dans le plan de l'écran), puis
+// rejoignent leur position ; à l'agrégation ils reviennent sur l'anneau et se replient au centre.
+// Quand beaucoup d'agrégats s'ouvrent ensemble (granularité globale), variante sobre : trajet
+// direct, mais les parents partent en « vague » (décalage dans le temps selon leur position écran),
+// ce qui évite la superposition de dizaines de corolles.
 //
-// Le moteur ne transmet pas l'unité à la trajectoire, seulement une « graine » par unité.
-// On remplace donc `h.graines[u]` par u (entier exact en Float32) et on garde les graines
-// d'origine pour les trajectoires du moteur (spirale…). Voir NOTES.md.
+// Itération 2 : le moteur fournit `unite`, `parent`, `o` (ouverture brute, linéaire dans le temps)
+// et `sens` ; on applique nous-mêmes décalage puis courbe sur `o` (départ immédiat).
 
-import { STATUTS, TRAJECTOIRES, VALIDATIONS, clamp, type PointTrajectoire, type VueGraphe } from '../../src/core'
+import { COURBES, STATUTS, TRAJECTOIRES, VALIDATIONS, clamp, type Courbe, type PointTrajectoire, type VueGraphe } from '../../src/core'
 
 export type OrdreEclosion = 'statut' | 'date' | 'validation' | 'confiance'
 export type FormeTrajectoire = 'corolle' | keyof typeof TRAJECTOIRES
@@ -20,12 +22,17 @@ export class Corolle {
   readonly angle: Float32Array
   /** Rayon (px) de l'anneau de pétales de chaque unité (celui de son parent). */
   readonly rayonPx: Float32Array
-  private graineOrig: Float32Array
+  /** Retard (0…1) de chaque parent dans la vague d'une ouverture globale. */
+  readonly retardVague: Float32Array
+  /** Nombre de catégories en transition (image précédente) et si la corolle complète s'applique. */
+  nbEnTransition = 0
   private sale = true
   /** Paramètres lus à chaque image (mis à jour par main.ts). */
   forme: FormeTrajectoire = 'corolle'
   phase = 0.45
-  decalage = 0.35
+  decalage = 0.12
+  vague = 0.35
+  seuilCorolle = 3
 
   constructor(
     private vue: VueGraphe,
@@ -36,9 +43,32 @@ export class Corolle {
     this.rang = new Float32Array(h.nU)
     this.angle = new Float32Array(h.nU)
     this.rayonPx = new Float32Array(h.nU)
-    this.graineOrig = Float32Array.from(h.graines)
-    for (let u = 0; u < h.nU; u++) h.graines[u] = u
+    this.retardVague = new Float32Array(h.nC)
     vue.granularite.version++
+  }
+
+  /**
+   * Après chaque image : compte les catégories en transition et calcule la vague (rang de gauche
+   * à droite à l'écran, pour une lecture continue). Utilisé à l'image suivante.
+   */
+  observer(): void {
+    const { h, granularite: g, projection: p } = this.vue
+    const enCours: number[] = []
+    for (let c = 0; c < h.nC; c++) {
+      const o = g.ouverture[c]!
+      if (o > 1e-3 && o < 0.999) enCours.push(c)
+    }
+    // On ne recalcule la vague qu'au démarrage d'une transition (ordre stable ensuite).
+    if (enCours.length && enCours.length !== this.nbEnTransition) {
+      enCours.sort((a, b) => p.x[h.nF + a]! - p.x[h.nF + b]!)
+      enCours.forEach((c, i) => (this.retardVague[c] = enCours.length > 1 ? i / (enCours.length - 1) : 0))
+    }
+    this.nbEnTransition = enCours.length
+  }
+
+  /** Vrai si l'ouverture de la catégorie c mérite la corolle complète. */
+  corolleComplete(c: number): boolean {
+    return this.vue.granularite.surcharge(c) !== null || this.nbEnTransition <= this.seuilCorolle
   }
 
   invalider(): void {
@@ -111,24 +141,38 @@ export class Corolle {
 
   /** Trajectoire à passer au moteur (options.trajectoire). */
   readonly trajectoire = (p: PointTrajectoire): void => {
-    const u = p.graine
-    const h = this.vue.h
-    if (!Number.isInteger(u) || u < 0 || u >= h.nU) return TRAJECTOIRES.droite(p)
-    p.graine = this.graineOrig[u]!
-    if (this.forme !== 'corolle') return (TRAJECTOIRES[this.forme] ?? TRAJECTOIRES.droite)(p)
+    const v = this.vue
+    const h = v.h
+    const u = p.unite ?? -1
+    const parent = p.parent ?? -1
+    const courbe: Courbe = COURBES[v.reglages.valeurs.courbe] ?? COURBES.sortie
+    if (u < 0 || parent < h.nF || this.forme !== 'corolle') {
+      if (this.forme !== 'corolle') return (TRAJECTOIRES[this.forme] ?? TRAJECTOIRES.droite)(p)
+      return TRAJECTOIRES.droite(p)
+    }
+    const c = parent - h.nF
+    const o = p.o ?? p.t
     if (this.sale) this.calculer()
-    // Décalage : les enfants éclosent l'un après l'autre dans l'ordre choisi.
+    const fin = (t: number) => {
+      if (t <= 0) { p.x = p.dx; p.y = p.dy; p.z = p.dz; return true }
+      if (t >= 1) { p.x = p.ax; p.y = p.ay; p.z = p.az; return true }
+      return false
+    }
+    if (!this.corolleComplete(c)) {
+      // Ouverture globale : trajet direct, parents décalés en vague.
+      const d = this.vague * this.retardVague[c]!
+      const t = courbe(clamp((o - d) / Math.max(0.05, 1 - d), 0, 1))
+      if (fin(t)) return
+      p.x = p.dx + (p.ax - p.dx) * t
+      p.y = p.dy + (p.ay - p.dy) * t
+      p.z = p.dz + (p.az - p.dz) * t
+      return
+    }
+    // Corolle : les enfants éclosent l'un après l'autre (cascade courte), puis courbe.
     const s = this.decalage
-    const t = s > 0 ? clamp((p.t - s * this.rang[u]!) / (1 - s), 0, 1) : p.t
-    if (t <= 0) {
-      p.x = p.dx; p.y = p.dy; p.z = p.dz
-      return
-    }
-    if (t >= 1) {
-      p.x = p.ax; p.y = p.ay; p.z = p.az
-      return
-    }
-    const cam = this.vue.camera
+    const t = courbe(s > 0 ? clamp((o - s * this.rang[u]!) / (1 - s), 0, 1) : o)
+    if (fin(t)) return
+    const cam = v.camera
     const k = cam.pixelsParUnite()
     const rw = this.rayonPx[u]! / Math.max(1e-6, k)
     const th = this.angle[u]!

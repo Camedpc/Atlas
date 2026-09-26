@@ -168,3 +168,81 @@ netteté des faces, densité et taille des libellés.
   filtres.
 - Mesure entre deux points (Maj + clic : Δt, Δ couloir) comme un pied à coulisse.
 - Graduations de confiance : une 4e règle (0…1) pour lire l'estimation du nœud survolé.
+
+## Itération 2
+
+Retours de la revue de captures réelles + moteur mis à jour (étendues, zone sûre, courbes de vues,
+`reglages.sauver()`, pointage tolérant).
+
+### Ce qui a changé
+
+1. **Étendues d'agrégats dans le langage de l'instrument** (`etendues.ts`). La capsule du moteur est
+   coupée (`etenduesParDefaut: false`, `etendues: 'aucune'`). En vue de face, chaque agrégat porte une
+   **barre d'erreur horizontale graduée** : moustaches min–max avec butées, tirets q10 / q90, trait
+   épais q25–q75, symbole à la médiane (placement « médiane » du moteur), graduations fines à chaque
+   semaine le long de la barre. Même rendu en vue de droite le long des couloirs (graduations par
+   couloir). Données : `vue.etendues.etendue(u, 'face' | 'droite')` et `pointSurAxe`, visibilité
+   `poidsAxes`. Le **crochet du réticule** reprend les mêmes quantiles sur la règle (min–max,
+   interquartile épais, point de médiane). Réglage « étendue des agrégats (face / droite) ».
+2. **Libellés limités aux N plus importants** (réglage `nbLibelles`, défaut 14) : parmi les unités
+   visibles, les agrégats par effectif puis les feuilles par nombre de descendants. S'y ajoutent le
+   survol (forcé), ses voisins, la sélection et ses ancêtres. Les autres n'apparaissent qu'au survol.
+   Recalcul au changement de granularité (par paliers pendant une transition) et de filtres.
+3. **Bandeaux des règles collées** : dégradé translucide (réglage `opaciteBandeau`, 0,6 au bord →
+   0 vers l'intérieur) ; les points restent visibles dessous, les libellés ont leur propre halo.
+   Plus de bandeau quand la règle Z bascule seulement ses libellés vers l'intérieur (c'était le
+   rectangle blanc parasite de la vue iso). Le cube est cadré dans la **zone sûre** du moteur :
+   en-tête et onglets marqués `data-zone-sure`, `margesSures` réserve la place des libellés de la règle
+   Z (150 px) et de la règle X ; « tout cadrer » recadre le cube entier ; ouvrir / fermer le panneau
+   recadre (réglage `recadrerPanneau`).
+4. **Cases à la coordonnée de leur intervalle** (`placerCases` dans `cases.ts`) : centre de la période
+   en X (dispositions face et cube), centre du couloir de type (et d'origine au niveau 2) en Y
+   (droite et cube). Réappliqué après chaque recalcul des barycentres (filtres). En vue de face les
+   cases s'alignent sur leurs colonnes de période, en vue de droite sur leurs couloirs ; leur barre
+   d'étendue montre la dispersion réelle dans la case.
+5. **Performance** :
+   - graduations mises en cache (clé : échelle quantifiée à ~2 %, densité, poids des faces) ;
+   - largeurs de texte mises en cache ;
+   - projection des traits de grille sans allocation ;
+   - **grilles et règles dessinées dans des canevas hors écran** réutilisés tant que la caméra, les
+     marges, les réglages et le thème ne changent pas : pendant une transition de granularité, un
+     survol ou un filtrage, on ne fait qu'une copie d'image. Seuls réticule, étendues et barres
+     d'erreur (qui suivent les points) sont redessinés.
+   Mesures Playwright (rAF réel, 1600 × 1000) : orbite 46 → **49 à 61 images/s** selon la charge de
+   la machine (plusieurs agents en parallèle) ; orbite continue au clic droit : 53 à 61 images/s.
+6. **Densité de grille auto** (réglage `densiteAuto`, défaut oui) : une face vue de biais perd ses
+   graduations fines (|visée · normale| < 0,9 → pas de micro, < 0,7 → majeures et moyennes
+   seulement) et sa densité baisse (× 0,3 à × 1). La vue iso n'affiche plus que la trame principale.
+
+Aussi : enveloppes de `camera.cadrer` et `animerVers` supprimées (API du moteur : `cadrer(…, zone)`,
+`camera.courbeAnimations` = ease-out-expo si « sortie exponentielle », sinon `courbeVues`) ;
+`reglages.sauver()` avant de recréer la vue en changeant de regroupement.
+
+### Vérification
+
+- `npx tsc --noEmit -p .` : aucune erreur dans ce dossier.
+- `node capture.mjs v4-instrument` (script du coordinateur, non modifié) : aucune erreur console,
+  toutes les étapes passent.
+- Copie adaptée `v4-etats.mjs` (dans le dossier `shots`) : iso cadrée, zoom ×6 en vue de face (règles
+  collées), panneau ouvert, cases en vue de face et de droite, orbite continue ; aucune erreur.
+
+### Captures décrites (itération 2)
+
+- **Face, sous-thèmes** : chaque agrégat est une mesure : disque à la médiane, barre graduée
+  horizontale sur sa période, barre de confiance verticale ; 14 libellés seulement, lisibles.
+- **Survol (Dimension VC)** : crochet rouge sur la règle X de 2026-05-03 à 2026-08-01 avec
+  interquartile épais, pastille « 2026-05-03 → 2026-08-01 (90 j) », fiche d'agrégat.
+- **Iso cadrée** : cube entier dans la zone sûre, trois faces en trame légère (majeures seulement),
+  règles en bas et à gauche, secteurs au sol à peine visibles.
+- **Zoom ×6** : règles collées au bord avec un dégradé qui laisse voir les points dessous.
+- **Cases, face** : carrés alignés sur les colonnes de mois ; **cases, droite** : carrés alignés
+  sur les couloirs de type, barres d'étendue le long des couloirs.
+
+### Limites restantes
+
+- Les barres d'étendue sont nombreuses à granularité 2 : lisibles en vue de face, chargées si on
+  descend aux feuilles et remonte vite (elles suivent la présence de l'agrégat).
+- Le cache bitmap est invalidé à chaque image d'orbite : le gain est nul pendant l'orbite elle-même
+  (seules les graduations et mesures de texte en cache y aident) ; il porte sur les transitions, le
+  survol et le filtrage.
+- En cases, la coordonnée Z reste la médiane des thèmes des feuilles (pas de sens pour une case).

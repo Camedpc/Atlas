@@ -175,11 +175,14 @@ export class PaletteCommandes {
     }))
 
     a.push(this.cmd('Lentille', L.epinglee ? 'Désépingler la lentille' : 'Épingler la lentille', () => L.epingler(), { raccourci: 'L' }))
+    a.push(this.cmd('Lentille', R.lire<string>('ancrageLentille') === 'graphe' ? 'Épinglage : ancrer à l\u2019écran' : 'Épinglage : ancrer au graphe', () => {
+      R.definir('ancrageLentille', R.lire<string>('ancrageLentille') === 'graphe' ? 'ecran' : 'graphe')
+    }))
     a.push(this.cmd('Lentille', R.lire<boolean>('lentille') ? 'Désactiver la lentille' : 'Activer la lentille', () => {
       R.definir('lentille', !R.lire<boolean>('lentille'))
     }))
     a.push(this.cmd('Lentille', R.lire<number>('fisheye') > 0 ? 'Fisheye : désactiver' : 'Fisheye : activer', () => {
-      R.definir('fisheye', R.lire<number>('fisheye') > 0 ? 0 : 1.6)
+      R.definir('fisheye', R.lire<number>('fisheye') > 0 ? 0 : 1)
     }))
     for (const p of [1, 2, 3]) a.push(this.cmd('Lentille', `Profondeur d'ouverture : +${p} niveau${p > 1 ? 'x' : ''}`, () => R.definir('profondeurLentille', p)))
     for (const r of [100, 160, 240]) a.push(this.cmd('Lentille', `Rayon de lentille : ${r} px`, () => R.definir('rayonLentille', r)))
@@ -242,7 +245,7 @@ export class PaletteCommandes {
         else if (titre.includes(mots[0]!)) score += 2
         if (c.genre === 'Catégorie') score += 1.5
         else if (c.genre !== 'Nœud') score += 1
-        score -= titre.length / 200
+        if (c.genre === 'Nœud' || c.genre === 'Catégorie') score -= titre.length / 200
         notes.push([c, score])
       }
       notes.sort((a, b) => b[1] - a[1])

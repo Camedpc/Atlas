@@ -29,6 +29,9 @@ const REGLAGES: DefinitionReglage[] = [
   { cle: 'nomCentre', defaut: true, dossier: DOSSIER_ANNEAUX, libelle: 'nom des agrégats' },
   { cle: 'tailleNom', defaut: 11.5, dossier: DOSSIER_ANNEAUX, libelle: 'taille du nom', min: 8, max: 18, pas: 0.5 },
   { cle: 'seuilNom', defaut: 13, dossier: DOSSIER_ANNEAUX, libelle: 'nom dessous si rayon ≥', min: 0, max: 60, pas: 1 },
+  { cle: 'seuilCompact', defaut: 10, dossier: DOSSIER_ANNEAUX, libelle: 'compact si rayon <', min: 0, max: 24, pas: 0.5 },
+  { cle: 'rubans', defaut: true, dossier: DOSSIER_ANNEAUX, libelle: 'rubans (vues face / droite)' },
+  { cle: 'hauteurRuban', defaut: 22, dossier: DOSSIER_ANNEAUX, libelle: 'hauteur des rubans', min: 4, max: 40, pas: 0.5 },
   { cle: 'eviterChevauchement', defaut: 0.9, dossier: DOSSIER_ANNEAUX, libelle: 'anti-chevauchement', min: 0, max: 1, pas: 0.05 },
   { cle: 'bordureValidation', defaut: true, dossier: DOSSIER_ANNEAUX, libelle: 'feuilles : bordure = validation' },
   { cle: 'grille', defaut: true, dossier: DOSSIER_ANNEAUX, libelle: 'fond pointillé' },
@@ -38,7 +41,9 @@ const REGLAGES: DefinitionReglage[] = [
   { cle: 'amplitudeCorolle', defaut: 1, dossier: DOSSIER_ECLOSION, libelle: 'amplitude', min: 0, max: 3, pas: 0.05 },
   { cle: 'arcCorolle', defaut: 360, dossier: DOSSIER_ECLOSION, libelle: 'arc (°)', min: 30, max: 360, pas: 5 },
   { cle: 'phaseCorolle', defaut: 0.45, dossier: DOSSIER_ECLOSION, libelle: 'part « pétales »', min: 0.1, max: 0.9, pas: 0.01 },
-  { cle: 'decalageEclosion', defaut: 0.3, dossier: DOSSIER_ECLOSION, libelle: 'décalage (cascade)', min: 0, max: 0.8, pas: 0.01 },
+  { cle: 'decalageEclosion', defaut: 0.12, dossier: DOSSIER_ECLOSION, libelle: 'décalage (cascade)', min: 0, max: 0.5, pas: 0.01 },
+  { cle: 'seuilCorolle', defaut: 3, dossier: DOSSIER_ECLOSION, libelle: 'corolle si ≤ n agrégats', min: 0, max: 20, pas: 1 },
+  { cle: 'vagueGlobale', defaut: 0.35, dossier: DOSSIER_ECLOSION, libelle: 'vague (ouverture globale)', min: 0, max: 0.8, pas: 0.01 },
   { cle: 'deroulement', defaut: 1, dossier: DOSSIER_ECLOSION, libelle: 'déroulé du parent', min: 0, max: 3, pas: 0.05 },
 
   { cle: 'detacheSurvol', defaut: 4, dossier: DOSSIER_SURVOL, libelle: 'détachement secteurs (px)', min: 0, max: 16, pas: 0.5 },
@@ -66,6 +71,23 @@ function lireStocke(): Record<string, unknown> {
     return {}
   }
 }
+
+/**
+ * Itération 1 : l'ancien moteur enregistrait toutes les valeurs, y compris nos anciens défauts
+ * (1 200 ms, courbe douce, cascade 0,3). On les oublie pour que les nouveaux défauts s'appliquent.
+ */
+function migrerReglages(): void {
+  try {
+    const s = lireStocke()
+    const anciens: Record<string, unknown> = { dureeTransition: 1200, courbe: 'douce', decalageEclosion: 0.3 }
+    let change = false
+    for (const [k, v] of Object.entries(anciens)) if (s[k] === v) (delete s[k], (change = true))
+    if (change) localStorage.setItem(CLE_STOCKAGE, JSON.stringify(s))
+  } catch {
+    // stockage indisponible : rien à migrer
+  }
+}
+migrerReglages()
 
 function donnees(): { jeu: JeuDonnees; info: string } {
   jeuBase ??= genererJeuSynthetique()
@@ -109,7 +131,8 @@ function monter(etat: EtatMontage = {}): VueGraphe {
     if (i.estAgregat) {
       a.taille = anneaux.rayon(i.nbFeuilles) * (R.taillePerspective ? Math.max(0.15, i.echelle) : 1)
       const k = v.reglages.lire<number>('eviterChevauchement')
-      if (k > 0 && plafond && plafond[i.unite]! > 0) a.taille = Math.min(a.taille, a.taille * (1 - k) + plafond[i.unite]! * k)
+      // Au survol, l'anneau reprend sa taille naturelle (lisible même en zone dense).
+      if (k > 0 && plafond && plafond[i.unite]! > 0 && i.survol !== 'survole') a.taille = Math.min(a.taille, a.taille * (1 - k) + plafond[i.unite]! * k)
       a.libelle = null
       a.forceLibelle = false
       // Le nœud sigma reste là pour le pointage, mais invisible : l'anneau est dessiné au-dessus.
@@ -117,6 +140,11 @@ function monter(etat: EtatMontage = {}): VueGraphe {
       return
     }
     const n = i.noeud!
+    // Pendant une corolle locale, les feuilles qui éclosent sont affichées franchement
+    // (la part visible du moteur les laisserait pâles jusqu'à mi-parcours).
+    if (corolle && i.alpha > 0 && i.alpha < 1 && i.survol !== 'autre' && i.lignee !== 'hors' && corolle.corolleComplete(v.h.chaine[i.unite * 3 + 2]!)) {
+      a.opacite = Math.max(a.opacite, Math.sqrt(i.alpha) * (a.opacite / Math.max(1e-3, i.alpha)))
+    }
     if (i.lignee === 'aucune' && v.reglages.lire<boolean>('bordureValidation')) {
       const val = n.validation
       a.couleurBordure = val === 'aucune' ? v.palette.bordureNoeud : v.palette.validation[val]
@@ -138,7 +166,9 @@ function monter(etat: EtatMontage = {}): VueGraphe {
     mode: etat.mode ?? '2d',
     vueInitiale: 'dessus',
     granularite: etat.granularite ?? 1,
-    reglages: { dureeTransition: 1200, courbe: 'douce', opaciteAretes: 0.22 },
+    reglages: { dureeTransition: 700, courbe: 'sortie', opaciteAretes: 0.22 },
+    etenduesParDefaut: false,
+    dessinerDessous: (c) => anneaux?.dessinerRubans(c),
     reglagesSupplementaires: REGLAGES,
     trajectoire: (p) => (corolle ? corolle.trajectoire(p) : TRAJECTOIRES.droite(p)),
     reducteursNoeud: [reducteur],
@@ -164,6 +194,8 @@ function monter(etat: EtatMontage = {}): VueGraphe {
     corolle!.forme = vue.reglages.lire<FormeTrajectoire>('formeEclosion')
     corolle!.phase = vue.reglages.lire<number>('phaseCorolle')
     corolle!.decalage = vue.reglages.lire<number>('decalageEclosion')
+    corolle!.vague = vue.reglages.lire<number>('vagueGlobale')
+    corolle!.seuilCorolle = vue.reglages.lire<number>('seuilCorolle')
     vue.granularite.version++
     vue.demanderRendu()
   }
@@ -173,7 +205,12 @@ function monter(etat: EtatMontage = {}): VueGraphe {
   const majSecteur = (x: number, y: number) => {
     const u = vue.survol
     const s = u !== null && u >= vue.h.nF ? anneaux!.secteurSous(u, x, y) : null
-    if (anneaux!.definirSecteur(s)) vue.demanderRendu()
+    if (anneaux!.definirSecteur(s)) {
+      // La bulle et les graines disent l'essentiel : on efface la fiche pour ne pas les masquer.
+      const f = vue.ui.fiche?.element
+      if (f) f.style.opacity = s ? '0' : ''
+      vue.demanderRendu()
+    }
   }
   vue.scene.addEventListener('pointermove', (e) => {
     const r = vue.scene.getBoundingClientRect()
@@ -205,12 +242,14 @@ function monter(etat: EtatMontage = {}): VueGraphe {
     return change
   }
   vue.on('image', ({ dt }) => {
+    corolle!.observer()
     const encore = anneaux!.avancer(dt)
     if (calculerPlafonds() || encore) vue.demanderRendu()
   })
   vue.on('filtres', () => {
     anneaux!.recompter()
     corolle!.invalider()
+    vue.demanderRendu()
   })
 
   const reconstruire = new Set(['regroupement', 'resolutionLouvain', 'liensSession'])
@@ -218,7 +257,7 @@ function monter(etat: EtatMontage = {}): VueGraphe {
   vue.on('reglage', ({ cle }) => {
     if (reconstruire.has(cle)) return planifierReconstruction()
     if (tailles.has(cle)) corolle!.invalider()
-    if (cle === 'formeEclosion' || cle === 'phaseCorolle' || cle === 'decalageEclosion') appliquerEclosion()
+    if (['formeEclosion', 'phaseCorolle', 'decalageEclosion', 'vagueGlobale', 'seuilCorolle'].includes(cle)) appliquerEclosion()
     if (cle === 'grille') vue.racine.classList.toggle('v6-grille', vue.reglages.lire<boolean>('grille'))
   })
 
@@ -246,6 +285,7 @@ function planifierReconstruction(): void {
   minuterieReconstruction = window.setTimeout(() => {
     const v = vueCourante
     if (!v) return
+    v.reglages.sauver()
     const etat: EtatMontage = { granularite: Math.round(v.granularite.globale), panneauOuvert: v.ui.panneau?.ouvert, mode: v.mode }
     v.detruire()
     monter(etat)

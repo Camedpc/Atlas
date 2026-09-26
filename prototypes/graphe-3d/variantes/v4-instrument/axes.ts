@@ -12,6 +12,7 @@ import {
   Z_MAX, type ContexteDessin, type TypeNoeud, type Vec3, type VueGraphe,
 } from '../../src/core'
 import { dateIso, JOUR, type Echelles, type Graduation } from './echelles'
+import { quantilesAxe } from './etendues'
 
 export const BORNES: Vec3 = [1.07, 1.07, Z_MAX + 0.07]
 
@@ -52,6 +53,10 @@ interface Regle {
   alignee: boolean
   normale: Point2
   collee: boolean
+  /** Bandeau dessiné (règle collée au bord). */
+  bandeau?: boolean
+  /** Libellés basculés vers l'intérieur du viewport. */
+  interieur?: boolean
 }
 
 export interface EtatInstrument {
@@ -80,10 +85,20 @@ function pxParUnite(vue: VueGraphe, axe: number): number {
   return vue.camera.pixelsParUnite() * Math.sqrt(Math.max(0, 1 - a * a))
 }
 
-function graduationsAxe(vue: VueGraphe, ech: Echelles, axe: number, sem: Semantique): { liste: Graduation[]; poids: number }[] {
-  const densite = vue.reglages.lire<number>('densiteGrille')
-  const px = pxParUnite(vue, axe)
-  const r: { liste: Graduation[]; poids: number }[] = []
+type Ensembles = { liste: Graduation[]; poids: number }[]
+/** Graduations mises en cache : elles ne dépendent que de l'échelle (quantifiée), de la densité et des poids. */
+const cacheGraduations = new Map<string, Ensembles>()
+
+function graduationsAxe(vue: VueGraphe, ech: Echelles, axe: number, sem: Semantique, facteurDensite = 1): Ensembles {
+  const densite = vue.reglages.lire<number>('densiteGrille') * facteurDensite
+  // Échelle quantifiée à ~2 % : les seuils d'apparition restent stables, le cache sert pendant l'orbite.
+  const px = Math.pow(2, Math.round(Math.log2(Math.max(1e-3, pxParUnite(vue, axe))) * 36) / 36)
+  const cle = `${axe}|${px.toFixed(3)}|${densite.toFixed(2)}|${Math.round(sem.temps * 40)}|${Math.round(sem.couloirs * 40)}`
+  const deja = cacheGraduations.get(cle)
+  if (deja) return deja
+  if (cacheGraduations.size > 400) cacheGraduations.clear()
+  const r: Ensembles = []
+  cacheGraduations.set(cle, r)
   if (axe === 0) {
     if (sem.temps > 0.02) r.push({ liste: ech.graduationsTemps(px * ech.uniteJour, densite), poids: sem.temps })
     if (sem.temps < 0.98) r.push({ liste: ech.graduationsCarte(px, densite), poids: 1 - sem.temps })
@@ -95,25 +110,94 @@ function graduationsAxe(vue: VueGraphe, ech: Echelles, axe: number, sem: Semanti
 }
 
 const ALPHA_NIVEAU = [0.55, 0.34, 0.2, 0.11]
+const P0: Vec3 = [0, 0, 0], P1: Vec3 = [0, 0, 0]
+const A0 = { x: 0, y: 0 }, A1 = { x: 0, y: 0 }
+
+/** Projection sans allocation (mêmes formules que Camera3D.projeterPoint). */
+function projecteur(vue: VueGraphe): (p: Vec3, o: { x: number; y: number }) => boolean {
+  const cam = vue.camera
+  const k = cam.pixelsParUnite()
+  const W2 = cam.largeur / 2, H2 = cam.hauteur / 2
+  const [rx, ry, rz] = cam.droite, [ux, uy, uz] = cam.haut, [bx, by, bz] = cam.arriere, [cx, cy, cz] = cam.cible
+  const d = cam.distance, per = cam.perspective
+  return (p, o) => {
+    const qx = p[0] - cx, qy = p[1] - cy, qz = p[2] - cz
+    const zc = d - (qx * bx + qy * by + qz * bz)
+    if (per > 0 && zc <= d * 0.04) return false
+    const e = per > 0 ? 1 + per * (d / zc - 1) : 1
+    o.x = W2 + (qx * rx + qy * ry + qz * rz) * e * k
+    o.y = H2 - (qx * ux + qy * uy + qz * uz) * e * k
+    return true
+  }
+}
+
+// ─── Cache bitmap des calques qui ne dépendent que de la caméra ─────────────
+
+/** Incrémentée par la variante à chaque changement de réglage ou de thème. */
+export const versions = { reglages: 0 }
+const caches = new Map<string, { canvas: HTMLCanvasElement; cle: string }>()
+
+/**
+ * Dessine via un canevas hors écran réutilisé tant que `cle` ne change pas : pendant une
+ * transition de granularité, un survol ou une animation d'arêtes, grilles et règles ne sont pas
+ * recalculées, seulement recopiées.
+ */
+function avecCache(nom: string, c: ContexteDessin, cle: string, dessiner: (ctx: CanvasRenderingContext2D) => void): void {
+  const r = c.vue.rendu.ratioPixel
+  const L = Math.round(c.largeur * r), H = Math.round(c.hauteur * r)
+  let e = caches.get(nom)
+  if (!e) caches.set(nom, (e = { canvas: document.createElement('canvas'), cle: '' }))
+  const complet = `${cle}|${L}|${H}|${versions.reglages}|${c.vue.racine.dataset.theme}`
+  if (e.cle !== complet) {
+    if (e.canvas.width !== L || e.canvas.height !== H) {
+      e.canvas.width = L
+      e.canvas.height = H
+    }
+    const g = e.canvas.getContext('2d')!
+    g.setTransform(1, 0, 0, 1, 0, 0)
+    g.clearRect(0, 0, L, H)
+    g.setTransform(r, 0, 0, r, 0, 0)
+    dessiner(g)
+    e.cle = complet
+  }
+  c.ctx.drawImage(e.canvas, 0, 0, c.largeur, c.hauteur)
+}
+
+function cleCamera(vue: VueGraphe): string {
+  const cam = vue.camera
+  const M = etat.marges
+  return `${cam.version}|${M.gauche}|${M.bas}|${M.haut}`
+}
 
 // ─── Calque dessous : faces, grilles, secteurs ──────────────────────────────
 
 export function dessinerGrilles(c: ContexteDessin, ech: Echelles): void {
+  etat.sem = semantique(c.vue)
+  if (!c.vue.reglages.lire<boolean>('grille')) return
+  avecCache('grilles', c, cleCamera(c.vue), (ctx) => dessinerGrillesSansCache({ ...c, ctx }, ech))
+}
+
+function dessinerGrillesSansCache(c: ContexteDessin, ech: Echelles): void {
   const { ctx, vue } = c
   const R = vue.reglages
-  const sem = (etat.sem = semantique(vue))
-  if (!R.lire<boolean>('grille')) return
+  const sem = etat.sem
   const cam = vue.camera
   const pal = vue.palette
   const av = cam.avant
   const B = BORNES
   const opac = R.lire<number>('opaciteGrille')
   const encre = pal.texte
+  const proj = projecteur(vue)
   ctx.save()
   ctx.lineCap = 'butt'
   for (let n = 0 as 0 | 1 | 2; n < 3; n = (n + 1) as 0 | 1 | 2) {
     const vis = smoothstep(0.1, 0.8, Math.abs(av[n]!))
     if (vis < 0.01) continue
+    // Densité auto : une face vue de biais garde seulement ses graduations majeures.
+    const face = Math.abs(av[n]!)
+    const auto = R.lire<boolean>('densiteAuto')
+    const facteurDensite = auto ? 0.3 + 0.7 * smoothstep(0.45, 0.97, face) : 1
+    const niveauMax = auto ? (face > 0.9 ? 3 : face > 0.7 ? 2 : 1) : 3
     const s = av[n]! >= 0 ? B[n]! : -B[n]!
     const [b, cAxe] = n === 0 ? [1, 2] : n === 1 ? [0, 2] : [0, 1]
     const coin = (vb: number, vc: number) => {
@@ -140,23 +224,21 @@ export function dessinerGrilles(c: ContexteDessin, ech: Echelles): void {
     // Grilles : traits de chaque axe du plan, groupés par palier d'opacité.
     const chemins = new Map<number, Path2D>()
     for (const [axe, autre] of [[b, cAxe], [cAxe, b]] as [number, number][]) {
-      for (const { liste, poids } of graduationsAxe(vue, ech, axe, sem)) {
+      for (const { liste, poids } of graduationsAxe(vue, ech, axe, sem, facteurDensite)) {
         for (const g of liste) {
-          if (!g.trait) continue
+          if (!g.trait || g.niveau > niveauMax) continue
           const alpha = vis * poids * opac * ALPHA_NIVEAU[g.niveau]!
           if (alpha < 0.01) continue
           const cle = Math.round(alpha * 40)
           let chemin = chemins.get(cle)
           if (!chemin) chemins.set(cle, (chemin = new Path2D()))
-          const p0: Vec3 = [0, 0, 0], p1: Vec3 = [0, 0, 0]
-          p0[n] = p1[n] = s
-          p0[axe] = p1[axe] = g.v
-          p0[autre] = -B[autre]!
-          p1[autre] = B[autre]!
-          const a0 = cam.projeterPoint(p0), a1 = cam.projeterPoint(p1)
-          if (!a0.visible || !a1.visible) continue
-          chemin.moveTo(a0.x, a0.y)
-          chemin.lineTo(a1.x, a1.y)
+          P0[n] = P1[n] = s
+          P0[axe] = P1[axe] = g.v
+          P0[autre] = -B[autre]!
+          P1[autre] = B[autre]!
+          if (!proj(P0, A0) || !proj(P1, A1)) continue
+          chemin.moveTo(A0.x, A0.y)
+          chemin.lineTo(A1.x, A1.y)
         }
       }
     }
@@ -288,10 +370,29 @@ function surRegle(vue: VueGraphe, r: Regle, v: number): Point2 & { visible: bool
 }
 
 export function dessinerRegles(c: ContexteDessin, ech: Echelles): void {
+  const vue = c.vue
+  etat.regles = [0, 1, 2].map((a) => choisirRegle(vue, a as 0 | 1 | 2))
+  // État des règles (collée, sens des libellés) : toujours calculé, le réticule s'en sert.
+  for (const regle of etat.regles) {
+    if (!regle) continue
+    const B = BORNES[regle.axe]!
+    const e0 = surRegle(vue, regle, -B), e1 = surRegle(vue, regle, B)
+    const brut0 = vue.camera.projeterPoint(pointAxe(regle.axe, -B, regle.fixe))
+    regle.collee = Math.abs(brut0.x - e0.x) + Math.abs(brut0.y - e0.y) > 0.5
+    regle.bandeau = regle.collee
+    // Règle verticale collée au bord gauche, ou place insuffisante à gauche : libellés vers l'intérieur.
+    if (!regle.horizontale && regle.normale.x < 0 && (regle.collee || Math.min(e0.x, e1.x) < etat.marges.gauche + 140)) {
+      regle.normale = { x: -regle.normale.x, y: -regle.normale.y }
+      regle.interieur = true
+    }
+  }
+  if (!vue.reglages.lire<boolean>('graduations')) return
+  avecCache('regles', c, cleCamera(vue), (ctx) => dessinerReglesSansCache({ ...c, ctx }, ech))
+}
+
+function dessinerReglesSansCache(c: ContexteDessin, ech: Echelles): void {
   const { ctx, vue } = c
   const R = vue.reglages
-  etat.regles = [0, 1, 2].map((a) => choisirRegle(vue, a as 0 | 1 | 2))
-  if (!R.lire<boolean>('graduations')) return
   const pal = vue.palette
   const sem = etat.sem
   const W = vue.rendu.largeur, H = vue.rendu.hauteur
@@ -306,30 +407,26 @@ export function dessinerRegles(c: ContexteDessin, ech: Echelles): void {
     const couleurAxe = pal.axes[regle.axe]
     const e0 = surRegle(vue, regle, -B), e1 = surRegle(vue, regle, B)
     if (!e0.visible || !e1.visible) continue
-    const brut0 = vue.camera.projeterPoint(pointAxe(regle.axe, -B, regle.fixe))
-    regle.collee = Math.abs(brut0.x - e0.x) + Math.abs(brut0.y - e0.y) > 0.5
-    // Règle verticale collée au bord gauche : les libellés passent à l'intérieur du viewport.
-    // Idem quand la place manque à gauche (panneau ouvert) : l'épine reste, les libellés basculent.
-    if (!regle.horizontale && regle.normale.x < 0 && (regle.collee || Math.min(e0.x, e1.x) < etat.marges.gauche + 140)) {
-      regle.normale = { x: -regle.normale.x, y: -regle.normale.y }
-      regle.collee = true
-    }
     const n = regle.normale
-    // Bandeau de règle quand l'arête est collée au bord de l'écran.
-    if (regle.collee) {
-      ctx.fillStyle = rgba(pal.fond, 0.88 * vis)
-      ctx.strokeStyle = rgba(pal.texte, 0.14 * vis)
-      ctx.lineWidth = 1
+    // Bandeau de règle collée au bord : dégradé translucide (les points restent visibles dessous,
+    // les libellés ont leur propre halo).
+    if (regle.bandeau) {
+      const k = R.lire<number>('opaciteBandeau')
       if (regle.horizontale) {
-        const y = e0.y
-        ctx.fillRect(etat.marges.gauche - 6, n.y > 0 ? y : y - 28, W, 28)
-        ctx.beginPath()
-        ctx.moveTo(etat.marges.gauche - 6, y + 0.5)
-        ctx.lineTo(W, y + 0.5)
-        ctx.stroke()
+        const y = e0.y, y1 = n.y > 0 ? y + 30 : y - 30
+        const gr = ctx.createLinearGradient(0, y, 0, y1)
+        gr.addColorStop(0, rgba(pal.fond, k * vis))
+        gr.addColorStop(1, rgba(pal.fond, 0))
+        ctx.fillStyle = gr
+        ctx.fillRect(etat.marges.gauche - 6, Math.min(y, y1), W, 30)
       } else {
-        const x = e0.x
-        ctx.fillRect(n.x < 0 ? x - 150 : x, etat.marges.haut, 150, H - etat.marges.haut - etat.marges.bas)
+        const x = e0.x, x1 = n.x > 0 ? x + 150 : x - 150
+        const gr = ctx.createLinearGradient(x, 0, x1, 0)
+        gr.addColorStop(0, rgba(pal.fond, k * vis))
+        gr.addColorStop(0.6, rgba(pal.fond, k * 0.4 * vis))
+        gr.addColorStop(1, rgba(pal.fond, 0))
+        ctx.fillStyle = gr
+        ctx.fillRect(Math.min(x, x1), etat.marges.haut, 150, H - etat.marges.haut - etat.marges.bas)
       }
     }
     // Épine de l'axe.
@@ -373,7 +470,7 @@ export function dessinerRegles(c: ContexteDessin, ech: Echelles): void {
           ? `700 ${t - 1.5}px ${pal.police}`
           : `${g.niveau === 0 ? 600 : g.niveau === 1 ? 500 : 400} ${t}px ${pal.police}`
       if (g.domaine !== undefined) ctx.letterSpacing = '0.06em'
-      const largeur = ctx.measureText(g.libelle).width
+      const largeur = largeurTexte(ctx, g.libelle)
       // Deux rangées possibles pour les libellés majeurs (couloirs serrés, mois).
       let place = false, x = 0, y = 0
       for (let rang = 0; rang < (g.niveau === 0 && regle.horizontale ? 2 : 1) && !place; rang++) {
@@ -386,6 +483,13 @@ export function dessinerRegles(c: ContexteDessin, ech: Echelles): void {
         place = libre(x0 - 4, y0 - 1, x0 + largeur + 4, y0 + t + 1)
       }
       if (!place) continue
+      if (regle.bandeau || regle.interieur) {
+        // Halo de lisibilité quand la règle passe au-dessus des points.
+        ctx.lineWidth = 3
+        ctx.lineJoin = 'round'
+        ctx.strokeStyle = rgba(pal.fond, 0.85 * alpha)
+        ctx.strokeText(g.libelle, x, y)
+      }
       ctx.fillStyle = rgba(g.domaine !== undefined ? pal.domaines[g.domaine % pal.domaines.length]! : g.niveau === 0 ? pal.texte : pal.texteDoux, alpha)
       ctx.fillText(g.libelle, x, y)
       ctx.letterSpacing = '0px'
@@ -414,6 +518,18 @@ export function dessinerRegles(c: ContexteDessin, ech: Echelles): void {
   ctx.restore()
 }
 
+const cacheLargeurs = new Map<string, number>()
+function largeurTexte(ctx: CanvasRenderingContext2D, texte: string): number {
+  const cle = `${ctx.font}|${ctx.letterSpacing}|${texte}`
+  let l = cacheLargeurs.get(cle)
+  if (l === undefined) {
+    if (cacheLargeurs.size > 4000) cacheLargeurs.clear()
+    l = ctx.measureText(texte).width
+    cacheLargeurs.set(cle, l)
+  }
+  return l
+}
+
 function titreAxe(axe: number, sem: Semantique): string {
   if (axe === 0) return sem.temps >= 0.5 ? 'X · date' : 'X · carte'
   if (axe === 1) return sem.couloirs >= 0.5 ? 'Y · type × origine' : 'Y · carte'
@@ -422,27 +538,11 @@ function titreAxe(axe: number, sem: Semantique): string {
 
 // ─── Réticule ────────────────────────────────────────────────────────────────
 
-const cacheEtendues = new Map<number, { x: [number, number]; y: [number, number]; z: [number, number] }>()
-
-/** Étendue sémantique d'un agrégat (temps en X, couloirs en Y, bandes en Z). */
-function etendue(vue: VueGraphe, u: number) {
-  let e = cacheEtendues.get(u)
-  if (e) return e
-  const c = vue.h.categorieDe(u)!
-  const d = vue.dispositions
-  const x: [number, number] = [Infinity, -Infinity], y: [number, number] = [Infinity, -Infinity], z: [number, number] = [Infinity, -Infinity]
-  for (const f of c.feuilles) {
-    const tx = d.face[f * 3]!, ly = d.droite[f * 3 + 1]!, bz = d.face[f * 3 + 2]!
-    x[0] = Math.min(x[0], tx); x[1] = Math.max(x[1], tx)
-    y[0] = Math.min(y[0], ly); y[1] = Math.max(y[1], ly)
-    z[0] = Math.min(z[0], bz); z[1] = Math.max(z[1], bz)
-  }
-  e = { x, y, z }
-  cacheEtendues.set(u, e)
-  return e
-}
+/** À appeler quand la vue est recréée. */
 export function viderCacheReticule(): void {
-  cacheEtendues.clear()
+  cacheGraduations.clear()
+  caches.clear()
+  versions.reglages++
 }
 
 export function dessinerReticule(c: ContexteDessin, ech: Echelles): void {
@@ -493,19 +593,30 @@ export function dessinerReticule(c: ContexteDessin, ech: Echelles): void {
     // Étendue d'un agrégat (crochet sur la règle).
     const poidsSem = axe === 0 ? sem.temps : axe === 1 ? sem.couloirs : 1
     if (agr && R.lire<boolean>('crochetsAgregat') && poidsSem > 0.5) {
-      const e = etendue(vue, u)
-      const [a0, a1] = axe === 0 ? e.x : axe === 1 ? e.y : e.z
-      const q0 = surRegle(vue, regle, a0), q1 = surRegle(vue, regle, a1)
-      const n = regle.normale
-      ctx.strokeStyle = rgba(couleur, 0.9 * alpha)
-      ctx.fillStyle = rgba(couleur, 0.16 * alpha)
-      ctx.lineWidth = 2
-      ctx.beginPath()
-      ctx.moveTo(q0.x - n.x * 5, q0.y - n.y * 5)
-      ctx.lineTo(q0.x, q0.y)
-      ctx.lineTo(q1.x, q1.y)
-      ctx.lineTo(q1.x - n.x * 5, q1.y - n.y * 5)
-      ctx.stroke()
+      const q = quantilesAxe(vue, u, axe)
+      if (q) {
+        const q0 = surRegle(vue, regle, q.min), q1 = surRegle(vue, regle, q.max)
+        const i0 = surRegle(vue, regle, q.q25), i1 = surRegle(vue, regle, q.q75), m = surRegle(vue, regle, q.mediane)
+        const n = regle.normale
+        // Crochet min–max, interquartile épais, médiane : la même barre d'erreur que sur le symbole.
+        ctx.strokeStyle = rgba(couleur, 0.9 * alpha)
+        ctx.lineWidth = 1.6
+        ctx.beginPath()
+        ctx.moveTo(q0.x - n.x * 6, q0.y - n.y * 6)
+        ctx.lineTo(q0.x, q0.y)
+        ctx.lineTo(q1.x, q1.y)
+        ctx.lineTo(q1.x - n.x * 6, q1.y - n.y * 6)
+        ctx.stroke()
+        ctx.lineWidth = 4
+        ctx.beginPath()
+        ctx.moveTo(i0.x, i0.y)
+        ctx.lineTo(i1.x, i1.y)
+        ctx.stroke()
+        ctx.fillStyle = rgba(couleur, alpha)
+        ctx.beginPath()
+        ctx.arc(m.x, m.y, 3.2, 0, Math.PI * 2)
+        ctx.fill()
+      }
     }
     // Pastille de valeur.
     if (!R.lire<boolean>('pastillesReticule')) continue

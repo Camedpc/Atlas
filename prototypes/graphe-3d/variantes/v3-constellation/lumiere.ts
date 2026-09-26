@@ -8,7 +8,7 @@
 // continu (scintillement, impulsions, fin des traînées) ont leur propre boucle
 // requestAnimationFrame qui ne redessine que ces calques, sans relancer sigma.
 
-import { rgba, type VueGraphe } from '../../src/core'
+import { centreCouloir, melangerCouleurs, pointSurAxe, poidsAxes, rgb, rgba, TYPES_NOEUD, type Vec3, type VueGraphe } from '../../src/core'
 import { R } from './reglages'
 import type { Squelette } from './squelette'
 
@@ -23,11 +23,37 @@ const lisse = (a: number, b: number, x: number) => {
   return t * t * (3 - 2 * t)
 }
 
-/** Profil radial du halo : diffus (gaussienne) → net (disque bordé d'une lueur). */
+/**
+ * Profil radial du halo : diffus (gaussienne à longue traîne) → net (disque bordé d'une lueur).
+ * La traîne en 1/(1 + k r²) prolonge le dégradé : la lueur se voit loin sans épaissir le cœur.
+ */
 function profil(r: number, nettete: number): number {
-  const doux = Math.exp(-r * r * 6)
-  const net = 0.28 * Math.exp(-r * r * 5) + 0.72 * (1 - lisse(0.4, 0.6, r))
-  return (doux + (net - doux) * nettete) * (1 - lisse(0.82, 1, r))
+  const traine = 0.35 / (1 + 22 * r * r)
+  const doux = 0.7 * Math.exp(-r * r * 7) + traine
+  const net = 0.2 * Math.exp(-r * r * 5) + 0.7 * (1 - lisse(0.36, 0.56, r)) + traine * 0.6
+  return Math.min(1, doux + (net - doux) * nettete) * (1 - lisse(0.8, 1, r))
+}
+
+/** Variante plus saturée et un peu plus sombre d'une couleur (cœur des halos en thème clair). */
+function saturer(couleur: string, k: number): [number, number, number] {
+  const [r, g, b] = rgb(couleur).map((x) => x / 255) as [number, number, number]
+  const max = Math.max(r, g, b), min = Math.min(r, g, b)
+  let hh = 0, ss = 0
+  const l = (max + min) / 2
+  if (max !== min) {
+    const d = max - min
+    ss = l > 0.5 ? d / (2 - max - min) : d / (max + min)
+    hh = max === r ? (g - b) / d + (g < b ? 6 : 0) : max === g ? (b - r) / d + 2 : (r - g) / d + 4
+    hh /= 6
+  }
+  ss = Math.min(1, ss * (1 + 0.6 * k))
+  const l2 = l * (1 - 0.18 * k)
+  const q = l2 < 0.5 ? l2 * (1 + ss) : l2 + ss - l2 * ss, p = 2 * l2 - q
+  const f = (t: number) => {
+    t = (t + 1) % 1
+    return t < 1 / 6 ? p + (q - p) * 6 * t : t < 1 / 2 ? q : t < 2 / 3 ? p + (q - p) * (2 / 3 - t) * 6 : p
+  }
+  return ss === 0 ? [l2 * 255, l2 * 255, l2 * 255] : [f(hh + 1 / 3) * 255, f(hh) * 255, f(hh - 1 / 3) * 255]
 }
 
 export class Lumiere {
@@ -87,7 +113,8 @@ export class Lumiere {
 
   private sprite(couleur: string, nettete: number): HTMLCanvasElement {
     const palier = Math.round(Math.min(1, Math.max(0, nettete)) * (PALIERS - 1))
-    const cle = `${couleur}|${palier}`
+    const coeur = R(this.vue).theme === 'clair' ? R(this.vue).haloCoeur : 0
+    const cle = `${couleur}|${palier}|${coeur}`
     let c = this.sprites.get(cle)
     if (c) return c
     c = document.createElement('canvas')
@@ -96,14 +123,37 @@ export class Lumiere {
     const m = TAILLE_SPRITE / 2
     const g = ctx.createRadialGradient(m, m, 0, m, m, m)
     const s = palier / (PALIERS - 1)
-    for (let i = 0; i <= 20; i++) {
-      const r = i / 20
-      g.addColorStop(r, rgba(couleur, profil(r, s)))
+    const base = rgb(couleur)
+    const sat = saturer(couleur, coeur)
+    for (let i = 0; i <= 24; i++) {
+      const r = i / 24
+      // Cœur saturé qui se fond vers la teinte pastel de la palette en s'éloignant.
+      const k = lisse(0.05, 0.55, r)
+      const col = [0, 1, 2].map((j) => Math.round(sat[j]! + (base[j]! - sat[j]!) * k))
+      g.addColorStop(r, `rgba(${col[0]},${col[1]},${col[2]},${profil(r, s).toFixed(4)})`)
     }
     ctx.fillStyle = g
     ctx.fillRect(0, 0, TAILLE_SPRITE, TAILLE_SPRITE)
     this.sprites.set(cle, c)
     return c
+  }
+
+  /** Tampon hors écran des halos : on y accumule, puis on compose avec un plafond d'opacité. */
+  private tampon: HTMLCanvasElement | null = null
+  private ctxTampon(): CanvasRenderingContext2D {
+    const { largeur, hauteur, ratioPixel } = this.vue.rendu
+    const w = Math.round(largeur * ratioPixel), hh = Math.round(hauteur * ratioPixel)
+    if (!this.tampon) this.tampon = document.createElement('canvas')
+    const t = this.tampon
+    if (t.width !== w || t.height !== hh) {
+      t.width = w
+      t.height = hh
+    }
+    const ctx = t.getContext('2d')!
+    ctx.setTransform(1, 0, 0, 1, 0, 0)
+    ctx.clearRect(0, 0, w, hh)
+    ctx.setTransform(ratioPixel, 0, 0, ratioPixel, 0, 0)
+    return ctx
   }
 
   // ─── Couleurs ────────────────────────────────────────────────────────────
@@ -123,6 +173,21 @@ export class Lumiere {
     if (V.haloCouleur === 'domaine') return p.domaines[h.domaine(u) % p.domaines.length]!
     if (V.haloCouleur === 'origine') return p.origine[n.origine]
     return p.statut[n.statut]
+  }
+
+  /**
+   * Halo plein : agrégats, nœuds importants (rang d'importance dans la part choisie), survol et
+   * voisins, lignée, clés du squelette. Les autres n'ont qu'un halo minimal.
+   */
+  estPlein(u: number): boolean {
+    const vue = this.vue
+    if (u >= vue.h.nF) return true
+    const S = this.squelette
+    if (S.rang[u]! >= 1 - R(vue).haloPleinPart) return true
+    if (u === vue.survol || this.estAllume(u)) return true
+    if (S.actif && S.cle[u]) return true
+    const l = vue.lignee
+    return l.active && l.role(u) !== 'hors'
   }
 
   private estAllume(u: number): boolean {
@@ -159,9 +224,22 @@ export class Lumiere {
 
     if (V.theme === 'sombre' && V.poussiere > 0) this.dessinerPoussiere(cd, V.poussiere)
 
+    if (V.traineesTemps) this.dessinerPeriodes(cd, additif)
+    if (V.halo) {
+      // Plafond de densité : les halos s'accumulent dans un tampon (source-over : l'alpha cumulé
+      // sature à 1 au lieu de s'additionner), puis le tampon est posé avec une opacité plafonnée.
+      const ct = this.ctxTampon()
+      ct.globalCompositeOperation = additif ? 'lighter' : 'source-over'
+      continu = this.dessinerHalos(ct, t) || continu
+      cd.save()
+      cd.setTransform(1, 0, 0, 1, 0, 0)
+      cd.globalAlpha = V.plafondHalos
+      cd.globalCompositeOperation = additif ? 'lighter' : 'source-over'
+      cd.drawImage(this.tampon!, 0, 0)
+      cd.restore()
+    }
     cd.save()
     cd.globalCompositeOperation = additif ? 'lighter' : 'source-over'
-    if (V.halo) continu = this.dessinerHalos(cd, t) || continu
     if (t !== this.dernierPush) {
       this.dernierPush = t
       this.image++
@@ -175,6 +253,7 @@ export class Lumiere {
     cu.globalCompositeOperation = additif ? 'lighter' : 'source-over'
     continu = this.dessinerImpulsions(cu, t) || continu
     cu.restore()
+    this.dessinerTerritoires(cu)
 
     this.besoinContinu = continu
     this.planifier()
@@ -230,13 +309,17 @@ export class Lumiere {
       const dof = persp > 0.01 ? Math.min(1, V.profondeurChamp * persp * Math.abs(P.profondeurNormalisee(u) - V.miseAuPoint) * 1.4) : 0
       let nettete = est * nettBase * (1 - dof)
       let rayon = taille * V.haloRayon + larg * V.haloIncertitude * Math.max(0.35, P.echelle[u]!)
-      let alpha = V.haloIntensite * (0.3 + 0.7 * est) * Math.pow(op, 0.8) * (1 - 0.45 * dof)
+      let alpha = V.haloIntensite * (0.3 + 0.7 * est) * Math.pow(op, 0.8) * (1 - 0.3 * dof)
       rayon *= 1 + 1.3 * dof
       if (agr) {
         // Nébuleuse d'agrégat : plus large et plus douce.
         rayon = taille * (1.8 + V.haloRayon * 0.7) + larg * V.haloIncertitude * 0.8
-        alpha *= 0.95 * V.haloAgregats
-        nettete *= 0.45
+        alpha *= 1.35 * V.haloAgregats
+        nettete *= 0.75
+      } else if (!this.estPlein(u)) {
+        // Halo minimal : une lueur serrée qui garde la couleur sans former de nappe.
+        rayon = (taille * V.haloMinimal + larg * V.haloIncertitude * 0.2) * (1 + 0.6 * dof)
+        alpha *= 0.75
       } else if (S.engage && S.absorbes[u]! > 0) {
         rayon *= 1 + Math.min(0.8, 0.1 * Math.sqrt(S.absorbes[u]!))
       }
@@ -248,7 +331,7 @@ export class Lumiere {
       }
       if (lignee.active) {
         const role = lignee.role(u)
-        if (role === 'hors') alpha *= V.estompeHalos * 0.6
+        if (role === 'hors') alpha *= V.haloContexte
         else alpha *= role === 'selection' ? 1.9 : 1.35
       }
       if (scint && !agr && h.noeuds[u]!.statut === 'incertain') {
@@ -278,7 +361,7 @@ export class Lumiere {
       const chemins = [new Path2D(), new Path2D(), new Path2D()]
       const perles = [new Path2D(), new Path2D(), new Path2D()]
       for (let f = 0; f < h.nF; f++) {
-        if (h.noeuds[f]!.validation !== 'ia_humain') continue
+        if (h.noeuds[f]!.validation !== 'ia_humain' || !this.estPlein(f)) continue
         const op = vue.opaciteAffichee[f]!
         if (op < 0.12 || !P.visible[f]) continue
         const b = op > 0.66 ? 2 : op > 0.33 ? 1 : 0
@@ -568,6 +651,153 @@ export class Lumiere {
     }
     ctx.fill()
     return true
+  }
+
+  // ─── Vues temps (1) et type (3) : traînées de période ────────────────────
+
+  /**
+   * Remplace la capsule du moteur : chaque agrégat laisse une traînée lumineuse le long de sa
+   * période (vue de face) — un chapelet de lueurs, une par semaine, d'éclat ∝ effectif, sur un
+   * fil min–max et un trait vif q25–q75. En vue de droite, une lueur par couloir de type.
+   */
+  private dessinerPeriodes(ctx: CanvasRenderingContext2D, additif: boolean): void {
+    const vue = this.vue
+    const V = R(vue)
+    const w = poidsAxes(vue)
+    const temps = w.temps > 0.04, couloirs = w.couloirs > 0.04
+    if (!temps && !couloirs) return
+    const { h, palette, camera: cam, etendues: E } = vue
+    const nT = E.nbTranches, nY = TYPES_NOEUD.length
+    const k = V.intensiteTemps
+    const proj = (p: Vec3) => cam.projeterPoint(p)
+    ctx.save()
+    ctx.globalCompositeOperation = additif ? 'lighter' : 'source-over'
+    ctx.lineCap = 'round'
+    const trait = (a: Vec3, b: Vec3, largeur: number, couleur: string, alpha: number) => {
+      const pa = proj(a), pb = proj(b)
+      if (!pa.visible || !pb.visible) return
+      ctx.globalAlpha = 1
+      ctx.strokeStyle = rgba(couleur, alpha)
+      ctx.lineWidth = largeur
+      ctx.beginPath()
+      ctx.moveTo(pa.x, pa.y)
+      ctx.lineTo(pb.x, pb.y)
+      ctx.stroke()
+    }
+    // Lueur étirée le long de l'axe (ellipse) : les semaines voisines se fondent en une traînée.
+    const allongee = (img: HTMLCanvasElement, x: number, y: number, ang: number, long: number, large: number, alpha: number) => {
+      ctx.save()
+      ctx.globalAlpha = Math.min(1, alpha)
+      ctx.translate(x, y)
+      ctx.rotate(ang)
+      ctx.drawImage(img, -long, -large, 2 * long, 2 * large)
+      ctx.restore()
+    }
+    for (const c of h.categories) {
+      const u = c.unite
+      const op = vue.opaciteAffichee[u]!
+      if (op < 0.04) continue
+      const coul = palette.domaines[c.domaine % palette.domaines.length]!
+      const epais = Math.max(3, Math.min(14, vue.tailleAffichee[u]! * 0.8))
+      const lueur = this.sprite(coul, 0.35)
+      if (temps) {
+        const a = op * Math.min(1, w.temps * 1.2) * k
+        const q = E.quantilesTemps(c.index)
+        const pt = (v: number) => pointSurAxe(vue, u, 'temps', v)
+        trait(pt(q.min), pt(q.max), 0.8, coul, 0.35 * a)
+        let max = 1
+        for (let i = 0; i < nT; i++) max = Math.max(max, E.tranches[c.index * nT + i]!)
+        const p0 = proj(pt(-1)), p1 = proj(pt(1))
+        const pas = Math.hypot(p1.x - p0.x, p1.y - p0.y) / nT
+        const ang = Math.atan2(p1.y - p0.y, p1.x - p0.x)
+        for (let i = 0; i < nT; i++) {
+          const n = E.tranches[c.index * nT + i]!
+          if (!n) continue
+          const p = proj(pt(-1 + (2 * (i + 0.5)) / nT))
+          if (!p.visible) continue
+          const f = n / max
+          allongee(lueur, p.x, p.y, ang, pas * 1.25, epais * (0.3 + 0.55 * Math.sqrt(f)), a * (0.3 + 0.6 * f))
+        }
+        trait(pt(q.q25), pt(q.q75), Math.max(1.4, epais * 0.22), coul, 0.75 * a)
+      }
+      if (couloirs && V.etenduesCouloirs) {
+        const a = op * Math.min(1, w.couloirs * 1.2) * k
+        let max = 1, premier = -1, dernier = -1
+        for (let t = 0; t < nY; t++) {
+          const n = E.types[c.index * nY + t]!
+          if (!n) continue
+          max = Math.max(max, n)
+          if (premier < 0) premier = t
+          dernier = t
+        }
+        if (premier < 0) continue
+        const pt = (v: number) => pointSurAxe(vue, u, 'couloirs', v)
+        trait(pt(centreCouloir(premier, 1)), pt(centreCouloir(dernier, 1)), 0.8, coul, 0.35 * a)
+        const q0 = proj(pt(centreCouloir(0, 1))), q1 = proj(pt(centreCouloir(1, 1)))
+        const ecart = Math.hypot(q1.x - q0.x, q1.y - q0.y)
+        const ang = Math.atan2(q1.y - q0.y, q1.x - q0.x)
+        for (let t = premier; t <= dernier; t++) {
+          const n = E.types[c.index * nY + t]!
+          if (!n) continue
+          const p = proj(pt(centreCouloir(t, 1)))
+          if (!p.visible) continue
+          const f = n / max
+          // Longueur ∝ effectif dans le couloir, comme le segment du moteur, mais lumineux.
+          allongee(lueur, p.x, p.y, ang, Math.max(3, ecart * 0.5 * f), epais * (0.3 + 0.3 * Math.sqrt(f)), a * (0.35 + 0.55 * f))
+        }
+      }
+    }
+    ctx.restore()
+  }
+
+  // ─── Territoires : noms des thèmes au niveau des feuilles ────────────────
+
+  /**
+   * Quand les feuilles dominent (tout ouvert, squelette, lignée), les agrégats ont disparu et
+   * l'on ne sait plus où l'on est : on écrit discrètement le nom de chaque thème au barycentre
+   * écran de ses feuilles visibles (placement glouton sans chevauchement).
+   */
+  private dessinerTerritoires(ctx: CanvasRenderingContext2D): void {
+    const vue = this.vue
+    const V = R(vue)
+    if (V.territoires === 'jamais' || V.opaciteTerritoires <= 0) return
+    const { h, projection: P, palette: pal, granularite: g } = vue
+    const niveauFeuilles = g.globale > 2.5 || this.squelette.actif
+    if (V.territoires === 'auto' && !niveauFeuilles) return
+    const themes = h.categories.filter((c) => c.niveau === 1)
+    const sx = new Float64Array(h.nC), sy = new Float64Array(h.nC), n = new Int32Array(h.nC)
+    for (let f = 0; f < h.nF; f++) {
+      if (vue.opaciteAffichee[f]! < 0.02 || !P.visible[f]) continue
+      const c = h.chaine[f * 3 + 1]!
+      sx[c] += P.x[f]!
+      sy[c] += P.y[f]!
+      n[c]!++
+    }
+    const ordre = themes.filter((c) => n[c.index]! >= 3).sort((a, b) => n[b.index]! - n[a.index]!)
+    const boites: [number, number, number, number][] = []
+    ctx.save()
+    ctx.font = `700 11px ${pal.police}`
+    ;(ctx as unknown as { letterSpacing: string }).letterSpacing = '1.5px'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.lineJoin = 'round'
+    ctx.lineWidth = 4
+    ctx.strokeStyle = rgba(pal.fond, 0.85)
+    const a = V.opaciteTerritoires
+    for (const c of ordre) {
+      const x = sx[c.index]! / n[c.index]!, y = sy[c.index]! / n[c.index]!
+      const texte = c.nom.toUpperCase()
+      const l = ctx.measureText(texte).width + 8
+      const b: [number, number, number, number] = [x - l / 2, y - 9, x + l / 2, y + 9]
+      if (boites.some((o) => b[0] < o[2] && b[2] > o[0] && b[1] < o[3] && b[3] > o[1])) continue
+      boites.push(b)
+      const coul = pal.domaines[c.domaine % pal.domaines.length]!
+      ctx.globalAlpha = a
+      ctx.strokeText(texte, x, y)
+      ctx.fillStyle = V.theme === 'sombre' ? rgba(coul, 0.95) : melangerCouleurs(coul, pal.texte, 0.35)
+      ctx.fillText(texte, x, y)
+    }
+    ctx.restore()
   }
 
   /** Nombre d'arêtes de lignée parcourues (pour le panneau / la console). */

@@ -2,15 +2,20 @@
 // agrégats s'ouvrent localement ; hors du disque, ils rentrent dans leur parent. Délais d'entrée et
 // de sortie + hystérésis sur le rayon évitent que ça « frétille ». Déformation fisheye optionnelle.
 
-import type { Projection, VueGraphe } from '../../src/core'
+import { etendueTempsEcran, poidsAxes, type Projection, type Vec3, type VueGraphe } from '../../src/core'
 
 interface Suivi {
   /** Instant où la catégorie a cessé de toucher la lentille (0 = elle la touche). */
   sortie: number
 }
 
-/** Accès à la méthode privée `Granularite.retirer` (retour animé à la granularité globale). */
-type GranulariteInterne = { retirer(c: number): void }
+/** Distance d'un point au segment [a, b]. */
+function distanceSegment(px: number, py: number, ax: number, ay: number, bx: number, by: number): number {
+  const dx = bx - ax, dy = by - ay
+  const l2 = dx * dx + dy * dy
+  const t = l2 < 1e-9 ? 0 : Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / l2))
+  return Math.hypot(px - ax - t * dx, py - ay - t * dy)
+}
 
 export class Lentille {
   /** Centre (pixels du conteneur de la scène). */
@@ -28,6 +33,10 @@ export class Lentille {
   /** Catégories sous la lentille en attente d'ouverture : instant d'entrée. */
   private candidates = new Map<number, number>()
   private ecouteurs = new Set<() => void>()
+  /** Point monde auquel la lentille épinglée est ancrée (réglage « ancrage » = graphe), ou null. */
+  private ancre: Vec3 | null = null
+  /** Poids de l'axe temps, relu à chaque mise à jour (capsules de la vue de face). */
+  private axes = { temps: 0 }
 
   constructor(private vue: VueGraphe) {}
 
@@ -59,8 +68,36 @@ export class Lentille {
       this.x = this.vue.rendu.largeur / 2
       this.y = this.vue.rendu.hauteur / 2
     }
+    this.ancre = etat && this.vue.reglages.lire<string>('ancrageLentille') === 'graphe' ? this.versMonde(this.x, this.y) : null
     this.notifier()
     this.vue.demanderRendu()
+  }
+
+  get ancree(): boolean {
+    return this.ancre !== null
+  }
+
+  /** Point monde sous un point écran, dans le plan de la cible caméra (perspective neutre). */
+  private versMonde(x: number, y: number): Vec3 {
+    const cam = this.vue.camera
+    const k = cam.pixelsParUnite()
+    const dx = (x - cam.largeur / 2) / k, dy = -(y - cam.hauteur / 2) / k
+    const c = cam.cible, d = cam.droite, h = cam.haut
+    return [c[0] + d[0] * dx + h[0] * dy, c[1] + d[1] * dx + h[1] * dy, c[2] + d[2] * dx + h[2] * dy]
+  }
+
+  /** Lentille ancrée : recalcule sa position écran depuis le point monde (à chaque image). */
+  suivreAncre(): void {
+    if (!this.ancre || !this.epinglee) return
+    const p = this.vue.camera.projeterPoint(this.ancre)
+    if (!p.visible) return
+    this.x = p.x
+    this.y = p.y
+  }
+
+  /** Granularité globale au niveau des nœuds : plus rien à ouvrir, la lentille devient une loupe. */
+  get modeLoupe(): boolean {
+    return Math.floor(this.vue.granularite.globale + 1e-3) >= 3
   }
 
   /** Influence 0…1 d'un point écran : 1 au centre, 0 au bord et au-delà (pondérée par l'intensité). */
@@ -81,12 +118,13 @@ export class Lentille {
   }
 
   /**
-   * Déformation fisheye (Sarkar & Brown) des positions écran dans le disque : d' = R·(k+1)t / (kt+1),
-   * t = d/R. Continue au bord (d' = R en d = R), agrandit le centre. Appliquée en place à la
-   * projection juste avant que sigma ne lise les positions.
+   * Déformation fisheye « douce » des positions écran dans le disque : d' = d·(1 + k(1 − t)²),
+   * t = d/R. Grossit le centre d'un facteur 1 + k, reste continue et tangente à l'identité au bord
+   * (pas de tassement contre le cercle, contrairement à Sarkar & Brown), monotone pour k ≤ 2.
+   * Appliquée en place à la projection via le crochet `apresProjection` du moteur.
    */
   deformer(p: Projection, n: number): void {
-    const k = this.R<number>('fisheye') * this.intensite
+    const k = Math.min(2, this.R<number>('fisheye')) * this.intensite
     if (k <= 0.001) return
     const R = this.rayon, cx = this.x, cy = this.y
     for (let u = 0; u < n; u++) {
@@ -94,8 +132,8 @@ export class Lentille {
       if (Math.abs(dx) >= R || Math.abs(dy) >= R) continue
       const d = Math.hypot(dx, dy)
       if (d >= R || d < 1e-6) continue
-      const t = d / R
-      const s = (k + 1) / (k * t + 1)
+      const t = 1 - d / R
+      const s = 1 + k * t * t
       p.x[u] = cx + dx * s
       p.y[u] = cy + dy * s
     }
@@ -103,7 +141,7 @@ export class Lentille {
 
   /** Même déformation pour un point isolé (grille de la loupe). */
   deformerPoint(px: number, py: number, sortie: { x: number; y: number }): void {
-    const k = this.R<number>('fisheye') * this.intensite
+    const k = Math.min(2, this.R<number>('fisheye')) * this.intensite
     const dx = px - this.x, dy = py - this.y
     const d = Math.hypot(dx, dy), R = this.rayon
     if (k <= 0.001 || d >= R || d < 1e-6) {
@@ -111,7 +149,8 @@ export class Lentille {
       sortie.y = py
       return
     }
-    const s = (k + 1) / ((k * d) / R + 1)
+    const t = 1 - d / R
+    const s = 1 + k * t * t
     sortie.x = this.x + dx * s
     sortie.y = this.y + dy * s
   }
@@ -121,23 +160,40 @@ export class Lentille {
     return Math.hypot(p.x[u]! - this.x, p.y[u]! - this.y)
   }
 
+  /**
+   * Distance de la lentille à l'emprise d'un agrégat : son disque et, quand l'axe temps est visible
+   * (vue de face, cube), la boîte de sa capsule (q25 → q75). Un thème étalé sur six mois s'ouvre dès
+   * que la lentille croise le cœur de sa période, pas seulement sa médiane. L'axe des couloirs
+   * (vue de droite) n'est pas utilisé : chaque thème couvre presque tous les types, sa capsule
+   * traverse tout l'écran et la lentille ouvrirait tout d'un coup.
+   */
+  private distanceEmprise(u: number): number {
+    const v = this.vue
+    let d = this.distance(u) - v.tailleAffichee[u]! * 0.5
+    if (this.axes.temps > 0.3) {
+      const q = etendueTempsEcran(v, u)
+      if (q) d = Math.min(d, distanceSegment(this.x, this.y, q.q25.x, q.q25.y, q.q75.x, q.q75.y) - 4)
+    }
+    return d
+  }
+
   /** Vrai si la catégorie c (ou ce qui en est sorti) touche le disque de rayon r. */
   private touche(c: number, r: number): boolean {
     const { h, granularite: g } = this.vue
     const cat = h.categories[c]!
-    if (this.distance(cat.unite) < r) return true
+    if (this.distanceEmprise(cat.unite) < r) return true
     if (cat.niveau === 2) {
       for (const f of cat.feuilles) if (g.alpha[f]! > 0.05 && this.distance(f) < r) return true
       return false
     }
     for (const e of cat.enfants) {
-      if (this.suivies.has(e) ? this.touche(e, r) : this.distance(h.categories[e]!.unite) < r + this.vue.tailleAffichee[h.categories[e]!.unite]! * 0.5) return true
+      if (this.suivies.has(e) ? this.touche(e, r) : this.distanceEmprise(h.categories[e]!.unite) < r) return true
     }
     return false
   }
 
   private retirer(c: number): void {
-    ;(this.vue.granularite as unknown as GranulariteInterne).retirer(c)
+    this.vue.granularite.revenirAuGlobal(c)
   }
 
   /** Referme c et les catégories qu'elle contient ouvertes par la lentille (les plus profondes d'abord). */
@@ -176,6 +232,8 @@ export class Lentille {
     const dOuv = this.R<number>('delaiOuverture')
     const dFerm = this.R<number>('delaiFermeture')
     let change = false
+    const pa = poidsAxes(v)
+    this.axes.temps = pa.temps
 
     // 1. Fermetures (hystérésis : on ne referme qu'au-delà de R × hystérésis, après un délai).
     for (const [c, s] of [...this.suivies]) {
@@ -203,7 +261,7 @@ export class Lentille {
         if (cat.niveau >= base + profondeur || this.suivies.has(c)) continue
         const u = cat.unite
         if (g.presence[u]! < 0.9 || g.ouverture[c]! > 0.5 || g.nbActives[c] === 0 || g.surcharge(c) !== null) continue
-        if (this.distance(u) >= R + v.tailleAffichee[u]! * 0.5) continue
+        if (this.distanceEmprise(u) >= R) continue
         vus.add(c)
         const debut = this.candidates.get(c)
         if (debut === undefined) this.candidates.set(c, t)

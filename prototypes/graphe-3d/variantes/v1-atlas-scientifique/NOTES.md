@@ -115,3 +115,81 @@ légende de figure. Les réglages du moteur restent disponibles.
 - Anneau d'agrégat double : couronne des statuts + arc de la confiance moyenne à l'intérieur.
 - Export SVG/PDF de la vue courante « prêt pour la revue » avec la légende de figure.
 - Barre d'échelle temporelle en vue de face et panneaux b/c (mini-vues des autres faces) en vignettes.
+
+## Itération 2
+
+Moteur mis à jour ; captures réelles avec Playwright (requestAnimationFrame actif, 1600 × 1000) :
+`scratchpad/shots/capture.mjs` et ma copie `capture-v1.mjs`, qui ajoute survol d'agrégat, faces à
+g = 1 et g = 2, trois images d'une transition, g = 3 zoomé, panneau ouvert et mesure de la zone sûre.
+Aucune erreur console. Environ 50 à 60 images/s en orbite.
+
+### Contournements retirés (API officielles)
+
+- **Transitions** : le remplacement de `granularite.calculerPositions` sur l'instance disparaît.
+  L'option `trajectoire` reçoit maintenant `p.o` (ouverture brute du parent) et `p.sens` : ressort à
+  l'ouverture, o^γ à la fermeture. Le réducteur lit `granularite.sens` pour retarder le fondu et
+  faire gonfler le parent.
+- **Panneau** : `ui: { panneauMode: 'externe', conteneurPanneau }` monte le panneau du moteur dans
+  ma colonne `<aside>`, qui pousse `#app`. Je ne construis plus `PanneauGauche` à la main et ne
+  retire plus de classe. À la fin de la transition de largeur, `cadrerTout()` recadre dans la zone
+  sûre.
+- `etenduesParDefaut: false`, remplacé par mon propre rendu (voir plus bas).
+
+### Retours traités
+
+1. **Vue de face, façon forest plot.** Le crochet `apresPositions` donne une **rangée** à chaque
+   agrégat visible près des faces temps et type.
+   - Ordre : arbre domaine → thème → sous-thème, frères triés par date médiane.
+   - Hauteur de rangée ∝ alpha : la mise en page reste continue pendant les transitions. Les feuilles
+     encore dans leur sous-thème suivent son décalage.
+   - Barre d'intervalle façon barre d'erreur : moustaches min–max en pointillé, trait q10–q90 à
+     embouts, barre q25–q75 teintée, et le disque (placement du moteur à la médiane) borné au pas de
+     rangée.
+   - Noms alignés à gauche des moustaches, comme les étiquettes de lignes d'un forest plot. Seuls
+     les N plus gros sont nommés (réglage « noms de rangées (max) », 24) ; les autres au survol.
+   - Vue de droite : même mise en rangées, un point par couloir (aire ∝ effectif) et le nom à gauche
+     du premier couloir occupé.
+   - Les territoires s'effacent dans ces vues.
+2. **Feuilles à g = 3.** Sous le réglage « rayon min. du détail » (6,5 px), une feuille n'est qu'un
+   point de couleur de statut, avec un fin liseré papier : ni anneau, ni motif de bordure. Le détail
+   revient au survol (nœud et voisins), sur la lignée, et quand le zoom l'agrandit. La taille des
+   feuilles suit le zoom avec un exposant réglable (0,55).
+3. **Cadrage.** La zone sûre du moteur fonctionne avec la colonne qui pousse. Mesure avec le
+   panneau ouvert : marge basse 104 px, bas du contenu à 825 px pour 896 px utiles. Plus rien sous
+   l'histogramme.
+4. **Fiche.** Vérifiée en capture sur une feuille à g = 3 (échelle 0–1, prémisses) et sur un
+   agrégat à g = 1 et g = 2 (composition, distribution, principaux). Elle est lisible à
+   1600 × 1000 et reste dans l'écran.
+5. **Hystérésis des libellés.**
+   - Visibilité : un libellé affiché à l'image précédente reçoit un bonus de priorité (× 1,6 par
+     défaut, réglable) et apparaît en fondu. Le moteur est relancé tant qu'un fondu est en cours ;
+     avant ce correctif, un libellé pouvait rester figé à moitié transparent quand la boucle
+     s'arrêtait.
+   - Côté : pendant un mouvement, l'emplacement précédent est essayé en premier. Au repos, et à
+     chaque changement de mode (carte / temps / type), on revient à l'ordre canonique.
+
+### Autres
+
+- La légende de figure reçoit un fond papier translucide (des nœuds passaient dessous au zoom).
+- Nouveaux réglages : rangées, noms de rangées (max), rayon min. du détail, taille ∝ zoom,
+  hystérésis.
+
+### Captures regardées (`out/v1-atlas-scientifique-it2/`, `out/v1-atlas-scientifique/`)
+
+- `03-face-g1` : 14 rangées nettes, noms à gauche, barres d'erreur, disques à la médiane, plus
+  aucun empilement.
+- `04-face-g2` : 36 rangées de ~17 px, 24 noms.
+- `05-droite-g2` : matrice de points par couloir.
+- `06-transition-*` : enfants qui sortent, noms stables.
+- `07-g3` : points de statut, seuls les nœuds importants en détail.
+- `08-survol-feuille` et `02-survol-agregat`, plus `09-survol` du script commun : fiches complètes.
+- `10-g3-zoom` : anneaux et doubles bordures lisibles.
+- `11-panneau-ouvert` : graphe recentré, rien sous l'histogramme.
+- `12-sombre-face`.
+
+### Limites restantes
+
+- En vue de droite, le disque d'un agrégat reste à sa médiane de couloir et chevauche parfois un
+  point de couloir.
+- Les libellés de feuilles n'évitent que les autres libellés, pas les disques : sur une grappe dense
+  à g = 3, un nom peut passer sur des points (le halo papier le garde lisible).

@@ -212,25 +212,50 @@ export class Squelette {
     return this.repli[f]! > 0.5 ? this.cible[f]! : f
   }
 
+  /** Filtrage des arêtes : toutes les paires, les k plus fortes par clé, ou clé → clé directes. */
+  modeAretes: 'toutes' | 'fortes' | 'directes' = 'fortes'
+  aretesParCle = 2
+  /** Nombre de paires de représentants avant filtrage (pour le panneau). */
+  nbPairesBrutes = 0
+
   /** Une seule arête affichée par paire orientée de représentants, épaisseur ∝ nombre. */
-  private retenirAretes(): void {
+  retenirAretes(): void {
     const { h } = this.vue
     const nF = this.nF
-    const parPaire = new Map<number, number>()
+    const paires = new Map<number, { cf: number; n: number; a: number; b: number }>()
     this.aretesRetenues.clear()
     const { aretesSource: S, aretesCible: T } = h
+    const directes = this.modeAretes === 'directes'
     for (let e = 0; e < S.length; e++) {
       const s = S[e]!, t = T[e]!
       const rs = this.representantCible(s), rt = this.representantCible(t)
       if (rs === rt) continue
+      if (directes && (rs !== s || rt !== t)) continue
       const cp = rs * nF + rt
-      const deja = parPaire.get(cp)
-      if (deja === undefined) {
-        const cf = s * nF + t
-        parPaire.set(cp, cf)
-        this.aretesRetenues.set(cf, 1)
-      } else this.aretesRetenues.set(deja, this.aretesRetenues.get(deja)! + 1)
+      const p = paires.get(cp)
+      if (p) p.n++
+      else paires.set(cp, { cf: s * nF + t, n: 1, a: rs, b: rt })
     }
+    this.nbPairesBrutes = paires.size
+    let gardees = [...paires.values()]
+    if (this.modeAretes === 'fortes') {
+      // Une paire reste si elle est parmi les k plus fortes de l'une de ses deux extrémités.
+      const parNoeud = new Map<number, { n: number; i: number }[]>()
+      gardees.forEach((p, i) => {
+        for (const x of [p.a, p.b]) {
+          let l = parNoeud.get(x)
+          if (!l) parNoeud.set(x, (l = []))
+          l.push({ n: p.n, i })
+        }
+      })
+      const garder = new Uint8Array(gardees.length)
+      for (const l of parNoeud.values()) {
+        l.sort((x, y) => y.n - x.n)
+        for (let j = 0; j < Math.min(this.aretesParCle, l.length); j++) garder[l[j]!.i] = 1
+      }
+      gardees = gardees.filter((_, i) => garder[i])
+    }
+    for (const p of gardees) this.aretesRetenues.set(p.cf, p.n)
   }
 
   /** Avance les animations ; renvoie vrai s'il en reste. */
@@ -286,6 +311,9 @@ export class Squelette {
       p.az = sortie[f * 3 + 2]!
       p.t = 1 - r
       p.graine = h.graines[f]!
+      p.unite = f
+      p.parent = k
+      p.sens = this.arrivee[f]! > this.depart[f]! ? -1 : 1
       trajectoire(p)
       sortie[f * 3] = p.x
       sortie[f * 3 + 1] = p.y

@@ -12,7 +12,7 @@
 // le territoire « se fend ». Au repli, le mouvement s'inverse.
 
 import {
-  COURBES, Projection, Z_MAX, clamp, melangerCouleurs, rgb, rgba, statistiquesCategorie, STATUTS,
+  COURBES, Projection, TYPES_NOEUD, Z_MAX, centreCouloir, clamp, pointSurAxe, poidsAxes, smoothstep, melangerCouleurs, rgb, rgba, statistiquesCategorie, STATUTS,
   type ContexteDessin, type Statut, type VueGraphe,
 } from '../../src/core'
 
@@ -44,6 +44,10 @@ interface Toponyme {
   lignes: string[]
   taille: number
   niveau: number
+  /** Catégorie déjà ouverte : nom en filigrane, derrière, sans collision avec les actifs. */
+  filigrane: boolean
+  rect: [number, number, number, number]
+  esp: number
 }
 
 /** Rotation de teinte (degrés) et décalage de luminosité d'une couleur. */
@@ -177,48 +181,225 @@ export class Carte {
     })
   }
 
-  /** Atténuation des territoires hors vue de dessus (la carte est une vue « thématique »). */
-  private facteurVue(): number {
+  /** Poids de la vue de dessus (0 en vues 1 et 3) : la carte en îlots n'a de sens que vue d'en haut. */
+  private poidsDessus(): number {
     const v = this.vue
+    if (v.reglages.valeurs.mode3D === 'cube') return 0
+    // Net : la carte en îlots s'efface dès qu'on quitte la vue de dessus (vues 1, 3, orbite libre).
+    return smoothstep(0.55, 0.95, v.poidsFaces[0]!)
+  }
+
+  /** Atténuation des territoires hors vue de dessus. */
+  private facteurVue(): number {
     const k = this.lire<number>('territoiresHorsDessus')
-    if (v.reglages.valeurs.mode3D === 'cube') return k
-    return k + (1 - k) * v.poidsFaces[0]!
+    return k + (1 - k) * this.poidsDessus()
   }
 
   // ─── Calque dessous ────────────────────────────────────────────────────────
 
+  /** Calque de la carte mis en cache (feuille, territoires, courbes, rivières). */
+  private cache = document.createElement('canvas')
+  private cleCache = ''
+  private cacheGrossier = false
+  private minuterieAffinage = 0
+  private versionReglages = 0
+  private versionRelies = 0
+  private derniereCle = ''
+  private cleFondCache = ''
+  private cleViseeCache = ''
+  private refCache = { x: 0, y: 0 }
+  private forcer = false
+  /** Temps passé à recalculer la carte à la dernière image (ms), pour le diagnostic. */
+  dernierCout = 0
+
+  /** À appeler quand un réglage change (invalide le cache). */
+  invalider(): void {
+    this.versionReglages++
+  }
+
+  definirRelies(r: Uint8Array | null): void {
+    this.relies = r
+    this.versionRelies++
+  }
+
   dessinerDessous(c: ContexteDessin): void {
     const { ctx, vue, largeur: W, hauteur: H } = c
+    const g = vue.granularite
+    const cam = vue.camera
+    // Clé de tout ce dont dépend la carte hors translation de la caméra : orientation, distance,
+    // perspective (donc mélange des faces), granularité, filtres, réglages, thème, mise en avant, taille.
+    const cleFond = `${g.version}|${vue.etendues.version}|${this.versionReglages}|${this.versionRelies}|${vue.reglages.valeurs.theme}|${W}x${H}`
+    const cleVisee = `${cam.orientation.map((x) => x.toFixed(6)).join(',')}|${cam.distance.toFixed(6)}|${cam.perspective.toFixed(4)}`
+    const cle = `${cam.version}|${cleFond}|${cleVisee}`
+    // En mouvement : la clé change deux images de suite.
+    const enMouvement = cle !== this.cleCache && this.derniereCle === this.cleCache && this.derniereCle !== ''
+    this.derniereCle = cle
+    this.dernierCout = 0
+    const r = window.devicePixelRatio || 1
+    const affiner = cle === this.cleCache && this.cacheGrossier
+    // Simple déplacement en orthographique : on décale l'image en cache au lieu de la recalculer.
+    const ref = cam.projeterPoint([0, 0, 0])
+    let dx = 0, dy = 0, decaler = false
+    if (cle !== this.cleCache && !affiner && !this.forcer && cleFond === this.cleFondCache && cleVisee === this.cleViseeCache && cam.perspective === 0) {
+      dx = ref.x - this.refCache.x
+      dy = ref.y - this.refCache.y
+      decaler = Math.abs(dx) < W * 0.35 && Math.abs(dy) < H * 0.35
+    }
+    if (decaler) {
+      this.derniereCle = this.cleCache
+      clearTimeout(this.minuterieAffinage)
+      this.minuterieAffinage = window.setTimeout(() => { this.forcer = true; vue.demanderRendu() }, 160)
+    } else if (cle !== this.cleCache || affiner) {
+      const t0 = performance.now()
+      // Pendant un mouvement : grille plus grossière, sans courbes ; une image affinée suit l'arrêt.
+      this.cacheGrossier = !affiner && enMouvement && !this.forcer
+      this.forcer = false
+      // En mouvement, le calque est rendu à résolution réduite (le remplissage est le poste le plus cher).
+      const e = this.cacheGrossier ? r * this.lire<number>('resolutionMouvement') : r
+      if (this.cache.width !== Math.round(W * e) || this.cache.height !== Math.round(H * e)) {
+        this.cache.width = Math.round(W * e)
+        this.cache.height = Math.round(H * e)
+      }
+      const cc = this.cache.getContext('2d')!
+      cc.setTransform(1, 0, 0, 1, 0, 0)
+      cc.clearRect(0, 0, this.cache.width, this.cache.height)
+      cc.setTransform(e, 0, 0, e, 0, 0)
+      this.rendreCarte(cc, W, H, this.cacheGrossier)
+      this.cleCache = cle
+      this.cleFondCache = cleFond
+      this.cleViseeCache = cleVisee
+      this.refCache = { x: ref.x, y: ref.y }
+      clearTimeout(this.minuterieAffinage)
+      if (this.cacheGrossier) this.minuterieAffinage = window.setTimeout(() => vue.demanderRendu(), 160)
+      this.dernierCout = performance.now() - t0
+    }
+    ctx.save()
+    ctx.setTransform(1, 0, 0, 1, 0, 0)
+    ctx.drawImage(this.cache, dx * r, dy * r, Math.round(W * r), Math.round(H * r))
+    ctx.restore()
+    this.placerToponymes(ctx, W, H)
+    if (this.lire<boolean>('halo')) this.dessinerHalos(ctx)
+  }
+
+  private rendreCarte(ctx: CanvasRenderingContext2D, W: number, H: number, grossier: boolean): void {
+    const vue = this.vue
     vue.camera.projeter(vue.positionsBase, this.proj)
     this.largeurTerritoire.fill(0)
-    if (this.lire<boolean>('graticule') || this.lire<boolean>('cadre')) this.dessinerFeuille(ctx, W, H)
+    const wDessus = this.poidsDessus()
+    if (this.lire<boolean>('graticule') || this.lire<boolean>('cadre')) this.dessinerFeuille(ctx, W, H, wDessus)
     const terr = this.lire<boolean>('territoires'), courbes = this.lire<boolean>('courbes'), topo = this.lire<boolean>('toponymes')
-    if (terr || courbes || topo) {
+    const fVue = this.facteurVue()
+    if ((terr || courbes || topo) && fVue > 0.02) {
       const t0 = performance.now()
-      this.calculerChamps(W, H)
-      const fVue = this.facteurVue()
-      this.dessinerTerritoires(ctx, fVue, terr)
-      if (courbes) this.dessinerCourbes(ctx, fVue)
+      this.calculerChamps(W, H, grossier ? 1.7 : 1)
+      this.dessinerTerritoires(ctx, fVue, terr, grossier)
+      if (courbes && !grossier) this.dessinerCourbes(ctx, fVue)
       // Qualité adaptative : si la carte coûte plus que le budget, la grille s'élargit (et inversement).
       const cout = performance.now() - t0
       const budget = this.lire<number>('budgetCarte')
       if (cout > budget) this.qualite = Math.min(3, this.qualite * 1.12)
       else if (cout < budget * 0.45) this.qualite = Math.max(1, this.qualite / 1.06)
     }
-    if (this.lire<boolean>('halo')) this.dessinerHalos(ctx)
+    if (this.lire<boolean>('rivieres')) {
+      this.dessinerRivieres(ctx, 'temps')
+      this.dessinerRivieres(ctx, 'couloirs')
+    }
   }
 
-  /** Quadrillage adaptatif et cadre de feuille en damier, sur le plan Z = sol. */
-  private dessinerFeuille(ctx: CanvasRenderingContext2D, W: number, H: number): void {
+  /**
+   * Vue temps (face) : chaque territoire devient une « rivière » horizontale le long de sa période,
+   * sur la ligne de son agrégat ; sa largeur suit l'activité par semaine (effectif lissé).
+   * Quand un agrégat s'ouvre, ses enfants prennent le relais : la rivière se divise en affluents.
+   */
+  private dessinerRivieres(ctx: CanvasRenderingContext2D, axe: 'temps' | 'couloirs'): void {
+    const vue = this.vue
+    const wT = poidsAxes(vue)[axe]
+    // Seulement près de la face concernée (en orbite libre, ce serait des traînées coûteuses).
+    if (wT < 0.2) return
+    const { h, granularite: g, etendues: E, camera: cam } = vue
+    // Vue temps : une tranche par semaine. Vue droite : une tranche par type de nœud (couloir).
+    const temps = axe === 'temps'
+    const nT = temps ? E.nbTranches : TYPES_NOEUD.length
+    const effectifs = temps ? E.tranches : E.types
+    const A = this.lire<number>('opaciteTerritoires') * 1.5 * wT
+    const largeur = this.lire<number>('largeurRivieres')
+    const lisse = new Float32Array(nT)
+    ctx.save()
+    ctx.lineJoin = 'round'
+    for (const c of h.categories) {
+      const u = c.unite
+      if (g.nbActives[c.index] === 0) continue
+      const pres = g.presence[u]!
+      if (pres < 0.02) continue
+      const o = g.ouverture[c.index]!
+      const a = pres * (1 - 0.7 * o)
+      if (a < 0.02) continue
+      // Effectif lissé (noyau 1-2-3-2-1).
+      let premier = -1, dernier = -1
+      for (let k = 0; k < nT; k++) {
+        let s = 0, p = 0
+        const rl = temps ? 2 : 0
+        for (let d = -rl; d <= rl; d++) {
+          const j = k + d
+          if (j < 0 || j >= nT) continue
+          const w = 3 - Math.abs(d)
+          s += effectifs[c.index * nT + j]! * w
+          p += w
+        }
+        lisse[k] = s / p
+        if (effectifs[c.index * nT + k]! > 0) {
+          if (premier < 0) premier = k
+          dernier = k
+        }
+      }
+      if (premier < 0) continue
+      const haut: number[] = [], bas: number[] = []
+      const k0 = Math.max(0, premier - 1), k1 = Math.min(nT - 1, dernier + 1)
+      for (let k = k0; k <= k1; k++) {
+        const x = temps ? -1 + ((k + 0.5) * 2) / nT : centreCouloir(k, 1)
+        const q = cam.projeterPoint(pointSurAxe(vue, u, axe, x))
+        if (!q.visible) continue
+        const bord = k === k0 || k === k1 ? 0.25 : 1
+        const demi = (1.2 + largeur * Math.sqrt(lisse[k]!)) * bord * Math.max(0.3, q.echelle)
+        haut.push(q.x, q.y - demi)
+        bas.push(q.x, q.y + demi)
+      }
+      const n = haut.length / 2
+      if (n < 2) continue
+      // Contour : bord haut de gauche à droite puis bord bas de droite à gauche, lissé.
+      const pts: number[] = [...haut]
+      for (let i = n - 1; i >= 0; i--) pts.push(bas[i * 2]!, bas[i * 2 + 1]!)
+      const m = pts.length / 2
+      const chemin = new Path2D()
+      const mx = (i: number) => (pts[(i % m) * 2]! + pts[((i + 1) % m) * 2]!) / 2
+      const my = (i: number) => (pts[(i % m) * 2 + 1]! + pts[((i + 1) % m) * 2 + 1]!) / 2
+      chemin.moveTo(mx(m - 1), my(m - 1))
+      for (let i = 0; i < m; i++) chemin.quadraticCurveTo(pts[i * 2]!, pts[i * 2 + 1]!, mx(i), my(i))
+      chemin.closePath()
+      const mis = this.relies && !this.relies[c.index] ? 0.3 : 1
+      ctx.fillStyle = rgba(this.teintes[c.index]!, A * a * mis)
+      ctx.fill(chemin)
+      ctx.lineWidth = 0.8
+      ctx.strokeStyle = rgba(this.teintesTrait[c.index]!, 0.45 * wT * a * mis)
+      ctx.stroke(chemin)
+      const longueur = Math.abs(haut[(n - 1) * 2]! - haut[0]!)
+      this.largeurTerritoire[c.index] = Math.max(this.largeurTerritoire[c.index]!, longueur * wT)
+    }
+    ctx.restore()
+  }
+
+  /** Quadrillage adaptatif et liseré de feuille discret, sur le plan Z = sol (vue de dessus seulement). */
+  private dessinerFeuille(ctx: CanvasRenderingContext2D, W: number, H: number, wDessus: number): void {
+    if (wDessus < 0.03) return
     const { camera: cam, palette } = this.vue
     const z = -Z_MAX - 0.05
-    const B = 1.1
+    const B = 1.25
     const p = (x: number, y: number) => cam.projeterPoint([x, y, z])
     ctx.save()
     if (this.lire<boolean>('graticule')) {
       const visible = Math.max(W, H) / cam.pixelsParUnite()
       const pas = pasJoli(visible / 9)
-      const op = this.lire<number>('opaciteGraticule')
+      const op = this.lire<number>('opaciteGraticule') * wDessus
       const n0 = Math.ceil(-B / pas), n1 = Math.floor(B / pas)
       if (n1 - n0 < 400) {
         const mineur = new Path2D(), majeur = new Path2D()
@@ -240,48 +421,26 @@ export class Carte {
       }
     }
     if (this.lire<boolean>('cadre')) {
-      const e = 0.016
+      // Simple liseré fin, loin des données (l'ancien damier ressemblait à un bug).
       const coins = [p(-B, -B), p(B, -B), p(B, B), p(-B, B)]
-      const ext = [p(-B - e, -B - e), p(B + e, -B - e), p(B + e, B + e), p(-B - e, B + e)]
-      if (coins.every((q) => q.visible) && ext.every((q) => q.visible)) {
-        // Damier : segments alternés entre la ligne de cadre intérieure et extérieure.
-        const damier = new Path2D()
-        const segs = 22
-        const cotes: [number, number, number, number][] = [[-B, -B, 1, 0], [B, -B, 0, 1], [B, B, -1, 0], [-B, B, 0, -1]]
-        cotes.forEach(([x0, y0, dx, dy], ci) => {
-          const L = 2 * B / segs
-          // normale extérieure
-          const nx = dy, ny = -dx
-          for (let s = ci % 2; s < segs; s += 2) {
-            const ax = x0 + dx * L * s, ay = y0 + dy * L * s
-            const bx = ax + dx * L, by = ay + dy * L
-            const q = [p(ax, ay), p(bx, by), p(bx + nx * e, by + ny * e), p(ax + nx * e, ay + ny * e)]
-            damier.moveTo(q[0]!.x, q[0]!.y)
-            for (let i = 1; i < 4; i++) damier.lineTo(q[i]!.x, q[i]!.y)
-            damier.closePath()
-          }
-        })
-        ctx.fillStyle = rgba(palette.texte, 0.38)
-        ctx.fill(damier)
-        ctx.lineWidth = 0.8
-        ctx.strokeStyle = rgba(palette.texte, 0.5)
-        for (const q of [coins, ext]) {
-          ctx.beginPath()
-          q.forEach((pt, i) => (i ? ctx.lineTo(pt.x, pt.y) : ctx.moveTo(pt.x, pt.y)))
-          ctx.closePath()
-          ctx.stroke()
-        }
+      if (coins.every((q) => q.visible)) {
+        ctx.lineWidth = 0.7
+        ctx.strokeStyle = rgba(palette.texte, 0.14 * wDessus)
+        ctx.beginPath()
+        coins.forEach((pt, i) => (i ? ctx.lineTo(pt.x, pt.y) : ctx.moveTo(pt.x, pt.y)))
+        ctx.closePath()
+        ctx.stroke()
       }
     }
     ctx.restore()
   }
 
   /** Remplit les champs de densité des catégories exposées (grille écran de pas adaptatif). */
-  private calculerChamps(W: number, H: number): void {
+  private calculerChamps(W: number, H: number, facteurPas = 1): void {
     const { h, granularite: g, filtres, camera } = this.vue
     const P = this.proj
     const Rpx = this.lire<number>('douceur') * camera.pixelsParUnite()
-    const pas = (this.pas = clamp(Math.round((Rpx / this.lire<number>('finesse')) * this.qualite), 3, 64))
+    const pas = (this.pas = clamp(Math.round((Rpx / this.lire<number>('finesse')) * this.qualite * facteurPas), 3, 64))
     const NX = Math.ceil(W / pas), NY = Math.ceil(H / pas)
     const besoin = this.besoin
     for (const c of h.categories) {
@@ -296,7 +455,8 @@ export class Carte {
     for (let f = 0; f < h.nF; f++) {
       E[f * 4 + 2] = -1
       if ((masquer && !filtres.actives[f]) || !P.visible[f]) continue
-      const r = Rpx * P.echelle[f]!
+      // Échelle perspective bornée : un point tout près de l'œil ne doit pas couvrir tout l'écran.
+      const r = Rpx * Math.min(3, P.echelle[f]!)
       const x = P.x[f]!, y = P.y[f]!
       const ia = Math.max(0, Math.ceil((x - r) / pas)), ib = Math.min(NX, Math.floor((x + r) / pas))
       const ja = Math.max(0, Math.ceil((y - r) / pas)), jb = Math.min(NY, Math.floor((y + r) / pas))
@@ -483,7 +643,7 @@ export class Carte {
     return this.marcher(r.w, r.hh, r.i0, r.j0, seuil)
   }
 
-  private dessinerTerritoires(ctx: CanvasRenderingContext2D, fVue: number, dessiner: boolean): void {
+  private dessinerTerritoires(ctx: CanvasRenderingContext2D, fVue: number, dessiner: boolean, simple = false): void {
     const { h, granularite: g } = this.vue
     const A = this.lire<number>('opaciteTerritoires') * fVue
     const seuil = this.lire<number>('seuilTerritoire')
@@ -515,6 +675,14 @@ export class Carte {
         ctx.fillStyle = rgba(this.teintes[c.index]!, A * t * t * (1 - 0.55 * propre) * mis)
         ctx.fill(contour.chemin, 'evenodd')
         if (epais <= 0) continue
+        if (simple) {
+          // En mouvement : trait plein fin, sans tirets (moins cher à tracer).
+          ctx.setLineDash([])
+          ctx.lineWidth = niveau === 0 ? epais : epais * 0.7
+          ctx.strokeStyle = rgba(this.teintesTrait[c.index]!, (niveau === 0 ? 0.6 : 0.4 * t) * fVue * mis)
+          ctx.stroke(contour.chemin)
+          continue
+        }
         const trait = this.teintesTrait[c.index]!
         if (niveau === 0) {
           ctx.setLineDash([])
@@ -589,13 +757,22 @@ export class Carte {
     const K = this.lire<number>('rayonHalo'), I = this.lire<number>('intensiteHalo')
     if (I <= 0) return
     const sprites = { valide: this.sprite(palette.statut.valide), incertain: this.sprite(palette.statut.incertain), refute: this.sprite(palette.statut.refute) }
+    // Garde-fous de coût (vue perspective très proche) : nœuds énormes ignorés, halos hors écran
+    // ignorés, surface totale plafonnée à quelques écrans.
+    const W = this.vue.rendu.largeur, H = this.vue.rendu.hauteur
+    let surface = 0
+    const plafond = 4 * W * H
+    const dehors = (x: number, y: number, r: number) => x < -r || y < -r || x > W + r || y > H + r
     ctx.save()
     for (let f = 0; f < h.nF; f++) {
       const o = op[f]!
-      if (o < 0.03 || !P.visible[f]) continue
+      if (o < 0.03 || !P.visible[f] || taille[f]! > 28) continue
       const n = h.noeuds[f]!
       const w = n.confiance.haut - n.confiance.bas
-      const r = taille[f]! + 2 + w * K
+      const r = Math.min(60, taille[f]! + 2 + w * K)
+      if (dehors(P.x[f]!, P.y[f]!, r)) continue
+      surface += 4 * r * r
+      if (surface > plafond) break
       ctx.globalAlpha = clamp(I * o * (1 - 0.6 * Math.min(1, w * 1.6)), 0, 1)
       ctx.drawImage(sprites[n.statut], P.x[f]! - r, P.y[f]! - r, 2 * r, 2 * r)
     }
@@ -603,9 +780,10 @@ export class Carte {
       for (const c of h.categories) {
         const u = c.unite
         const o = op[u]!
-        if (o < 0.03 || !P.visible[u]) continue
+        if (o < 0.03 || !P.visible[u] || taille[u]! > 60) continue
         const conf = this.confAgregats[c.index]!
-        const r = taille[u]! * 1.15 + 3 + conf.largeur * K * 1.4
+        const r = Math.min(100, taille[u]! * 1.15 + 3 + conf.largeur * K * 1.4)
+        if (dehors(P.x[u]!, P.y[u]!, r)) continue
         for (const s of STATUTS) {
           const part = conf.parts[s]
           if (part < 0.02) continue
@@ -617,17 +795,26 @@ export class Carte {
     ctx.restore()
   }
 
-  // ─── Calque dessus : toponymes ─────────────────────────────────────────────
+  /** Noms actifs placés à cette image (dessinés sur le calque dessus). */
+  private actifs: Toponyme[] = []
 
-  dessinerToponymes(c: ContexteDessin): void {
+  /**
+   * Place tous les toponymes. Deux familles :
+   *   - actifs : catégories au niveau affiché (ouverture < 0,5), prioritaires, calque dessus ;
+   *   - filigranes : catégories déjà ouvertes (domaines quand on voit les thèmes…), dessinés sur
+   *     le calque dessous (derrière nœuds et arêtes) et seulement s'ils ne touchent aucun nom actif.
+   */
+  placerToponymes(ctx: CanvasRenderingContext2D, W: number, H: number): void {
+    this.actifs = []
     if (!this.lire<boolean>('toponymes')) return
-    const { ctx, vue, largeur: W, hauteur: H } = c
+    const vue = this.vue
     const { h, granularite: g, palette } = vue
     const T = this.lire<number>('tailleToponymes')
     const esp = this.lire<number>('espacementToponymes')
-    const opG = this.lire<number>('opaciteToponymes') * (0.4 + 0.6 * this.facteurVue())
+    const axes = poidsAxes(vue)
+    const opG = this.lire<number>('opaciteToponymes') * (0.4 + 0.6 * Math.max(this.facteurVue(), axes.temps, axes.couloirs))
     const lisibilite = this.lire<number>('lisibiliteToponymes')
-    const P = this.proj
+    const P = vue.projection
     const survol = vue.survol !== null
     const liste = this.toponymes
     liste.length = 0
@@ -646,45 +833,110 @@ export class Carte {
       const largeurNom = Math.max(...lignes.map((l) => l.length)) * taille * (0.68 + esp)
       const lt = this.largeurTerritoire[cat.index]!
       if (lt <= 0) continue
-      a *= clamp((lt / largeurNom - lisibilite * 0.4) / (lisibilite * 0.8), 0, 1)
+      const place = clamp((lt / largeurNom - lisibilite * 0.4) / (lisibilite * 0.8), 0, 1)
+      // Les noms du niveau affiché restent lisibles même sur un petit territoire (la collision tranche).
+      a *= o < 0.5 && lt > 0 ? Math.max(0.6, place) : place
       if (this.relies && !this.relies[cat.index]) a *= 0.25
       else if (survol) a *= 0.8
       a *= opG
       if (a < 0.03) continue
-      const x = P.x[u]!, y = P.y[u]! - (1 - o) * (vue.tailleAffichee[u]! + taille * 0.9)
+      // Position : sur l'agrégat affiché (médiane en vue temps), au-dessus de son disque.
+      const x = vue.projection.x[u]!, y = vue.projection.y[u]! - (1 - o) * (vue.tailleAffichee[u]! + taille * 0.9)
       if (x < -200 || x > W + 200 || y < -60 || y > H + 60) continue
-      liste.push({ cat: cat.index, x, y, alpha: a, lignes, taille, niveau: cat.niveau })
+      liste.push({ cat: cat.index, x, y, alpha: a, lignes, taille, niveau: cat.niveau, filigrane: o >= 0.5, rect: [0, 0, 0, 0], esp: 0 })
     }
-    // Priorité : les plus visibles d'abord, puis les niveaux hauts ; on saute ce qui chevauche.
-    liste.sort((p, q) => q.alpha - p.alpha || p.niveau - q.niveau)
+    // Actifs d'abord (les plus visibles, puis les niveaux hauts), filigranes ensuite.
+    liste.sort((p, q) => Number(p.filigrane) - Number(q.filigrane) || q.alpha - p.alpha || p.niveau - q.niveau)
     const places: [number, number, number, number][] = []
+    // Disques visibles (agrégats et nœuds) : un filigrane ne doit pas passer dessus.
+    let disques: number[] | null = null
+    const touche = (r: [number, number, number, number]) => {
+      if (places.some((q) => r[0] < q[2] && r[2] > q[0] && r[1] < q[3] && r[3] > q[1])) return true
+      if (!disques) return false
+      for (let i = 0; i < disques.length; i += 3) {
+        const cx = clamp(disques[i]!, r[0], r[2]), cy = clamp(disques[i + 1]!, r[1], r[3])
+        if (Math.hypot(cx - disques[i]!, cy - disques[i + 1]!) < disques[i + 2]!) return true
+      }
+      return false
+    }
     ctx.save()
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    ctx.lineJoin = 'round'
     const avecEspacement = 'letterSpacing' in ctx
     for (const t of liste) {
-      const poids = t.niveau === 2 ? 500 : 600
-      ctx.font = `${t.niveau === 2 ? 'italic ' : ''}${poids} ${t.taille}px ${palette.police}`
-      const espPx = t.taille * esp * (t.niveau === 0 ? 1.4 : t.niveau === 1 ? 1 : 0.7)
-      if (avecEspacement) (ctx as CanvasRenderingContext2D & { letterSpacing: string }).letterSpacing = `${espPx.toFixed(1)}px`
+      if (!disques) {
+        disques = []
+        for (let u = 0; u < h.nU; u++) {
+          if (vue.opaciteAffichee[u]! < 0.25) continue
+          disques.push(P.x[u]!, P.y[u]!, vue.tailleAffichee[u]! + 3)
+        }
+      }
+      this.police(ctx, t, esp, avecEspacement)
       const hLigne = t.taille * 1.18
       const largeur = Math.max(...t.lignes.map((l) => ctx.measureText(l).width))
       const hauteur = hLigne * t.lignes.length
-      const r: [number, number, number, number] = [t.x - largeur / 2 - 4, t.y - hauteur / 2 - 2, t.x + largeur / 2 + 4, t.y + hauteur / 2 + 2]
-      if (places.some((q) => r[0] < q[2] && r[2] > q[0] && r[1] < q[3] && r[3] > q[1])) continue
-      places.push(r)
-      ctx.globalAlpha = t.alpha
-      ctx.lineWidth = t.niveau === 0 ? 4 : 3.2
-      ctx.strokeStyle = rgba(palette.fond, 0.85)
-      ctx.fillStyle = this.teintesTexte[t.cat]!
-      t.lignes.forEach((l, i) => {
-        // letterSpacing ajoute un espace après la dernière lettre : on recentre.
-        const x = t.x + (avecEspacement ? espPx / 2 : 0)
-        const y = t.y + (i - (t.lignes.length - 1) / 2) * hLigne
-        ctx.strokeText(l, x, y)
-        ctx.fillText(l, x, y)
-      })
+      const marge = t.filigrane ? 8 : 4
+      // Actif : à sa place ou rien. Filigrane : on essaie aussi au-dessus / au-dessous.
+      const decalages = t.filigrane ? [0, -1, 1].map((k) => k * (hauteur + 6)) : [0, -0.8 * hauteur, 0.8 * hauteur + 8]
+      const y0 = t.y
+      let place = false
+      for (const d of decalages) {
+        t.y = y0 + d
+        t.rect = [t.x - largeur / 2 - marge, t.y - hauteur / 2 - marge / 2, t.x + largeur / 2 + marge, t.y + hauteur / 2 + marge / 2]
+        if (!touche(t.rect)) {
+          place = true
+          break
+        }
+      }
+      if (!place && !t.filigrane) {
+        // Nom actif : si seuls des disques gênent, il reste à sa place (priorité à la lecture).
+        t.y = y0
+        t.rect = [t.x - largeur / 2 - marge, t.y - hauteur / 2 - marge / 2, t.x + largeur / 2 + marge, t.y + hauteur / 2 + marge / 2]
+        const r = t.rect
+        place = !places.some((q) => r[0] < q[2] && r[2] > q[0] && r[1] < q[3] && r[3] > q[1])
+      }
+      if (!place) continue
+      places.push(t.rect)
+      if (t.filigrane) this.ecrire(ctx, t, avecEspacement, palette.fond)
+      else this.actifs.push(t)
+    }
+    ctx.restore()
+  }
+
+  private police(ctx: CanvasRenderingContext2D, t: Toponyme, esp: number, avecEspacement: boolean): void {
+    const poids = t.niveau === 2 ? 500 : 600
+    ctx.font = `${t.niveau === 2 ? 'italic ' : ''}${poids} ${t.taille}px ${this.vue.palette.police}`
+    t.esp = t.taille * esp * (t.niveau === 0 ? 1.4 : t.niveau === 1 ? 1 : 0.7)
+    if (avecEspacement) (ctx as CanvasRenderingContext2D & { letterSpacing: string }).letterSpacing = `${t.esp.toFixed(1)}px`
+  }
+
+  private ecrire(ctx: CanvasRenderingContext2D, t: Toponyme, avecEspacement: boolean, fond: string): void {
+    const hLigne = t.taille * 1.18
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.lineJoin = 'round'
+    ctx.globalAlpha = t.alpha
+    ctx.lineWidth = t.niveau === 0 ? 4 : 3.2
+    ctx.strokeStyle = rgba(fond, t.filigrane ? 0.5 : 0.85)
+    ctx.fillStyle = this.teintesTexte[t.cat]!
+    t.lignes.forEach((l, i) => {
+      // letterSpacing ajoute un espace après la dernière lettre : on recentre.
+      const x = t.x + (avecEspacement ? t.esp / 2 : 0)
+      const y = t.y + (i - (t.lignes.length - 1) / 2) * hLigne
+      ctx.strokeText(l, x, y)
+      ctx.fillText(l, x, y)
+    })
+  }
+
+  // ─── Calque dessus : toponymes actifs ──────────────────────────────────────
+
+  dessinerToponymes(c: ContexteDessin): void {
+    if (!this.lire<boolean>('toponymes') || !this.actifs.length) return
+    const { ctx, vue } = c
+    const esp = this.lire<number>('espacementToponymes')
+    ctx.save()
+    const avecEspacement = 'letterSpacing' in ctx
+    for (const t of this.actifs) {
+      this.police(ctx, t, esp, avecEspacement)
+      this.ecrire(ctx, t, avecEspacement, vue.palette.fond)
     }
     ctx.restore()
   }

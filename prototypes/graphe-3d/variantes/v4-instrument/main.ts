@@ -6,10 +6,11 @@
 import {
   creerVue, el, rgb, rgbaGL, melangerCouleurs, barreStatuts, statistiquesCategorie, genererJeuSynthetique,
   LIBELLES_ORIGINE, LIBELLES_STATUT, LIBELLES_TYPE, LIBELLES_VALIDATION, NOMS_DISPOSITIONS, NOMS_NIVEAUX, TYPES_NOEUD, VALIDATIONS,
-  quat, type ContexteDessin, type Courbe, type DefinitionReglage, type NomVue, type Quat, type ReducteurNoeud, type Vec3, type VueGraphe,
+  COURBES, type ContexteDessin, type Courbe, type DefinitionReglage, type NomVue, type Quat, type ReducteurNoeud, type Vec3, type VueGraphe,
 } from '../../src/core'
-import { BORNES, dessinerGrilles, dessinerRegles, dessinerReticule, etat, lireVar, viderCacheReticule } from './axes'
-import { donneesParCases, type OrdreCases, type PasCases } from './cases'
+import { dessinerEtenduesInstrument } from './etendues'
+import { BORNES, versions, dessinerGrilles, dessinerRegles, dessinerReticule, etat, lireVar, viderCacheReticule } from './axes'
+import { donneesParCases, placerCases, type OrdreCases, type PasCases } from './cases'
 import { dessinerBarresErreur } from './confiance'
 import { dateIso, Echelles, JOUR } from './echelles'
 import { construireEntete, construireSurimpression, MenuRadialInstrument, type Pilote } from './entete'
@@ -37,10 +38,13 @@ const REGLAGES: DefinitionReglage[] = [
   { cle: 'facesTeintees', defaut: true, dossier: D.grille, libelle: 'faces teintées' },
   { cle: 'opaciteGrille', defaut: 1, dossier: D.grille, libelle: 'opacité', min: 0, max: 2, pas: 0.05 },
   { cle: 'densiteGrille', defaut: 1, dossier: D.grille, libelle: 'densité', min: 0.3, max: 3, pas: 0.05 },
+  { cle: 'densiteAuto', defaut: true, dossier: D.grille, libelle: 'densité auto (faces de biais)' },
   { cle: 'axesOrigine', defaut: true, dossier: D.grille, libelle: "axes d'origine (sol)" },
   { cle: 'secteurs', defaut: true, dossier: D.grille, libelle: 'secteurs (dessus)' },
   { cle: 'graduations', defaut: true, dossier: D.grad, libelle: 'règles graduées' },
   { cle: 'regleEcran', defaut: true, dossier: D.grad, libelle: 'collées au bord' },
+  { cle: 'opaciteBandeau', defaut: 0.6, dossier: D.grad, libelle: 'bandeau collé (opacité)', min: 0, max: 1, pas: 0.05 },
+  { cle: 'recadrerPanneau', defaut: true, dossier: D.grad, libelle: 'recadrer à l’ouverture du panneau' },
   { cle: 'policeGraduations', defaut: 10.5, dossier: D.grad, libelle: 'taille police', min: 8, max: 15, pas: 0.5 },
   { cle: 'longueurGraduations', defaut: 5, dossier: D.grad, libelle: 'longueur traits', min: 2, max: 14, pas: 0.5 },
   { cle: 'reticule', defaut: true, dossier: D.ret, libelle: 'réticule' },
@@ -52,7 +56,9 @@ const REGLAGES: DefinitionReglage[] = [
   { cle: 'buteeBarres', defaut: 2.5, dossier: D.conf, libelle: 'butées (px)', min: 0, max: 8, pas: 0.25 },
   { cle: 'epaisseurBarres', defaut: 1, dossier: D.conf, libelle: 'épaisseur', min: 0.5, max: 3, pas: 0.1 },
   { cle: 'opaciteBarres', defaut: 0.7, dossier: D.conf, libelle: 'opacité', min: 0, max: 1, pas: 0.01 },
+  { cle: 'etenduesPeriode', defaut: true, dossier: D.conf, libelle: 'étendue des agrégats (face / droite)' },
   { cle: 'barresAgregats', defaut: true, dossier: D.conf, libelle: 'sur les agrégats' },
+  { cle: 'nbLibelles', defaut: 14, dossier: D.sym, libelle: 'libellés (N plus importants)', min: 0, max: 120, pas: 1 },
   { cle: 'tailleSymbole', defaut: 1.45, dossier: D.sym, libelle: 'taille symboles', min: 0.4, max: 3, pas: 0.05 },
   { cle: 'tailleSymboleAgregat', defaut: 1, dossier: D.sym, libelle: 'taille agrégats', min: 0.3, max: 3, pas: 0.05 },
   { cle: 'indicateurValidation', defaut: 0.34, dossier: D.sym, libelle: 'indicateur validation', min: 0, max: 0.6, pas: 0.01 },
@@ -112,6 +118,11 @@ function creerReducteur(regroupement: 'categories' | 'cases', couleurs: (vue: Vu
       EXTRA.compte = 0
       a.taille *= R.tailleSymbole as number
     }
+    // Libellés : seulement les N unités visibles les plus importantes, plus survol et lignée.
+    if (a.libelle !== null && !a.forceLibelle && !LIBELLES_RETENUS.has(info.unite)) {
+      const lignee = info.lignee === 'selection' || info.lignee === 'ancetre'
+      if (!lignee && info.survol !== 'voisin') a.libelle = null
+    }
     if (a.surligne || info.survol === 'survole') {
       EXTRA.couleurBordure = rgbaGL(info.survol === 'survole' && !a.surligne ? pal.accent : a.couleurBordure, Math.max(a.opacite, 0.9))
       EXTRA.tailleBordure = 0.3
@@ -125,6 +136,29 @@ function creerReducteur(regroupement: 'categories' | 'cases', couleurs: (vue: Vu
 }
 
 // ─── Libellés (calque sigma) ─────────────────────────────────────────────────
+
+/** Unités dont le libellé est affiché d'office (recalculé quand la granularité ou les filtres changent). */
+const LIBELLES_RETENUS = new Set<number>()
+function choisirLibelles(vue: VueGraphe): void {
+  LIBELLES_RETENUS.clear()
+  const N = vue.reglages.valeurs.nbLibelles as number
+  if (N <= 0) return
+  const { h, granularite: g } = vue
+  const candidats: [number, number][] = []
+  for (let u = 0; u < h.nU; u++) {
+    if (g.alpha[u]! < 0.5) continue
+    if (u < h.nF) {
+      if (!vue.filtres.actives[u]) continue
+      candidats.push([u, h.importance[u]!])
+    } else {
+      const c = u - h.nF
+      // Agrégats : effectif (prioritaires sur les feuilles, le poids est gonflé).
+      candidats.push([u, 1e6 + g.nbActives[c]!])
+    }
+  }
+  candidats.sort((a, b) => b[1] - a[1])
+  for (let i = 0; i < Math.min(N, candidats.length); i++) LIBELLES_RETENUS.add(candidats[i]![0])
+}
 
 let vueActive: VueGraphe | null = null
 
@@ -275,7 +309,6 @@ function rendreFiche(u: number, vue: VueGraphe): HTMLElement {
   )
 }
 
-const tourner = (q: Quat, v: Vec3): Vec3 => quat.tourner(q, v)
 const fmt = (v: number) => (v >= 0 ? ' ' : '') + v.toFixed(3)
 
 // ─── Montage (recréé quand le regroupement change) ──────────────────────────
@@ -341,11 +374,17 @@ function monter(conserve?: EtatConserve): Montage {
     mode: conserve?.mode ?? '3d',
     vueInitiale: 'face' as NomVue,
     granularite: conserve?.granularite ?? 2,
-    reglages: { dureeTransition: 360, dureeVues: 340, tailleNoeud: 3.4, opaciteAretes: 0.2, nettete: 5, densiteLibelles: 0.45, tailleLibelle: 11.5 },
+    reglages: { dureeTransition: 380, dureeVues: 340, tailleNoeud: 3.4, opaciteAretes: 0.2, nettete: 5, densiteLibelles: 0.45, tailleLibelle: 11.5, etendues: 'aucune' },
+    // Étendues : dessinées par l'instrument (barres d'erreur de période), pas par la capsule du moteur.
+    etenduesParDefaut: false,
+    // Zone sûre : place des libellés de la règle Z à gauche et de la règle X en bas.
+    margesSures: { gauche: 150, bas: 34, haut: 26, droite: 70 },
     reglagesSupplementaires: REGLAGES,
     reducteursNoeud: [creerReducteur(regroupement, couleursCases)],
     dessinerDessous: (c: ContexteDessin) => {
       dessinerGrilles(c, ECH)
+      dessinerEtenduesInstrument(c, ECH, (u) =>
+        regroupement === 'cases' ? couleursCases(c.vue).get(u) ?? c.vue.palette.texteDoux : c.vue.palette.domaines[c.vue.h.domaine(u) % c.vue.palette.domaines.length]!)
       dessinerBarresErreur(c)
     },
     dessinerDessus: (c: ContexteDessin) => {
@@ -364,17 +403,21 @@ function monter(conserve?: EtatConserve): Montage {
   vue.racine.classList.add('v4')
 
   // Cases : les feuilles gardent les positions thématiques d'origine.
-  if (regroupement === 'cases') for (const nom of NOMS_DISPOSITIONS) vue.remplacerDisposition(nom, ECH.dispositions[nom])
+  if (regroupement === 'cases') {
+    for (const nom of NOMS_DISPOSITIONS) vue.remplacerDisposition(nom, ECH.dispositions[nom])
+    // … et chaque case va à la coordonnée de son intervalle (période × couloir).
+    placerCases(vue.h, vue.dispositions, pas, ordre, (t) => ECH.dateVersX(t))
+    vue.on('filtres', () => placerCases(vue.h, vue.dispositions, pas, ordre, (t) => ECH.dateVersX(t)))
+  }
 
   // Transitions nettes : ease-out-expo pour la granularité et pour la caméra.
   const appliquerCourbe = () => {
     const R = vue.reglages.valeurs
     vue.courbePerso = R.courbeExpo ? sortieExpo(R.forceExpo as number) : null
+    // Caméra : même courbe (API du moteur), sinon celle du réglage « courbeVues ».
+    vue.camera.courbeAnimations = R.courbeExpo ? sortieExpo(R.forceExpo as number) : (COURBES[R.courbeVues] ?? COURBES.sortie)
     vue.granularite.version++
   }
-  const animerVers = vue.camera.animerVers.bind(vue.camera)
-  vue.camera.animerVers = (cible, duree, courbe) =>
-    animerVers(cible, duree, vue.reglages.valeurs.courbeExpo ? sortieExpo(vue.reglages.valeurs.forceExpo as number) : courbe)
   appliquerCourbe()
 
   // Symboles : couleurs de validation (uniformes WebGL) et taille de l'indicateur.
@@ -424,13 +467,27 @@ function monter(conserve?: EtatConserve): Montage {
   mesurer()
   let derniereMesure = 0
 
+  choisirLibelles(vue)
+  let versionLibelles = -1
   const desabonnements = [
+    vue.on('granularite', () => {
+      // Pendant une transition la granularité change à chaque image : on recalcule au plus par palier.
+      const cle = Math.round(vue.granularite.globale * 4)
+      if (cle !== versionLibelles || !vue.animateur.enCours) {
+        versionLibelles = cle
+        choisirLibelles(vue)
+      }
+    }),
+    vue.on('filtres', () => choisirLibelles(vue)),
     vue.on('reglage', ({ cle }) => {
-      if (cle === 'courbeExpo' || cle === 'forceExpo') appliquerCourbe()
+      versions.reglages++
+      if (cle === 'nbLibelles') choisirLibelles(vue)
+      if (cle === 'courbeExpo' || cle === 'forceExpo' || cle === 'courbeVues') appliquerCourbe()
       if (cle === 'indicateurValidation') appliquerSymboles()
       if (cle === 'regroupement' || ((cle === 'pasCases' || cle === 'ordreCases') && regroupement === 'cases')) {
-        // Tous les réglages sont écrits tout de suite (la sauvegarde du moteur est différée de 250 ms).
-        ecrireStocke({ ...vue.reglages.valeurs })
+        // Écriture immédiate (la sauvegarde du moteur est différée) ; regroupement lu avant la recréation.
+        vue.reglages.sauver()
+        ecrireStocke({ regroupement: vue.reglages.valeurs.regroupement, pasCases: vue.reglages.valeurs.pasCases, ordreCases: vue.reglages.valeurs.ordreCases })
         window.setTimeout(remonter, 0)
       }
     }),
@@ -447,31 +504,11 @@ function monter(conserve?: EtatConserve): Montage {
     }),
   ]
 
-  // Cadrage dans la zone utile : sous l'en-tête, au-dessus de l'histogramme, en laissant la place
-  // des libellés de la règle verticale à gauche (le cadrage du moteur vise tout le conteneur).
-  const cadrerMoteur = vue.camera.cadrer.bind(vue.camera)
-  vue.camera.cadrer = (positions, indices, duree = 450, marge = 1.3) => {
-    const cam = vue.camera
-    const W = cam.largeur, H = cam.hauteur, M = etat.marges
-    const libelles = 150
-    const utileL = Math.max(200, W - M.gauche - libelles - M.droite - 70), utileH = Math.max(160, H - M.haut - M.bas - 30)
-    const facteur = Math.max(H / utileH, W / utileL)
-    cadrerMoteur(positions, indices, duree, marge * facteur)
-    const anim = (cam as unknown as { anim: { c1: Vec3; d1: number; q1: Quat } | null }).anim
-    if (!anim) return
-    const k = H / 2 / (anim.d1 * Math.tan((cam.champVision * Math.PI) / 360))
-    const xS = (M.gauche + libelles + W - M.droite - 70) / 2, yS = (M.haut + 20 + H - M.bas) / 2
-    const q = anim.q1
-    const droite = tourner(q, [1, 0, 0]), haut = tourner(q, [0, 1, 0])
-    const ox = (xS - W / 2) / k, oy = (H / 2 - yS) / k
-    anim.c1 = [anim.c1[0] - droite[0] * ox - haut[0] * oy, anim.c1[1] - droite[1] * ox - haut[1] * oy, anim.c1[2] - droite[2] * ox - haut[2] * oy]
-  }
-
   // « Tout cadrer » vise le cube de l'instrument (ses règles comprises), pas seulement les points.
   const coins = new Float32Array(24)
   for (let i = 0; i < 8; i++) coins.set([(i & 1 ? 1 : -1) * BORNES[0], (i & 2 ? 1 : -1) * BORNES[1], (i & 4 ? 1 : -1) * BORNES[2]], i * 3)
   vue.cadrerTout = () => {
-    vue.camera.cadrer(coins, null, vue.reglages.valeurs.dureeVues, 1.08)
+    vue.camera.cadrer(coins, null, vue.reglages.valeurs.dureeVues, 1.08, vue.zoneSure())
     vue.demanderRendu()
   }
 
@@ -484,7 +521,15 @@ function monter(conserve?: EtatConserve): Montage {
     vue.camera.version++
     if (conserve.selection !== null && conserve.selection < vue.h.nF) vue.selectionner(conserve.selection)
     vue.demanderRendu()
-  } else vue.camera.cadrer(coins, null, 1, 1.08)
+  } else {
+    // Cadrage initial du cube dans la zone sûre, refait à la première image (mise en page faite).
+    vue.camera.cadrer(coins, null, 1, 1.08, vue.zoneSure())
+    const une = vue.on('image', () => {
+      une()
+      vue.camera.cadrer(coins, null, 1, 1.08, vue.zoneSure())
+      vue.demanderRendu()
+    })
+  }
 
   ;(window as unknown as { atlasVue: VueGraphe }).atlasVue = vue
   return {

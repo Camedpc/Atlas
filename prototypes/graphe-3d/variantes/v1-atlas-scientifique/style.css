@@ -406,9 +406,12 @@ body.cote-ouvert .v1-bouton-cote {
 
 .v1-figure {
   position: absolute;
-  top: 56px;
-  left: 14px;
-  max-width: 300px;
+  top: 52px;
+  left: 8px;
+  max-width: 310px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--fond) 86%, transparent);
   font-family: var(--police-titre);
   font-size: 13px;
   line-height: 1.4;

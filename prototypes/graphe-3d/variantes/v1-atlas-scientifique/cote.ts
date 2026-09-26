@@ -6,7 +6,7 @@
 // moteur) et la caméra garde sa cible au centre : le graphe se recentre tout seul.
 
 import {
-  el, PanneauGauche, LIBELLES_STATUT, LIBELLES_VALIDATION, LIBELLES_VUES, NOMS_NIVEAUX, STATUTS, VALIDATIONS,
+  el, LIBELLES_STATUT, LIBELLES_VALIDATION, LIBELLES_VUES, NOMS_NIVEAUX, STATUTS, VALIDATIONS,
   formaterNombre, type VueGraphe,
 } from '../../src/core'
 import { glypheValidation, s } from './fiche'
@@ -40,11 +40,9 @@ function ecrireStockage(v: { ouvert: boolean; onglet: Onglet }): void {
 
 export function monterCote(vue: VueGraphe, cote: HTMLElement, bouton: HTMLButtonElement): void {
   const etat = lireStockage()
-  const interieur = el('div', { class: 'v1-cote-interieur' })
-  cote.appendChild(interieur)
-  const p = new PanneauGauche(interieur, vue, true)
-  vue.racine.classList.remove('panneau-ouvert')
-  ;(vue.ui as { panneau?: PanneauGauche }).panneau = p
+  // Panneau du moteur monté en mode « externe » dans notre colonne (option ui.panneauMode).
+  const p = vue.ui.panneau
+  if (!p) return
 
   // Onglets, insérés entre l'en-tête et le contenu.
   const boutons = new Map<Onglet, HTMLButtonElement>()
@@ -75,6 +73,10 @@ export function monterCote(vue: VueGraphe, cote: HTMLElement, bouton: HTMLButton
     ecrireStockage(etat)
   }
   bouton.addEventListener('click', () => basculer())
+  // Quand la colonne a fini de pousser la scène, on recadre dans la nouvelle zone sûre.
+  cote.addEventListener('transitionend', (e) => {
+    if (e.target === cote && e.propertyName === 'width') vue.cadrerTout()
+  })
   choisir(etat.onglet)
   basculer(etat.ouvert)
 

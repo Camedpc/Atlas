@@ -5,16 +5,15 @@
 import { createNodeBorderProgram } from '@sigma/node-border'
 import { createEdgeCurveProgram } from '@sigma/edge-curve'
 import {
-  rgba, rgbaGL, melangerCouleurs, centreCouloir, formaterDateCourte, LIBELLES_TYPE, TYPES_NOEUD, Z_MAX,
-  type ContexteDessin, type ReducteurArete, type ReducteurNoeud, type VueGraphe, type Statut,
+  rgba, rgbaGL, melangerCouleurs, centreCouloir, formaterDateCourte, poidsAxes, pointSurAxe, etendueTempsEcran,
+  LIBELLES_TYPE, TYPES_NOEUD, Z_MAX,
+  type ContexteDessin, type CrochetPositions, type ReducteurArete, type ReducteurNoeud, type VueGraphe, type Statut,
 } from '../../src/core'
 
 // ─── État partagé de la variante ─────────────────────────────────────────────
 
 export interface EtatFigure {
   vue: VueGraphe
-  /** Sens de la dernière variation d'ouverture par catégorie : +1 ouverture, −1 fermeture. */
-  sens: Int8Array
   /** Par catégorie : [validé, incertain, réfuté] parmi les feuilles actives. */
   statuts: Int32Array
   /** Couleurs dérivées du thème. */
@@ -26,6 +25,25 @@ export interface EtatFigure {
   /** Feuilles triées par importance décroissante (candidates aux libellés). */
   ordreImportance: Int32Array
   mesures: Map<string, number>
+  /** 1 si l'unité est dessinée en détail (anneau + bordure de validation) à cette image. */
+  detail: Uint8Array
+  /** Facteur de zoom courant par rapport à la vue d'ensemble (mis en cache par version caméra). */
+  zoom: number
+  zoomCle: string
+  /** Catégories en ordre d'arbre (domaine → thème → sous-thème, frères triés par médiane temporelle). */
+  ordreArbre: Int32Array
+  /** Décalage Z appliqué à chaque catégorie par la mise en rangées (vue temps / type). */
+  decalage: Float32Array
+  /** Poids courant de la mise en rangées (0 = carte, 1 = rangées façon « forest plot »). */
+  wRangees: number
+  /** Pas vertical d'une rangée à l'écran (px), pour borner la taille des disques. */
+  pasRangee: number
+  /** Mode de placement des libellés à l'image précédente (l'hystérésis de côté repart à zéro au changement). */
+  modeLibelles: string
+  /** Hystérésis des libellés : dernier emplacement choisi, affiché à l'image précédente, fondu. */
+  coteLibelle: Int8Array
+  vuLibelle: Uint8Array
+  fonduLibelle: Float32Array
 }
 
 const lire = <T extends number | boolean | string>(vue: VueGraphe, cle: string) => vue.reglages.lire<T>(cle)
@@ -35,7 +53,6 @@ export function creerEtat(vue: VueGraphe): EtatFigure {
   const ordre = Int32Array.from({ length: h.nF }, (_, i) => i).sort((a, b) => h.importance[b]! - h.importance[a]!)
   const etat: EtatFigure = {
     vue,
-    sens: new Int8Array(h.nC).fill(1),
     statuts: new Int32Array(h.nC * 3),
     teintes: [],
     encre: '#1f1d1a',
@@ -44,6 +61,17 @@ export function creerEtat(vue: VueGraphe): EtatFigure {
     policeTitre: 'Georgia, serif',
     ordreImportance: ordre,
     mesures: new Map(),
+    detail: new Uint8Array(h.nU),
+    zoom: 1,
+    zoomCle: '',
+    ordreArbre: new Int32Array(h.nC),
+    decalage: new Float32Array(h.nC),
+    wRangees: 0,
+    pasRangee: 1e9,
+    modeLibelles: '',
+    coteLibelle: new Int8Array(h.nU).fill(-1),
+    vuLibelle: new Uint8Array(h.nU),
+    fonduLibelle: new Float32Array(h.nU),
   }
   majCouleurs(etat)
   majStatuts(etat)
@@ -65,9 +93,9 @@ export function majCouleurs(etat: EtatFigure): void {
   etat.mesures.clear()
 }
 
-/** Composition en statuts des catégories (feuilles actives), recalculée aux filtres. */
+/** Composition en statuts (feuilles actives) et ordre des rangées, recalculés aux filtres. */
 export function majStatuts(etat: EtatFigure): void {
-  const { h, filtres } = etat.vue
+  const { h, filtres, etendues } = etat.vue
   const s = etat.statuts
   s.fill(0)
   const idx: Record<Statut, number> = { valide: 0, incertain: 1, refute: 2 }
@@ -76,6 +104,38 @@ export function majStatuts(etat: EtatFigure): void {
     const k = idx[h.noeuds[f]!.statut]
     for (let n = 0; n < 3; n++) s[h.chaine[f * 3 + n]! * 3 + k]!++
   }
+  // Ordre d'arbre ; les frères sont triés par date médiane (lecture en escalier dans le temps).
+  const med = (c: number) => etendues.quantilesTemps(c).mediane
+  const ordre: number[] = []
+  const visiter = (c: number) => {
+    ordre.push(c)
+    const enfants = [...h.categories[c]!.enfants].sort((a, b) => med(a) - med(b))
+    for (const e of enfants) visiter(e)
+  }
+  for (const d of h.domaines) visiter(d)
+  etat.ordreArbre.set(ordre)
+}
+
+/** Rapport entre l'échelle écran courante (px par unité monde) et celle de la vue d'ensemble. */
+export function echelleZoom(vue: VueGraphe, W: number, H: number): number {
+  const cam = vue.camera
+  const c = cam.cible
+  const d = cam.droite
+  const a = cam.projeterPoint([c[0], c[1], c[2]])
+  const b = cam.projeterPoint([c[0] + d[0] * 0.1, c[1] + d[1] * 0.1, c[2] + d[2] * 0.1])
+  const ppu = Math.hypot(b.x - a.x, b.y - a.y) / 0.1
+  const k = ppu / (0.42 * Math.min(W, H))
+  return Math.max(0.3, Math.min(8, k || 1))
+}
+
+function zoomCourant(etat: EtatFigure): number {
+  const v = etat.vue
+  const cle = `${v.camera.version}|${v.rendu.largeur}|${v.rendu.hauteur}`
+  if (cle !== etat.zoomCle) {
+    etat.zoomCle = cle
+    etat.zoom = echelleZoom(v, v.rendu.largeur, v.rendu.hauteur)
+  }
+  return etat.zoom
 }
 
 // ─── Programmes sigma ────────────────────────────────────────────────────────
@@ -103,6 +163,54 @@ export const programmesArete = {
   }),
 }
 
+// ─── Mise en rangées (vues temps / type) ────────────────────────────────────
+
+/**
+ * Crochet `apresPositions` : près des faces « temps » et « type », chaque agrégat visible reçoit
+ * sa propre rangée verticale (Z), comme un forest plot. La hauteur d'une rangée est ∝ à la part
+ * visible (alpha) de l'agrégat : la mise en page reste continue pendant les transitions.
+ * Les feuilles encore dans leur sous-thème suivent le décalage de celui-ci.
+ */
+export function creerCrochetRangees(etat: EtatFigure): CrochetPositions {
+  return ({ vue, positions }) => {
+    const { h, granularite: g } = vue
+    const axes = poidsAxes(vue)
+    const w = lire<boolean>(vue, 'rangees') ? Math.max(axes.temps, axes.couloirs) : 0
+    etat.wRangees = w
+    etat.decalage.fill(0)
+    etat.pasRangee = 1e9
+    if (w < 0.001) return
+    let total = 0
+    for (let i = 0; i < h.nC; i++) {
+      const a = g.alpha[h.nF + etat.ordreArbre[i]!]!
+      if (a > 0.001) total += a
+    }
+    if (total < 1e-3) return
+    // Avec peu de rangées, on les resserre autour du centre (pas de rangées de 300 px).
+    const etendue = Z_MAX * 0.96 * Math.min(1, 0.3 + total / 14)
+    let cumul = 0
+    for (let i = 0; i < h.nC; i++) {
+      const c = etat.ordreArbre[i]!
+      const u = h.nF + c
+      const a = g.alpha[u]!
+      if (a <= 0.001) continue
+      const centre = (cumul + a / 2) / total
+      cumul += a
+      const z = etendue - 2 * etendue * centre
+      const dz = (z - positions[u * 3 + 2]!) * w
+      positions[u * 3 + 2] += dz
+      etat.decalage[c] = dz
+    }
+    for (let f = 0; f < h.nF; f++) {
+      const sc = h.chaine[f * 3 + 2]!
+      const dz = etat.decalage[sc]!
+      if (dz) positions[f * 3 + 2] += dz * (1 - g.ouverture[sc]!)
+    }
+    const a = vue.camera.projeterPoint([0, 0, etendue]), b = vue.camera.projeterPoint([0, 0, -etendue])
+    etat.pasRangee = Math.hypot(a.x - b.x, a.y - b.y) / Math.max(1, total)
+  }
+}
+
 // ─── Réducteurs ──────────────────────────────────────────────────────────────
 
 /** Motifs de bordure par validation : [A, B (vide), C] en multiples de l'épaisseur de base. */
@@ -120,40 +228,55 @@ export function creerReducteurNoeud(etat: EtatFigure): ReducteurNoeud {
     const R = vue.reglages.valeurs
     const pal = vue.palette
     const u = info.unite
+    const sens = vue.granularite.sens
     // Libellés : tout est dessiné par notre placement maison (calque du dessus).
     a.libelle = null
     a.forceLibelle = false
 
-    // Lisibilité au survol : le reste s'estompe plus franchement que par défaut.
-    if (info.survol === 'autre') a.opacite *= lire<number>(vue, 'estompeSurvol') / Math.max(R.opaciteEstompe, 0.25)
+    // Lisibilité au survol : le contexte s'estompe plus franchement que le défaut du moteur.
+    if (info.survol === 'autre') a.opacite *= lire<number>(vue, 'estompeSurvol') / Math.max(0.05, R.opaciteContexte ?? 0.3)
 
     // Transitions : fondu retardé à la fermeture (on se resserre d'abord), parent qui gonfle.
     if (lire<boolean>(vue, 'jaillissement')) {
       const parent = info.estAgregat ? info.categorie!.parent : vue.h.chaine[u * 3 + 2]!
       const al = info.alpha
-      if (parent >= 0 && etat.sens[parent]! < 0 && al > 0.001 && al < 0.999) a.opacite *= Math.min(1, al * 2.2) / al
+      if (parent >= 0 && sens[parent]! < 0 && al > 0.001 && al < 0.999) a.opacite *= Math.min(1, al * 2.2) / al
       if (info.estAgregat) {
         const o = info.ouverture
         if (o > 0.001 && o < 0.999) {
-          const ferme = etat.sens[info.categorie!.index]! < 0
+          const ferme = sens[info.categorie!.index]! < 0
           a.taille *= 1 + lire<number>(vue, 'gonflement') * Math.sin(Math.PI * (1 - o)) * (ferme ? 1 : 0.3)
         }
       }
     }
+    // Rangées (vues temps / type) : marqueurs plus discrets, la barre d'intervalle porte l'information.
+    if (info.estAgregat && etat.wRangees > 0) {
+      const borne = Math.max(3, etat.pasRangee * 0.36)
+      a.taille = a.taille * (1 - etat.wRangees) + Math.min(a.taille * 0.7, borne) * etat.wRangees
+    }
+    // Les feuilles grossissent modérément avec le zoom : c'est là que le détail devient lisible.
+    if (!info.estAgregat) a.taille *= Math.pow(Math.max(1, zoomCourant(etat)), lire<number>(vue, 'tailleSuitZoom'))
 
     const op = Math.max(0, Math.min(1, a.opacite))
     const w = lire<number>(vue, 'epaisseurBordure')
     const encre = etat.encre
     let bA = 0, bB = 0, bC = 0
     let cA = encre, cC = encre
+    let detail = 1
     if (info.estAgregat) {
       a.couleur = etat.teintes[info.domaine % etat.teintes.length]!
       cA = pal.domaines[info.domaine % pal.domaines.length]!
       bA = 1.1 * w
     } else {
+      // Sous le rayon de détail, un point de couleur de statut suffit (sauf survol / lignée).
+      const important = info.survol === 'survole' || info.survol === 'voisin' || a.surligne
+      detail = important || a.taille >= lire<number>(vue, 'rayonDetail') ? 1 : 0
       const v = info.noeud!.validation
       const style = lire<string>(vue, 'styleBordure')
-      if (style === 'motif') {
+      if (!detail) {
+        bA = 0.6
+        cA = pal.fond
+      } else if (style === 'motif') {
         const m = MOTIFS[v]
         bA = m[0] * w
         bB = m[1] * w
@@ -166,6 +289,7 @@ export function creerReducteurNoeud(etat: EtatFigure): ReducteurNoeud {
         cA = pal.fond
       }
     }
+    etat.detail[u] = detail
     // Lignée : filet coloré à l'extérieur, le motif de validation se resserre à l'intérieur.
     if (a.surligne) {
       bC = bA || 0.8
@@ -210,18 +334,6 @@ export function creerReducteurArete(): ReducteurArete {
 
 let horsEcran: HTMLCanvasElement | null = null
 
-/** Rapport entre l'échelle écran courante (px par unité monde) et celle de la vue d'ensemble. */
-function echelleZoom(vue: VueGraphe, W: number, H: number): number {
-  const cam = vue.camera
-  const c = cam.cible
-  const d = cam.droite
-  const a = cam.projeterPoint([c[0], c[1], c[2]])
-  const b = cam.projeterPoint([c[0] + d[0] * 0.1, c[1] + d[1] * 0.1, c[2] + d[2] * 0.1])
-  const ppu = Math.hypot(b.x - a.x, b.y - a.y) / 0.1
-  const k = ppu / (0.42 * Math.min(W, H))
-  return Math.max(0.3, Math.min(8, k || 1))
-}
-
 /** Territoires des domaines : union de disques (teinte + contour), façon carte de figure. */
 export function dessinerTerritoires(_etat: EtatFigure, c: ContexteDessin): void {
   const { vue, ctx, projection: p, largeur: W, hauteur: H } = c
@@ -256,7 +368,8 @@ export function dessinerTerritoires(_etat: EtatFigure, c: ContexteDessin): void 
     vides[d] = 0
   }
   // Le territoire s'efface quand on survole ou qu'une lignée est active : il ne doit pas gêner.
-  const attenuation = vue.survol !== null || vue.lignee.active ? 0.45 : 1
+  const attenuation = (vue.survol !== null || vue.lignee.active ? 0.45 : 1) * (1 - _etat.wRangees)
+  if (attenuation < 0.02) return
   for (let d = 0; d < nbDom; d++) {
     if (vides[d]) continue
     const couleur = palette.domaines[h.categories[h.domaines[d]!]!.domaine % palette.domaines.length]!
@@ -315,7 +428,7 @@ export function dessinerAnneaux(etat: EtatFigure, c: ContexteDessin): void {
     const op = vue.opaciteAffichee[f]!
     if (op < 0.04 || !p.visible[f]) continue
     const t = vue.tailleAffichee[f]!
-    if (t < rMin) continue
+    if (t < rMin || !etat.detail[f]) continue
     const n = h.noeuds[f]!
     const x = p.x[f]!, y = p.y[f]!
     const r = t + ecart + w / 2
@@ -374,17 +487,112 @@ export function dessinerAnneaux(etat: EtatFigure, c: ContexteDessin): void {
   ctx.restore()
 }
 
+// ─── Étendues façon « barre d'erreur » (vues temps et type) ─────────────────
+
+/**
+ * Remplace le rendu d'étendues du moteur (`etenduesParDefaut: false`) par un style de figure :
+ * vue temps → moustaches min–max en pointillé, trait q10–q90 à embouts, barre q25–q75 teintée,
+ * le disque de l'agrégat restant à la médiane ; vue type → un point par couloir, aire ∝ effectif.
+ */
+export function dessinerBarresErreur(etat: EtatFigure, c: ContexteDessin): void {
+  const { vue, ctx } = c
+  if (vue.reglages.valeurs.etendues === 'aucune') return
+  const w = poidsAxes(vue)
+  const temps = w.temps > 0.04
+  const couloirs = vue.reglages.valeurs.etenduesCouloirs && w.couloirs > 0.04
+  if (!temps && !couloirs) return
+  const { h, palette, camera: cam } = vue
+  const nY = TYPES_NOEUD.length
+  ctx.save()
+  ctx.lineCap = 'butt'
+  for (const cat of h.categories) {
+    const u = cat.unite
+    const op = vue.opaciteAffichee[u]!
+    if (op < 0.04 || vue.granularite.alpha[u]! < 0.05) continue
+    const base = palette.domaines[cat.domaine % palette.domaines.length]!
+    const encreDom = melangerCouleurs(base, etat.encre, 0.3)
+    if (temps) {
+      const q = etendueTempsEcran(vue, u)
+      if (!q) continue
+      const a = op * Math.min(1, w.temps * 1.2)
+      const dx = q.max.x - q.min.x, dy = q.max.y - q.min.y
+      const L = Math.hypot(dx, dy) || 1
+      const nx = -dy / L, ny = dx / L
+      const trait = (p0: { x: number; y: number }, p1: { x: number; y: number }) => {
+        ctx.beginPath()
+        ctx.moveTo(p0.x, p0.y)
+        ctx.lineTo(p1.x, p1.y)
+        ctx.stroke()
+      }
+      const embout = (p: { x: number; y: number }, demi: number) => {
+        ctx.beginPath()
+        ctx.moveTo(p.x - nx * demi, p.y - ny * demi)
+        ctx.lineTo(p.x + nx * demi, p.y + ny * demi)
+        ctx.stroke()
+      }
+      // Moustaches extrêmes : pointillé fin.
+      ctx.setLineDash([1.5, 2.5])
+      ctx.strokeStyle = rgba(encreDom, 0.45 * a)
+      ctx.lineWidth = 0.8
+      trait(q.min, q.q10)
+      trait(q.q90, q.max)
+      ctx.setLineDash([])
+      // Barre interquartile teintée.
+      ctx.strokeStyle = rgba(base, 0.32 * a)
+      ctx.lineWidth = 7
+      trait(q.q25, q.q75)
+      // Trait 10–90 % et embouts, à l'encre du domaine.
+      ctx.strokeStyle = rgba(encreDom, 0.85 * a)
+      ctx.lineWidth = 1.2
+      trait(q.q10, q.q90)
+      embout(q.q10, 4)
+      embout(q.q90, 4)
+    }
+    if (couloirs) {
+      const a = op * Math.min(1, w.couloirs * 1.2)
+      let max = 1, premier = -1, dernier = -1
+      for (let t = 0; t < nY; t++) {
+        const n = vue.etendues.types[cat.index * nY + t]!
+        if (!n) continue
+        max = Math.max(max, n)
+        if (premier < 0) premier = t
+        dernier = t
+      }
+      if (premier < 0) continue
+      const pt = (t: number) => cam.projeterPoint(pointSurAxe(vue, u, 'couloirs', centreCouloir(t, 1)))
+      const p0 = pt(premier), p1 = pt(dernier)
+      ctx.strokeStyle = rgba(encreDom, 0.5 * a)
+      ctx.lineWidth = 0.8
+      ctx.beginPath()
+      ctx.moveTo(p0.x, p0.y)
+      ctx.lineTo(p1.x, p1.y)
+      ctx.stroke()
+      ctx.fillStyle = rgba(base, 0.7 * a)
+      for (let t = premier; t <= dernier; t++) {
+        const n = vue.etendues.types[cat.index * nY + t]!
+        if (!n) continue
+        const p = pt(t)
+        if (!p.visible) continue
+        ctx.beginPath()
+        ctx.arc(p.x, p.y, 1.5 + 4.5 * Math.sqrt(n / max), 0, Math.PI * 2)
+        ctx.fill()
+      }
+    }
+  }
+  ctx.restore()
+}
+
 // ─── Calque du dessus : libellés sans chevauchement ─────────────────────────
 
 interface Candidat {
   u: number
   prio: number
   genre: 'survol' | 'agregat' | 'feuille'
-  alpha: number
 }
 
 const candidats: Candidat[] = []
 const boites: number[] = []
+const vusCetteImage: number[] = []
 
 function mesurer(etat: EtatFigure, ctx: CanvasRenderingContext2D, police: string, espacement: string, texte: string): number {
   const cle = `${police}|${espacement}|${texte}`
@@ -406,8 +614,34 @@ function libre(x0: number, y0: number, x1: number, y1: number, W: number, H: num
   return true
 }
 
+/** Abscisse écran du début de l'étendue d'un agrégat (moustache min ou premier couloir occupé). */
+function bordGauche(vue: VueGraphe, u: number, axe: 'temps' | 'couloirs', repli: number): number {
+  if (axe === 'temps') {
+    const q = etendueTempsEcran(vue, u)
+    return q ? Math.min(q.min.x, q.max.x) : repli
+  }
+  const c = vue.h.categorieDe(u)
+  if (!c) return repli
+  const nY = TYPES_NOEUD.length
+  let xMin = repli
+  for (let t = 0; t < nY; t++) {
+    if (!vue.etendues.types[c.index * nY + t]) continue
+    const p = vue.camera.projeterPoint(pointSurAxe(vue, u, 'couloirs', centreCouloir(t, 1)))
+    if (p.visible) xMin = Math.min(xMin, p.x - 7)
+  }
+  return xMin
+}
+
 const tronquer = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1).trimEnd()}…` : s)
 
+/**
+ * Placement glouton avec hystérésis :
+ * - visibilité : un libellé affiché à l'image précédente reçoit un bonus de priorité (il ne
+ *   cède sa place qu'à un candidat nettement plus important) et apparaît en fondu ;
+ * - côté : l'emplacement choisi la dernière fois est essayé en premier.
+ * Vue temps (rangées) : les noms d'agrégats s'alignent à gauche des moustaches, comme les
+ * étiquettes de lignes d'un forest plot ; seuls les N plus gros sont nommés (les autres au survol).
+ */
 export function dessinerLibelles(etat: EtatFigure, c: ContexteDessin): void {
   const { vue, ctx, projection: p, largeur: W, hauteur: H } = c
   const { h, granularite: g, palette } = vue
@@ -419,13 +653,22 @@ export function dessinerLibelles(etat: EtatFigure, c: ContexteDessin): void {
   candidats.length = 0
   boites.length = 0
   const visible = (u: number) => vue.opaciteAffichee[u]! > 0.04 && p.visible[u] === 1 && g.alpha[u]! > 0.05
+  const bonusVu = (u: number) => (etat.vuLibelle[u] ? lire<number>(vue, 'hysteresisLibelles') : 0)
+  const axes = poidsAxes(vue)
+  const modeRangees = etat.wRangees > 0.5
+  const axeRangees: 'temps' | 'couloirs' = axes.temps >= axes.couloirs ? 'temps' : 'couloirs'
+  const mode = modeRangees ? axeRangees : 'carte'
+  if (mode !== etat.modeLibelles) {
+    etat.modeLibelles = mode
+    etat.coteLibelle.fill(-1)
+  }
 
-  if (survol !== null && visible(survol)) candidats.push({ u: survol, prio: 1e9, genre: 'survol', alpha: 1 })
+  if (survol !== null && visible(survol)) candidats.push({ u: survol, prio: 1e9, genre: 'survol' })
   if (lignee.selection !== null && lignee.selection !== survol && visible(lignee.selection)) {
-    candidats.push({ u: lignee.selection, prio: 9e8, genre: 'survol', alpha: 1 })
+    candidats.push({ u: lignee.selection, prio: 9e8, genre: 'survol' })
   }
   if (survol !== null) {
-    for (const v of voisins) if (visible(v)) candidats.push({ u: v, prio: 8e8 + (v < h.nF ? h.importance[v]! : 1e4), genre: v < h.nF ? 'feuille' : 'agregat', alpha: 1 })
+    for (const v of voisins) if (visible(v)) candidats.push({ u: v, prio: 8e8 + (v < h.nF ? h.importance[v]! : 1e4), genre: v < h.nF ? 'feuille' : 'agregat' })
   }
   if (strategie !== 'aucun' && lire<boolean>(vue, 'libellesAgregats')) {
     for (let ci = 0; ci < h.nC; ci++) {
@@ -433,7 +676,7 @@ export function dessinerLibelles(etat: EtatFigure, c: ContexteDessin): void {
       if (u === survol || voisins.has(u) || !visible(u)) continue
       const role = lignee.role(u)
       const bonus = role === 'ancetre' || role === 'descendant' ? 5e5 : 0
-      candidats.push({ u, prio: 1e5 + bonus + g.nbActives[ci]!, genre: 'agregat', alpha: 1 })
+      candidats.push({ u, prio: 1e5 + bonus + g.nbActives[ci]! * (1 + bonusVu(u)), genre: 'agregat' })
     }
   }
   const nbFeuilles = lire<number>(vue, 'libellesFeuilles')
@@ -448,7 +691,7 @@ export function dessinerLibelles(etat: EtatFigure, c: ContexteDessin): void {
       if (g.alpha[f]! < 0.6) continue
       const role = lignee.role(f)
       const bonus = role === 'ancetre' || role === 'descendant' ? 5e5 : 0
-      candidats.push({ u: f, prio: bonus + h.importance[f]!, genre: 'feuille', alpha: 1 })
+      candidats.push({ u: f, prio: bonus + (1 + h.importance[f]!) * (1 + bonusVu(f)), genre: 'feuille' })
       pris++
     }
   }
@@ -457,10 +700,14 @@ export function dessinerLibelles(etat: EtatFigure, c: ContexteDessin): void {
   const halo = lire<number>(vue, 'haloLibelles')
   const base = lire<number>(vue, 'tailleLibellesAgregats')
   const echelle = lire<number>(vue, 'echellePoids')
+  const maxRangees = lire<number>(vue, 'libellesRangeesMax')
   const ecartAnneau = lire<boolean>(vue, 'anneau') ? lire<number>(vue, 'ecartAnneau') + lire<number>(vue, 'epaisseurAnneau') * 1.6 : 0
   const tailleTexte = R.tailleLibelle
   const attenue = survol !== null || lignee.active
+  const enMouvement = vue.animateur.enCours || vue.camera.enAnimation
   let feuillesPlacees = 0
+  let rangeesNommees = 0
+  vusCetteImage.length = 0
 
   ctx.save()
   ctx.lineJoin = 'round'
@@ -469,15 +716,17 @@ export function dessinerLibelles(etat: EtatFigure, c: ContexteDessin): void {
     const u = cand.u
     const agr = u >= h.nF
     const x = p.x[u]!, y = p.y[u]!
-    const r = vue.tailleAffichee[u]! + ecartAnneau
+    const r = vue.tailleAffichee[u]! + (agr || etat.detail[u] ? ecartAnneau : 0)
     let texte: string
     let police: string
     let couleur = palette.texte
     let taille: number
     let espacement = '0px'
     if (agr) {
+      if (modeRangees && cand.genre !== 'survol' && cand.prio < 8e8 && rangeesNommees >= maxRangees) continue
       const cat = h.categories[u - h.nF]!
       taille = Math.max(9, base * (0.7 + echelle * Math.sqrt(g.nbActives[cat.index]! / h.nF) * 1.4))
+      if (modeRangees) taille = Math.min(taille, base * 1.05)
       if (cat.niveau === 0) {
         texte = cat.nom.toUpperCase()
         police = `600 ${taille.toFixed(1)}px ${etat.policeTexte}`
@@ -502,24 +751,36 @@ export function dessinerLibelles(etat: EtatFigure, c: ContexteDessin): void {
     }
     ctx.letterSpacing = espacement
     const l = mesurer(etat, ctx, police, espacement, texte)
-    const hauteurBoite = taille * 1.15
-    // Positions candidates : dedans (agrégat assez grand), dessous, dessus, droite, gauche.
+    const hb = taille * 1.15
+    // Positions candidates, dans un ordre fixe par genre (l'index sert à l'hystérésis de côté).
     const essais: [number, number][] = []
-    if (agr && l <= r * 1.7 && taille <= r * 0.75) essais.push([x, y])
-    if (agr) essais.push([x, y + r + 3 + hauteurBoite / 2], [x, y - r - 3 - hauteurBoite / 2], [x + r + 4 + l / 2, y], [x - r - 4 - l / 2, y])
-    else essais.push([x + r + 4 + l / 2, y], [x - r - 4 - l / 2, y], [x, y - r - 2 - hauteurBoite / 2], [x, y + r + 2 + hauteurBoite / 2])
-    let place: [number, number] | null = null
-    for (const [cx, cy] of essais) {
-      if (libre(cx - l / 2 - 2, cy - hauteurBoite / 2, cx + l / 2 + 2, cy + hauteurBoite / 2, W, H)) {
-        place = [cx, cy]
+    if (agr && modeRangees) {
+      const xg = Math.min(bordGauche(vue, u, axeRangees, x), x - r) - 8
+      essais.push([xg - l / 2, y], [x + r + 4 + l / 2, y], [x, y - r - 2 - hb / 2])
+    } else if (agr) {
+      if (l <= r * 1.7 && taille <= r * 0.75) essais.push([x, y])
+      else essais.push([x, y + r + 3 + hb / 2])
+      essais.push([x, y + r + 3 + hb / 2], [x, y - r - 3 - hb / 2], [x + r + 4 + l / 2, y], [x - r - 4 - l / 2, y])
+    } else essais.push([x + r + 4 + l / 2, y], [x - r - 4 - l / 2, y], [x, y - r - 2 - hb / 2], [x, y + r + 2 + hb / 2])
+    // Hystérésis de côté pendant un mouvement seulement ; au repos, on revient à l'ordre canonique.
+    const prefere = enMouvement ? etat.coteLibelle[u]! : -1
+    const ordre = prefere >= 0 && prefere < essais.length ? [prefere, ...essais.keys()].filter((k, i, t) => t.indexOf(k) === i) : [...essais.keys()]
+    let choix = -1
+    for (const k of ordre) {
+      const [cx, cy] = essais[k]!
+      if (libre(cx - l / 2 - 2, cy - hb / 2, cx + l / 2 + 2, cy + hb / 2, W, H)) {
+        choix = k
         break
       }
     }
-    if (!place && cand.genre === 'survol') place = essais[0]!
-    if (!place) continue
-    const [cx, cy] = place
-    boites.push(cx - l / 2 - 2, cy - hauteurBoite / 2, cx + l / 2 + 2, cy + hauteurBoite / 2)
+    if (choix < 0 && cand.genre === 'survol') choix = ordre[0]!
+    if (choix < 0) continue
+    const [cx, cy] = essais[choix]!
+    etat.coteLibelle[u] = choix
+    boites.push(cx - l / 2 - 2, cy - hb / 2, cx + l / 2 + 2, cy + hb / 2)
+    vusCetteImage.push(u)
     if (!agr && cand.genre === 'feuille') feuillesPlacees++
+    if (agr) rangeesNommees++
 
     // Opacité : suit le nœud ; les agrégats apparaissent quand ils sont bien formés.
     let alpha = Math.min(1, vue.opaciteAffichee[u]! * 1.5)
@@ -530,6 +791,9 @@ export function dessinerLibelles(etat: EtatFigure, c: ContexteDessin): void {
       if (!agr) continue
       alpha = Math.min(alpha, 0.35)
     }
+    // Fondu d'apparition (hystérésis de visibilité) : pas de libellé qui clignote.
+    const fondu = (etat.fonduLibelle[u] = Math.min(1, etat.fonduLibelle[u]! + 0.18))
+    alpha *= cand.genre === 'survol' ? 1 : fondu
     if (cand.genre === 'survol') alpha = 1
     if (alpha < 0.03) continue
     ctx.globalAlpha = alpha
@@ -545,6 +809,13 @@ export function dessinerLibelles(etat: EtatFigure, c: ContexteDessin): void {
   }
   ctx.letterSpacing = '0px'
   ctx.restore()
+  // Fondu en cours : on redemande des images (la boucle du moteur s'arrête quand rien ne bouge).
+  if (vusCetteImage.some((u) => etat.fonduLibelle[u]! < 1)) vue.demanderRendu()
+  // Mémoire de l'image : ce qui n'a pas été posé perd son fondu (réapparaîtra en fondu).
+  const vu = etat.vuLibelle
+  vu.fill(0)
+  for (const u of vusCetteImage) vu[u] = 1
+  for (let u = 0; u < vu.length; u++) if (!vu[u]) etat.fonduLibelle[u] = 0
 }
 
 // ─── Repères d'axes (vues de face et de droite) ─────────────────────────────
