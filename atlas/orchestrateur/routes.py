@@ -1,13 +1,24 @@
 """Routes des conversations avec l'orchestrateur."""
 
-from fastapi import APIRouter, HTTPException
+import secrets
+
+from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, Field
 
 from .. import conversations
 from ..modeles import Conversation, Execution, Message
+from . import config
 from .gestionnaire import DejaEnCours, gestionnaire
 
-routeur = APIRouter(prefix="/api/conversations", tags=["conversations"])
+
+def verifier_jeton(authorization: str | None = Header(default=None)) -> None:
+    if config.JETON_ACCES is None:
+        return
+    if authorization is None or not secrets.compare_digest(authorization, f"Bearer {config.JETON_ACCES}"):
+        raise HTTPException(401, "Jeton d'accès manquant ou invalide.", headers={"WWW-Authenticate": "Bearer"})
+
+
+routeur = APIRouter(prefix="/api/conversations", tags=["conversations"], dependencies=[Depends(verifier_jeton)])
 
 
 class NouvelleConversation(BaseModel):

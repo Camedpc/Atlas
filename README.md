@@ -87,13 +87,9 @@ Connexion, dans le `CODEX_HOME` d'Atlas uniquement :
   `--statut` affiche le compte utilisé) ;
 - en production, une clé API : renseigner `OPENAI_API_KEY` dans le `.env` suffit, elle est prioritaire.
 
-### Passer sur une VM
+### Sur une VM
 
-1. Installer Python 3.13 et cloner le dépôt.
-2. `python -m venv .venv && .venv/bin/pip install -r requirements-agents.txt`
-3. Copier le `.env` avec `OPENAI_API_KEY` (ou lancer `python -m atlas.orchestrateur.connexion` en SSH) et
-   `ATLAS_CORS_ORIGINES` = l'URL du front.
-4. `.venv/bin/python -m uvicorn atlas.serveur:app --host 0.0.0.0 --port 8000`
+Docker + Caddy (HTTPS) + jeton d'accès : voir [`deploiement/README.md`](deploiement/README.md).
 
 Tout l'état utile est dans Supabase. Les threads Codex vivent dans `espace/.codex` : copier `espace/` sur la VM
 les conserve ; sinon chaque conversation repart de son historique de messages, sans perte visible.

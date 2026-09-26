@@ -1,5 +1,5 @@
 // Panneau de gauche : conversations avec l'orchestrateur, suivies en direct pendant une exécution.
-import { api, type EtatConversation, type Message } from './api'
+import { api, enregistrerJeton, JetonRequis, type EtatConversation, type Message } from './api'
 import { echapper, rendre } from './rendu'
 
 const INTERVALLE_SUIVI_MS = 1500
@@ -88,12 +88,27 @@ export class PanneauConversations {
         '<option value="">— Choisir une conversation —</option>' +
         conversations.map((c) => `<option value="${c.id}">${echapper(c.titre)}</option>`).join('')
       if (conversations.length) await this.ouvrir(this.courante ?? conversations[0].id)
-    } catch {
+    } catch (e) {
+      if (e instanceof JetonRequis) return this.demanderJeton()
       this.fil.innerHTML = `<div class="msg systeme">Serveur de l’orchestrateur injoignable. En local : lancer
         <code>uvicorn atlas.serveur:app --port 8000</code> ; sinon renseigner <code>VITE_API_URL</code>.
         Le graphe reste consultable.</div>`
       this.saisie.disabled = this.envoyer.disabled = true
     }
+  }
+
+  private demanderJeton() {
+    this.fil.innerHTML = `<form class="jeton">
+        <p>Ce serveur est protégé : saisis le jeton d’accès (<code>ATLAS_JETON_ACCES</code> dans le .env du serveur).</p>
+        <input type="password" autocomplete="off" placeholder="Jeton d’accès" />
+        <button type="submit">Valider</button>
+      </form>`
+    const formulaire = this.fil.querySelector('form')!
+    formulaire.addEventListener('submit', (e) => {
+      e.preventDefault()
+      enregistrerJeton(formulaire.querySelector('input')!.value.trim())
+      void this.charger()
+    })
   }
 
   private async nouvelle() {

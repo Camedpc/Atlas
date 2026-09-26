@@ -32,5 +32,12 @@ CODEX_HOME = Path(os.environ.get("ATLAS_CODEX_HOME") or ESPACE_TRAVAIL / ".codex
 # Exécutable Codex ; vide = celui installé avec le SDK (openai-codex-cli-bin).
 CODEX_BIN = _optionnel("ATLAS_CODEX_BIN")
 
+# Plafond de sous-agents ouverts en même temps par conversation (vide = défaut de Codex).
+MAX_SOUS_AGENTS = int(v) if (v := _optionnel("ATLAS_MAX_SOUS_AGENTS")) else None
+
+# Jeton exigé sur les routes des conversations (en-tête Authorization: Bearer …). Vide = pas de contrôle (dev local).
+# Obligatoire dès que le serveur est joignable depuis Internet : l'orchestrateur exécute des commandes.
+JETON_ACCES = _optionnel("ATLAS_JETON_ACCES")
+
 # Origines autorisées à appeler le serveur depuis un navigateur (ex. le front Vercel), séparées par des virgules.
 CORS_ORIGINES = [o.strip() for o in os.environ.get("ATLAS_CORS_ORIGINES", "").split(",") if o.strip()]
