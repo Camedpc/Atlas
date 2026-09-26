@@ -252,6 +252,22 @@ body.sessions-repliees .panneau-sessions {
   border-bottom: 1px solid var(--trait);
 }
 
+/* Conversation rangée par sa poignée : colonne à 0 (redimension.ts), bouton de retour à droite. */
+body.conversation-rangee .panneau-conversation {
+  visibility: hidden;
+  overflow: hidden;
+  border: 0;
+}
+
+.deplier-conversation {
+  display: none !important;
+}
+
+body.conversation-rangee .deplier-conversation {
+  display: grid !important;
+  flex: none;
+}
+
 .deplier-sessions {
   display: none !important;
 }
@@ -972,8 +988,14 @@ body.sessions-repliees .deplier-sessions {
     grid-template-rows: 62dvh 38dvh;
   }
 
-  .poignee {
-    display: none;
+  .poignee,
+  body.conversation-rangee .deplier-conversation {
+    display: none !important;
+  }
+
+  body.conversation-rangee .panneau-conversation {
+    visibility: visible;
+    border-bottom: 1px solid var(--trait);
   }
 
   .panneau-conversation {

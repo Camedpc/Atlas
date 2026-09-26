@@ -1,6 +1,6 @@
 // Poignées entre les colonnes : on glisse pour régler la largeur des sessions et de la conversation.
-// Glisser les sessions en deçà de SEUIL_RANGEMENT les range (bouton en haut à gauche pour les rouvrir) ;
-// double-clic sur une poignée : largeur par défaut. Les largeurs sont gardées dans ce navigateur.
+// Glisser une colonne en deçà de SEUIL_RANGEMENT la range (bouton en haut à gauche de la colonne suivante
+// pour la rouvrir) ; double-clic sur une poignée : largeur par défaut. Les largeurs sont gardées dans ce navigateur.
 
 const CLE = 'atlas.largeurs'
 const SESSIONS = { min: 200, max: 480, defaut: 260 }
@@ -13,6 +13,7 @@ const LARGEUR_FLOTTANTE = 1200
 interface Largeurs {
   sessions?: number
   conversation?: number
+  conversationRangee?: boolean
 }
 
 function lire(): Largeurs {
@@ -39,10 +40,24 @@ export function installerPoignees(replierSessions: (replie: boolean) => void) {
 
   const appliquer = () => {
     app.style.setProperty('--largeur-sessions', `${largeurs.sessions ?? SESSIONS.defaut}px`)
-    if (largeurs.conversation) app.style.setProperty('--colonne-conversation', `${largeurs.conversation}px`)
+    document.body.classList.toggle('conversation-rangee', !!largeurs.conversationRangee)
+    if (largeurs.conversationRangee) app.style.setProperty('--colonne-conversation', '0px')
+    else if (largeurs.conversation) app.style.setProperty('--colonne-conversation', `${largeurs.conversation}px`)
     else app.style.removeProperty('--colonne-conversation')
   }
   appliquer()
+
+  const rangerConversation = (rangee: boolean) => {
+    if (rangee) largeurs.conversationRangee = true
+    else delete largeurs.conversationRangee
+  }
+
+  document.querySelector('.deplier-conversation')!.addEventListener('click', () => {
+    rangerConversation(false)
+    appliquer()
+    ecrire(largeurs)
+    window.dispatchEvent(new Event('resize'))
+  })
 
   const poignee = (parent: HTMLElement, cible: 'sessions' | 'conversation') => {
     const el = document.createElement('div')
@@ -72,8 +87,10 @@ export function installerPoignees(replierSessions: (replie: boolean) => void) {
           largeurs.sessions = Math.round(Math.max(SESSIONS.min, Math.min(max, x)))
         } else {
           const debut = conversation.getBoundingClientRect().left
+          const largeur = m.clientX - debut
+          rangerConversation(largeur < SEUIL_RANGEMENT)
           const max = window.innerWidth - debut - DROITE_MIN
-          largeurs.conversation = Math.round(Math.max(CONVERSATION_MIN, Math.min(max, m.clientX - debut)))
+          if (!largeurs.conversationRangee) largeurs.conversation = Math.round(Math.max(CONVERSATION_MIN, Math.min(max, largeur)))
         }
         appliquer()
       }
@@ -94,7 +111,10 @@ export function installerPoignees(replierSessions: (replie: boolean) => void) {
       if (cible === 'sessions') {
         delete largeurs.sessions
         replierSessions(false)
-      } else delete largeurs.conversation
+      } else {
+        delete largeurs.conversation
+        rangerConversation(false)
+      }
       appliquer()
       ecrire(largeurs)
       window.dispatchEvent(new Event('resize'))

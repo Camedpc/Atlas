@@ -20,6 +20,9 @@ document.querySelector<HTMLElement>('#app')!.innerHTML = `
   <main class="panneau-conversation"></main>
   <section class="panneau-droit">
     <header class="droit-tete">
+      <button type="button" class="icone deplier-conversation" title="Afficher la conversation" aria-label="Afficher la conversation">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2.5" y="3" width="13" height="12" rx="2"/><path d="M7 3v12"/></svg>
+      </button>
       <div class="onglets" role="tablist">
         <button type="button" role="tab" data-vue="raisonnement">Graphe de raisonnement</button>
         <button type="button" role="tab" data-vue="agents">Agent graph</button>
