@@ -9,7 +9,7 @@ navigateur → Vercel (site)  ──/api/conversations + jeton──→  VM : Ca
 
 ## 1. Créer la VM (Hetzner)
 
-- Ubuntu 24.04, 4 vCPU / 8 Go conseillés (2 vCPU / 4 Go suffisent pour quelques agents à la fois ;
+- Ubuntu (24.04 ou 26.04), 4 vCPU / 8 Go conseillés (2 vCPU / 4 Go suffisent pour quelques agents à la fois ;
   x86 ou ARM, les deux marchent). Agrandissable plus tard sans perdre le disque.
 - Ajouter ta clé SSH publique à la création (`~/.ssh/id_ed25519.pub`).
 - Noter l'adresse IP.

@@ -3,6 +3,9 @@ services:
   atlas:
     build: .
     env_file: .env
+    environment:
+      # Prime sur .env, où la ligne vide héritée de .env.example renverrait vers /app/espace (non inscriptible).
+      ATLAS_ESPACE_TRAVAIL: /donnees/espace
     volumes:
       - donnees:/donnees
     restart: unless-stopped
