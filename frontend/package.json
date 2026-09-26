@@ -6,10 +6,20 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "lint": "oxlint"
   },
   "devDependencies": {
+    "graphology-types": "^0.24.8",
+    "oxlint": "^1.85.0",
     "typescript": "~6.0.2",
     "vite": "^8.3.0"
+  },
+  "dependencies": {
+    "dompurify": "^3.4.16",
+    "graphology": "^0.26.0",
+    "katex": "^0.18.9",
+    "marked": "^18.0.14",
+    "sigma": "^3.0.3"
   }
 }

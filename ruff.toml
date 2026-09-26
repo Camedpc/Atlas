@@ -1,0 +1,12 @@
+line-length = 120
+extend-exclude = ["prototypes", "AtlasVoice"]
+
+[lint]
+# Erreurs, imports, bugs probables, syntaxe moderne
+select = ["E", "F", "W", "I", "B", "UP"]
+# `l` en compréhension est l'usage du projet
+ignore = ["E741"]
+
+[lint.isort]
+# Le dossier supabase/ (migrations SQL) n'est pas un paquet Python
+known-third-party = ["supabase"]

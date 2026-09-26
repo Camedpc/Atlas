@@ -1,18 +1,295 @@
 :root {
   color-scheme: light dark;
   font-family: system-ui, sans-serif;
+  font-size: 14px;
+  --fond: #ffffff;
+  --fond-2: #f4f5f7;
+  --bord: #dfe2e7;
+  --texte: #1d2129;
+  --doux: #6b7280;
+  --accent: #4a7fd4;
+  --erreur: #d64545;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fond: #16181d;
+    --fond-2: #1f2229;
+    --bord: #2e323b;
+    --texte: #e6e8ec;
+    --doux: #9aa1ad;
+  }
+}
+
+* {
+  box-sizing: border-box;
 }
 
 body {
   margin: 0;
-  padding: 2rem 1rem;
+  background: var(--fond);
+  color: var(--texte);
 }
 
-main {
-  max-width: 40rem;
-  margin: 0 auto;
+button,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
 }
 
-.erreur {
-  color: #d33;
+button {
+  cursor: pointer;
+  border: 1px solid var(--bord);
+  background: var(--fond-2);
+  border-radius: 6px;
+  padding: 0.35rem 0.7rem;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+#app {
+  display: grid;
+  grid-template-columns: minmax(22rem, 38%) 1fr;
+  height: 100dvh;
+}
+
+/* ── Conversations ───────────────────────────────────────── */
+
+.panneau-conversations {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid var(--bord);
+}
+
+.entete {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.6rem;
+  border-bottom: 1px solid var(--bord);
+}
+
+.liste {
+  flex: 1;
+  min-width: 0;
+  background: var(--fond-2);
+  border: 1px solid var(--bord);
+  border-radius: 6px;
+  padding: 0.35rem;
+}
+
+.fil {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.msg {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  line-height: 1.45;
+}
+
+.msg.utilisateur {
+  align-self: flex-end;
+  max-width: 85%;
+  white-space: pre-wrap;
+  background: var(--accent);
+  color: white;
+  padding: 0.5rem 0.75rem;
+  border-radius: 12px 12px 2px 12px;
+}
+
+.msg.assistant > :first-child {
+  margin-top: 0;
+}
+
+.msg.assistant > :last-child {
+  margin-bottom: 0;
+}
+
+.msg.outil {
+  font-size: 0.85rem;
+  color: var(--doux);
+  border-left: 3px solid var(--bord);
+  padding-left: 0.5rem;
+}
+
+.msg.outil summary {
+  cursor: pointer;
+  font-family: ui-monospace, monospace;
+}
+
+.msg.outil pre {
+  max-height: 20rem;
+  overflow: auto;
+  background: var(--fond-2);
+  padding: 0.5rem;
+  border-radius: 6px;
+}
+
+.msg.systeme {
+  color: var(--erreur);
+  font-size: 0.9rem;
+}
+
+.etat {
+  padding: 0 0.8rem;
+  min-height: 1.4rem;
+  color: var(--doux);
+  font-size: 0.85rem;
+}
+
+.saisie {
+  padding: 0.6rem;
+  border-top: 1px solid var(--bord);
+}
+
+.saisie textarea {
+  width: 100%;
+  resize: vertical;
+  background: var(--fond-2);
+  border: 1px solid var(--bord);
+  border-radius: 6px;
+  padding: 0.5rem;
+}
+
+.boutons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.4rem;
+}
+
+.envoyer {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+
+/* ── Graphe ──────────────────────────────────────────────── */
+
+.panneau-graphe {
+  position: relative;
+  min-width: 0;
+}
+
+.sigma {
+  position: absolute;
+  inset: 0;
+}
+
+.barre {
+  position: absolute;
+  top: 0.6rem;
+  left: 0.6rem;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: var(--fond);
+  border: 1px solid var(--bord);
+  border-radius: 8px;
+  padding: 0.3rem 0.6rem;
+}
+
+.compteur {
+  color: var(--doux);
+}
+
+.legende {
+  position: absolute;
+  bottom: 0.6rem;
+  left: 0.6rem;
+  display: flex;
+  gap: 0.8rem;
+  margin: 0;
+  padding: 0.3rem 0.6rem;
+  list-style: none;
+  background: var(--fond);
+  border: 1px solid var(--bord);
+  border-radius: 8px;
+  font-size: 0.85rem;
+}
+
+.legende i {
+  display: inline-block;
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 50%;
+  margin-right: 0.3rem;
+  vertical-align: -1px;
+}
+
+.detail {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.6rem;
+  bottom: 0.6rem;
+  width: min(26rem, 55%);
+  overflow-y: auto;
+  background: var(--fond);
+  border: 1px solid var(--bord);
+  border-radius: 8px;
+  padding: 0.8rem 1rem;
+  box-shadow: 0 4px 16px #0002;
+}
+
+.detail h2 {
+  margin: 0 1.5rem 0.4rem 0;
+  font-size: 1.1rem;
+}
+
+.detail .fermer {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  padding: 0 0.5rem;
+}
+
+.meta {
+  color: var(--doux);
+  font-size: 0.85rem;
+}
+
+.pastille {
+  color: white;
+  border-radius: 999px;
+  padding: 0.1rem 0.5rem;
+  margin-right: 0.4rem;
+}
+
+.lien {
+  padding: 0.05rem 0.4rem;
+  font-family: ui-monospace, monospace;
+  font-size: 0.8rem;
+}
+
+.demo {
+  border-top: 1px solid var(--bord);
+  padding-top: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.demo summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+@media (max-width: 800px) {
+  #app {
+    grid-template-columns: 1fr;
+    grid-template-rows: 55dvh 45dvh;
+  }
+
+  .panneau-conversations {
+    border-right: none;
+    border-bottom: 1px solid var(--bord);
+  }
 }
