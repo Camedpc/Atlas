@@ -1,0 +1,352 @@
+{
+  "version": 1,
+  "ecran": "ecran_principal",
+  "utilisateur_id": "u1",
+  "version_donnees": "2026-09-26T10:12:00Z#42",
+  "strategie": "defaut",
+  "parametres_lecture": {},
+  "liens_complets": false,
+  "camera": {
+    "mode": "2d",
+    "vue": "face",
+    "orientation": [
+      0,
+      0,
+      0,
+      1
+    ],
+    "cible": [
+      0,
+      0,
+      0
+    ],
+    "distance": 1.5
+  },
+  "selection": null,
+  "portee": null,
+  "surlignes": [],
+  "filtres": {
+    "conversation": null,
+    "statuts": [],
+    "types": [],
+    "periode": {
+      "debut": null,
+      "fin": null
+    },
+    "texte": "",
+    "mode": "estomper"
+  },
+  "fiche": null,
+  "panneau_ouvert": true,
+  "theme": "sombre",
+  "visibles": [
+    {
+      "noeud": "n0",
+      "libelle": "n",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "noeud": "n1",
+      "libelle": "n",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "noeud": "n2",
+      "libelle": "n",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "noeud": "n3",
+      "libelle": "n",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "noeud": "n4",
+      "libelle": "n",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "noeud": "n5",
+      "libelle": "n",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "noeud": "n6",
+      "libelle": "n",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "noeud": "n7",
+      "libelle": "n",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "noeud": "n8",
+      "libelle": "n",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "noeud": "n9",
+      "libelle": "n",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "noeud": "n10",
+      "libelle": "n",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "noeud": "n11",
+      "libelle": "n",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "noeud": "n12",
+      "libelle": "n",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "noeud": "n13",
+      "libelle": "n",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "noeud": "n14",
+      "libelle": "n",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "noeud": "n15",
+      "libelle": "n",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "noeud": "n16",
+      "libelle": "n",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "noeud": "n17",
+      "libelle": "n",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "noeud": "n18",
+      "libelle": "n",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "noeud": "n19",
+      "libelle": "n",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "noeud": "n20",
+      "libelle": "n",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "noeud": "n21",
+      "libelle": "n",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "noeud": "n22",
+      "libelle": "n",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "noeud": "n23",
+      "libelle": "n",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "noeud": "n24",
+      "libelle": "n",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "noeud": "n25",
+      "libelle": "n",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "noeud": "n26",
+      "libelle": "n",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "noeud": "n27",
+      "libelle": "n",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "noeud": "n28",
+      "libelle": "n",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "noeud": "n29",
+      "libelle": "n",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "noeud": "n30",
+      "libelle": "n",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "noeud": "n31",
+      "libelle": "n",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "noeud": "n32",
+      "libelle": "n",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "noeud": "n33",
+      "libelle": "n",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "noeud": "n34",
+      "libelle": "n",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "noeud": "n35",
+      "libelle": "n",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "noeud": "n36",
+      "libelle": "n",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "noeud": "n37",
+      "libelle": "n",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "noeud": "n38",
+      "libelle": "n",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "noeud": "n39",
+      "libelle": "n",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "noeud": "n40",
+      "libelle": "n",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "noeud": "n41",
+      "libelle": "n",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "noeud": "n42",
+      "libelle": "n",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "noeud": "n43",
+      "libelle": "n",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "noeud": "n44",
+      "libelle": "n",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "noeud": "n45",
+      "libelle": "n",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "noeud": "n46",
+      "libelle": "n",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "noeud": "n47",
+      "libelle": "n",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "noeud": "n48",
+      "libelle": "n",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "noeud": "n49",
+      "libelle": "n",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "noeud": "n50",
+      "libelle": "n",
+      "x": 0,
+      "y": 0
+    }
+  ],
+  "survol": null,
+  "conversation_affichee": "3f2b8c1e-6a4d-4e2f-9b7a-1c2d3e4f5a6b"
+}

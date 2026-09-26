@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://atlas.local/protocoles/p2-lot-navigation.schema.json",
+  "title": "P2 — LotNavigation : agent moyen 2 → agent navigateur",
+  "description": "Intentions de navigation qui désignent les choses par leur description, sans rien résoudre. Vocabulaire fermé.",
+  "type": "object",
+  "properties": {
+    "version": { "$ref": "commun.schema.json#/$defs/Version" },
+    "lot_id": { "$ref": "commun.schema.json#/$defs/Uuid" },
+    "tache_id": { "type": "integer", "minimum": 1 },
+    "utilisateur_id": { "type": "string", "minLength": 1 },
+    "emis_le": { "$ref": "commun.schema.json#/$defs/DateHeure" },
+    "intentions": {
+      "description": "Dans l'ordre d'exécution.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/IntentionNavigation" },
+      "minItems": 1,
+      "maxItems": 20
+    }
+  },
+  "required": ["version", "lot_id", "tache_id", "utilisateur_id", "intentions"],
+  "additionalProperties": false,
+  "$defs": {
+    "Designation": {
+      "type": "object",
+      "properties": {
+        "texte": { "type": "string", "minLength": 1, "description": "« le lemme de compacité », « celui-là »" },
+        "genre": { "enum": ["noeud", "conversation"] },
+        "type": { "type": "string", "minLength": 1, "description": "Indice : lemme, hypothese, decision…" },
+        "deictique": { "enum": ["selection", "survol", "precedent"] }
+      },
+      "required": ["texte"],
+      "additionalProperties": false
+    },
+    "CriteresFiltre": {
+      "type": "object",
+      "properties": {
+        "conversation": { "$ref": "#/$defs/Designation" },
+        "statuts": {
+          "type": "array",
+          "items": { "$ref": "commun.schema.json#/$defs/StatutNoeud" },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "types": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1, "uniqueItems": true },
+        "periode": {
+          "description": "Dates déjà résolues (« le mois dernier » → dates).",
+          "type": "object",
+          "properties": {
+            "debut": { "$ref": "commun.schema.json#/$defs/Date" },
+            "fin": { "$ref": "commun.schema.json#/$defs/Date" }
+          },
+          "minProperties": 1,
+          "additionalProperties": false
+        },
+        "texte": { "type": "string", "minLength": 1 }
+      },
+      "minProperties": 1,
+      "additionalProperties": false
+    },
+    "IntentionNavigation": {
+      "oneOf": [
+        { "$ref": "#/$defs/IntentionAvecDesignation" },
+        {
+          "type": "object",
+          "properties": {
+            "intention": { "const": "niveau_de_detail" },
+            "niveau": { "enum": ["essentiel", "normal", "complet", "plus", "moins"] }
+          },
+          "required": ["intention", "niveau"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": { "intention": { "const": "liens_complets" }, "oui": { "type": "boolean" } },
+          "required": ["intention", "oui"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "intention": { "const": "point_de_vue" },
+            "mode": { "$ref": "commun.schema.json#/$defs/Mode" },
+            "vue": { "enum": ["face", "cote", "dessus", "iso"] }
+          },
+          "required": ["intention", "mode"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "intention": { "const": "filtrer" },
+            "criteres": { "$ref": "#/$defs/CriteresFiltre" },
+            "action": { "enum": ["masquer", "estomper"] }
+          },
+          "required": ["intention", "criteres", "action"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": { "intention": { "enum": ["effacer_filtres", "effacer_selection", "tout_voir", "revenir"] } },
+          "required": ["intention"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "IntentionAvecDesignation": {
+      "description": "montrer : amener à l'écran et cadrer ; lignee : d'où ça vient, ce que ça permet ; portee : tout ce qui dépend d'un choix ; detailler : ouvrir la fiche.",
+      "type": "object",
+      "properties": {
+        "intention": { "enum": ["montrer", "lignee", "portee", "detailler"] },
+        "quoi": { "$ref": "#/$defs/Designation" }
+      },
+      "required": ["intention", "quoi"],
+      "additionalProperties": false
+    }
+  }
+}

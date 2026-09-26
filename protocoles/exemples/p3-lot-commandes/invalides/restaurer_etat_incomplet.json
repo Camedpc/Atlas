@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "lot_id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+  "ecran": "ecran_principal",
+  "origine": "navigateur",
+  "tache_id": 17,
+  "commandes": [
+    {
+      "op": "restaurer",
+      "etat": {
+        "version": 1,
+        "ecran": "ecran_principal",
+        "utilisateur_id": "u1",
+        "version_donnees": "2026-09-26T10:12:00Z#42",
+        "strategie": "defaut",
+        "parametres_lecture": {},
+        "liens_complets": false,
+        "selection": null,
+        "portee": null,
+        "surlignes": [],
+        "filtres": {
+          "conversation": null,
+          "statuts": [],
+          "types": [],
+          "periode": {
+            "debut": null,
+            "fin": null
+          },
+          "texte": "",
+          "mode": "estomper"
+        },
+        "fiche": null,
+        "panneau_ouvert": true,
+        "theme": "sombre",
+        "visibles": [
+          {
+            "noeud": "theoreme_principal",
+            "libelle": "Théorème principal",
+            "x": 640,
+            "y": 360
+          },
+          {
+            "noeud": "lemme_compacite",
+            "libelle": "Lemme de compacité",
+            "x": 320.5,
+            "y": 180
+          }
+        ],
+        "survol": null,
+        "conversation_affichee": "3f2b8c1e-6a4d-4e2f-9b7a-1c2d3e4f5a6b"
+      }
+    }
+  ]
+}

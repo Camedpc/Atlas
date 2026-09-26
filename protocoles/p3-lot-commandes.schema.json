@@ -1,0 +1,180 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://atlas.local/protocoles/p3-lot-commandes.schema.json",
+  "title": "P3 — LotCommandes : agent navigateur (ou interface, ou test) → écran",
+  "description": "Commandes exactes exécutées par le programme déterministe du front. Références stables uniquement (ids de nœud, UUID de conversation), jamais d'index de point.",
+  "type": "object",
+  "properties": {
+    "version": { "$ref": "commun.schema.json#/$defs/Version" },
+    "lot_id": { "$ref": "commun.schema.json#/$defs/Uuid" },
+    "ecran": { "$ref": "commun.schema.json#/$defs/IdEcran" },
+    "origine": { "enum": ["navigateur", "interface", "test"] },
+    "tache_id": { "type": "integer", "minimum": 1 },
+    "atomique": { "type": "boolean", "default": true, "description": "Tout ou rien : le lot est validé entièrement avant la première action." },
+    "emis_le": { "$ref": "commun.schema.json#/$defs/DateHeure" },
+    "commandes": {
+      "description": "Liste vide permise : le compte rendu renvoie alors simplement l'état courant.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/CommandeBas" },
+      "maxItems": 50
+    }
+  },
+  "required": ["version", "lot_id", "ecran", "origine", "commandes"],
+  "additionalProperties": false,
+  "$defs": {
+    "CommandeBas": {
+      "oneOf": [
+        { "$ref": "#/$defs/Strategie" },
+        { "$ref": "#/$defs/ParametresLecture" },
+        { "$ref": "#/$defs/LiensComplets" },
+        { "$ref": "#/$defs/Mode" },
+        { "$ref": "#/$defs/Vue" },
+        { "$ref": "#/$defs/Orbiter" },
+        { "$ref": "#/$defs/Zoomer" },
+        { "$ref": "#/$defs/Cadrer" },
+        { "$ref": "#/$defs/Selectionner" },
+        { "$ref": "#/$defs/Portee" },
+        { "$ref": "#/$defs/Surligner" },
+        { "$ref": "#/$defs/Filtres" },
+        { "$ref": "#/$defs/SansArgument" },
+        { "$ref": "#/$defs/Fiche" },
+        { "$ref": "#/$defs/Panneau" },
+        { "$ref": "#/$defs/Theme" },
+        { "$ref": "#/$defs/Restaurer" }
+      ]
+    },
+    "Strategie": {
+      "type": "object",
+      "properties": { "op": { "const": "strategie" }, "id": { "$ref": "commun.schema.json#/$defs/Strategie" } },
+      "required": ["op", "id"],
+      "additionalProperties": false
+    },
+    "ParametresLecture": {
+      "type": "object",
+      "properties": {
+        "op": { "const": "parametres_lecture" },
+        "patch": { "$ref": "commun.schema.json#/$defs/ParametresLecture" }
+      },
+      "required": ["op", "patch"],
+      "additionalProperties": false
+    },
+    "LiensComplets": {
+      "type": "object",
+      "properties": { "op": { "const": "liens_complets" }, "oui": { "type": "boolean" } },
+      "required": ["op", "oui"],
+      "additionalProperties": false
+    },
+    "Mode": {
+      "type": "object",
+      "properties": { "op": { "const": "mode" }, "mode": { "$ref": "commun.schema.json#/$defs/Mode" } },
+      "required": ["op", "mode"],
+      "additionalProperties": false
+    },
+    "Vue": {
+      "type": "object",
+      "properties": { "op": { "const": "vue" }, "nom": { "$ref": "commun.schema.json#/$defs/NomVue" } },
+      "required": ["op", "nom"],
+      "additionalProperties": false
+    },
+    "Orbiter": {
+      "description": "3D seulement (sinon erreur etat_invalide).",
+      "type": "object",
+      "properties": {
+        "op": { "const": "orbiter" },
+        "d_azimut_deg": { "type": "number", "minimum": -360, "maximum": 360 },
+        "d_elevation_deg": { "type": "number", "minimum": -180, "maximum": 180 }
+      },
+      "required": ["op", "d_azimut_deg", "d_elevation_deg"],
+      "additionalProperties": false
+    },
+    "Zoomer": {
+      "description": "facteur > 1 rapproche.",
+      "type": "object",
+      "properties": { "op": { "const": "zoomer" }, "facteur": { "type": "number", "exclusiveMinimum": 0, "maximum": 100 } },
+      "required": ["op", "facteur"],
+      "additionalProperties": false
+    },
+    "Cadrer": {
+      "type": "object",
+      "properties": {
+        "op": { "const": "cadrer" },
+        "cibles": {
+          "oneOf": [
+            { "type": "array", "items": { "$ref": "commun.schema.json#/$defs/Cible" }, "minItems": 1 },
+            { "enum": ["tout", "selection"] }
+          ]
+        }
+      },
+      "required": ["op", "cibles"],
+      "additionalProperties": false
+    },
+    "Selectionner": {
+      "description": "Sélection et lignée ; null efface.",
+      "type": "object",
+      "properties": {
+        "op": { "const": "selectionner" },
+        "cible": { "oneOf": [{ "$ref": "commun.schema.json#/$defs/RefNoeud" }, { "type": "null" }] }
+      },
+      "required": ["op", "cible"],
+      "additionalProperties": false
+    },
+    "Portee": {
+      "type": "object",
+      "properties": { "op": { "const": "portee" }, "cible": { "$ref": "commun.schema.json#/$defs/RefNoeud" } },
+      "required": ["op", "cible"],
+      "additionalProperties": false
+    },
+    "Surligner": {
+      "description": "Liste vide = effacer le surlignage.",
+      "type": "object",
+      "properties": {
+        "op": { "const": "surligner" },
+        "cibles": { "type": "array", "items": { "$ref": "commun.schema.json#/$defs/RefNoeud" } }
+      },
+      "required": ["op", "cibles"],
+      "additionalProperties": false
+    },
+    "Filtres": {
+      "description": "Fusion superficielle ; {} ne change rien.",
+      "type": "object",
+      "properties": { "op": { "const": "filtres" }, "patch": { "$ref": "commun.schema.json#/$defs/PatchFiltres" } },
+      "required": ["op", "patch"],
+      "additionalProperties": false
+    },
+    "SansArgument": {
+      "type": "object",
+      "properties": { "op": { "enum": ["effacer_filtres", "recharger_donnees"] } },
+      "required": ["op"],
+      "additionalProperties": false
+    },
+    "Fiche": {
+      "description": "Panneau de détail du front ; null le ferme.",
+      "type": "object",
+      "properties": {
+        "op": { "const": "fiche" },
+        "cible": { "oneOf": [{ "$ref": "commun.schema.json#/$defs/RefNoeud" }, { "type": "null" }] }
+      },
+      "required": ["op", "cible"],
+      "additionalProperties": false
+    },
+    "Panneau": {
+      "type": "object",
+      "properties": { "op": { "const": "panneau" }, "ouvert": { "type": "boolean" } },
+      "required": ["op", "ouvert"],
+      "additionalProperties": false
+    },
+    "Theme": {
+      "type": "object",
+      "properties": { "op": { "const": "theme" }, "theme": { "$ref": "commun.schema.json#/$defs/Theme" } },
+      "required": ["op", "theme"],
+      "additionalProperties": false
+    },
+    "Restaurer": {
+      "description": "Pour « revenir » : réapplique un état exporté (hors visibles et survol).",
+      "type": "object",
+      "properties": { "op": { "const": "restaurer" }, "etat": { "$ref": "p4-etat-affichage.schema.json" } },
+      "required": ["op", "etat"],
+      "additionalProperties": false
+    }
+  }
+}

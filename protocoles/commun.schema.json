@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://atlas.local/protocoles/commun.schema.json",
+  "title": "Définitions communes aux protocoles P1 à P4",
+  "$defs": {
+    "Version": { "const": 1 },
+    "IdNoeud": {
+      "description": "noeuds.id : slug lisible (contrainte check de la migration init).",
+      "type": "string",
+      "pattern": "^[a-z0-9_]+$"
+    },
+    "Uuid": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+    },
+    "IdEcran": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,64}$" },
+    "Date": {
+      "description": "Date ISO 8601 (jour), ou date et heure UTC.",
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(T\\d{2}:\\d{2}(:\\d{2}(\\.\\d+)?)?Z)?$"
+    },
+    "DateHeure": {
+      "description": "Date et heure ISO 8601 UTC.",
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$"
+    },
+    "StatutNoeud": { "enum": ["etabli", "suspendu", "a_verifier", "invalide", "ouvert"] },
+    "Strategie": { "enum": ["defaut", "roles", "roles_aux", "transitive", "chaines", "complet"] },
+    "Mode": { "enum": ["2d", "3d"] },
+    "Theme": { "enum": ["clair", "sombre"] },
+    "NomVue": { "enum": ["dessus", "dessous", "face", "arriere", "droite", "gauche", "iso"] },
+    "RefNoeud": {
+      "type": "object",
+      "properties": { "noeud": { "$ref": "#/$defs/IdNoeud" } },
+      "required": ["noeud"],
+      "additionalProperties": false
+    },
+    "RefConversation": {
+      "description": "Les nœuds créés par cette conversation (noeuds.conversation_id).",
+      "type": "object",
+      "properties": { "conversation": { "$ref": "#/$defs/Uuid" } },
+      "required": ["conversation"],
+      "additionalProperties": false
+    },
+    "Cible": { "oneOf": [{ "$ref": "#/$defs/RefNoeud" }, { "$ref": "#/$defs/RefConversation" }] },
+    "ErreurProtocole": {
+      "type": "object",
+      "properties": {
+        "code": { "enum": ["invalide", "introuvable", "ambigu", "etat_invalide", "delai"] },
+        "message": { "type": "string", "minLength": 1 },
+        "details": {}
+      },
+      "required": ["code", "message"],
+      "additionalProperties": false
+    },
+    "Periode": {
+      "type": "object",
+      "properties": {
+        "debut": { "oneOf": [{ "$ref": "#/$defs/Date" }, { "type": "null" }] },
+        "fin": { "oneOf": [{ "$ref": "#/$defs/Date" }, { "type": "null" }] }
+      },
+      "required": ["debut", "fin"],
+      "additionalProperties": false
+    },
+    "EtatFiltres": {
+      "description": "Filtres de l'écran. Listes vides et texte vide = pas de filtre.",
+      "type": "object",
+      "properties": {
+        "conversation": { "oneOf": [{ "$ref": "#/$defs/Uuid" }, { "type": "null" }] },
+        "statuts": { "type": "array", "items": { "$ref": "#/$defs/StatutNoeud" }, "uniqueItems": true },
+        "types": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+        "periode": { "$ref": "#/$defs/Periode" },
+        "texte": { "type": "string" },
+        "mode": { "enum": ["masquer", "estomper"] }
+      },
+      "required": ["conversation", "statuts", "types", "periode", "texte", "mode"],
+      "additionalProperties": false
+    },
+    "PatchFiltres": {
+      "description": "Fusion superficielle dans EtatFiltres : chaque clé présente remplace la valeur courante.",
+      "type": "object",
+      "properties": {
+        "conversation": { "oneOf": [{ "$ref": "#/$defs/Uuid" }, { "type": "null" }] },
+        "statuts": { "type": "array", "items": { "$ref": "#/$defs/StatutNoeud" }, "uniqueItems": true },
+        "types": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+        "periode": { "$ref": "#/$defs/Periode" },
+        "texte": { "type": "string" },
+        "mode": { "enum": ["masquer", "estomper"] }
+      },
+      "additionalProperties": false
+    },
+    "ParametresLecture": {
+      "description": "Surcharges des paramètres du graphe de lecture (ParametresLecture du moteur, en snake_case). Toutes les clés sont facultatives.",
+      "type": "object",
+      "properties": {
+        "demonstrations": { "enum": ["toutes", "principale"] },
+        "roles_retenus": {
+          "type": "array",
+          "items": { "enum": ["principale", "auxiliaire", "technique", "contexte"] },
+          "uniqueItems": true
+        },
+        "masquer_contexte": { "type": "boolean" },
+        "types_toujours_visibles": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+        "types_insecables": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+        "longueur_min_chaine": { "type": "integer", "minimum": 2, "maximum": 50 },
+        "longueur_max_chaine": { "type": "integer", "minimum": 2, "maximum": 50 },
+        "meme_sous_probleme": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

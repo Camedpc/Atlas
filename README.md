@@ -14,6 +14,7 @@ Harness de hackathon : des agents IA transforment leurs raisonnements scientifiq
 | `api/index.py` | Lecture seule, déployée comme fonction Python sur Vercel |
 | `frontend/` | Interface : conversations à gauche, graphe sigma.js à droite |
 | `tests/` | Tests Python (sans réseau) |
+| `protocoles/` | JSON Schema des liaisons voix → commandes → affichage (P1 à P4) et exemples de contrat |
 
 ## API
 

@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://atlas.local/protocoles/p1-tache.schema.json",
+  "title": "P1 — Tâche du registre : champs ajoutés pour la navigation",
+  "description": "L'enveloppe reste la tâche du registre d'AtlasVoice (backend/app/registre/modele.py). Ce schéma ne décrit que les champs concernés par P1 ; les autres champs de la tâche sont libres ici.",
+  "type": "object",
+  "properties": {
+    "type_agent": { "enum": ["explorateur", "editeur_graphe", "conversation", "navigateur"] },
+    "demande_brute": { "type": "string", "minLength": 1, "description": "Phrase entière ; fait toujours foi." },
+    "extrait": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Segment de demande_brute qui concerne cette tâche. Le serveur vérifie qu'il en est une sous-chaîne (après normalisation), sinon le remplace par demande_brute."
+    },
+    "contexte": {
+      "type": "object",
+      "properties": {
+        "graphe_actif": { "type": ["string", "null"] },
+        "conversation_active": { "type": ["string", "null"] },
+        "derniers_echanges": { "type": "array", "items": { "type": "object", "additionalProperties": { "type": "string" } } },
+        "affichage": {
+          "description": "Rempli par le serveur depuis le relais (dernier écran actif), null sans écran.",
+          "oneOf": [{ "$ref": "p4-etat-affichage.schema.json#/$defs/EtatResume" }, { "type": "null" }]
+        }
+      },
+      "required": ["affichage"],
+      "additionalProperties": false
+    }
+  },
+  "required": ["type_agent", "demande_brute", "extrait", "contexte"]
+}

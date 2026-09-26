@@ -1,0 +1,40 @@
+{
+  "id": 17,
+  "type_agent": "navigateur",
+  "demande_brute": "montre-moi la lignée du lemme de compacité et lance une recherche sur Sobolev",
+  "extrait": "montre-moi la lignée du lemme de compacité",
+  "reformulation": "Afficher la lignée du lemme de compacité.",
+  "contexte": {
+    "graphe_actif": null,
+    "conversation_active": "3f2b8c1e-6a4d-4e2f-9b7a-1c2d3e4f5a6b",
+    "derniers_echanges": [],
+    "affichage": {
+      "ecran": "ecran_principal",
+      "strategie": "defaut",
+      "selection": {
+        "noeud": "lemme_compacite"
+      },
+      "filtres": {
+        "conversation": null,
+        "statuts": [],
+        "types": [],
+        "periode": {
+          "debut": null,
+          "fin": null
+        },
+        "texte": "",
+        "mode": "estomper"
+      },
+      "conversation_affichee": "3f2b8c1e-6a4d-4e2f-9b7a-1c2d3e4f5a6b",
+      "mode": "2d",
+      "visibles": [
+        {
+          "libelle": "Théorème principal"
+        },
+        {
+          "libelle": "Lemme de compacité"
+        }
+      ]
+    }
+  }
+}
