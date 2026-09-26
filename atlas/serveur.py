@@ -13,7 +13,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from . import conversations, routes_lecture
-from .orchestrateur import config, routes
+from .orchestrateur import config, routes, routes_projets
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s : %(message)s")
 log = logging.getLogger(__name__)
@@ -34,3 +34,4 @@ if config.CORS_ORIGINES:
 app.include_router(routes_lecture.routeur)
 app.include_router(routes.routeur)
 app.include_router(routes.routeur_modeles)
+app.include_router(routes_projets.routeur)

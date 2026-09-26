@@ -70,7 +70,33 @@ export interface Conversation {
   id: string
   titre: string
   session_agent: string | null
+  projet_id: string | null
   modifie_le: string
+}
+
+/** Un espace de travail : ses sessions, et son dossier dans le bunker. */
+export interface Projet {
+  id: string
+  nom: string
+  description: string
+  dossier: string
+  modifie_le: string
+}
+
+export interface ListeProjets {
+  utilisateur: string
+  projets: Projet[]
+}
+
+/** Un nœud de l'arborescence d'un projet du bunker (atlas/orchestrateur/fichiers.py). */
+export interface NoeudFichier {
+  nom: string
+  chemin: string
+  type: 'dossier' | 'fichier'
+  taille?: number
+  modifie?: number
+  enfants?: NoeudFichier[]
+  tronque?: boolean
 }
 
 export interface Execution {
@@ -131,20 +157,33 @@ export interface Message {
   cree_le: string
 }
 
-async function appel<T>(chemin: string, init?: RequestInit): Promise<T> {
+async function requete(chemin: string, init?: RequestInit): Promise<Response> {
   const entetes: Record<string, string> = {}
   if (init?.body) entetes['Content-Type'] = 'application/json'
   if (jetonEnMemoire) entetes.Authorization = `Bearer ${jetonEnMemoire}`
   const r = await fetch(BASE + chemin, { ...init, headers: entetes })
   if (r.status === 401) throw new JetonRequis()
   if (!r.ok) throw new Error(`${chemin} : ${r.status} ${await r.text()}`)
-  return r.json() as Promise<T>
+  return r
+}
+
+async function appel<T>(chemin: string, init?: RequestInit): Promise<T> {
+  return (await requete(chemin, init)).json() as Promise<T>
 }
 
 export const api = {
   graphe: () => appel<Graphe>('/api/graphe'),
-  conversations: () => appel<Conversation[]>('/api/conversations'),
-  creerConversation: () => appel<Conversation>('/api/conversations', { method: 'POST', body: '{}' }),
+  projets: () => appel<ListeProjets>('/api/projets'),
+  creerProjet: (nom: string) =>
+    appel<Projet>('/api/projets', { method: 'POST', body: JSON.stringify({ nom }) }),
+  conversations: (projetId: string) =>
+    appel<Conversation[]>(`/api/conversations?projet_id=${encodeURIComponent(projetId)}`),
+  creerConversation: (projetId: string) =>
+    appel<Conversation>('/api/conversations', { method: 'POST', body: JSON.stringify({ projet_id: projetId }) }),
+  fichiers: (projetId: string) => appel<NoeudFichier>(`/api/projets/${projetId}/fichiers`),
+  // Le fichier passe par fetch (le jeton d'accès est un en-tête) : l'aperçu en fait une URL blob.
+  fichier: async (projetId: string, chemin: string) =>
+    (await requete(`/api/projets/${projetId}/fichier?chemin=${encodeURIComponent(chemin)}`)).blob(),
   conversation: (id: string) => appel<EtatConversation>(`/api/conversations/${id}`),
   messages: (id: string, apresId?: number, agent?: string | null) => {
     const params = new URLSearchParams()

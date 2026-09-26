@@ -12,7 +12,7 @@ Harness de hackathon : des agents IA transforment leurs raisonnements scientifiq
 | `atlas/orchestrateur/` | Orchestrateur de recherche (SDK Codex) et ses routes |
 | `atlas/serveur.py` | Serveur longue durée : lecture + conversations (local, puis VM) |
 | `api/index.py` | Lecture seule, déployée comme fonction Python sur Vercel |
-| `frontend/` | Interface : sessions à gauche, conversation et arbre des agents au centre, graphe ou agent graph à droite |
+| `frontend/` | Interface : espace et sessions à gauche, conversation et arbre des agents au centre, graphe, agent graph ou documents à droite |
 | `tests/` | Tests Python (sans réseau) |
 
 ## API
@@ -29,8 +29,12 @@ Servies seulement par `atlas.serveur` (pas sur Vercel) :
 
 | Route | Rôle |
 |---|---|
-| `GET /api/conversations` | Conversations, la plus récente d'abord |
-| `POST /api/conversations` | Crée une conversation (`{"titre"?}`) |
+| `GET /api/projets` | Espaces de travail (projets) et utilisateur |
+| `POST /api/projets` | Crée un espace (`{"nom", "description"?}`) et son dossier dans le bunker |
+| `GET /api/projets/{id}/fichiers` | Arborescence du dossier de l'espace dans le bunker (vue Documents) |
+| `GET /api/projets/{id}/fichier?chemin=` | Contenu d'un fichier de l'espace, pour l'aperçu |
+| `GET /api/conversations?projet_id=` | Conversations (d'un espace), la plus récente d'abord |
+| `POST /api/conversations` | Crée une conversation (`{"titre"?, "projet_id"?}`) |
 | `GET /api/conversations/{id}` | Conversation, exécution en cours et dernière exécution |
 | `GET /api/conversations/{id}/messages?apres_id=&agent=` | Messages de l'orchestrateur, ou d'un sous-agent (`agent` = chemin Codex) |
 | `GET /api/conversations/{id}/agents` | Arbre des agents : en direct pendant un tour, sinon celui du dernier tour |

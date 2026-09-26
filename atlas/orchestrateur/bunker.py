@@ -5,7 +5,7 @@
       partage/                              commun à toutes les sessions, en écriture
         python/                             environnement Python : `pip install` sert à tout le monde
         pip/                                cache pip
-      utilisateurs/<utilisateur>/<projet>/
+      utilisateurs/<utilisateur>/<projet>/     un dossier par projet (`projets.dossier` dans Supabase)
         doc_projet/  scripts_projet/        ressources du projet (les agents ne font que les lire)
         sessions/<conversation>/            dossier de travail de la session
           conv/  docs_session/  scripts/  .tmp/
@@ -35,12 +35,17 @@ SOUS_DOSSIERS_SESSION = ("conv", "docs_session", "scripts", ".tmp")
 SOUS_DOSSIERS_PROJET = ("doc_projet", "scripts_projet", "sessions")
 
 
-def dossier_projet() -> Path:
-    return config.ESPACE_TRAVAIL / "utilisateurs" / config.UTILISATEUR / config.PROJET
+def dossier_utilisateur() -> Path:
+    return config.ESPACE_TRAVAIL / "utilisateurs" / config.UTILISATEUR
 
 
-def dossier_session(conversation_id: str) -> Path:
-    return dossier_projet() / "sessions" / conversation_id
+def dossier_projet(projet: str | None = None) -> Path:
+    """Dossier d'un projet (son `dossier` dans Supabase) ; ATLAS_PROJET par défaut."""
+    return dossier_utilisateur() / (projet or config.PROJET)
+
+
+def dossier_session(conversation_id: str, projet: str | None = None) -> Path:
+    return dossier_projet(projet) / "sessions" / conversation_id
 
 
 def dossier_partage() -> Path:
@@ -91,12 +96,17 @@ def environnement_shell(session: Path) -> dict[str, Any]:
 # ── Préparation des dossiers ─────────────────────────────────────────────────
 
 
-def preparer_session(conversation_id: str) -> Path:
-    """Crée l'arborescence de la session (et du projet, et le Python partagé) si besoin ; renvoie la session."""
-    projet = dossier_projet()
+def preparer_projet(projet: str | None = None) -> Path:
+    racine = dossier_projet(projet)
     for nom in SOUS_DOSSIERS_PROJET:
-        (projet / nom).mkdir(parents=True, exist_ok=True)
-    session = dossier_session(conversation_id)
+        (racine / nom).mkdir(parents=True, exist_ok=True)
+    return racine
+
+
+def preparer_session(conversation_id: str, projet: str | None = None) -> Path:
+    """Crée l'arborescence de la session (et du projet, et le Python partagé) si besoin ; renvoie la session."""
+    preparer_projet(projet)
+    session = dossier_session(conversation_id, projet)
     ancien = config.ESPACE_TRAVAIL / conversation_id  # disposition d'avant le bunker
     if ancien.is_dir() and not session.exists():
         shutil.move(str(ancien), str(session))

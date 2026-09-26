@@ -1,9 +1,11 @@
 // Atlas : sessions à gauche, conversation au centre (avec l'arbre des agents au-dessus de la saisie),
 // et à droite le graphe de raisonnement ou l'agent graph.
 import './style.css'
+import './espaces.css'
 import { AgentGraph } from './agentgraph'
 import { api, type Graphe, type Noeud } from './api'
 import { PanneauConversation } from './conversations'
+import { VueDocuments } from './documents'
 import { COULEURS_STATUT, LIBELLES_STATUT, VueGraphe } from './graphe'
 import { installerPoignees } from './redimension'
 import { echapper, rendre } from './rendu'
@@ -11,7 +13,7 @@ import { echapper, rendre } from './rendu'
 const INTERVALLE_GRAPHE_MS = 4000
 const CLE_VUE = 'atlas.vue'
 
-type Vue = 'raisonnement' | 'agents'
+type Vue = 'raisonnement' | 'agents' | 'documents'
 
 document.querySelector<HTMLElement>('#app')!.innerHTML = `
   <aside class="panneau-sessions"></aside>
@@ -21,6 +23,7 @@ document.querySelector<HTMLElement>('#app')!.innerHTML = `
       <div class="onglets" role="tablist">
         <button type="button" role="tab" data-vue="raisonnement">Graphe de raisonnement</button>
         <button type="button" role="tab" data-vue="agents">Agent graph</button>
+        <button type="button" role="tab" data-vue="documents">Documents</button>
       </div>
       <div class="outils-raisonnement">
         <label><input type="checkbox" class="filtre" /> Cette conversation</label>
@@ -37,6 +40,7 @@ document.querySelector<HTMLElement>('#app')!.innerHTML = `
       <article class="detail" hidden></article>
     </div>
     <div class="vue vue-agents" hidden><div class="scene-agents"></div></div>
+    <div class="vue vue-documents" hidden></div>
   </section>`
 
 const detail = document.querySelector<HTMLElement>('.detail')!
@@ -98,6 +102,7 @@ document.querySelector('.recharger')!.addEventListener('click', () => void charg
 
 // ─── Onglets du panneau de droite ───
 
+const documents = new VueDocuments(document.querySelector<HTMLElement>('.vue-documents')!)
 const agentGraph = new AgentGraph(document.querySelector<HTMLElement>('.scene-agents')!, () => conversation.focaliser())
 
 function montrer(vue: Vue) {
@@ -107,6 +112,8 @@ function montrer(vue: Vue) {
   })
   document.querySelector<HTMLElement>('.vue-raisonnement')!.hidden = vue !== 'raisonnement'
   document.querySelector<HTMLElement>('.vue-agents')!.hidden = vue !== 'agents'
+  document.querySelector<HTMLElement>('.vue-documents')!.hidden = vue !== 'documents'
+  documents.afficher(vue === 'documents')
   document.querySelector<HTMLElement>('.outils-raisonnement')!.hidden = vue !== 'raisonnement'
   agentGraph.afficher(vue === 'agents')
   if (vue === 'raisonnement') vueGraphe.recentrer()
@@ -128,6 +135,7 @@ const conversation = new PanneauConversation(
   (id) => {
     if (id !== conversationId) agentGraph.reinitialiser()
     conversationId = id
+    documents.revelerSession(id)
     redessiner()
   },
   // Pendant une exécution, le graphe est relu au plus toutes les INTERVALLE_GRAPHE_MS.
@@ -135,13 +143,15 @@ const conversation = new PanneauConversation(
     if (Date.now() - dernierChargement > INTERVALLE_GRAPHE_MS) void chargerGraphe()
   },
   () => montrer('agents'),
+  (projet, conversations) => documents.definirProjet(projet, conversations),
 )
 
 installerPoignees((replie) => conversation.replierSessions(replie))
 
 let vueInitiale: Vue = 'raisonnement'
 try {
-  if (localStorage.getItem(CLE_VUE) === 'agents') vueInitiale = 'agents'
+  const garde = localStorage.getItem(CLE_VUE)
+  if (garde === 'agents' || garde === 'documents') vueInitiale = garde
 } catch {
   // stockage indisponible
 }

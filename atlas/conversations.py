@@ -9,13 +9,17 @@ from .modeles import Conversation, Execution, Message, RoleMessage, StatutExecut
 TITRE_PAR_DEFAUT = "Nouvelle recherche"
 
 
-def creer_conversation(titre: str | None = None) -> Conversation:
-    ligne = supabase().table("conversations").insert({"titre": titre or TITRE_PAR_DEFAUT}).execute().data[0]
-    return Conversation.model_validate(ligne)
+def creer_conversation(titre: str | None = None, projet_id: str | None = None) -> Conversation:
+    ligne = {"titre": titre or TITRE_PAR_DEFAUT, **({"projet_id": projet_id} if projet_id else {})}
+    return Conversation.model_validate(supabase().table("conversations").insert(ligne).execute().data[0])
 
 
-def lister_conversations() -> list[Conversation]:
-    lignes = supabase().table("conversations").select("*").order("modifie_le", desc=True).execute().data
+def lister_conversations(projet_id: str | None = None, *, avec_sans_projet: bool = False) -> list[Conversation]:
+    """Les plus récentes d'abord ; celles d'un projet si `projet_id` (et celles sans projet si `avec_sans_projet`)."""
+    q = supabase().table("conversations").select("*")
+    if projet_id:
+        q = q.or_(f"projet_id.eq.{projet_id},projet_id.is.null") if avec_sans_projet else q.eq("projet_id", projet_id)
+    lignes = q.order("modifie_le", desc=True).execute().data
     return [Conversation.model_validate(l) for l in lignes]
 
 

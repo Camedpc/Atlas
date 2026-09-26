@@ -8,7 +8,7 @@ travaillent, la conversation reste « en cours », et une exception fait échoue
 import asyncio
 from collections.abc import Awaitable, Callable
 
-from .. import conversations
+from .. import conversations, projets
 from ..modeles import Message
 from . import bunker
 
@@ -32,7 +32,9 @@ def conversation_markdown(messages: list[Message]) -> str:
 async def copier_conversation(conversation_id: str, execution_id: str) -> None:
     """Recopie la conversation dans `conv/conversation.md` de la session, pour que les agents puissent la relire."""
     messages = await asyncio.to_thread(conversations.lister_messages, conversation_id, limite=5000)
-    fichier = bunker.dossier_session(conversation_id) / "conv" / "conversation.md"
+    conversation = await asyncio.to_thread(conversations.lire_conversation, conversation_id)
+    projet = await asyncio.to_thread(projets.dossier_de, conversation.projet_id if conversation else None)
+    fichier = bunker.dossier_session(conversation_id, projet) / "conv" / "conversation.md"
     fichier.parent.mkdir(parents=True, exist_ok=True)
     await asyncio.to_thread(fichier.write_text, conversation_markdown(messages), encoding="utf-8")
 

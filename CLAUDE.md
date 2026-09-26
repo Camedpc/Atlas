@@ -24,6 +24,8 @@ prompts dans `atlas/orchestrateur/prompts/*.md` : c'est Camille qui les fait év
 - Toute évolution de schéma passe par une nouvelle migration dans `supabase/migrations/`, jamais en
   modifiant `20260925000000_init.sql`. Garder `atlas/modeles.py` aligné sur le SQL.
 - `journal` est append-only (triggers) : on n'y fait que des `insert`.
+- Espaces de travail : table `projets` (nom, description, `dossier` dans le bunker) ; `conversations.projet_id`
+  (null = le projet « defaut », dossier historique du bunker). Le front arrive sur la page du dernier espace ouvert.
 - `noeuds.parents` / `noeuds.enfants` (parents = prémisses) sont maintenus par trigger depuis `demonstrations` :
   ne jamais les écrire. Le graphe est global ; `noeuds.conversation_id` dit seulement qui a créé le nœud.
 
@@ -89,6 +91,8 @@ vers un sous-agent (« direct app-server input is not allowed for multi-agent v2
 Camille à un sous-agent est injecté (`steer`) dans le tour de l'orchestrateur avec `prompts/relais.md`, qui le
 transmet par `send_message` / `followup_task` ; hors tour, il lance un tour de relais.
 Bunker (`bunker.py`) : chaque conversation travaille dans `espace/utilisateurs/<utilisateur>/<projet>/sessions/<id>/`
+(`<projet>` = `projets.dossier` de sa conversation, lu par `projets.dossier_de` ; la vue Documents lit ce dossier via
+`routes_projets.py`, jamais au-delà)
 (`conv/`, `docs_session/`, `scripts/`, `.tmp/`) ; Python partagé dans `espace/partage/` (`pip install` sert à toutes
 les sessions) ; `shell_environment_policy.inherit = "core"` masque les secrets du serveur aux commandes en local, mais
 Codex l'ignore sur la VM (les agents y voient toutes les variables, et partagent l'utilisateur Unix du serveur). Le
@@ -114,7 +118,8 @@ L'ancien backend agents (chercheur, vérificateur) reste lisible via `git show 1
 - TypeScript : pas de point-virgule, guillemets simples, indentation 2 espaces ; `erasableSyntaxOnly` interdit les
   propriétés déclarées dans le constructeur (`constructor(private x)`).
 - Front (TS sans framework) : `api.ts` (appels, `VITE_API_URL` pour viser un serveur d'orchestrateur distant),
-  `conversations.ts` (colonne centrale), `sessions.ts` (barre latérale), `agents.ts` (état partagé des agents et
+  `conversations.ts` (colonne centrale), `sessions.ts` (barre latérale et sélecteur d'espace), `documents.ts`
+  (arbre du bunker et aperçus, pdf.js), `agents.ts` (état partagé des agents et
   sélection = destinataire de la saisie), `arbre.ts` (arbre façon Claude Code), `agentgraph.ts` (Blueprint porté de
   `visu/vue-sous-agents`), `graphe.ts` (sigma : réglages en tête, couleurs opaques uniquement), `rendu.ts`
   (Markdown + LaTeX). Thème clair uniquement.
@@ -126,6 +131,10 @@ L'ancien backend agents (chercheur, vérificateur) reste lisible via `git show 1
 - Vercel ne route que `/api/*` vers `api/index.py` : toute route FastAPI garde le préfixe `/api`.
 - Une branche locale s'appelle `atlas`, comme le dossier `atlas/` : utiliser `--` dans les commandes git
   sur des chemins (`git checkout -- atlas/`).
+- Une migration qui fait un `update` sur `conversations` déclenche `toucher_modifie_le` et brouille l'ordre des
+  sessions : couper le trigger le temps de l'`update` (voir `20260927030000_projets_dates.sql`).
+- La migration `20260927000000_taches_navigation` (couche vocale) est dans Supabase mais pas dans ce dépôt : pour
+  `db push`, travailler dans une copie de `supabase/` qui contient un fichier vide portant ce nom (`--workdir`).
 - Le dépôt est sous OneDrive : en cas d'erreur EPERM/EBUSY sur `node_modules`, suspecter la synchro.
 - `prototypes/graphe-3d/` n'a pas de proxy `/api` : il tourne sur des données synthétiques. Lire
   `prototypes/graphe-3d/src/core/README.md` avant de toucher au moteur sigma.

@@ -4,7 +4,15 @@
 // Pendant une exécution, un message s'injecte dans le tour en cours au lieu d'attendre la fin.
 import { RACINE, etat, formatTokens, nomAgent } from './agents'
 import { ArbreAgents } from './arbre'
-import { api, enregistrerJeton, JetonRequis, type Conversation, type EtatConversation, type Message } from './api'
+import {
+  api,
+  enregistrerJeton,
+  JetonRequis,
+  type Conversation,
+  type EtatConversation,
+  type Message,
+  type Projet,
+} from './api'
 import { echapper, rendre } from './rendu'
 import { SelecteurModele } from './reglages'
 import { PanneauSessions } from './sessions'
@@ -50,6 +58,19 @@ function rendreMessage(m: Message): string {
   }
 }
 
+/** « il y a 5 min », « il y a 3 h », « hier », « 21 sept. » */
+export function dateRelative(iso: string): string {
+  const date = new Date(iso)
+  const minutes = Math.round((Date.now() - date.getTime()) / 60_000)
+  if (minutes < 1) return 'à l’instant'
+  if (minutes < 60) return `il y a ${minutes} min`
+  if (minutes < 24 * 60) return `il y a ${Math.round(minutes / 60)} h`
+  if (minutes < 48 * 60) return 'hier'
+  return date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
+}
+
+const CLE_PROJET = 'atlas.projet'
+
 function decrireEtat(e: EtatConversation): string {
   if (e.en_cours) return 'L’orchestrateur travaille…'
   const ex = e.derniere_execution
@@ -72,6 +93,10 @@ export class PanneauConversation {
   private cible: HTMLElement
   private envoyer: HTMLButtonElement
   private arreter: HTMLButtonElement
+  private racine: HTMLElement
+  private projets: Projet[] = []
+  private projet: Projet | null = null
+  private utilisateur = ''
   private conversations: Conversation[] = []
   private courante: string | null = null
   private enCours = false
@@ -80,6 +105,7 @@ export class PanneauConversation {
   private generation = 0
   private readonly surChangement: (conversationId: string | null) => void
   private readonly surActivite: () => void
+  private readonly surProjet: (projet: Projet | null, conversations: Conversation[]) => void
 
   constructor(
     racine: HTMLElement,
@@ -87,14 +113,18 @@ export class PanneauConversation {
     surChangement: (conversationId: string | null) => void,
     surActivite: () => void,
     surAgentGraph: () => void,
+    surProjet: (projet: Projet | null, conversations: Conversation[]) => void,
   ) {
+    this.racine = racine
     this.surChangement = surChangement
     this.surActivite = surActivite
-    this.sessions = new PanneauSessions(
-      sessions,
-      (id) => void this.ouvrir(id),
-      () => void this.nouvelle(),
-    )
+    this.surProjet = surProjet
+    this.sessions = new PanneauSessions(sessions, {
+      surOuvrir: (id) => void this.ouvrir(id),
+      surNouvelle: () => void this.nouvelle(),
+      surProjet: (id) => void this.entrerProjet(id),
+      surCreerProjet: (nom) => this.creerProjet(nom),
+    })
     racine.innerHTML = `
       <header class="conv-tete">
         <button type="button" class="icone deplier-sessions" title="Afficher la barre latérale" aria-label="Afficher la barre latérale">
@@ -157,6 +187,8 @@ export class PanneauConversation {
     this.fil.addEventListener('click', (e) => {
       const lien = (e.target as HTMLElement).closest<HTMLElement>('.lien-agent')
       if (lien) etat.selectionner(lien.dataset.chemin!)
+      const session = (e.target as HTMLElement).closest<HTMLElement>('[data-session]')
+      if (session) void this.ouvrir(session.dataset.session!)
     })
     this.ariane.addEventListener('click', (e) => {
       const lien = (e.target as HTMLElement).closest<HTMLElement>('[data-chemin]')
@@ -168,14 +200,22 @@ export class PanneauConversation {
     this.majCible()
   }
 
+  /** Arrive sur la page du dernier espace ouvert (le plus récent la première fois). */
   async charger() {
     try {
-      this.conversations = await api.conversations()
+      const liste = await api.projets()
+      this.projets = liste.projets
+      this.utilisateur = liste.utilisateur
       // Après la liste : le jeton d'accès est alors connu.
       void this.selecteur.charger()
-      this.majSessions()
-      if (this.conversations.length) await this.ouvrir(this.courante ?? this.conversations[0].id)
-      else this.ouvrirVide()
+      let garde: string | null = null
+      try {
+        garde = localStorage.getItem(CLE_PROJET)
+      } catch {
+        // stockage indisponible
+      }
+      const projet = this.projets.find((p) => p.id === (this.projet?.id ?? garde)) ?? this.projets[0]
+      await this.entrerProjet(projet?.id ?? null)
     } catch (e) {
       if (e instanceof JetonRequis) return this.demanderJeton()
       console.error(e)
@@ -198,6 +238,25 @@ export class PanneauConversation {
 
   private get contenu(): HTMLElement {
     return this.fil.querySelector('.fil-contenu')!
+  }
+
+  private async entrerProjet(id: string | null) {
+    this.projet = this.projets.find((p) => p.id === id) ?? null
+    try {
+      if (this.projet) localStorage.setItem(CLE_PROJET, this.projet.id)
+    } catch {
+      // le choix ne tiendra que le temps de la page
+    }
+    this.sessions.afficherProjets(this.projets, this.projet?.id ?? null, this.utilisateur)
+    this.conversations = this.projet ? await api.conversations(this.projet.id) : []
+    this.ouvrirVide()
+    this.surProjet(this.projet, this.conversations)
+  }
+
+  private async creerProjet(nom: string) {
+    const projet = await api.creerProjet(nom)
+    this.projets.unshift(projet)
+    await this.entrerProjet(projet.id)
   }
 
   private majSessions() {
@@ -223,19 +282,41 @@ export class PanneauConversation {
     this.courante = null
     this.generation++
     this.enCours = false
-    this.titre.textContent = 'Nouvelle recherche'
+    this.titre.textContent = this.projet?.nom ?? 'Nouvelle recherche'
+    this.racine.classList.add('accueil-projet')
     this.contenu.innerHTML = this.accueil()
     this.etatTexte.textContent = ''
     etat.vider()
     this.majSessions()
+    this.majCible()
     this.surChangement(null)
     this.saisie.focus()
   }
 
+  // Page d'arrivée d'un espace : son nom, sa description, et les sessions à reprendre.
   private accueil(): string {
-    return `<div class="accueil"><h2>Quelle question veux-tu explorer ?</h2>
-      <p>L’orchestrateur confie des missions à des directeurs de labo, qui convoquent littérature et expérimentateurs ;
-      chaque rapport devient un graphe de raisonnement, puis chaque démonstration est vérifiée.</p></div>`
+    const p = this.projet
+    if (!p) {
+      return `<div class="accueil"><h2>Quelle question veux-tu explorer ?</h2>
+        <p>Crée un espace depuis le menu en haut à gauche pour ranger tes recherches.</p></div>`
+    }
+    const recentes = this.conversations.slice(0, 4)
+    const description = p.description
+      ? `<p>${echapper(p.description)}</p>`
+      : '<p>L’orchestrateur confie des missions à des directeurs de labo ; chaque rapport devient un graphe de raisonnement vérifié.</p>'
+    return `<div class="accueil">
+      <h2>${echapper(p.nom)}</h2>${description}
+      ${
+        recentes.length
+          ? `<div class="intertitre">Reprendre une session</div>
+        <div class="recentes">${recentes
+          .map(
+            (c) => `<button type="button" data-session="${c.id}"><span>${echapper(c.titre)}</span>
+              <span class="quand">${dateRelative(c.modifie_le)}</span></button>`,
+          )
+          .join('')}</div>`
+          : ''
+      }</div>`
   }
 
   private async nouvelle() {
@@ -249,6 +330,7 @@ export class PanneauConversation {
     this.courante = id
     this.generation++
     this.enCours = false
+    this.racine.classList.remove('accueil-projet')
     const c = this.conversations.find((x) => x.id === id)
     this.titre.textContent = c?.titre ?? ''
     etat.vider()
@@ -298,7 +380,9 @@ export class PanneauConversation {
       ? `Message à ${nom}…`
       : this.enCours
         ? 'Ajouter une consigne pendant qu’il travaille…'
-        : 'Pose une question de recherche…'
+        : !this.courante && this.projet
+          ? `Nouvelle recherche dans « ${this.projet.nom} »…`
+          : 'Pose une question de recherche…'
     this.majAriane()
   }
 
@@ -311,12 +395,16 @@ export class PanneauConversation {
     const contenu = this.saisie.value.trim()
     if (!contenu) return
     if (!this.courante) {
+      if (!this.projet) return
       try {
-        const c = await api.creerConversation()
+        const c = await api.creerConversation(this.projet.id)
         this.conversations.unshift(c)
         this.courante = c.id
+        this.racine.classList.remove('accueil-projet')
         this.contenu.innerHTML = ''
+        this.majSessions()
         this.surChangement(c.id)
+        this.surProjet(this.projet, this.conversations)
       } catch (e) {
         this.contenu.insertAdjacentHTML('beforeend', `<div class="msg systeme">${echapper(String(e))}</div>`)
         return
@@ -372,7 +460,9 @@ export class PanneauConversation {
       }
     } else if (this.dernierId === undefined) {
       this.contenu.innerHTML =
-        agent ? `<p class="vide">${echapper(nomAgent(etat.get(agent), agent))} n’a encore rien produit.</p>` : this.accueil()
+        agent
+          ? `<p class="vide">${echapper(nomAgent(etat.get(agent), agent))} n’a encore rien produit.</p>`
+          : '<p class="vide">Session vide.</p>'
     }
 
     const changement = conv.en_cours !== this.enCours

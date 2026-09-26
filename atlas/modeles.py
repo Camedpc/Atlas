@@ -76,6 +76,18 @@ class EntreeJournal(BaseModel):
     auteur: str
 
 
+class Projet(BaseModel):
+    """Table `projets` : un espace de travail, avec son dossier dans le bunker."""
+
+    id: str
+    nom: str
+    description: str
+    dossier: str
+    """Dossier du projet dans le bunker : espace/utilisateurs/<utilisateur>/<dossier>/."""
+    cree_le: datetime
+    modifie_le: datetime
+
+
 class Conversation(BaseModel):
     """Table `conversations`."""
 
@@ -83,6 +95,8 @@ class Conversation(BaseModel):
     titre: str
     session_agent: str | None
     """Thread Codex de l'orchestrateur, repris au tour suivant."""
+    projet_id: str | None = None
+    """Projet de la conversation ; None = le projet « defaut »."""
     cree_le: datetime
     modifie_le: datetime
 

@@ -18,7 +18,7 @@ from openai_codex.models import (
 )
 from openai_codex.types import ReasoningEffort
 
-from .. import conversations
+from .. import conversations, projets
 from ..modeles import Conversation
 from . import bunker, config
 from .consignes import consigne_complete
@@ -54,7 +54,7 @@ def config_codex() -> CodexConfig:
     return CodexConfig(codex_bin=config.CODEX_BIN, env={"CODEX_HOME": str(config.CODEX_HOME)})
 
 
-def surcharges_thread(conversation_id: str) -> dict[str, Any]:
+def surcharges_thread(conversation_id: str, projet: str | None = None) -> dict[str, Any]:
     """Réglages Codex d'Atlas, appliqués à chaque thread."""
     surcharges: dict[str, Any] = {
         "web_search": "live",
@@ -86,21 +86,21 @@ def surcharges_thread(conversation_id: str) -> dict[str, Any]:
         agents["max_concurrent_threads_per_session"] = config.MAX_SOUS_AGENTS
     surcharges["agents"] = agents
     # Hérités par les sous-agents : toute l'équipe travaille dans le bunker de la session.
-    session = bunker.dossier_session(conversation_id)
+    session = bunker.dossier_session(conversation_id, projet)
     surcharges["shell_environment_policy"] = bunker.environnement_shell(session)
     if config.BUNKER:
         surcharges |= bunker.permissions_session(session)
     return surcharges
 
 
-def parametres_thread(dossier: Path, conversation_id: str) -> dict[str, Any]:
+def parametres_thread(dossier: Path, conversation_id: str, projet: str | None = None) -> dict[str, Any]:
     parametres: dict[str, Any] = {
         # Rien à faire approuver : une commande refusée par le sandbox n'est jamais relancée hors du sandbox.
         "approval_mode": ApprovalMode.deny_all,
         "cwd": str(dossier),
         "model": config.MODELE,
         "developer_instructions": consigne_complete("orchestrateur"),
-        "config": surcharges_thread(conversation_id),
+        "config": surcharges_thread(conversation_id, projet),
     }
     if not config.BUNKER:
         # Le profil de permissions du bunker ne se combine pas avec un mode de sandbox : l'un ou l'autre.
@@ -125,12 +125,13 @@ async def tour(
     (par défaut ATLAS_EFFORT_ORCHESTRATEUR et le modèle du thread) ; les sous-agents gardent ceux de leur rôle.
     """
     suivi = suivi if suivi is not None else SuiviAgents()
-    dossier = await asyncio.to_thread(bunker.preparer_session, conversation.id)
+    projet = await asyncio.to_thread(projets.dossier_de, conversation.projet_id)
+    dossier = await asyncio.to_thread(bunker.preparer_session, conversation.id, projet)
 
     async with AsyncCodex(config=config_codex()) as codex:
         await _connecter(codex)
 
-        thread, texte = await _ouvrir_thread(codex, conversation, execution_id, texte, dossier)
+        thread, texte = await _ouvrir_thread(codex, conversation, execution_id, texte, dossier, projet)
         if thread.id != conversation.session_agent:
             await asyncio.to_thread(conversations.modifier_conversation, conversation.id, session_agent=thread.id)
             conversation.session_agent = thread.id
@@ -319,10 +320,10 @@ async def _connecter(codex: AsyncCodex) -> None:
 
 
 async def _ouvrir_thread(
-    codex: AsyncCodex, conversation: Conversation, execution_id: str, texte: str, dossier: Path
+    codex: AsyncCodex, conversation: Conversation, execution_id: str, texte: str, dossier: Path, projet: str
 ) -> tuple[AsyncThread, str]:
     """Reprend le thread de la conversation, ou en ouvre un nouveau (avec l'historique si la reprise échoue)."""
-    parametres = parametres_thread(dossier, conversation.id)
+    parametres = parametres_thread(dossier, conversation.id, projet)
     if conversation.session_agent:
         try:
             return await codex.thread_resume(conversation.session_agent, **parametres), texte

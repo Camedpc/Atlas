@@ -6,7 +6,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, Field
 
-from .. import conversations
+from .. import conversations, projets
 from ..modeles import Conversation, Execution, Message
 from . import agent, config
 from .gestionnaire import Reglages, TourIndisponible, gestionnaire
@@ -27,6 +27,8 @@ Effort = Literal["none", "minimal", "low", "medium", "high", "xhigh", "max", "ul
 
 class NouvelleConversation(BaseModel):
     titre: str | None = None
+    projet_id: str | None = None
+    """Projet de la conversation ; absent = le projet par défaut."""
 
 
 class NouveauMessage(BaseModel):
@@ -52,13 +54,25 @@ def _conversation(conversation_id: str) -> Conversation:
 
 
 @routeur.get("")
-def lister() -> list[Conversation]:
-    return conversations.lister_conversations()
+def lister(projet_id: str | None = None) -> list[Conversation]:
+    """Toutes les conversations, ou celles d'un projet (le projet par défaut garde aussi celles sans projet)."""
+    if projet_id is None:
+        return conversations.lister_conversations()
+    projet = projets.lire_projet(projet_id)
+    if projet is None:
+        raise HTTPException(404, f"Projet inexistant : {projet_id}")
+    return conversations.lister_conversations(projet_id, avec_sans_projet=projet.dossier == projets.DOSSIER_PAR_DEFAUT)
 
 
 @routeur.post("", status_code=201)
 def creer(corps: NouvelleConversation) -> Conversation:
-    return conversations.creer_conversation(corps.titre)
+    projet_id = corps.projet_id
+    if projet_id is None:
+        defaut = projets.projet_par_defaut()
+        projet_id = defaut.id if defaut else None
+    elif projets.lire_projet(projet_id) is None:
+        raise HTTPException(404, f"Projet inexistant : {projet_id}")
+    return conversations.creer_conversation(corps.titre, projet_id)
 
 
 @routeur.get("/{conversation_id}")
