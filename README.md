@@ -12,7 +12,7 @@ Harness de hackathon : des agents IA transforment leurs raisonnements scientifiq
 | `atlas/orchestrateur/` | Orchestrateur de recherche (SDK Codex) et ses routes |
 | `atlas/serveur.py` | Serveur longue durée : lecture + conversations (local, puis VM) |
 | `api/index.py` | Lecture seule, déployée comme fonction Python sur Vercel |
-| `frontend/` | Interface : conversations à gauche, graphe sigma.js à droite |
+| `frontend/` | Interface : sessions à gauche, conversation et arbre des agents au centre, graphe ou agent graph à droite |
 | `tests/` | Tests Python (sans réseau) |
 
 ## API
@@ -32,8 +32,9 @@ Servies seulement par `atlas.serveur` (pas sur Vercel) :
 | `GET /api/conversations` | Conversations, la plus récente d'abord |
 | `POST /api/conversations` | Crée une conversation (`{"titre"?}`) |
 | `GET /api/conversations/{id}` | Conversation, exécution en cours et dernière exécution |
-| `GET /api/conversations/{id}/messages?apres_id=` | Messages (utilisateur, assistant, outil, systeme) |
-| `POST /api/conversations/{id}/messages` | Lance un tour de l'orchestrateur (`{"contenu"}`), 409 si déjà en cours |
+| `GET /api/conversations/{id}/messages?apres_id=&agent=` | Messages de l'orchestrateur, ou d'un sous-agent (`agent` = chemin Codex) |
+| `GET /api/conversations/{id}/agents` | Arbre des agents : en direct pendant un tour, sinon celui du dernier tour |
+| `POST /api/conversations/{id}/messages` | `{"contenu", "agent"?}` : lance un tour, ou s'injecte dans le tour en cours |
 | `POST /api/conversations/{id}/arreter` | Interrompt le tour en cours |
 
 Chaque nœud porte aussi `parents` (ses prémisses) et `enfants` (les nœuds qui le citent), maintenus par

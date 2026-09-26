@@ -30,6 +30,7 @@ html,
 body {
   margin: 0;
   height: 100%;
+  overflow: hidden;
   background: var(--fond);
   color: var(--texte);
 }
@@ -501,6 +502,7 @@ body.sessions-repliees .deplier-sessions {
 
 .arbre-liste {
   max-height: min(30vh, 260px);
+  overflow-x: hidden;
   overflow-y: auto;
   padding: 2px 0 6px;
   border-top: 1px solid var(--trait);
@@ -587,15 +589,18 @@ body.sessions-repliees .deplier-sessions {
 }
 
 .ligne-agent .activite {
-  flex: 1;
-  min-width: 0;
+  flex: 1 1 0;
+  min-width: 4ch;
   overflow: hidden;
   text-overflow: ellipsis;
   color: var(--texte-2);
 }
 
 .ligne-agent .mesures {
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: var(--texte-3);
   font-size: 11px;
 }
@@ -706,9 +711,11 @@ body.sessions-repliees .deplier-sessions {
   padding: 0 12px;
   border-bottom: 1px solid var(--trait);
   white-space: nowrap;
+  overflow: hidden;
 }
 
 .onglets {
+  flex: none;
   display: flex;
   gap: 2px;
   padding: 2px;
@@ -741,6 +748,7 @@ body.sessions-repliees .deplier-sessions {
   display: flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
   margin-left: auto;
   font-size: 12.5px;
   color: var(--texte-2);
@@ -878,6 +886,13 @@ body.sessions-repliees .deplier-sessions {
 }
 
 /* ── Écrans étroits ──────────────────────────────────────── */
+
+@media (max-width: 1440px) {
+  .compteur,
+  .recharger {
+    display: none;
+  }
+}
 
 @media (max-width: 1200px) {
   #app,

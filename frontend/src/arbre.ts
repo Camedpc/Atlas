@@ -63,7 +63,10 @@ export class ArbreAgents {
       this.dessiner()
     })
     racine.querySelector('.bouton-agent-graph')!.addEventListener('click', () => this.surAgentGraph())
-    this.liste.addEventListener('click', (e) => {
+    // pointerdown plutôt que click : l'arbre se redessine chaque seconde, un clic à cheval serait perdu.
+    this.liste.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return
+      e.preventDefault()
       const el = (e.target as HTMLElement).closest<HTMLElement>('[data-chemin]')
       if (!el) return
       const chemin = el.dataset.chemin!

@@ -81,7 +81,13 @@ réglables par `ATLAS_MODELE_<ROLE>` / `ATLAS_EFFORT_<ROLE>`. Les rôles sont vi
 hiérarchie tient aux prompts. Un sous-agent doit être lancé avec `fork_turns = "none"` : sinon il hérite de tout
 l'historique du parent, se perd, et Codex ignore le modèle de son rôle. Places simultanées :
 `ATLAS_MAX_SOUS_AGENTS` (+1 pour l'orchestrateur, défaut Codex 4 au total). Le flux du thread principal ne montre
-que « sous-agent démarré / terminé » ; le détail est dans les rollouts de `CODEX_HOME/sessions/`.
+que « sous-agent démarré / terminé » : `agent.tour` intercepte donc toutes les notifications sur le routeur interne
+du SDK (`_espionner`), `suivi_agents.py` en tire l'arbre (chemin `/root/…`, rôle et surnom lus par `thread/read` ;
+la mission est chiffrée par Codex, on affiche le nom de tâche) et les items des sous-agents vont dans `messages`
+avec `agent` = leur chemin ; l'arbre final est gardé dans `executions.agents`. Codex refuse toute entrée directe
+vers un sous-agent (« direct app-server input is not allowed for multi-agent v2 sub-agents ») : un message de
+Camille à un sous-agent est injecté (`steer`) dans le tour de l'orchestrateur avec `prompts/relais.md`, qui le
+transmet par `send_message` / `followup_task` ; hors tour, il lance un tour de relais.
 Bunker (`bunker.py`) : chaque conversation travaille dans `espace/utilisateurs/<utilisateur>/<projet>/sessions/<id>/`
 (`conv/`, `docs_session/`, `scripts/`, `.tmp/`) ; Python partagé dans `espace/partage/` (`pip install` sert à toutes
 les sessions) ; `shell_environment_policy.inherit = "core"` masque les secrets du serveur aux commandes en local, mais
@@ -108,7 +114,10 @@ L'ancien backend agents (chercheur, vérificateur) reste lisible via `git show 1
 - TypeScript : pas de point-virgule, guillemets simples, indentation 2 espaces ; `erasableSyntaxOnly` interdit les
   propriétés déclarées dans le constructeur (`constructor(private x)`).
 - Front (TS sans framework) : `api.ts` (appels, `VITE_API_URL` pour viser un serveur d'orchestrateur distant),
-  `conversations.ts`, `graphe.ts` (sigma : réglages en tête, couleurs opaques uniquement), `rendu.ts` (Markdown + LaTeX).
+  `conversations.ts` (colonne centrale), `sessions.ts` (barre latérale), `agents.ts` (état partagé des agents et
+  sélection = destinataire de la saisie), `arbre.ts` (arbre façon Claude Code), `agentgraph.ts` (Blueprint porté de
+  `visu/vue-sous-agents`), `graphe.ts` (sigma : réglages en tête, couleurs opaques uniquement), `rendu.ts`
+  (Markdown + LaTeX). Thème clair uniquement.
 - Git : une branche par sujet (ex. `visu/graphe-3d`), merge dans `main`. Commits = phrase française courte,
   sans préfixe conventional-commit.
 
