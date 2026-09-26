@@ -5,11 +5,14 @@ import { formatTemps, formatTokens } from './simulation.js'
 
 const VITESSES = [1, 3, 6, 12]
 
-export function monterBarre(sim, { titre, sousTitre = '' }) {
+export function monterBarre(sim, { titre, sousTitre = '', retour }) {
+  // Les variantes claires reviennent à leur propre catalogue.
+  const clair = document.querySelector('link[href$="commun/clair.css"]')
+  retour = retour || (clair ? '../../clair.html' : '../../index.html')
   const barre = document.createElement('header')
   barre.className = 'barre'
   barre.innerHTML = `
-    <a class="retour" href="../../index.html">← Options</a>
+    <a class="retour" href="${retour}">← Options</a>
     <span class="titre">${titre}<small>${sousTitre}</small></span>
     <span class="espace"></span>
     <span class="compteurs">

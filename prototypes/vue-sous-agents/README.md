@@ -4,8 +4,8 @@ Six prototypes de visualisation des sous-agents d'une recherche Atlas, en direct
 Ils tournent tous sur la même simulation (`commun/simulation.js`) : aucun vrai agent n'est lancé.
 
 ```bash
-python -m http.server 8765 --directory prototypes/vue-sous-agents
-# puis http://localhost:8765
+python prototypes/vue-sous-agents/serveur.py   # sans cache, port 8765
+# puis http://localhost:8765 (itération 1) ou http://localhost:8765/clair.html (itération 2, thème clair)
 ```
 
 | Option | Idée |
