@@ -1,0 +1,28 @@
+{
+  "source": "directeurs/01-analyse-lineaire/rapport.md",
+  "noeuds": [
+    {
+      "id": "lv-jacobienne",
+      "enonce": "La jacobienne au point fixe a des valeurs propres ±i√(αγ)"
+    },
+    {
+      "id": "lv-centre",
+      "enonce": "Le point fixe intérieur est un centre"
+    },
+    {
+      "id": "lv-integrale",
+      "enonce": "V(x,y) est une intégrale première"
+    }
+  ],
+  "demonstrations": [
+    {
+      "conclusion": "lv-centre",
+      "justifie_par": [
+        "lv-jacobienne",
+        "lv-integrale"
+      ],
+      "validite": "valide",
+      "confiance": 0.93
+    }
+  ]
+}

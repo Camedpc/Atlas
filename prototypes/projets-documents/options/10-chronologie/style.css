@@ -1,0 +1,90 @@
+/* 10 · Chronologie des productions : accueil maître-détail, vue Documents en journal daté. */
+
+.accueil-md { display: grid; grid-template-columns: minmax(280px, 380px) 1fr; height: 100%; }
+.accueil-md > * { min-height: 0; overflow-y: auto; }
+.md-projets { background: var(--fond-lateral); border-right: 1px solid var(--trait); padding: 0 12px 24px; }
+.md-projets .laterale-tete { padding: 0 4px; }
+.md-projets .intertitre { margin: 6px 8px 8px; }
+.projet-choix {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  margin-bottom: 2px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  text-align: left;
+}
+.projet-choix:hover { background: var(--fond-3); }
+.projet-choix.actif { background: var(--fond-3); }
+.projet-choix .nom { font-weight: 600; font-size: 13.5px; }
+.projet-choix .sous { margin-top: 2px; font-size: 12px; color: var(--texte-3); }
+
+.md-detail { padding: 40px 48px; }
+.md-detail .cadre { max-width: 760px; }
+.md-detail h1 { margin: 0 0 6px; font-size: 22px; letter-spacing: -0.015em; }
+.md-detail .desc { margin: 0 0 20px; color: var(--texte-2); line-height: 1.55; }
+.md-detail .actions { display: flex; gap: 8px; margin-bottom: 28px; }
+.tableau-sessions { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.tableau-sessions th { padding: 6px 10px; border-bottom: 1px solid var(--trait-fort); font-size: 12px; font-weight: 500; color: var(--texte-3); text-align: left; }
+.tableau-sessions td { padding: 10px; border-bottom: 1px solid var(--trait); vertical-align: middle; }
+.tableau-sessions tr:hover td { background: var(--fond-lateral); }
+.tableau-sessions .titre { font-weight: 500; }
+.tableau-sessions .gris { color: var(--texte-3); font-size: 12.5px; white-space: nowrap; }
+.tableau-sessions td:last-child { text-align: right; }
+.statut-en-cours { color: var(--texte); font-weight: 500; }
+.statut-en-cours::before { content: '●'; margin-right: 5px; font-size: 9px; vertical-align: 1px; color: var(--accent); }
+
+/* Barre latérale de l'app */
+.retour-accueil { border: 0; background: none; padding: 4px 6px; border-radius: 6px; color: var(--texte-2); font-size: 12.5px; }
+.retour-accueil:hover { background: var(--fond-3); color: var(--texte); }
+.nom-projet { margin: 0 18px 8px; font-weight: 600; font-size: 14px; }
+
+/* Outils de la vue Documents */
+.segmente { display: flex; gap: 2px; padding: 2px; background: var(--fond-2); border: 1px solid var(--trait); border-radius: 7px; }
+.segmente button { padding: 2px 8px; border: 0; border-radius: 5px; background: none; font-size: 12px; color: var(--texte-2); }
+.segmente button.actif { background: var(--fond); color: var(--texte); box-shadow: 0 1px 2px rgba(24, 24, 27, 0.08); }
+
+/* Documents : liste en haut, aperçu en bas */
+.docs { flex: 1; min-height: 0; display: grid; grid-template-rows: minmax(160px, 44%) 1fr; }
+.docs > * { min-height: 0; min-width: 0; }
+.docs-liste { overflow: auto; border-bottom: 1px solid var(--trait); }
+.docs-liste .arbo { padding: 8px 6px; }
+
+.chrono { padding: 4px 0 16px; }
+.chrono-jour {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 10px 16px 6px;
+  background: var(--fond);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--texte-2);
+}
+.chrono-session { display: flex; align-items: baseline; gap: 8px; padding: 6px 16px 2px; font-size: 12px; color: var(--texte-3); }
+.chrono-session b { font-weight: 500; color: var(--texte-2); }
+.chrono-session .en-cours { font-size: 11px; padding: 0 5px; border: 1px solid var(--trait-fort); border-radius: 4px; color: var(--texte-2); }
+.entree {
+  display: grid;
+  grid-template-columns: 42px 36px 1fr;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 4px 16px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  text-align: left;
+}
+.entree:hover { background: var(--fond-2); }
+.entree.choisie { background: var(--accent-doux); }
+.entree .h { font: 12px var(--mono); color: var(--texte-3); }
+.entree .vignette { display: grid; place-items: center; width: 36px; height: 28px; border: 1px solid var(--trait); border-radius: 4px; background: #fff; color: var(--texte-3); overflow: hidden; }
+.entree .vignette img { width: 100%; height: 100%; object-fit: cover; }
+.entree .corps { min-width: 0; }
+.entree .qui { font-size: 12px; color: var(--texte-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.entree .qui b { font-weight: 500; color: var(--texte-2); }
+.entree .quoi { font: 12.5px var(--mono); color: var(--texte); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.entree.en-cours .h { color: var(--texte); }
+.chrono-jour::first-letter { text-transform: uppercase; }

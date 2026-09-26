@@ -1,0 +1,81 @@
+/* 01 · Espaces de travail : accueil plein cadre, puis l'app à trois colonnes dans l'espace choisi. */
+
+.accueil-espaces {
+  height: 100%;
+  overflow-y: auto;
+  background: var(--fond-lateral);
+}
+.accueil-cadre { max-width: 640px; margin: 0 auto; padding: 9vh 24px 48px; }
+.accueil-cadre .marque { font-size: 18px; }
+.accueil-cadre h1 { margin: 28px 0 6px; font-size: 24px; letter-spacing: -0.02em; }
+.accueil-cadre .sous { margin: 0 0 24px; color: var(--texte-2); }
+.accueil-cadre .compte { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; font-size: 13px; color: var(--texte-2); }
+
+.espaces { border: 1px solid var(--trait); border-radius: 12px; background: var(--fond); overflow: hidden; }
+.espace-ligne {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 14px 16px;
+  border: 0;
+  border-bottom: 1px solid var(--trait);
+  border-radius: 0;
+  background: none;
+  text-align: left;
+}
+.espace-ligne:last-child { border-bottom: 0; }
+.espace-ligne:hover { background: var(--fond-2); }
+.espace-ligne .monogramme { width: 36px; height: 36px; font-size: 14px; border-radius: 9px; }
+.espace-ligne .corps { flex: 1; min-width: 0; }
+.espace-ligne .nom { font-weight: 600; }
+.espace-ligne .desc { margin-top: 2px; font-size: 12.5px; color: var(--texte-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.espace-ligne .chiffres { flex: none; text-align: right; font-size: 12px; color: var(--texte-3); line-height: 1.5; }
+.espace-ligne .fleche { flex: none; color: var(--texte-3); }
+.nouveau-projet { margin-top: 12px; }
+
+/* Sélecteur d'espace en tête de barre latérale */
+.selecteur-espace {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+  padding: 5px 6px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  text-align: left;
+}
+.selecteur-espace:hover { background: var(--fond-3); }
+.selecteur-espace .monogramme { width: 24px; height: 24px; font-size: 11px; border-radius: 6px; }
+.selecteur-espace .nom { flex: 1; min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.selecteur-espace svg { flex: none; color: var(--texte-3); }
+
+.menu-flottant .coche { margin-left: auto; color: var(--texte-2); }
+.menu-flottant .petit { font-size: 12px; color: var(--texte-3); padding: 6px 8px 2px; }
+
+.laterale-pied {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--trait);
+  font-size: 13px;
+  color: var(--texte-2);
+}
+
+/* Écran d'arrivée dans un espace, sans session ouverte */
+.arrivee { max-width: 560px; margin: 12vh auto 0; padding: 0 24px; }
+.arrivee h2 { margin: 0 0 6px; font-size: 22px; letter-spacing: -0.015em; }
+.arrivee p { margin: 0 0 20px; color: var(--texte-2); line-height: 1.55; }
+.arrivee .recentes button { display: flex; justify-content: space-between; gap: 12px; width: 100%; padding: 9px 12px; margin-bottom: 6px; text-align: left; }
+.arrivee .recentes span:last-child { color: var(--texte-3); font-size: 12px; flex: none; }
+
+/* Documents : arbre à gauche, aperçu à droite */
+.docs { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(220px, 42%) 1fr; }
+.docs-arbre { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--trait); background: var(--fond-lateral); }
+.docs-arbre .racine { flex: none; padding: 10px 12px 6px; font: 11.5px var(--mono); color: var(--texte-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.docs-arbre .arbo { flex: 1; min-height: 0; overflow: auto; padding: 0 6px 12px; }
+.docs > * { min-height: 0; min-width: 0; }

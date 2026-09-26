@@ -1,0 +1,107 @@
+/* 03 · Fil d'Ariane et colonnes : le fil d'Ariane est le navigateur, les documents sont un Finder en colonnes. */
+
+.cadre { display: flex; flex-direction: column; height: 100%; }
+.cadre > .trois-colonnes { flex: 1; min-height: 0; height: auto; }
+
+.ariane {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 44px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--trait);
+  background: var(--fond);
+  white-space: nowrap;
+  overflow-x: auto;
+  font-size: 13px;
+}
+.ariane .marque { margin-right: 14px; }
+.ariane .sep { color: var(--texte-3); padding: 0 2px; }
+.segment {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 280px;
+  padding: 4px 7px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--texte-2);
+}
+.segment:hover { background: var(--fond-2); color: var(--texte); }
+.segment .txt { overflow: hidden; text-overflow: ellipsis; }
+.segment svg { flex: none; color: var(--texte-3); }
+.segment.dernier { color: var(--texte); font-weight: 500; }
+.segment.fichier { font-family: var(--mono); font-size: 12px; }
+.segment.invite { color: var(--texte-3); font-style: italic; }
+
+.menu-flottant { max-height: 60vh; overflow-y: auto; }
+.menu-flottant .coche { margin-left: auto; color: var(--texte-2); }
+.menu-flottant .petit { font-size: 11.5px; color: var(--texte-3); padding: 6px 8px 2px; }
+.menu-flottant svg { flex: none; color: var(--texte-3); }
+.menu-flottant .txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Colonnes Miller (accueil au centre, Documents à droite) */
+.miller { display: flex; height: 100%; min-height: 0; overflow-x: auto; overflow-y: hidden; }
+.colonne {
+  flex: none;
+  width: 220px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid var(--trait);
+}
+.colonne-tete {
+  flex: none;
+  padding: 10px 12px 6px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--texte-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.colonne-corps { flex: 1; min-height: 0; overflow-y: auto; padding: 0 6px 12px; }
+.entree {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  height: 28px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  text-align: left;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.entree:hover { background: var(--fond-3); }
+.entree.choisie { background: var(--fond-3); font-weight: 500; }
+.entree.choisie.feuille { background: var(--accent-doux); }
+.entree svg { flex: none; color: var(--texte-3); }
+.entree .txt { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.entree .fl { flex: none; color: var(--texte-3); font-size: 10px; }
+.entree .meta { flex: none; font-size: 11px; color: var(--texte-3); }
+.entree.cache .txt { color: var(--texte-3); }
+.colonne .vide { margin: 8px; }
+
+.colonne.apercu-col { flex: 1 0 380px; width: auto; border-right: 0; }
+.colonne.apercu-col .apercu { height: 100%; }
+
+.colonne.resume { flex: 1 0 300px; width: auto; border-right: 0; }
+.resume-corps { padding: 18px 20px; }
+.resume-corps h2 { margin: 0 0 6px; font-size: 18px; letter-spacing: -0.01em; }
+.resume-corps p { margin: 0 0 14px; color: var(--texte-2); line-height: 1.55; }
+.resume-corps dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 0 0 18px; font-size: 13px; }
+.resume-corps dt { color: var(--texte-3); }
+.resume-corps dd { margin: 0; }
+
+.centre-miller { flex: 1; min-height: 0; background: var(--fond-lateral); }
+.centre-miller .colonne { background: var(--fond); }
+.centre-miller .colonne.resume { background: var(--fond-lateral); }
+
+.laterale .indice { margin: 12px 18px; font-size: 12.5px; color: var(--texte-3); line-height: 1.5; }
+.droit .colonne { width: 190px; }
+.droit .colonne.apercu-col { width: auto; }

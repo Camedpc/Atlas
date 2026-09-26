@@ -1,0 +1,31 @@
+{
+  "source": "directeurs/01-couplage-electron-phonon/rapport.md",
+  "noeuds": [
+    {
+      "id": "lah10-tc-170",
+      "enonce": "Tc(LaH10, 170 GPa) = 250 K (mesure)"
+    },
+    {
+      "id": "allen-dynes-8pc",
+      "enonce": "Allen–Dynes reproduit Tc à 8 % au-dessus de 170 GPa"
+    },
+    {
+      "id": "anharmonicite",
+      "enonce": "Sous 160 GPa, l'anharmonicité réduit λ d'environ 30 %"
+    }
+  ],
+  "demonstrations": [
+    {
+      "conclusion": "allen-dynes-8pc",
+      "justifie_par": [
+        "lah10-tc-170"
+      ],
+      "validite": "a_verifier"
+    },
+    {
+      "conclusion": "anharmonicite",
+      "justifie_par": [],
+      "validite": "a_verifier"
+    }
+  ]
+}

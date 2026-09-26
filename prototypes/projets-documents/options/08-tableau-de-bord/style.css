@@ -1,0 +1,107 @@
+/* 08 · Tableau de bord de projet : tableau des projets à l'ouverture, puis tableau de bord au centre. */
+
+.liste-projets { height: 100%; overflow-y: auto; }
+.liste-projets .cadre { max-width: 980px; margin: 0 auto; padding: 8vh 24px 48px; }
+.liste-projets h1 { margin: 20px 0 4px; font-size: 22px; letter-spacing: -0.015em; }
+.liste-projets .sous { margin: 0 0 24px; color: var(--texte-2); }
+
+.tableau { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.tableau th {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--trait-fort);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--texte-3);
+  text-align: left;
+  white-space: nowrap;
+}
+.tableau td { padding: 12px; border-bottom: 1px solid var(--trait); vertical-align: top; }
+.tableau tr.ligne { cursor: pointer; }
+.tableau tr.ligne:hover td { background: var(--fond-lateral); }
+.tableau .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tableau .nom { font-weight: 600; }
+.tableau .desc { margin-top: 2px; font-size: 12.5px; color: var(--texte-3); max-width: 40ch; }
+.tableau .date { color: var(--texte-2); white-space: nowrap; }
+
+/* Barre latérale */
+.retour-projets {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+  padding: 5px 6px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  text-align: left;
+  font-weight: 600;
+}
+.retour-projets:hover { background: var(--fond-3); }
+.retour-projets span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.retour-projets .fleche { color: var(--texte-3); font-weight: 400; }
+.entree-tdb { margin: 0 10px 2px; }
+.entree-tdb svg { color: var(--texte-3); flex: none; }
+
+/* Tableau de bord */
+.tdb { flex: 1; min-height: 0; overflow-y: auto; }
+.tdb-cadre { max-width: 820px; margin: 0 auto; padding: 24px 28px 48px; }
+.tdb h2 { margin: 0 0 4px; font-size: 21px; letter-spacing: -0.015em; }
+.tdb .desc { margin: 0 0 22px; color: var(--texte-2); line-height: 1.55; }
+.tdb section { margin-bottom: 28px; }
+.tdb h3 { display: flex; align-items: baseline; gap: 8px; margin: 0 0 10px; font-size: 13px; font-weight: 600; }
+.tdb h3 small { font-weight: 400; color: var(--texte-3); font-size: 12px; }
+
+.chiffres { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px 28px; align-items: start; margin-bottom: 28px; }
+.chiffre .valeur { font-size: 24px; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.chiffre .libelle { font-size: 12px; color: var(--texte-3); }
+.etat-graphe .barre { display: flex; height: 8px; margin: 10px 0 8px; border-radius: 4px; overflow: hidden; background: var(--fond-3); }
+.etat-graphe .barre i { display: block; height: 100%; }
+.etat-graphe .legende { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--texte-2); }
+.etat-graphe .legende i { display: inline-block; width: 8px; height: 8px; margin-right: 5px; border-radius: 2px; vertical-align: 0; }
+
+.lignes { border: 1px solid var(--trait); border-radius: 10px; overflow: hidden; }
+.lignes button {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 14px;
+  border: 0;
+  border-bottom: 1px solid var(--trait);
+  border-radius: 0;
+  background: none;
+  text-align: left;
+}
+.lignes button:last-child { border-bottom: 0; }
+.lignes button:hover { background: var(--fond-2); }
+.lignes .titre { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.lignes .contexte { flex: none; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--texte-3); }
+.lignes .date { flex: none; font-size: 12px; color: var(--texte-3); min-width: 6ch; text-align: right; }
+
+.figures { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; }
+.figure {
+  flex: none;
+  width: 180px;
+  padding: 0;
+  border: 1px solid var(--trait);
+  border-radius: 8px;
+  background: var(--fond);
+  overflow: hidden;
+  text-align: left;
+}
+.figure:hover { border-color: var(--trait-fort); background: var(--fond); }
+.figure img { display: block; width: 100%; height: 112px; object-fit: contain; background: #fff; border-bottom: 1px solid var(--trait); }
+.figure span { display: block; padding: 6px 8px; font-size: 12px; color: var(--texte-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.ouverts { margin: 0; padding: 0; list-style: none; }
+.ouverts li { display: flex; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--trait); font-size: 13.5px; line-height: 1.5; }
+.ouverts li:last-child { border-bottom: 0; }
+.ouverts .source { flex: none; margin-left: auto; padding: 0 4px; border: 0; background: none; font-size: 12px; color: var(--texte-3); }
+.ouverts .source:hover { color: var(--accent); background: none; }
+
+/* Documents : arbre en haut, aperçu en bas */
+.docs { flex: 1; min-height: 0; display: grid; grid-template-rows: minmax(140px, 38%) 1fr; }
+.docs > * { min-height: 0; min-width: 0; }
+.docs-arbre { overflow: auto; padding: 8px 6px 10px; border-bottom: 1px solid var(--trait); background: var(--fond-lateral); }
+.etat-graphe { grid-column: 1 / -1; }

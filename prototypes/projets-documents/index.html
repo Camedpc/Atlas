@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Projets et documents — propositions</title>
+    <link rel="stylesheet" href="commun/base.css" />
+    <style>
+      html, body { overflow: auto; }
+      .page { max-width: 1080px; margin: 0 auto; padding: 48px 24px 64px; }
+      h1 { margin: 0 0 8px; font-size: 26px; letter-spacing: -0.02em; }
+      .chapeau { margin: 0 0 8px; max-width: 46rem; color: var(--texte-2); line-height: 1.6; }
+      .demande { margin: 0 0 32px; max-width: 46rem; color: var(--texte-3); font-size: 13px; line-height: 1.6; }
+      .grille { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
+      .carte {
+        display: flex; flex-direction: column; gap: 8px;
+        padding: 16px 18px 14px; border: 1px solid var(--trait); border-radius: 10px;
+        text-decoration: none; color: var(--texte); background: var(--fond);
+      }
+      .carte:hover { border-color: var(--trait-fort); background: var(--fond-lateral); }
+      .carte .tete { display: flex; align-items: baseline; gap: 10px; }
+      .carte .num { font: 500 12px var(--mono); color: var(--texte-3); }
+      .carte h2 { margin: 0; font-size: 15px; }
+      .carte p { margin: 0; font-size: 13px; line-height: 1.55; color: var(--texte-2); }
+      .carte dl { margin: 4px 0 0; display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; font-size: 12.5px; line-height: 1.5; }
+      .carte dt { color: var(--texte-3); }
+      .carte dd { margin: 0; color: var(--texte-2); }
+      .pied { margin-top: 32px; font-size: 12.5px; color: var(--texte-3); }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <h1>Projets, sessions et documents</h1>
+      <p class="chapeau">Dix façons d’organiser l’espace de Camille dans Atlas : choisir un projet à l’ouverture, retrouver ses
+        sessions, et parcourir le bunker (<code>espace/utilisateurs/camille/</code>) dans une vue Documents à côté du graphe de
+        raisonnement et de l’agent graph.</p>
+      <p class="demande">Toutes les maquettes utilisent les mêmes données : 4 projets, 8 sessions, 55 fichiers (rapports Markdown avec
+        formules, figures PNG et SVG, PDF, scripts et CSV). Les onglets « Graphe de raisonnement » et « Agent graph » sont factices.</p>
+      <div class="grille"></div>
+      <p class="pied">Dans chaque maquette, la barre du haut permet de passer à la proposition précédente ou suivante.</p>
+    </main>
+    <script type="module">
+      import { OPTIONS } from './commun/options.js'
+      import { echapper } from './commun/bunker.js'
+      document.querySelector('.grille').innerHTML = OPTIONS.map((o, i) => `
+        <a class="carte" href="options/${o.dossier}/index.html">
+          <div class="tete"><span class="num">${String(i + 1).padStart(2, '0')}</span><h2>${echapper(o.titre)}</h2></div>
+          <p>${echapper(o.idee)}</p>
+          <dl><dt>Optimise</dt><dd>${echapper(o.optimise)}</dd><dt>Limites</dt><dd>${echapper(o.limites)}</dd></dl>
+        </a>`).join('')
+    </script>
+  </body>
+</html>
