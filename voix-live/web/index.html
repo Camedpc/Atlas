@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Atlas · voix en direct</title>
+  <link rel="stylesheet" href="/web/style.css">
+</head>
+<body>
+  <header>
+    <div class="titre">Atlas <span>voix en direct</span></div>
+    <div id="etat" class="etat" data-etat="arret"><i></i><span>Arrêté</span></div>
+    <div id="mesures" class="mesures"></div>
+  </header>
+
+  <main>
+    <section class="conversation">
+      <div id="fil" class="fil">
+        <p class="vide">Lance la conversation, puis parle normalement. Tu peux couper la parole à Atlas à tout
+          moment, lui donner des consignes, lui demander de lancer une commande ou un sous-agent.</p>
+      </div>
+      <div id="partiel" class="partiel"></div>
+      <footer class="commandes">
+        <button id="demarrer" class="principal">Démarrer la conversation</button>
+        <button id="interrompre" title="Échap">Interrompre</button>
+        <button id="muet" title="Couper le micro">Micro</button>
+        <div class="niveau"><div id="niveau"></div></div>
+        <form id="saisie"><input id="texte" placeholder="Ou écris un message…" autocomplete="off"></form>
+      </footer>
+    </section>
+
+    <aside>
+      <section>
+        <h2>Tâches de fond</h2>
+        <div id="taches" class="taches"><p class="discret">Aucune tâche. Demande par exemple « lance un sous-agent
+          qui analyse le dossier atlas ».</p></div>
+      </section>
+      <section>
+        <h2>Consignes</h2>
+        <textarea id="consignes" rows="4" placeholder="Ex. : réponds en une phrase, parle plus lentement, tutoie-moi…"></textarea>
+        <button id="appliquer">Appliquer</button>
+      </section>
+      <section>
+        <h2>Réglages</h2>
+        <label>Voix
+          <select id="voix">
+            <option value="iEu63s1rhn_kegTr">Gaspard (chaleureux)</option>
+            <option value="6oIkS98REoVZ1dEw">Apolline (efficace)</option>
+            <option value="YKeBw3OV1RgpdhLh">Jules (vif)</option>
+            <option value="biuhvu17TxVKOcyy">Marius (assuré)</option>
+            <option value="FXxJ9mANRq6BCTX5">Noémie (expressive)</option>
+            <option value="Tek4tJXiX6_yvXq7">Augustin (curieux)</option>
+          </select>
+        </label>
+        <label>Modèle
+          <select id="modele">
+            <option value="gpt-5.6-luna">GPT-5.6 Luna (le plus réactif)</option>
+            <option value="gpt-6-luna">GPT-6 Luna</option>
+            <option value="gpt-6-sol">GPT-6 Sol (plus lent)</option>
+          </select>
+        </label>
+        <label class="case"><input type="checkbox" id="casque" checked> Coupure immédiate
+          <small>Casque, ou anti-écho du navigateur efficace. Décoche si Atlas se coupe tout seul sur haut-parleurs.</small>
+        </label>
+      </section>
+    </aside>
+  </main>
+
+  <script type="module" src="/web/app.js"></script>
+</body>
+</html>
