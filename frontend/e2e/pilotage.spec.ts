@@ -61,7 +61,9 @@ test('un lot refusé ne change rien', async ({ page }) => {
   }
   expect(cr.ok).toBe(false)
   expect(cr.resultats[1]?.erreur?.code).toBe('introuvable')
-  expect(cr.etat).toEqual(avant)
+  // Hors visibles et survol (positions à l'écran, qui dépendent de l'animation en cours).
+  const sansEcran = (e: unknown) => ({ ...(e as Record<string, unknown>), visibles: undefined, survol: undefined })
+  expect(sansEcran(cr.etat)).toEqual(sansEcran(avant))
 })
 
 test('mêmes lots depuis le même état : même écran, et restaurer redonne l’état', async ({ page }) => {
