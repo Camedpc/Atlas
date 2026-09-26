@@ -1,4 +1,4 @@
-"""Protocoles P1 à P4 de la chaîne voix → commandes → affichage (miroir Pydantic de `protocoles/`).
+"""Protocoles P1, P3 et P4 de la chaîne voix → commandes → affichage (miroir Pydantic de `protocoles/`).
 
 Les JSON Schema de `protocoles/` font foi ; ces modèles doivent accepter et refuser exactement les
 mêmes exemples (`protocoles/exemples/`, vérifié par `tests/test_protocoles.py`). Tout modèle refuse
@@ -221,27 +221,6 @@ class TacheP1(BaseModel):
     contexte: ContexteP1
 
 
-# ─── P2 : texte brut pour le navigateur ──────────────────────────────────────
-
-
-class Echange(Strict):
-    question: TexteNonVide
-    reponse: TexteNonVide
-
-
-class LotNavigation(Strict):
-    """Le texte brut destiné au navigateur, extrait mot pour mot par l'agent moyen 2 ; le navigateur le comprend."""
-
-    version: Literal[1]
-    lot_id: Uuid
-    tache_id: Annotated[int, Field(ge=1)]
-    utilisateur_id: TexteNonVide
-    emis_le: DateHeure | None = None
-    demande: Annotated[str, StringConstraints(min_length=1, max_length=2000)]
-    demande_brute: TexteNonVide | None = None
-    echanges: Annotated[list[Echange], Field(max_length=5)] | None = None
-
-
 # ─── P3 : commandes bas niveau ───────────────────────────────────────────────
 
 
@@ -368,7 +347,6 @@ class CompteRendu(Strict):
 # Nom du schéma (fichier `protocoles/<nom>.schema.json`) → modèle.
 MODELES: dict[str, type[BaseModel]] = {
     "p1-tache": TacheP1,
-    "p2-lot-navigation": LotNavigation,
     "p3-lot-commandes": LotCommandes,
     "p3-compte-rendu": CompteRendu,
     "p4-etat-affichage": EtatAffichage,

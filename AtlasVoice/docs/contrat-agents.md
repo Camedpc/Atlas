@@ -69,8 +69,8 @@ prévient Atlas de la même façon.
 
 ## Affichage : piloter l'écran du graphe (`/api/affichage`)
 
-Relais entre les agents de navigation et les écrans du graphe (front de l'application). Formats : JSON
-Schema de `protocoles/` (P2, P3, P4), modèles `backend/app/affichage/protocole.py`. Un message invalide est
+Relais entre l'agent navigateur et les écrans du graphe (front de l'application). Formats : JSON
+Schema de `protocoles/` (P3, P4), modèles `backend/app/affichage/protocole.py`. Un message invalide est
 refusé (422, `{"code": "invalide", …}`). Rien n'est écrit en base : pas de confirmation, pas de verrou.
 
 | Appel | Par | Effet |
@@ -79,9 +79,6 @@ refusé (422, `{"code": "invalide", …}`). Rien n'est écrit en base : pas de c
 | `GET /ecrans/{ecran}/flux` (SSE, `event: lot`) | écran | Lots de commandes, dans l'ordre |
 | `POST /ecrans/{ecran}/etat` (`EtatAffichage`) | écran | État de l'écran (P4), au plus 4 par seconde |
 | `POST /ecrans/{ecran}/compte-rendu` (`CompteRendu`) | écran | Résultat d'un lot |
-| `POST /intentions` (`LotNavigation`) | agent moyen 2 | Transmet à l'agent navigateur, répond avec le compte rendu final |
-| `GET /intentions/flux` (SSE, `event: intentions`) | agent navigateur | `LotNavigation` reçus |
-| `POST /intentions/{lot_id}/compte-rendu` (`CompteRendu`) | agent navigateur | Échec avant toute commande (ambiguïté, introuvable…) |
 | `POST /commandes` (`LotCommandes`) | agent navigateur, tests | Pousse vers l'écran, répond avec le `CompteRendu` |
 | `GET /utilisateurs/{id}/etat` | agents | Dernier `EtatAffichage` de l'écran actif (404 sans écran) |
 
@@ -89,11 +86,7 @@ Règles :
 
 1. **Délai** : un compte rendu arrive en `ATLAS_AFFICHAGE_DELAI_S` (3 s par défaut), sinon erreur `delai`
    (HTTP 504). Un lot qui a expiré n'est jamais exécuté plus tard. Écran inconnu : `introuvable` (404).
-2. **Un seul `lot_id` de bout en bout** : l'agent navigateur réutilise le `lot_id` du `LotNavigation` pour
-   le `LotCommandes` qui en résulte ; le compte rendu de l'écran répond alors aussi à l'agent moyen 2.
-3. **Droits** : un utilisateur ne voit que ses écrans ; les agents (`X-Agents-Cle`) les voient tous.
-4. **Pas de hasard** : deux candidats plausibles → compte rendu `ambigu` avec la question, que l'agent
-   moyen 2 pose par `question` sur sa tâche.
+2. **Droits** : un utilisateur ne voit que ses écrans ; les agents (`X-Agents-Cle`) les voient tous.
 
 Essai à la main (écran ouvert, `VITE_AFFICHAGE_URL` renseigné dans le front) :
 
@@ -103,25 +96,19 @@ curl -s -H "X-Agents-Cle: $CLE" -H 'Content-Type: application/json' localhost:80
   -d "{\"version\":1,\"lot_id\":\"$(uuidgen)\",\"ecran\":\"$ECRAN\",\"origine\":\"test\",\"commandes\":[{\"op\":\"mode\",\"mode\":\"3d\"}]}"
 ```
 
-### Agent moyen 2 (`backend/app/agents/navigation/moyen2.py`) : extraction
+### Agent navigateur (`backend/app/agents/navigation/navigateur.py`)
 
-Processus distinct : `python -m app.agents.navigation.moyen2`. Il prend les tâches `navigateur` dès leur
-création (flux du registre) ; chacune avance seule. Il **n'interprète rien** : il extrait le texte brut
-destiné à l'affichage et le passe au navigateur (`LotNavigation.demande`).
+Processus distinct : `python -m app.agents.navigation.navigateur`. Il prend lui-même les tâches `navigateur`
+du registre dès leur création (créées par Atlas à la voix, ou par le champ de texte de l'écran), les mène
+jusqu'au bout et suit le cycle ordinaire des tâches : pas de confirmation ni de verrou (rien n'est écrit en
+base). Chaque tâche avance seule (une question n'en bloque pas d'autres) ; les passages à l'écran restent dans
+l'ordre.
 
-- Chat texte (canal `texte`, champ de l'écran) : tout le texte part tel quel, sans modèle.
-- Voix : un petit modèle (`ATLAS_NAV_LLM_*`, par défaut celui d'Atlas) recopie mot pour mot, depuis le journal
-  (demande brute, derniers tours de l'utilisateur), le texte qui concerne l'affichage ; la transcription peut
-  être coupée en morceaux. Le code vérifie que chaque mot vient du journal, sinon garde l'extrait d'Atlas,
-  puis la demande brute.
-- Compte rendu : `ok` → `terminer` (« C'est affiché. ») ; `ambigu` → `question` à l'utilisateur, puis le même
-  texte repart avec l'échange (2 fois au plus) ; autre erreur → `echec` avec le message du navigateur.
-
-### Agent navigateur (`backend/app/agents/navigation/navigateur.py`) : compréhension
-
-Processus distinct : `python -m app.agents.navigation.navigateur`. Pour chaque demande, il donne au modèle
-(`ATLAS_NAVIGATEUR_LLM_*`, `openai:gpt-5.5` par défaut, température standard) :
-- le texte brut, la phrase entière et les questions déjà posées avec les réponses ;
+Pour chaque tâche, il donne au modèle (`ATLAS_NAVIGATEUR_LLM_*`, `openai:gpt-5.5` par défaut, température
+standard) :
+- **tout le texte brut** du tour (`demande_brute`, morceaux de transcription réunis), l'extrait qu'Atlas pense
+  destiné à l'affichage (un indice), et les questions déjà posées avec les réponses ; si la phrase demande aussi
+  autre chose à d'autres agents, il ne fait que la partie affichage ;
 - **tout l'écran** : l'état d'affichage complet (caméra, niveau de détail, sélection, portée, surlignés, filtres,
   fiche, nœuds visibles avec libellé et position, survol, conversation ouverte) ;
 - tout le graphe (`ATLAS_API_URL`, relu quand `version_donnees` change) : id, nom, type, statut, début de
@@ -129,10 +116,10 @@ Processus distinct : `python -m app.agents.navigation.navigateur`. Pour chaque d
 - **l'historique** des 12 demandes précédentes sur cet écran et ce qu'il en a fait (commandes ou refus), en
   messages de conversation : l'utilisateur peut y faire référence.
 
-Le modèle est libre : il répond par `commander` (commandes P3, avec une explication pour le journal) ou
-`refuser` (question, introuvable, rien à annuler, hors affichage). Le code ne tient que le non négociable :
-commandes validées et ids existants, sinon second essai avec l'erreur ; `filtres.patch.autour
-[{noeud, etendue: lignee | premisses | consequences | seul}]` calculé sur le graphe ; « revenir » : le modèle
-écrit `restaurer`, le code y met l'état de la pile (20 par écran). Chaque demande est journalisée avec ses
-commandes ou son refus. Écran actif = le plus récent parmi les écrans connectés au relais. Délai d'une demande :
-`ATLAS_AFFICHAGE_DELAI_INTENTIONS_S` (60 s).
+Le modèle est libre : `commander` (commandes P3, avec une explication pour le journal) ou `refuser`. Issue :
+commandes exécutées → `resultat` « C'est affiché. » ; `ambigu` → `question` à l'utilisateur, puis sa réponse est
+redonnée au modèle (2 fois au plus) ; sinon `echec` avec la phrase du modèle ou de l'écran. Le code ne tient que
+le non négociable : commandes validées et ids existants, sinon second essai avec l'erreur ; `filtres.patch.autour
+[{noeud, etendue: lignee | premisses | consequences | seul}]` calculé sur le graphe ; « revenir » : le modèle écrit
+`restaurer`, le code y met l'état de la pile (20 par écran). Chaque tâche est journalisée avec ses commandes ou
+son refus. Écran visé : le plus récent parmi les écrans de l'utilisateur connectés au relais.

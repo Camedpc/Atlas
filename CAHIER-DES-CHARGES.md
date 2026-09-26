@@ -13,7 +13,7 @@ se code, se teste et se remplace **séparément**. Lire aussi `CLAUDE.md`, `Atla
 | Moteur d'affichage | **`src/raisonnement`** (graphe de lecture, gauche → droite, 2D avec bascule 3D), pas le cube `src/core` |
 | Où vit l'affichage | **Il remplace `frontend/src/graphe.ts`** (sigma 2D actuel) dans l'application Atlas |
 | Relais des commandes d'affichage | **Dans le backend d'AtlasVoice** (`AtlasVoice/backend/app/affichage/`) |
-| Agent moyen 2 / agent navigateur | **Deux agents distincts**, reliés par le protocole P2 |
+| Agent moyen 2 / agent navigateur | **Un seul agent navigateur** : il prend les tâches `navigateur` dans le registre (plus d'agent moyen 2 ni de P2) |
 
 ## 1. Architecture cible
 
@@ -22,12 +22,12 @@ se code, se teste et se remplace **séparément**. Lire aussi `CLAUDE.md`, `Atla
  parole ◀──────────────────────────────────▶ texte                                   [P0]
                                                │ agent moyen 1 (Atlas vocal)
                                                ▼
-                         commandes haut niveau (texte brut découpé)                  [P1]
-                           │                                        │
-          agent moyen 2    │                                        │  (hors périmètre)
-                           ▼                                        ▼
-               commandes de navigation   [P2]             noyau calculatoire (agents)
-                           │ agent navigateur                       │ écrit en base
+                         tâches du registre (texte brut du tour)                     [P1]
+                           │ type navigateur                        │ autres types
+                           │                                        │  (hors périmètre)
+                           │                                        ▼
+                           │ agent navigateur (modèle)     noyau calculatoire (agents)
+                           │                                        │ écrit en base
                            ▼                                        ▼
                commandes bas niveau      [P3]  ◀── données du graphe (GET /api/graphe) [P5]
                            │ programme déterministe (frontend)
@@ -51,7 +51,7 @@ Principes :
    reconstruit le graphe sigma) et une étape fusionnée regroupe plusieurs nœuds.
 5. Conventions du dépôt : tout en français, config par variables d'env (`.env.example`), tests sans réseau.
 
-**Périmètre** : P1 (compléments), P2, P3, P4, les deux agents de navigation, le relais, le programme
+**Périmètre** : P1 (compléments), P3, P4, l'agent navigateur, le relais, le programme
 déterministe et le nouvel affichage du front. **Hors périmètre** : les agents du noyau calculatoire
 (définis par Camille, ne pas les inventer) et les champs de données qui leur reviennent en base.
 
@@ -109,7 +109,7 @@ exemples : `protocoles/` (ils font foi). Un message invalide est **refusé avec 
 interface ErreurProtocole { code: 'invalide' | 'introuvable' | 'ambigu' | 'etat_invalide' | 'delai'; message: string; details?: unknown }
 ```
 
-Références stables (P2, P3, P4) :
+Références stables (P3, P4) :
 
 ```ts
 type RefNoeud = { noeud: string }              // noeuds.id : slug ^[a-z0-9_]+$
@@ -142,35 +142,17 @@ Règles propres aux tâches `navigateur` : pas de confirmation (rien n'est écri
 `resultat_oral` d'une phrase au plus (« C'est affiché. »), budget de bout en bout **< 1,5 s** entre la fin
 de phrase et le premier mouvement à l'écran. Ambiguïté (« lequel des deux lemmes ? ») → `besoin_precision`.
 
-### P2 — Texte brut → agent navigateur (agent moyen 2 → agent navigateur)
+### P2 — (supprimé)
 
-L'agent moyen 2 **prend** la tâche `navigateur` dans le registre et se contente d'**extraire**, mot pour mot,
-le texte brut qui concerne l'affichage (journal vocal : demande brute, derniers tours ; la transcription peut
-être coupée en morceaux). Il n'interprète rien. Il transmet ce texte à l'agent navigateur par le relais
-(`POST /api/affichage/intentions`, voir B4) ; c'est le navigateur qui comprend la demande.
-
-```ts
-interface LotNavigation {
-  version: 1
-  lot_id: string                     // UUID
-  tache_id: number
-  utilisateur_id: string
-  emis_le?: string                   // horodatage ISO UTC, pour mesurer la latence
-  demande: string                    // le texte brut destiné à l'affichage, tel que l'utilisateur l'a dit ou écrit
-  demande_brute?: string             // la phrase entière, si elle contient plus (contexte, pronoms)
-  echanges?: { question: string; reponse: string }[]   // questions déjà posées pour cette demande et réponses
-}
-```
-
-Au chat texte (champ de l'écran), tout le texte est destiné à l'affichage : il part tel quel. Une ambiguïté
-revient en question ; l'agent moyen 2 la pose via `besoin_precision` et renvoie le même texte avec l'échange.
+Plus d'agent moyen 2 : l'agent navigateur prend lui-même les tâches `navigateur` du registre (P1), avec tout le
+texte brut du tour (`demande_brute`, morceaux de transcription réunis) et l'extrait d'Atlas comme indice.
 
 ### P3 — Commandes de navigation → commandes bas niveau (agent navigateur → écran)
 
 L'agent navigateur **comprend** le texte brut avec un modèle, sur les vraies données (`GET /api/graphe`
 avec prémisses et conséquences, `GET /api/conversations`) et sur l'état d'affichage (P4), puis choisit ses
-outils : les commandes ci-dessous. Deux candidats plausibles : il renvoie une question à l'agent moyen 2,
-qui la pose via `besoin_precision` ; jamais de choix au hasard.
+outils : les commandes ci-dessous. S'il ne sait pas lequel choisir, il pose la question via `besoin_precision`
+sur sa tâche ; jamais de choix au hasard.
 
 ```ts
 interface LotCommandes {
@@ -280,24 +262,18 @@ prompt, migration, énoncés de bench. Tests : `test_outils.py` (extrait valide 
 `test_api.py` (création `navigateur`), bench relancé : aucune régression sur les autres types, ≥ 90 % de
 routage correct sur les énoncés de navigation.
 
-### B2 — Agent moyen 2 (P1 → P2)
-Processus d'agent qui consomme les tâches `navigateur` via `ClientRegistre`
-(`backend/app/agents/contrat.py`), dans `AtlasVoice/backend/app/agents/navigation/moyen2.py`. Il **extrait**
-le texte brut destiné à l'affichage : au chat texte, tout le texte ; à la voix, un petit modèle
-(`ATLAS_NAV_LLM_*`) le recopie mot pour mot depuis le journal, et le code vérifie que chaque mot vient bien
-du journal (sinon l'extrait d'Atlas, puis la demande brute). Il n'interprète rien, ne connaît ni les ids ni
-le moteur. Il termine la tâche avec le compte rendu (« C'est affiché. », l'erreur) ou pose la question.
-Tests : extraction (mot pour mot, repli), transmission, question ; modèle remplacé par une fonction factice.
+### B2 — (supprimé : l'agent navigateur prend les tâches lui-même)
 
-### B3 — Agent navigateur (P2 → P3)
-`AtlasVoice/backend/app/agents/navigation/navigateur.py`, processus distinct de B2. Un modèle puissant
+### B3 — Agent navigateur (P1 → P3)
+`AtlasVoice/backend/app/agents/navigation/navigateur.py`. Il prend les tâches `navigateur` du registre via
+`ClientRegistre`, les mène jusqu'au bout (résultat « C'est affiché. », question, échec). Un modèle puissant
 (`ATLAS_NAVIGATEUR_LLM_*`, gpt-5.5 par défaut) reçoit le texte brut, tout l'écran, le graphe (nœuds avec
 prémisses et conséquences), les conversations et l'historique des demandes précédentes sur cet écran ; il
 comprend librement ce que l'utilisateur veut voir et répond par ses outils (commandes P3) ou par une question.
 Le code ne tient que le non négociable (ids, validité, `autour`, pile `revenir`) et redonne un essai au modèle
 si sa sortie n'est pas exécutable. Tests : modèle factice, graphe et état de fixture, sans réseau.
 
-### B4 — Relais d'affichage (transport P2, P3, P4), dans AtlasVoice
+### B4 — Relais d'affichage (transport P3, P4), dans AtlasVoice
 `AtlasVoice/backend/app/affichage/` + routeur monté dans `main.py`. État en mémoire (éphémère : l'état
 d'un écran n'a pas à survivre à un redémarrage ; les tâches, elles, restent dans le registre).
 
@@ -307,8 +283,6 @@ d'un écran n'a pas à survivre à un redémarrage ; les tâches, elles, restent
 | `GET /api/affichage/ecrans/{ecran}/flux` (SSE) | front | Reçoit les `LotCommandes`, dans l'ordre |
 | `POST /api/affichage/ecrans/{ecran}/etat` (`EtatAffichage`) | front | Met à jour l'état (P4) |
 | `POST /api/affichage/ecrans/{ecran}/compte-rendu` (`CompteRendu`) | front | Résultat d'un lot |
-| `POST /api/affichage/intentions` (`LotNavigation`) | agent moyen 2 (`X-Agents-Cle`) | Transmet à l'agent navigateur ; répond avec le compte rendu final (délai max 3 s, sinon `delai`) |
-| `GET /api/affichage/intentions/flux` (SSE) | agent navigateur (`X-Agents-Cle`) | Reçoit les `LotNavigation` |
 | `POST /api/affichage/commandes` (`LotCommandes`) | agent navigateur (`X-Agents-Cle`) ou tests | Pousse vers l'écran ; répond avec le `CompteRendu` (délai max 3 s) |
 | `GET /api/affichage/utilisateurs/{id}/etat` | agents, session vocale | Dernier `EtatAffichage` de l'écran actif (404 si aucun écran) |
 
@@ -382,7 +356,7 @@ passent, le hook `tsc --noEmit` reste vert.
 2. B6 étapes 1 à 4 (sans pilotage) : l'application affiche le graphe avec le nouveau moteur, à fonctions égales.
 3. B5 avec des lots écrits à la main (`window.atlasAffichage`) → l'écran est pilotable.
 4. B4 → on pilote l'écran avec `curl`.
-5. B3 sur des `LotNavigation` écrits à la main.
+5. B3 sur des tâches `navigateur` créées à la main (champ de texte de l'écran, `POST /api/taches`).
 6. B1 puis B2 → la chaîne complète, à la voix et au chat texte.
 7. B6 étape 5 (suppression de l'ancien graphe, `CLAUDE.md`).
 

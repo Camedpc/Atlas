@@ -1,12 +1,10 @@
-"""Relais d'affichage : transporte P2 (intentions), P3 (commandes) et P4 (états d'écran) entre les agents
-et les écrans du graphe. État en mémoire : un écran n'a pas à survivre à un redémarrage (il se redéclare).
+"""Relais d'affichage : transporte P3 (commandes) et P4 (états d'écran) entre l'agent navigateur et les
+écrans du graphe. État en mémoire : un écran n'a pas à survivre à un redémarrage (il se redéclare).
 
 - Un écran appartient à un utilisateur ; son écran par défaut est le plus récemment actif (déclaré, état
   envoyé) parmi ceux connectés au flux, sinon parmi tous : un onglet fermé ne capte pas les commandes.
 - Un lot n'est livré à un écran que tant que son émetteur l'attend : après le délai, il est abandonné et
   ne sera jamais exécuté plus tard.
-- L'agent navigateur réutilise le `lot_id` du LotNavigation pour le LotCommandes qui en résulte : le compte
-  rendu de l'écran répond aussi à l'agent moyen 2. S'il échoue avant (ambiguïté…), il répond directement.
 """
 
 from __future__ import annotations
@@ -18,7 +16,7 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 
 from .. import config
-from .protocole import CompteRendu, EtatAffichage, EtatResume, ErreurProtocole, LotCommandes, LotNavigation, VisibleResume
+from .protocole import CompteRendu, EtatAffichage, EtatResume, ErreurProtocole, LotCommandes, VisibleResume
 
 # Au-delà, un écran sans connexion ni état est oublié.
 OUBLI_ECRAN_S = 3600
@@ -61,9 +59,8 @@ class Ecran:
 class Relais:
     def __init__(self) -> None:
         self.ecrans: dict[str, Ecran] = {}
-        # Lots en attente d'un compte rendu (commandes et intentions), par lot_id.
+        # Lots de commandes en attente d'un compte rendu, par lot_id.
         self.attentes: dict[str, asyncio.Future[CompteRendu]] = {}
-        self.navigateurs: set[asyncio.Queue[LotNavigation]] = set()
 
     # ── écrans ─────────────────────────────────────────────────────
 
@@ -155,34 +152,6 @@ class Relais:
         finally:
             e.connexions.discard(file)
 
-    # ── P2 : intentions vers l'agent navigateur ───────────────────
-
-    async def transmettre_intentions(self, lot: LotNavigation, delai_s: float | None = None) -> CompteRendu:
-        if not self.navigateurs:
-            return compte_rendu_erreur(lot.lot_id, "introuvable", "Aucun agent navigateur connecté.")
-        attente = self._attendre(lot.lot_id)
-        for file in self.navigateurs:
-            file.put_nowait(lot)
-        delai = config.AFFICHAGE_DELAI_INTENTIONS_S if delai_s is None else delai_s
-        return await self._resultat(lot.lot_id, attente, delai, self.ecran_actif(lot.utilisateur_id))
-
-    def repondre_intentions(self, cr: CompteRendu) -> None:
-        """Réponse directe de l'agent navigateur (échec avant toute commande : ambiguïté, introuvable…)."""
-        if not self._resoudre(cr):
-            raise ErreurRelais("introuvable", f"Aucun lot en attente : {cr.lot_id}", 404)
-
-    async def flux_navigateur(self) -> AsyncIterator[LotNavigation]:
-        file: asyncio.Queue[LotNavigation] = asyncio.Queue()
-        self.navigateurs.add(file)
-        try:
-            while True:
-                lot = await file.get()
-                attente = self.attentes.get(lot.lot_id)
-                if attente is not None and not attente.done():
-                    yield lot
-        finally:
-            self.navigateurs.discard(file)
-
     # ── attentes ──────────────────────────────────────────────────
 
     def _attendre(self, lot_id: str) -> asyncio.Future[CompteRendu]:
@@ -194,8 +163,7 @@ class Relais:
         return f
 
     def _refuser(self, cr: CompteRendu) -> CompteRendu:
-        """Lot refusé par le relais lui-même : son compte rendu répond aussi à qui attend ce lot_id
-        (l'agent moyen 2, quand l'agent navigateur réutilise le lot_id de ses intentions)."""
+        """Lot refusé par le relais lui-même : son compte rendu répond aussi à qui attendrait déjà ce lot_id."""
         self._resoudre(cr)
         return cr
 

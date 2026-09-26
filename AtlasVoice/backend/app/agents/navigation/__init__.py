@@ -1,1 +1,1 @@
-"""Agents de navigation : moyen 2 (P1 → P2) et navigateur (P2 → P3)."""
+"""Agent navigateur : tâches `navigateur` du registre → commandes de l'écran du graphe."""

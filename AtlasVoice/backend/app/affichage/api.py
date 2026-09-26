@@ -2,8 +2,7 @@
 
 - écrans du graphe (front de l'application, JWT de l'utilisateur) : déclaration, flux des lots, états,
   comptes rendus ;
-- agents (`X-Agents-Cle`) : intentions (agent moyen 2 → agent navigateur), commandes (agent navigateur
-  → écran), état de l'écran d'un utilisateur.
+- agents (`X-Agents-Cle`) : commandes (agent navigateur → écran), état de l'écran d'un utilisateur.
 
 Les messages sont validés par les modèles de `protocole.py` (miroir de `protocoles/`) ; un message invalide
 est refusé avec une ErreurProtocole `invalide` (422), jamais ignoré.
@@ -22,7 +21,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, ValidationError
 
 from .. import auth
-from .protocole import CompteRendu, EtatAffichage, IdEcran, LotCommandes, LotNavigation
+from .protocole import CompteRendu, EtatAffichage, IdEcran, LotCommandes
 from .relais import ErreurRelais, Relais
 
 routeur = APIRouter(prefix="/api/affichage", tags=["affichage"])
@@ -128,29 +127,6 @@ async def compte_rendu_ecran(ecran: str, request: Request, u: str = Depends(auth
 
 
 # ── agents ───────────────────────────────────────────────────────
-
-
-@routeur.post("/intentions", dependencies=[Depends(auth.agent)])
-async def intentions(request: Request, r: Relais = Depends(relais)) -> JSONResponse:
-    """Agent moyen 2 : transmet un LotNavigation et attend le compte rendu final."""
-    return _reponse(await r.transmettre_intentions(await _lire(request, LotNavigation)))
-
-
-@routeur.get("/intentions/flux", dependencies=[Depends(auth.agent)])
-async def flux_intentions(request: Request, r: Relais = Depends(relais)) -> StreamingResponse:
-    return _sse(r.flux_navigateur(), "intentions", request)
-
-
-@routeur.post("/intentions/{lot_id}/compte-rendu", status_code=204, dependencies=[Depends(auth.agent)])
-async def reponse_intentions(lot_id: str, request: Request, r: Relais = Depends(relais)) -> None:
-    """Agent navigateur : échec d'un LotNavigation avant toute commande (ambiguïté, introuvable…)."""
-    cr = await _lire(request, CompteRendu)
-    if cr.lot_id != lot_id:
-        raise HTTPException(422, {"code": "invalide", "message": "lot_id différent de celui de l'URL"})
-    try:
-        r.repondre_intentions(cr)
-    except ErreurRelais as err:
-        raise _http(err) from err
 
 
 @routeur.post("/commandes", dependencies=[Depends(auth.agent)])

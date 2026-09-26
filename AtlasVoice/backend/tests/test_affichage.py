@@ -9,7 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app import config
-from app.affichage.protocole import CompteRendu, EtatAffichage, LotCommandes, LotNavigation
+from app.affichage.protocole import CompteRendu, EtatAffichage, LotCommandes
 from app.affichage.relais import Relais, resume
 from app.main import app
 
@@ -31,13 +31,6 @@ def lot_commandes(ecran: str, lot_id: str | None = None, **modifs) -> LotCommand
 
 def compte_rendu(lot_id: str, e: EtatAffichage, ok: bool = True) -> CompteRendu:
     return CompteRendu(version=1, lot_id=lot_id, ok=ok, resultats=[{"index": 0, "ok": ok}], etat=e)
-
-
-def lot_navigation(utilisateur: str = "u1") -> LotNavigation:
-    return LotNavigation.model_validate({
-        "version": 1, "lot_id": str(uuid.uuid4()), "tache_id": 7, "utilisateur_id": utilisateur,
-        "demande": "montre-moi la lignée du lemme de compacité",
-    })
 
 
 class EcranFactice:
@@ -127,41 +120,6 @@ async def test_ecran_inconnu_ou_deconnecte():
     assert (await r.commander(lot_commandes("ecran_a"), delai_s=0.01)).erreur.code == "delai"
 
 
-async def test_chaine_intentions_commandes_compte_rendu():
-    """Agent moyen 2 → relais → agent navigateur → relais → écran → compte rendu aux deux agents."""
-    r = Relais()
-    r.declarer("u1", "ecran_a")
-    async with EcranFactice(r, "ecran_a") as ecran:
-        navigateur = r.flux_navigateur()
-        recu = asyncio.ensure_future(anext(navigateur))
-        await asyncio.sleep(0)
-        intentions = lot_navigation()
-        attente = asyncio.create_task(r.transmettre_intentions(intentions, delai_s=1))
-        lot_nav = await recu
-        assert lot_nav.lot_id == intentions.lot_id
-        # L'agent navigateur répond avec le même lot_id.
-        cr_commandes = await r.commander(lot_commandes("ecran_a", lot_id=lot_nav.lot_id, tache_id=7), delai_s=1)
-        cr_final = await attente
-        assert cr_commandes.ok and cr_final.ok and cr_final.lot_id == intentions.lot_id
-        assert [x.lot_id for x in ecran.recus] == [intentions.lot_id]
-        await navigateur.aclose()
-
-
-async def test_intentions_echec_direct_et_sans_navigateur():
-    r = Relais()
-    assert (await r.transmettre_intentions(lot_navigation(), delai_s=0.01)).erreur.code == "introuvable"
-    navigateur = r.flux_navigateur()
-    recu = asyncio.ensure_future(anext(navigateur))
-    await asyncio.sleep(0)
-    attente = asyncio.create_task(r.transmettre_intentions(lot_navigation(), delai_s=1))
-    lot = await recu
-    ambigu = CompteRendu.model_validate({"version": 1, "lot_id": lot.lot_id, "ok": False, "resultats": [],
-                                         "erreur": {"code": "ambigu", "message": "Lequel des deux lemmes ?"}})
-    r.repondre_intentions(ambigu)
-    assert (await attente).erreur.code == "ambigu"
-    await navigateur.aclose()
-
-
 def test_ecran_par_defaut_et_droits():
     r = Relais()
     r.declarer("u1", "ecran_a")
@@ -182,7 +140,7 @@ def test_ecran_par_defaut_et_droits():
     assert e.value.statut_http == 422
 
 
-async def test_ecran_connecte_prefere_et_refus_transmis_a_l_agent_moyen():
+async def test_ecran_connecte_prefere():
     r = Relais()
     r.declarer("u1", "ecran_vivant")
     async with EcranFactice(r, "ecran_vivant"):
@@ -191,16 +149,9 @@ async def test_ecran_connecte_prefere_et_refus_transmis_a_l_agent_moyen():
         r.enregistrer_etat("ecran_ferme", "u1", etat("ecran_ferme"))
         assert r.ecran_actif("u1").id == "ecran_vivant"
     assert r.ecran_actif("u1").id == "ecran_ferme"  # plus aucun écran connecté : le plus récent
-    # Le navigateur vise un écran déconnecté : le refus du relais répond tout de suite à l'agent moyen 2.
-    navigateur = r.flux_navigateur()
-    recu = asyncio.ensure_future(anext(navigateur))
-    await asyncio.sleep(0)
-    attente = asyncio.create_task(r.transmettre_intentions(lot_navigation(), delai_s=5))
-    lot_nav = await recu
-    await r.commander(lot_commandes("ecran_ferme", lot_id=lot_nav.lot_id), delai_s=5)
-    cr = await asyncio.wait_for(attente, 0.5)
+    # Un lot pour un écran déconnecté est refusé tout de suite, sans attendre le délai.
+    cr = await asyncio.wait_for(r.commander(lot_commandes("ecran_ferme"), delai_s=5), 0.5)
     assert cr.erreur.code == "delai" and cr.erreur.message == "L'écran n'est pas connecté au relais."
-    await navigateur.aclose()
 
 
 def test_resume_pour_atlas():
@@ -255,13 +206,6 @@ def test_http_commandes_codes(client):
     client.post("/api/affichage/ecrans", json={"ecran": "ecran_http"})
     r = client.post("/api/affichage/commandes", headers=AGENT, json={**lot, "ecran": "ecran_http"})
     assert r.status_code == 504 and r.json()["erreur"]["code"] == "delai"
-    nav = lot_navigation("anonyme").model_dump(mode="json", exclude_unset=True)
-    r = client.post("/api/affichage/intentions", headers=AGENT, json=nav)
-    assert r.status_code == 404 and r.json()["erreur"]["code"] == "introuvable"
-    # Compte rendu d'un lot que personne n'attend.
-    r = client.post(f"/api/affichage/intentions/{nav['lot_id']}/compte-rendu", headers=AGENT,
-                    json={"version": 1, "lot_id": nav["lot_id"], "ok": False, "resultats": []})
-    assert r.status_code == 404
 
 
 def test_http_droits_entre_utilisateurs(client, monkeypatch):

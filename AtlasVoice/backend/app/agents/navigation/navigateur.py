@@ -1,20 +1,23 @@
-"""Agent navigateur (P2 → P3) : processus distinct qui écoute les demandes du relais d'affichage, les comprend
-avec un modèle de langage et pousse les commandes vers l'écran.
+"""Agent navigateur : prend les tâches `navigateur` du registre, comprend avec un modèle de langage ce que
+l'utilisateur veut voir, pousse les commandes vers l'écran (relais d'affichage, P3) et termine la tâche.
 
     python -m app.agents.navigation.navigateur        (depuis AtlasVoice/backend)
 
-Il reçoit le **texte brut** de l'utilisateur (extrait mot pour mot par l'agent moyen 2). Il donne au modèle
-(`ATLAS_NAVIGATEUR_LLM_*`, par défaut un modèle puissant) tout ce qu'il faut pour comprendre : **tout l'écran**
-(état d'affichage complet), le graphe (nœuds avec prémisses et conséquences), les conversations, et
-**l'historique** des demandes précédentes sur cet écran avec ce qui a été fait, pour que l'utilisateur puisse
-y faire référence. Le modèle est libre : il agit avec ses outils (commandes P3 de l'écran), pose une question
-ou refuse, avec l'outil `commander` ou `refuser`.
+Pour chaque tâche (créée par Atlas à la voix, ou par le champ de texte de l'écran) il donne au modèle
+(`ATLAS_NAVIGATEUR_LLM_*`, par défaut un modèle puissant) : **tout le texte brut** du tour de l'utilisateur,
+l'extrait qu'Atlas pense destiné à l'affichage, **tout l'écran** (état d'affichage complet), le graphe (nœuds
+avec prémisses et conséquences), les conversations, et **l'historique** des demandes précédentes sur cet écran
+avec ce qui a été fait. Le modèle est libre : il agit avec ses outils (commandes P3), pose une question ou
+refuse (outil `commander` ou `refuser`).
+
+Cycle d'une tâche : commandes exécutées → « C'est affiché. » ; question → posée à l'utilisateur par le registre
+(`besoin_precision`), puis la réponse est redonnée au modèle ; sinon échec avec une phrase lisible. Chaque
+tâche avance seule (une question n'en bloque pas d'autres) ; les passages à l'écran restent dans l'ordre.
 
 Le code ne garde que ce qui n'est pas négociable :
 - les commandes sont validées par le protocole et chaque id doit exister, sinon le modèle a un second essai ;
 - `filtres.autour` (garder un nœud et sa lignée, ses prémisses ou ses conséquences) est calculé sur le graphe ;
-- « revenir » : le modèle écrit `{"op": "restaurer"}`, le code y met l'état précédent de la pile ;
-- le `lot_id` est celui du LotNavigation (un seul id de bout en bout), l'écran celui de l'utilisateur.
+- « revenir » : le modèle écrit `{"op": "restaurer"}`, le code y met l'état précédent de la pile.
 """
 
 from __future__ import annotations
@@ -23,8 +26,9 @@ import asyncio
 import json
 import logging
 import re
-from collections.abc import AsyncIterator, Awaitable, Callable
-from dataclasses import dataclass
+import uuid
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
@@ -32,9 +36,10 @@ import httpx
 from pydantic import ValidationError
 
 from ... import config
-from ...affichage.protocole import CompteRendu, EtatAffichage, LotCommandes, LotNavigation
+from ...affichage.protocole import CompteRendu, EtatAffichage, LotCommandes
 from ...config import ModeleLLM
 from ...llm.proxy import _flux
+from ..contrat import ClientRegistre, TacheArretee
 
 log = logging.getLogger("atlas.navigateur")
 ATTENTES_RECONNEXION_S = [1, 2, 5, 10, 30]
@@ -43,6 +48,9 @@ TAILLE_HISTORIQUE = 12  # demandes précédentes gardées en contexte, par écra
 NB_ESSAIS_MODELE = 2
 LONGUEUR_ENONCE = 200
 MAX_JETONS = 8000  # un modèle qui raisonne consomme des jetons avant de répondre
+RESULTAT_ORAL = "C'est affiché."
+NB_QUESTIONS = 2
+DELAI_REPONSE_S = 300
 
 # Type déduit de l'id quand la base ne le stocke pas (mêmes règles que le front, donneesAtlas.ts).
 PREFIXES = [
@@ -158,9 +166,11 @@ répondre au mieux à ce que l'utilisateur veut.
 Les messages précédents sont tes échanges avec l'utilisateur sur cet écran : ses demandes et ce que tu as \
 fait. Il peut y faire référence (« comme tout à l'heure », « l'autre », « enlève le dernier filtre »).
 
-À chaque demande tu reçois (JSON) : demande (le texte brut qui t'est destiné, fait foi), demande_brute (la \
-phrase entière, pour le contexte), echanges (questions déjà posées pour cette demande et réponses de \
-l'utilisateur : une réponse désigne ce qu'il veut), ecran (tout ce qui est à l'écran : caméra, niveau de \
+À chaque demande tu reçois (JSON) : demande (tout ce que l'utilisateur a dit ou écrit, tel quel ; à la voix \
+la transcription peut être imparfaite ou coupée ; la phrase peut aussi demander autre chose à d'autres agents \
+— résumer, expliquer, modifier le graphe : ne fais que la partie affichage), extrait_atlas (la partie que \
+l'assistant vocal pense t'être destinée, un simple indice), echanges (questions déjà posées pour cette demande \
+et réponses de l'utilisateur : une réponse désigne ce qu'il veut), ecran (tout ce qui est à l'écran : caméra, niveau de \
 détail, sélection, portée, surlignés, filtres, fiche ouverte, nœuds visibles avec leur libellé et leur \
 position, survol, conversation ouverte), noeuds (tout le graphe : id, nom, type, statut, début de l'énoncé, \
 premisses et consequences directes), conversations (id, titre), pile_profondeur (nombre d'états qu'on peut \
@@ -286,7 +296,7 @@ def _developper_filtres(patch: Any, graphe: Graphe) -> Any:
     return patch
 
 
-def construire_lot(commandes: list[dict[str, Any]], lot: LotNavigation, etat: EtatAffichage,
+def construire_lot(commandes: list[dict[str, Any]], tache_id: int, etat: EtatAffichage,
                    pile: list[EtatAffichage], graphe: Graphe) -> tuple[LotCommandes, int]:
     """LotCommandes validé depuis la sortie du modèle ; renvoie aussi le nombre d'états restaurés.
     Lève ValueError (message pour le modèle) si la sortie n'est pas exécutable, Refus pour « rien à annuler »."""
@@ -323,7 +333,7 @@ def construire_lot(commandes: list[dict[str, Any]], lot: LotNavigation, etat: Et
                 raise ValueError(f"id de nœud inconnu : {r['noeud']!r} ; utilise seulement les id de la liste")
     try:
         sortie = LotCommandes.model_validate({
-            "version": 1, "lot_id": lot.lot_id, "ecran": etat.ecran, "origine": "navigateur", "tache_id": lot.tache_id,
+            "version": 1, "lot_id": str(uuid.uuid4()), "ecran": etat.ecran, "origine": "navigateur", "tache_id": tache_id,
             "emis_le": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z", "commandes": propres,
         })
     except ValidationError as e:
@@ -334,6 +344,32 @@ def construire_lot(commandes: list[dict[str, Any]], lot: LotNavigation, etat: Et
 
 
 @dataclass
+class Demande:
+    """Une tâche `navigateur` du registre, telle que le modèle la reçoit."""
+
+    tache_id: int
+    utilisateur_id: str
+    texte: str  # tout le tour de l'utilisateur (morceaux de transcription réunis), ou le texte écrit
+    extrait: str | None = None  # la partie qu'Atlas pense destinée à l'affichage
+    echanges: list[tuple[str, str]] = field(default_factory=list)  # (question, réponse de l'utilisateur)
+
+    @classmethod
+    def depuis_tache(cls, t: dict[str, Any]) -> Demande:
+        extrait = t.get("extrait")
+        return cls(t["id"], t["utilisateur_id"], t["demande_brute"], extrait if extrait != t["demande_brute"] else None)
+
+
+@dataclass
+class Issue:
+    """Ce qu'a donné une demande : commandes exécutées, ou refus (question, introuvable…) avec son message."""
+
+    ok: bool
+    code: str | None = None
+    message: str | None = None
+    commandes: list[dict[str, Any]] | None = None
+
+
+@dataclass
 class Tour:
     """Une demande précédente sur cet écran et ce que le navigateur en a fait (contexte des suivantes)."""
 
@@ -341,11 +377,16 @@ class Tour:
     reponse: str
 
 
+MESSAGES_ECRAN = {"delai": "L'écran n'a pas répondu.", "introuvable": "L'écran du graphe n'est plus ouvert."}
+
+
 class AgentNavigateur:
-    def __init__(self, url_relais: str, cle: str | None, url_atlas: str, jeton_atlas: str | None = None,
+    def __init__(self, registre: Any, url_relais: str, cle: str | None, url_atlas: str, jeton_atlas: str | None = None,
                  transport: httpx.AsyncBaseTransport | None = None, appeler: AppelModele | None = None) -> None:
+        # `registre` : ClientRegistre (ou un faux dans les tests) ; il porte le cycle des tâches.
+        self.registre = registre
         self.relais = httpx.AsyncClient(base_url=url_relais.rstrip("/") + "/api/affichage",
-                                        headers={"X-Agents-Cle": cle} if cle else {}, timeout=10, transport=transport)
+                                        headers={"X-Agents-Cle": cle} if cle else {}, timeout=15, transport=transport)
         self.atlas = httpx.AsyncClient(base_url=url_atlas.rstrip("/") + "/api",
                                        headers={"Authorization": f"Bearer {jeton_atlas}"} if jeton_atlas else {},
                                        timeout=10, transport=transport)
@@ -354,6 +395,8 @@ class AgentNavigateur:
         self.piles: dict[str, list[EtatAffichage]] = {}
         self.historiques: dict[str, list[Tour]] = {}
         self._graphe: tuple[str, list[dict[str, Any]]] | None = None
+        # Un seul passage à l'écran à la fois : pile, historique et ordre des commandes restent cohérents.
+        self._ecran_verrou = asyncio.Lock()
 
     async def fermer(self) -> None:
         await self.relais.aclose()
@@ -385,19 +428,44 @@ class AgentNavigateur:
             log.warning("Conversations indisponibles (%s)", e)
             return []
 
-    # ── traitement d'un lot ───────────────────────────────────────
+    # ── une tâche du registre, de bout en bout ────────────────────
 
-    def messages(self, lot: LotNavigation, etat: EtatAffichage, noeuds: list[dict[str, Any]],
+    async def mener(self, tache: dict[str, Any]) -> None:
+        """Mène une tâche `navigateur` (déjà prise) jusqu'à son état final."""
+        tid = tache["id"]
+        d = Demande.depuis_tache(tache)
+        try:
+            for _ in range(NB_QUESTIONS + 1):
+                async with self._ecran_verrou:
+                    issue = await self.traiter(d)
+                if issue.ok:
+                    await self.registre.terminer(tid, RESULTAT_ORAL, {"commandes": issue.commandes})
+                    return
+                if issue.code == "ambigu":
+                    question = issue.message or "Tu peux préciser ?"
+                    await self.registre.questionner(tid, question)
+                    suite = await self.registre.attendre_utilisateur(tid, DELAI_REPONSE_S)
+                    d.echanges.append((question, suite.get("reponse") or ""))
+                    continue
+                await self.registre.echouer(tid, issue.message or "L'affichage a échoué.")
+                return
+            await self.registre.echouer(tid, "Je n'arrive pas à savoir quoi afficher.")
+        except TacheArretee:
+            log.info("Tâche %s arrêtée par l'utilisateur", tid)
+
+    # ── une demande : modèle → commandes → écran ──────────────────
+
+    def messages(self, d: Demande, etat: EtatAffichage, noeuds: list[dict[str, Any]],
                  conversations: list[dict[str, Any]], pile: list[EtatAffichage]) -> list[dict[str, Any]]:
         """Prompt système, demandes précédentes sur cet écran (et réponses), puis la demande avec tout le contexte."""
         messages: list[dict[str, Any]] = [{"role": "system", "content": SYSTEME}]
         for t in self.historiques.get(etat.ecran, []):
             messages += [{"role": "user", "content": t.demande}, {"role": "assistant", "content": t.reponse}]
-        entree: dict[str, Any] = {"demande": lot.demande}
-        if lot.demande_brute and lot.demande_brute != lot.demande:
-            entree["demande_brute"] = lot.demande_brute
-        if lot.echanges:
-            entree["echanges"] = [e.model_dump() for e in lot.echanges]
+        entree: dict[str, Any] = {"demande": d.texte}
+        if d.extrait:
+            entree["extrait_atlas"] = d.extrait
+        if d.echanges:
+            entree["echanges"] = [{"question": q, "reponse": r} for q, r in d.echanges]
         entree |= {
             "ecran": _ecran(etat),
             "noeuds": [_resume_noeud(n) for n in noeuds],
@@ -407,51 +475,54 @@ class AgentNavigateur:
         messages.append({"role": "user", "content": json.dumps(entree, ensure_ascii=False)})
         return messages
 
-    def _memoriser(self, ecran: str, lot: LotNavigation, reponse: str) -> None:
-        demande = lot.demande + "".join(f"\n(question : {e.question} — réponse : {e.reponse})" for e in lot.echanges or [])
+    def _memoriser(self, ecran: str, d: Demande, reponse: str) -> None:
+        demande = d.texte + "".join(f"\n(question : {q} — réponse : {r})" for q, r in d.echanges)
         historique = self.historiques.setdefault(ecran, [])
         historique.append(Tour(demande, reponse))
         del historique[:-TAILLE_HISTORIQUE]
 
-    async def traiter(self, lot: LotNavigation) -> CompteRendu:
-        etat = await self.etat_ecran(lot.utilisateur_id)
+    async def traiter(self, d: Demande) -> Issue:
+        etat = await self.etat_ecran(d.utilisateur_id)
         if etat is None:
-            return await self.repondre(lot.lot_id, "introuvable", "Aucun écran du graphe n'est ouvert.", None)
+            return Issue(False, "introuvable", "Aucun écran du graphe n'est ouvert.")
         pile = self.piles.setdefault(etat.ecran, [])
         try:
             noeuds = await self._charger_graphe(etat.version_donnees)
         except httpx.HTTPError as e:
-            return await self.repondre(lot.lot_id, "introuvable", f"Graphe indisponible : {e}", etat)
+            return Issue(False, "introuvable", f"Graphe indisponible : {e}")
         conversations = await self._charger_conversations()
 
         try:
             lot_cmd, restaures, explication = await self.planifier(
-                self.messages(lot, etat, noeuds, conversations, pile), lot, etat, pile, Graphe(noeuds))
+                self.messages(d, etat, noeuds, conversations, pile), d, etat, pile, Graphe(noeuds))
         except Refus as r:
-            log.info("Lot %s « %s » → refus %s : %s", lot.lot_id[:8], lot.demande[:80], r.code, r.message)
-            self._memoriser(etat.ecran, lot, f"Refus ({r.code}) : {r.message}")
-            return await self.repondre(lot.lot_id, r.code, r.message, etat, r.details)
+            log.info("Tâche %s « %s » → refus %s : %s", d.tache_id, d.texte[:80], r.code, r.message)
+            self._memoriser(etat.ecran, d, f"Refus ({r.code}) : {r.message}")
+            return Issue(False, r.code, r.message)
         except Exception as e:  # modèle injoignable, clé absente…
-            log.exception("Lot %s : échec de l'appel au modèle", lot.lot_id)
-            return await self.repondre(lot.lot_id, "introuvable", f"Navigateur indisponible : {e}", etat)
+            log.exception("Tâche %s : échec de l'appel au modèle", d.tache_id)
+            return Issue(False, "introuvable", f"Navigateur indisponible : {e}")
 
         r = await self.relais.post("/commandes", content=lot_cmd.model_dump_json(exclude_unset=True),
                                    headers={"Content-Type": "application/json"})
         cr = CompteRendu.model_validate_json(r.content)
-        commandes = json.dumps([c.model_dump(mode="json", exclude_unset=True, exclude={"etat"}) for c in lot_cmd.commandes],
-                               ensure_ascii=False)
-        log.info("Lot %s « %s » → %s%s", lot.lot_id[:8], lot.demande[:80], commandes[:600],
+        commandes = [c.model_dump(mode="json", exclude_unset=True, exclude={"etat"}) for c in lot_cmd.commandes]
+        texte = json.dumps(commandes, ensure_ascii=False)
+        log.info("Tâche %s « %s » → %s%s", d.tache_id, d.texte[:80], texte[:600],
                  "" if cr.ok else f" (écran : {cr.erreur.code if cr.erreur else 'refusé'})")
-        self._memoriser(etat.ecran, lot, (explication + "\n" if explication else "") + f"Commandes : {commandes}"
+        self._memoriser(etat.ecran, d, (explication + "\n" if explication else "") + f"Commandes : {texte}"
                         + ("" if cr.ok else " — refusées par l'écran"))
-        if cr.ok:
-            del pile[len(pile) - restaures:]
-            if any(c.op != "restaurer" for c in lot_cmd.commandes):
-                pile.append(etat)  # état d'avant le lot, pour pouvoir revenir
-                del pile[:-TAILLE_PILE]
-        return cr
+        if not cr.ok:
+            erreur = cr.erreur or next((x.erreur for x in cr.resultats if x.erreur), None)
+            code = erreur.code if erreur else "invalide"
+            return Issue(False, code, MESSAGES_ECRAN.get(code) or (erreur.message if erreur else "L'écran a refusé."))
+        del pile[len(pile) - restaures:]
+        if any(c.op != "restaurer" for c in lot_cmd.commandes):
+            pile.append(etat)  # état d'avant, pour pouvoir revenir
+            del pile[:-TAILLE_PILE]
+        return Issue(True, commandes=commandes)
 
-    async def planifier(self, messages: list[dict[str, Any]], lot: LotNavigation, etat: EtatAffichage,
+    async def planifier(self, messages: list[dict[str, Any]], d: Demande, etat: EtatAffichage,
                         pile: list[EtatAffichage], graphe: Graphe) -> tuple[LotCommandes, int, str]:
         """Appel au modèle, puis validation ; un second essai avec l'erreur si la sortie n'est pas exécutable."""
         erreur = "réponds par l'outil commander ou refuser"
@@ -464,66 +535,50 @@ class AgentNavigateur:
                 try:
                     if not args["commandes"]:
                         raise ValueError("aucune commande")
-                    lot_cmd, restaures = construire_lot(args["commandes"], lot, etat, pile, graphe)
+                    lot_cmd, restaures = construire_lot(args["commandes"], d.tache_id, etat, pile, graphe)
                     return lot_cmd, restaures, str(args.get("explication") or "")
                 except ValueError as e:
                     erreur = str(e)
-            log.warning("Lot %s : sortie du modèle refusée (%s)", lot.lot_id, erreur)
+            log.warning("Tâche %s : sortie du modèle refusée (%s)", d.tache_id, erreur)
             messages = [*messages, {"role": "user", "content": f"Ta réponse n'est pas exécutable : {erreur}. Recommence."}]
         raise Refus("invalide", "Je n'ai pas réussi à traduire cette demande en affichage.")
 
-    async def repondre(self, lot_id: str, code: str, message: str, etat: EtatAffichage | None,
-                       details: Any = None) -> CompteRendu:
-        erreur: dict[str, Any] = {"code": code, "message": message}
-        if details is not None:
-            erreur["details"] = details
-        corps: dict[str, Any] = {"version": 1, "lot_id": lot_id, "ok": False, "resultats": [], "erreur": erreur}
-        if etat is not None:
-            corps["etat"] = json.loads(etat.model_dump_json(exclude_unset=True))
-        cr = CompteRendu.model_validate(corps)
-        r = await self.relais.post(f"/intentions/{lot_id}/compte-rendu", content=cr.model_dump_json(exclude_unset=True),
-                                   headers={"Content-Type": "application/json"})
-        if r.status_code not in (204, 404):  # 404 : l'agent moyen 2 n'attend plus (délai)
-            r.raise_for_status()
-        return cr
+    # ── boucle : les tâches `navigateur` du registre ──────────────
 
-    # ── boucle ────────────────────────────────────────────────────
-
-    async def intentions(self) -> AsyncIterator[LotNavigation]:
-        async with self.relais.stream("GET", "/intentions/flux", timeout=None) as r:
-            r.raise_for_status()
-            evenement = None
-            async for ligne in r.aiter_lines():
-                if ligne.startswith("event:"):
-                    evenement = ligne[6:].strip()
-                elif ligne.startswith("data:") and evenement == "intentions":
-                    yield LotNavigation.model_validate_json(ligne[5:].strip())
+    async def prendre_tout(self, en_cours: set[asyncio.Task]) -> None:
+        while (tache := await self.registre.prendre(["navigateur"])) is not None:
+            t = asyncio.create_task(self.mener(tache))
+            en_cours.add(t)
+            t.add_done_callback(en_cours.discard)
 
     async def executer(self) -> None:
-        """Écoute le relais indéfiniment ; les lots sont traités un par un (pile et historique cohérents)."""
+        """Prend les tâches `navigateur` dès qu'elles arrivent (flux du registre) ; chacune avance seule."""
+        en_cours: set[asyncio.Task] = set()
         essais = 0
         modele = config.LLM_NAVIGATEUR.nom if config.LLM_NAVIGATEUR else "aucun"
         while True:
             try:
-                log.info("Connexion au relais d'affichage (navigateur IA, modèle %s)", modele)
-                async for lot in self.intentions():
+                log.info("Écoute du registre (navigateur IA, modèle %s)", modele)
+                await self.prendre_tout(en_cours)
+                async for evt in self.registre.evenements():
                     essais = 0
-                    try:
-                        await self.traiter(lot)
-                    except Exception:
-                        log.exception("Lot %s : échec du traitement", lot.lot_id)
+                    t = evt.get("tache") or {}
+                    if t.get("type_agent") == "navigateur" and t.get("statut") == "en_attente":
+                        await self.prendre_tout(en_cours)
             except (httpx.HTTPError, ValueError) as e:
-                log.warning("Relais injoignable (%s)", e)
+                log.warning("Registre injoignable (%s)", e)
             await asyncio.sleep(ATTENTES_RECONNEXION_S[min(essais, len(ATTENTES_RECONNEXION_S) - 1)])
             essais += 1
 
 
 async def principal() -> None:
-    agent = AgentNavigateur(config.URL_INTERNE, config.AGENTS_API_KEY, config.ATLAS_API_URL, config.ATLAS_JETON_ACCES)
-    try:
-        await agent.executer()
-    finally:
-        await agent.fermer()
+    async with ClientRegistre(config.URL_INTERNE, config.AGENTS_API_KEY) as registre:
+        agent = AgentNavigateur(registre, config.URL_INTERNE, config.AGENTS_API_KEY, config.ATLAS_API_URL,
+                                config.ATLAS_JETON_ACCES)
+        try:
+            await agent.executer()
+        finally:
+            await agent.fermer()
 
 
 if __name__ == "__main__":

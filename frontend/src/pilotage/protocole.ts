@@ -1,4 +1,4 @@
-// Protocoles P1 à P4 de la chaîne voix → commandes → affichage : types et validation.
+// Protocoles P1, P3 et P4 de la chaîne voix → commandes → affichage : types et validation.
 //
 // Les JSON Schema de `protocoles/` (racine du dépôt) font foi. Ces types en sont le miroir ; la validation,
 // elle, compile directement les schémas : un message est accepté ici si et seulement si le schéma l'accepte.
@@ -53,20 +53,6 @@ export interface ParametresLecture {
   longueur_min_chaine?: number
   longueur_max_chaine?: number
   meme_sous_probleme?: boolean
-}
-
-// ─── P2 : texte brut pour le navigateur ──────────────────────────────────────
-
-/** Le texte brut destiné au navigateur, extrait mot pour mot par l'agent moyen 2 ; le navigateur le comprend. */
-export interface LotNavigation {
-  version: 1
-  lot_id: string
-  tache_id: number
-  utilisateur_id: string
-  emis_le?: string
-  demande: string
-  demande_brute?: string
-  echanges?: { question: string; reponse: string }[]
 }
 
 // ─── P3 : commandes bas niveau ───────────────────────────────────────────────
@@ -170,7 +156,6 @@ function compiler<T>(ref: string): ValidateFunction<T> {
 /** Validateurs par nom de schéma (fichier `protocoles/<nom>.schema.json`). */
 export const VALIDATEURS = {
   'p1-tache': compiler<unknown>('p1-tache.schema.json'),
-  'p2-lot-navigation': compiler<LotNavigation>('p2-lot-navigation.schema.json'),
   'p3-lot-commandes': compiler<LotCommandes>('p3-lot-commandes.schema.json'),
   'p3-compte-rendu': compiler<CompteRendu>('p3-compte-rendu.schema.json'),
   'p4-etat-affichage': compiler<EtatAffichage>('p4-etat-affichage.schema.json'),
@@ -191,6 +176,5 @@ function valider<T>(f: ValidateFunction<T>, message: unknown): Validation<T> {
 }
 
 export const validerLotCommandes = (m: unknown) => valider(VALIDATEURS['p3-lot-commandes'], m)
-export const validerLotNavigation = (m: unknown) => valider(VALIDATEURS['p2-lot-navigation'], m)
 export const validerCompteRendu = (m: unknown) => valider(VALIDATEURS['p3-compte-rendu'], m)
 export const validerEtatAffichage = (m: unknown) => valider(VALIDATEURS['p4-etat-affichage'], m)

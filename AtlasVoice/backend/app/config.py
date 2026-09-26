@@ -71,17 +71,15 @@ ATLAS_TTS_PADDING_BONUS = float(_env("ATLAS_TTS_PADDING_BONUS", "0"))
 # température, de 0 (plus stable, plus régulière) à 1,4 (plus variée), 0,7 par défaut chez Gradium.
 ATLAS_TTS_TEMP = float(t) if (t := _env("ATLAS_TTS_TEMP")) else None
 # Silence traîné avant de considérer le tour fini (le VAD sémantique de Gradium décide en amont).
-ATLAS_FLUSH_S = float(_env("ATLAS_FLUSH_S", "0.3"))
+ATLAS_FLUSH_S = float(_env("ATLAS_FLUSH_S", "1.5"))
 
 # ── Modèle d'Atlas : rapide, non-raisonnant, avec secours (section 5) ──
 LLM_PRINCIPAL = _modele("ATLAS_LLM", "anthropic", "claude-haiku-4-5")
 LLM_SECOURS = _modele("ATLAS_LLM_SECOURS", None, None)
-# Agent moyen 2 (navigation : tâche → intentions) : petit modèle rapide, par défaut celui d'Atlas.
-LLM_NAVIGATION = _modele("ATLAS_NAV_LLM", None, None) or LLM_PRINCIPAL
 # Agent navigateur (comprend la demande et choisit les commandes) : un modèle puissant, gpt-5.5 par défaut
-# avec une clé OpenAI ; sans clé OpenAI ni réglage, le modèle de l'agent moyen 2.
+# avec une clé OpenAI ; sans clé OpenAI ni réglage, le modèle d'Atlas.
 LLM_NAVIGATEUR = (_modele("ATLAS_NAVIGATEUR_LLM", "openai", "gpt-5.5")
-                  if _env("ATLAS_NAVIGATEUR_LLM_FOURNISSEUR") or _env("OPENAI_API_KEY") else LLM_NAVIGATION)
+                  if _env("ATLAS_NAVIGATEUR_LLM_FOURNISSEUR") or _env("OPENAI_API_KEY") else LLM_PRINCIPAL)
 # Bascule sur le secours si le premier token dépasse ce délai.
 LLM_DELAI_BASCULE_S = float(_env("ATLAS_LLM_DELAI_BASCULE_S", "1.5"))
 LLM_MAX_TOKENS = int(_env("ATLAS_LLM_MAX_TOKENS", "400"))
@@ -97,8 +95,6 @@ SUPABASE_JWT_SECRET = _env("SUPABASE_JWT_SECRET")
 AGENTS_API_KEY = _env("AGENTS_API_KEY")
 # Relais d'affichage : délai maximal d'un compte rendu (écran ou agent navigateur).
 AFFICHAGE_DELAI_S = float(_env("ATLAS_AFFICHAGE_DELAI_S", "3"))
-# Délai d'une demande envoyée à l'agent navigateur (il appelle un modèle, parfois deux fois).
-AFFICHAGE_DELAI_INTENTIONS_S = float(_env("ATLAS_AFFICHAGE_DELAI_INTENTIONS_S", "60"))
 # Agent navigateur : API de lecture d'Atlas (graphe, conversations) et son jeton d'accès éventuel.
 ATLAS_API_URL = _env("ATLAS_API_URL", "http://127.0.0.1:8000")
 ATLAS_JETON_ACCES = _env("ATLAS_JETON_ACCES")

@@ -1,16 +1,18 @@
-"""Agent navigateur IA (B3) : texte brut → sortie du modèle → LotCommandes validé ; outil `filtres.autour`,
-« revenir », refus, second essai, processus. Modèle, relais et API Atlas simulés (aucun réseau, aucun quota)."""
+"""Agent navigateur IA : tâche `navigateur` du registre → modèle → commandes validées → écran → fin de tâche.
+Outil `filtres.autour`, « revenir », question à l'utilisateur, historique, second essai. Modèle, registre,
+relais et API Atlas simulés (aucun réseau, aucun quota)."""
 
+import asyncio
 import json
-import uuid
 from pathlib import Path
 
 import httpx
 import pytest
 
-from app.affichage.protocole import EtatAffichage, LotNavigation
+from app.affichage.protocole import EtatAffichage
+from app.agents.contrat import TacheArretee
 from app.agents.navigation import navigateur
-from app.agents.navigation.navigateur import AgentNavigateur, Graphe, Refus, construire_lot, deduire_type
+from app.agents.navigation.navigateur import AgentNavigateur, Demande, Graphe, Refus, construire_lot, deduire_type
 from app.config import ModeleLLM
 
 PROTOCOLES = Path(__file__).resolve().parents[3] / "protocoles"
@@ -42,30 +44,25 @@ def etat(**modifs) -> EtatAffichage:
                                          "version_donnees": "v1", **modifs})
 
 
-def lot(demande="montre le théorème principal", **modifs) -> LotNavigation:
-    return LotNavigation.model_validate({"version": 1, "lot_id": str(uuid.uuid4()), "tache_id": 7, "utilisateur_id": "u1",
-                                         "demande": demande, **modifs})
-
-
 def construire(commandes, pile=()):
-    return construire_lot(commandes, lot(), etat(), list(pile), GRAPHE)
+    return construire_lot(commandes, 7, etat(), list(pile), GRAPHE)
 
 
 # ── sortie du modèle → lot exécutable ────────────────────────────
 
 
-def test_nettoie_les_champs_et_garde_lot_id_ecran():
-    l = lot()
-    sortie, restaures = construire_lot([
+def test_nettoie_les_champs_et_attache_la_tache_et_l_ecran():
+    sortie, restaures = construire([
         {"op": "selectionner", "cible": {"noeud": "thm_principal"}, "facteur": None, "oui": True},
         {"op": "cadrer", "cibles": ["selection"]},
         {"op": "fiche"},
         {"op": "cadrer", "cibles": ["choix_jauge", CONV]},
-    ], l, etat(), [], GRAPHE)
-    assert restaures == 0 and sortie.lot_id == l.lot_id and sortie.ecran == "ecran_a" and sortie.tache_id == 7
+    ])
+    assert restaures == 0 and sortie.ecran == "ecran_a" and sortie.tache_id == 7 and sortie.origine == "navigateur"
     assert [c.model_dump(exclude_unset=True) for c in sortie.commandes] == [
         {"op": "selectionner", "cible": {"noeud": "thm_principal"}}, {"op": "cadrer", "cibles": "selection"},
         {"op": "fiche", "cible": None}, {"op": "cadrer", "cibles": [{"noeud": "choix_jauge"}, {"conversation": CONV}]}]
+    assert construire([{"op": "zoomer", "facteur": 2}])[0].lot_id != sortie.lot_id  # un lot_id par envoi
 
 
 def test_outil_autour_calcule_la_lignee_sur_le_graphe():
@@ -77,7 +74,6 @@ def test_outil_autour_calcule_la_lignee_sur_le_graphe():
     assert garder("lignee") == ["choix_jauge", "cor_final", "def_compacite", "lemme_compacite_faible",
                                 "lemme_compacite_forte", "thm_principal"]
     assert garder("seul") == ["thm_principal"]
-    # Plusieurs nœuds et une liste explicite se cumulent ; isole n'est jamais ajouté.
     sortie, _ = construire([{"op": "filtres", "patch": {"noeuds": ["isole"], "autour": [
         {"noeud": "cor_final", "etendue": "seul"}, {"noeud": "choix_jauge"}]}}])
     assert sortie.commandes[0].patch.noeuds == ["choix_jauge", "cor_final", "isole", "thm_principal"]
@@ -105,21 +101,44 @@ def test_revenir_injecte_l_etat_de_la_pile():
     assert r.value.code == "etat_invalide"
 
 
-def test_type_deduit():
+def test_type_deduit_et_demande_depuis_la_tache():
     assert deduire_type(n("def_x", "x")) == "definition"
     assert deduire_type(n("x", "x", admis=True)) == "definition"
     assert deduire_type(n("x", "x", demonstrations=[{}])) == "resultat"
+    d = Demande.depuis_tache({"id": 3, "utilisateur_id": "u1", "demande_brute": "passe en 3D et résume", "extrait": "passe en 3D"})
+    assert (d.tache_id, d.texte, d.extrait, d.echanges) == (3, "passe en 3D et résume", "passe en 3D", [])
+    assert Demande.depuis_tache({"id": 3, "utilisateur_id": "u1", "demande_brute": "x", "extrait": "x"}).extrait is None
 
 
-# ── processus (modèle, relais et API Atlas simulés) ──────────────
+# ── processus : registre, modèle, relais et API Atlas simulés ────
+
+
+class RegistreFactice:
+    def __init__(self, reponses=()):
+        self.appels: list[tuple] = []
+        self.reponses = list(reponses)
+
+    async def terminer(self, tid, oral, detail=None, modification_appliquee=False):
+        self.appels.append(("terminer", tid, oral, detail))
+
+    async def echouer(self, tid, erreur):
+        self.appels.append(("echouer", tid, erreur))
+
+    async def questionner(self, tid, question):
+        self.appels.append(("questionner", tid, question))
+
+    async def attendre_utilisateur(self, tid, delai_s=600):
+        if not self.reponses:
+            raise TacheArretee("arrêtée")
+        return {"id": tid, "statut": "en_cours", "reponse": self.reponses.pop(0)}
 
 
 class Serveurs:
-    def __init__(self, avec_ecran=True):
-        self.avec_ecran = avec_ecran
+    """Relais (écran) et API Atlas simulés."""
+
+    def __init__(self, avec_ecran=True, ecran_ok=True):
+        self.avec_ecran, self.ecran_ok = avec_ecran, ecran_ok
         self.lots: list[dict] = []
-        self.reponses: list[dict] = []
-        self.conversations_lues = 0
 
     def __call__(self, requete: httpx.Request) -> httpx.Response:
         chemin = requete.url.path
@@ -129,15 +148,14 @@ class Serveurs:
         if chemin == "/api/graphe":
             return httpx.Response(200, json={"noeuds": NOEUDS, "aretes": []})
         if chemin == "/api/conversations":
-            self.conversations_lues += 1
             return httpx.Response(200, json=[{"id": CONV, "titre": "Énergie"}])
         if chemin == "/api/affichage/commandes":
             corps = json.loads(requete.content)
             self.lots.append(corps)
+            if not self.ecran_ok:
+                return httpx.Response(504, json={"version": 1, "lot_id": corps["lot_id"], "ok": False, "resultats": [],
+                                                 "erreur": {"code": "delai", "message": "Pas de compte rendu en 3 s."}})
             return httpx.Response(200, json={"version": 1, "lot_id": corps["lot_id"], "ok": True, "resultats": []})
-        if chemin.endswith("/compte-rendu"):
-            self.reponses.append(json.loads(requete.content))
-            return httpx.Response(204)
         return httpx.Response(500)
 
 
@@ -154,137 +172,139 @@ def modele(*reponses):
     return appeler
 
 
-def agent(serveurs, appeler):
-    return AgentNavigateur("http://relais", "cle", "http://atlas", transport=httpx.MockTransport(serveurs), appeler=appeler)
+def agent(serveurs, appeler, registre=None):
+    return AgentNavigateur(registre or RegistreFactice(), "http://relais", "cle", "http://atlas",
+                           transport=httpx.MockTransport(serveurs), appeler=appeler)
+
+
+def tache(texte, tid=7, extrait=None):
+    return {"id": tid, "utilisateur_id": "u1", "type_agent": "navigateur", "demande_brute": texte, "extrait": extrait or texte}
 
 
 ISOLER = ("commander", {
-    "resolutions": [{"texte": "le théorème de convergence", "nature": "noeud", "candidats": ["thm_principal"],
-                     "choisi": "thm_principal", "raison": "même énoncé"}],
     "commandes": [{"op": "zoomer", "facteur": 0.6},
                   {"op": "filtres", "patch": {"autour": [{"noeud": "thm_principal", "etendue": "premisses"}], "mode": "masquer"}},
-                  {"op": "cadrer", "cibles": "tout"}]})
+                  {"op": "cadrer", "cibles": "tout"}],
+    "explication": "Le théorème et sa preuve."})
 
 
-async def test_texte_brut_au_modele_puis_commandes_avec_le_meme_lot_id():
-    s, appeler = Serveurs(), modele(ISOLER)
-    a = agent(s, appeler)
-    l = lot("dézoome et n'affiche que ce qui sert à prouver le théorème de convergence",
-            demande_brute="dézoome et n'affiche que ce qui sert à prouver le théorème de convergence, puis résume-le")
-    cr = await a.traiter(l)
-    assert cr.ok and s.lots[0]["lot_id"] == l.lot_id and s.lots[0]["ecran"] == "ecran_a"
-    assert [c["op"] for c in s.lots[0]["commandes"]] == ["zoomer", "filtres", "cadrer"]
+async def test_tache_menee_jusqu_a_c_est_affiche():
+    s, appeler, registre = Serveurs(), modele(ISOLER), RegistreFactice()
+    a = agent(s, appeler, registre)
+    texte = "dézoome et n'affiche que ce qui sert à prouver le théorème de convergence, puis résume-le"
+    await a.mener(tache(texte, extrait="dézoome et n'affiche que ce qui sert à prouver le théorème de convergence"))
+    assert registre.appels[0][:3] == ("terminer", 7, "C'est affiché.")
+    assert [c["op"] for c in registre.appels[0][3]["commandes"]] == ["zoomer", "filtres", "cadrer"]
+    assert s.lots[0]["tache_id"] == 7 and s.lots[0]["ecran"] == "ecran_a"
     assert s.lots[0]["commandes"][1]["patch"]["noeuds"] == ["choix_jauge", "def_compacite", "lemme_compacite_faible",
                                                             "lemme_compacite_forte", "thm_principal"]
     assert len(a.piles["ecran_a"]) == 1
-    # Le modèle reçoit le texte brut, la phrase entière, tout l'écran et les nœuds avec leurs liens.
+    # Le modèle reçoit tout le texte brut, l'extrait d'Atlas, tout l'écran, le graphe et les conversations.
     entree = json.loads(appeler.recus[0][-1]["content"])
-    assert entree["demande"] == l.demande and entree["demande_brute"].endswith("puis résume-le")
-    assert entree["ecran"]["camera"]["mode"] == "2d" and entree["pile_profondeur"] == 0
+    assert entree["demande"] == texte and entree["extrait_atlas"].startswith("dézoome")
     assert set(entree["ecran"]) >= {"camera", "strategie", "selection", "filtres", "fiche", "visibles", "surlignes", "survol"}
     thm = next(x for x in entree["noeuds"] if x["id"] == "thm_principal")
     assert thm["type"] == "theoreme" and thm["premisses"] == ["lemme_compacite_faible", "lemme_compacite_forte", "choix_jauge"]
-    assert thm["consequences"] == ["cor_final"]
-    # Les conversations sont toujours fournies : le modèle décide s'il en a besoin.
-    assert entree["conversations"] == [{"id": CONV, "titre": "Énergie"}] and s.conversations_lues == 1
+    assert entree["conversations"] == [{"id": CONV, "titre": "Énergie"}] and entree["pile_profondeur"] == 0
     await a.fermer()
 
 
-async def test_la_question_du_modele_part_telle_quelle():
-    s = Serveurs()
+async def test_question_puis_reponse_redonnee_au_modele():
     question = "Lequel veux-tu : « Lemme de compacité faible » ou « Lemme de compacité forte » ?"
-    a = agent(s, modele(("refuser", {"code": "ambigu", "message": question})))
-    cr = await a.traiter(lot("zoome sur le lemme de compacité"))
-    assert (cr.erreur.code, cr.erreur.message) == ("ambigu", question) and not s.lots
-    assert s.reponses[0]["erreur"]["message"] == question
+    appeler = modele(("refuser", {"code": "ambigu", "message": question}),
+                     ("commander", {"commandes": [{"op": "cadrer", "cibles": [{"noeud": "lemme_compacite_forte"}]}]}))
+    s, registre = Serveurs(), RegistreFactice(["le fort"])
+    a = agent(s, appeler, registre)
+    await a.mener(tache("zoome sur le lemme de compacité"))
+    assert [x[0] for x in registre.appels] == ["questionner", "terminer"] and registre.appels[0][2] == question
+    assert json.loads(appeler.recus[1][-1]["content"])["echanges"] == [{"question": question, "reponse": "le fort"}]
+    # La question et la réponse restent dans l'historique de l'écran.
+    assert "(question : " in a.historiques["ecran_a"][-1].demande
     await a.fermer()
 
 
-async def test_plusieurs_noeuds_sans_question_imposee():
-    """Le modèle est libre : « tous les lemmes » peut donner une liste de nœuds, le code ne force aucune question."""
-    s = Serveurs()
-    a = agent(s, modele(("commander", {"commandes": [
-        {"op": "filtres", "patch": {"noeuds": ["lemme_compacite_faible", "lemme_compacite_forte"], "mode": "masquer"}},
-        {"op": "cadrer", "cibles": "tout"}]})))
-    assert (await a.traiter(lot("affiche seulement tous les lemmes"))).ok
-    assert s.lots[0]["commandes"][0]["patch"]["noeuds"] == ["lemme_compacite_faible", "lemme_compacite_forte"]
-    await a.fermer()
-
-
-async def test_historique_des_demandes_en_contexte():
-    s = Serveurs()
-    appeler = modele(ISOLER, ("refuser", {"code": "introuvable", "message": "Je ne trouve pas la conjecture de Riemann."}),
-                     ("commander", {"commandes": [{"op": "effacer_filtres"}]}))
-    a = agent(s, appeler)
-    await a.traiter(lot("garde seulement la preuve du théorème"))
-    await a.traiter(lot("montre la conjecture de Riemann"))
-    await a.traiter(lot("enlève le filtre de tout à l'heure"))
-    # 3e appel : système, puis les deux demandes précédentes et ce qui en a été fait, puis la demande.
-    m = appeler.recus[2]
-    assert [x["role"] for x in m] == ["system", "user", "assistant", "user", "assistant", "user"]
-    assert m[1]["content"] == "garde seulement la preuve du théorème" and '"op": "filtres"' in m[2]["content"]
-    assert m[4]["content"] == "Refus (introuvable) : Je ne trouve pas la conjecture de Riemann."
-    assert json.loads(m[5]["content"])["demande"] == "enlève le filtre de tout à l'heure"
-    await a.fermer()
-
-
-async def test_la_reponse_a_la_question_arrive_au_modele():
-    s, appeler = Serveurs(), modele(("commander", {"resolutions": [], "commandes": [
-        {"op": "cadrer", "cibles": [{"noeud": "lemme_compacite_forte"}]}]}))
-    a = agent(s, appeler)
-    await a.traiter(lot("zoome sur le lemme de compacité", echanges=[{"question": "Lequel ?", "reponse": "le fort"}]))
-    assert json.loads(appeler.recus[0][-1]["content"])["echanges"] == [{"question": "Lequel ?", "reponse": "le fort"}]
-    await a.fermer()
-
-
-async def test_vue_sans_designation_et_second_essai():
-    s = Serveurs()
-    a = agent(s, modele(("commander", {"resolutions": [], "commandes": [{"op": "mode", "mode": "3d"}, {"op": "vue", "nom": "dessus"}]})))
-    assert (await a.traiter(lot("passe en 3D vue du dessus"))).ok
-    s2 = Serveurs()
-    appeler = modele(("commander", {"resolutions": [], "commandes": [{"op": "cadrer", "cibles": [{"noeud": "invente"}]}]}),
-                     ("commander", {"resolutions": [], "commandes": [{"op": "cadrer", "cibles": "tout"}]}))
-    a2 = agent(s2, appeler)
-    assert (await a2.traiter(lot())).ok
-    assert "id de nœud inconnu" in appeler.recus[1][-1]["content"]
-    s3 = Serveurs()
-    a3 = agent(s3, modele(("", {}), ("commander", {"resolutions": [], "commandes": []})))
-    cr = await a3.traiter(lot())
-    assert cr.erreur.code == "invalide" and not s3.lots
-    for x in (a, a2, a3):
+async def test_refus_ecran_absent_ecran_muet_et_arret():
+    registre = RegistreFactice()
+    a = agent(Serveurs(), modele(("refuser", {"code": "introuvable", "message": "Je ne trouve pas la conjecture de Riemann."})), registre)
+    await a.mener(tache("montre la conjecture de Riemann"))
+    assert registre.appels == [("echouer", 7, "Je ne trouve pas la conjecture de Riemann.")]
+    registre = RegistreFactice()
+    a2 = agent(Serveurs(avec_ecran=False), modele(), registre)
+    await a2.mener(tache("passe en 3D"))
+    assert registre.appels == [("echouer", 7, "Aucun écran du graphe n'est ouvert.")]
+    registre = RegistreFactice()
+    a3 = agent(Serveurs(ecran_ok=False), modele(("commander", {"commandes": [{"op": "mode", "mode": "3d"}]})), registre)
+    await a3.mener(tache("passe en 3D"))
+    assert registre.appels == [("echouer", 7, "L'écran n'a pas répondu.")] and a3.piles["ecran_a"] == []
+    # Arrêt par l'utilisateur pendant une question : plus rien n'est écrit.
+    registre = RegistreFactice([])
+    a4 = agent(Serveurs(), modele(("refuser", {"code": "ambigu", "message": "Lequel ?"})), registre)
+    await a4.mener(tache("zoome sur le lemme"))
+    assert [x[0] for x in registre.appels] == ["questionner"]
+    for x in (a, a2, a3, a4):
         await x.fermer()
 
 
-async def test_revenir_depile_et_rien_a_annuler():
+async def test_plusieurs_noeuds_second_essai_et_modele_absent():
     s = Serveurs()
-    restaurer = ("commander", {"resolutions": [], "commandes": [{"op": "restaurer"}]})
-    a = agent(s, modele(ISOLER, restaurer, restaurer))
-    await a.traiter(lot())
-    assert (await a.traiter(lot("annule"))).ok
-    assert s.lots[1]["commandes"][0]["op"] == "restaurer" and s.lots[1]["commandes"][0]["etat"]["ecran"] == "ecran_a"
-    assert a.piles["ecran_a"] == []
-    cr = await a.traiter(lot("annule"))
-    assert cr.erreur.code == "etat_invalide" and len(s.lots) == 2
-    await a.fermer()
-
-
-async def test_cadrer_une_conversation():
-    s, appeler = Serveurs(), modele(("commander", {"resolutions": [], "commandes": [{"op": "cadrer", "cibles": [{"conversation": CONV}]}]}))
-    a = agent(s, appeler)
-    assert (await a.traiter(lot("montre ce qu'on a fait dans la conversation sur l'énergie"))).ok
-    assert s.lots[0]["commandes"][0]["cibles"] == [{"conversation": CONV}]
-    await a.fermer()
-
-
-async def test_sans_ecran_ou_sans_modele():
-    a = agent(Serveurs(avec_ecran=False), modele())
-    assert (await a.traiter(lot())).erreur.code == "introuvable"
-    a2 = AgentNavigateur("http://relais", "cle", "http://atlas", transport=httpx.MockTransport(Serveurs()),
+    appeler = modele(("commander", {"commandes": [{"op": "cadrer", "cibles": [{"noeud": "invente"}]}]}),
+                     ("commander", {"commandes": [
+                         {"op": "filtres", "patch": {"noeuds": ["lemme_compacite_faible", "lemme_compacite_forte"], "mode": "masquer"}},
+                         {"op": "cadrer", "cibles": "tout"}]}))
+    registre = RegistreFactice()
+    a = agent(s, appeler, registre)
+    await a.mener(tache("affiche seulement tous les lemmes"))
+    assert registre.appels[0][0] == "terminer" and "id de nœud inconnu" in appeler.recus[1][-1]["content"]
+    assert s.lots[0]["commandes"][0]["patch"]["noeuds"] == ["lemme_compacite_faible", "lemme_compacite_forte"]
+    registre = RegistreFactice()
+    a2 = AgentNavigateur(registre, "http://relais", "cle", "http://atlas", transport=httpx.MockTransport(Serveurs()),
                          appeler=navigateur.appel_modele(None))
-    cr = await a2.traiter(lot())
-    assert cr.erreur.code == "introuvable" and "Navigateur indisponible" in cr.erreur.message
+    await a2.mener(tache("passe en 3D"))
+    assert registre.appels[0][0] == "echouer" and "Navigateur indisponible" in registre.appels[0][2]
     await a.fermer()
     await a2.fermer()
+
+
+async def test_historique_et_revenir():
+    s = Serveurs()
+    appeler = modele(ISOLER, ("commander", {"commandes": [{"op": "restaurer"}]}),
+                     ("commander", {"commandes": [{"op": "restaurer"}]}))
+    registre = RegistreFactice()
+    a = agent(s, appeler, registre)
+    await a.mener(tache("garde seulement la preuve du théorème", 1))
+    await a.mener(tache("annule le dernier filtre", 2))
+    assert s.lots[1]["commandes"][0]["op"] == "restaurer" and s.lots[1]["commandes"][0]["etat"]["ecran"] == "ecran_a"
+    assert a.piles["ecran_a"] == []
+    await a.mener(tache("annule encore", 3))
+    assert registre.appels[-1] == ("echouer", 3, "Il n'y a rien à annuler.") and len(s.lots) == 2
+    # 3e appel : système, puis les deux demandes précédentes et ce qui en a été fait, puis la demande.
+    m = appeler.recus[2]
+    assert [x["role"] for x in m] == ["system", "user", "assistant", "user", "assistant", "user"]
+    assert m[1]["content"] == "garde seulement la preuve du théorème" and m[2]["content"].startswith("Le théorème et sa preuve.")
+    await a.fermer()
+
+
+async def test_questions_en_parallele_passages_a_l_ecran_en_ordre():
+    """Une tâche qui attend une réponse ne bloque pas les autres."""
+    reponse = asyncio.Event()
+
+    class RegistreLent(RegistreFactice):
+        async def attendre_utilisateur(self, tid, delai_s=600):
+            await reponse.wait()
+            return {"id": tid, "statut": "en_cours", "reponse": "le fort"}
+
+    appeler = modele(("refuser", {"code": "ambigu", "message": "Lequel ?"}),
+                     ("commander", {"commandes": [{"op": "mode", "mode": "3d"}]}),
+                     ("commander", {"commandes": [{"op": "cadrer", "cibles": [{"noeud": "lemme_compacite_forte"}]}]}))
+    s, registre = Serveurs(), RegistreLent()
+    a = agent(s, appeler, registre)
+    premiere = asyncio.create_task(a.mener(tache("zoome sur le lemme", 1)))
+    await asyncio.sleep(0.05)
+    await a.mener(tache("passe en 3D", 2))  # passe pendant que la première attend
+    reponse.set()
+    await premiere
+    assert [x[:2] for x in registre.appels] == [("questionner", 1), ("terminer", 2), ("terminer", 1)]
+    await a.fermer()
 
 
 async def test_lecture_de_l_appel_d_outil_en_flux(monkeypatch):
