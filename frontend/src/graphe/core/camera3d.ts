@@ -207,6 +207,36 @@ export class Camera3D {
     return this.anim?.q1 ?? this.orientation
   }
 
+  /** Cible et distance visées (fin d'animation si une animation est en cours). */
+  get cibleVisee(): Vec3 {
+    return this.anim?.c1 ?? this.cible
+  }
+
+  get distanceVisee(): number {
+    return this.anim?.d1 ?? this.distance
+  }
+
+  /** Vue nommée visée (fin d'animation), à 0,5° près. */
+  vueVisee(tolerance = 0.5): NomVue | null {
+    const q = this.orientationVisee
+    for (const nom of NOMS_VUES) if (quat.angle(q, ORIENTATIONS[nom]) < (tolerance * Math.PI) / 180) return nom
+    return null
+  }
+
+  /** Orbite animée, composée avec l'orientation visée (pilotage : déterministe même pendant une animation). */
+  orbiterVers(dAzimut: number, dElevation: number, duree = 450): void {
+    if (this.verrou2D) return
+    const q = this.orientationVisee
+    const qz = quat.axeAngle([0, 0, 1], dAzimut)
+    const qx = quat.axeAngle(quat.tourner(q, [1, 0, 0]), dElevation)
+    this.animerVers({ orientation: quat.normaliser(quat.multiplier(qz, quat.multiplier(qx, q))) }, duree)
+  }
+
+  /** Zoom animé vers le centre, composé avec la distance visée (> 1 rapproche). */
+  zoomerVers(facteur: number, duree = 450): void {
+    this.animerVers({ distance: this.distanceVisee / facteur }, duree)
+  }
+
   allerVue(nom: NomVue, duree = 450): void {
     if (this.mode !== 'auto' && nom !== 'iso') this.mode = 'auto'
     this.animerVers({ orientation: ORIENTATIONS[nom] }, duree)

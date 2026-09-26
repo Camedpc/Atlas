@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import type { Graphe, Noeud } from '../api'
 import { deduireType, depuisGrapheAtlas, versionDonnees } from './donneesAtlas'
 import { construireJustification } from './raisonnement/donnees'
-import { filtresVides, noeudPasse, normaliser } from '../pilotage/filtres'
+import { filtresVides } from '../pilotage/etat'
+import { noeudPasse, normaliser } from '../pilotage/filtres'
 
 const CONV = '3f2b8c1e-6a4d-4e2f-9b7a-1c2d3e4f5a6b'
 

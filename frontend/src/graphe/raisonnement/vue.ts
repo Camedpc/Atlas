@@ -400,22 +400,12 @@ export class VueRaisonnement {
     this.calqueDessus = this.sigma.createCanvas('rsnDessus', { afterLayer: 'hoverNodes', style })
     this.dimensionnerCalques()
     this.camera.redimensionner(this.largeur, this.hauteur)
-    let minuterie = 0
-    let aspect = this.largeur / this.hauteur
+    this.aspectDispose = this.largeur / this.hauteur
     this.observateur = new ResizeObserver(() => {
-      this.mesurer()
-      this.dimensionnerCalques()
-      this.camera.redimensionner(this.largeur, this.hauteur)
-      this.demanderRendu()
-      // Format d'écran nettement changé : la disposition étirée est recalculée.
-      clearTimeout(minuterie)
-      minuterie = window.setTimeout(() => {
-        const a = this.largeur / this.hauteur
-        if (this.reglages.valeurs.ajusterAspect && this.lecture && Math.abs(Math.log(a / aspect)) > 0.15) {
-          aspect = a
-          void this.redisposer()
-        }
-      }, 350)
+      this.prendreDimensions()
+      // Format d'écran nettement changé : la disposition étirée est recalculée (après la rafale).
+      clearTimeout(this.minuterieAspect)
+      this.minuterieAspect = window.setTimeout(() => void this.redisposerSiAspect(), 350)
     })
     this.observateur.observe(this.scene)
 
@@ -488,6 +478,26 @@ export class VueRaisonnement {
     if (p === null) this.selectionner(null)
     else if (portee) this.montrerPortee(p)
     else this.selectionner(p)
+  }
+
+  /**
+   * Stratégie et paramètres de lecture exacts (remplace les surcharges au lieu de les fusionner).
+   * La promesse se résout quand la nouvelle disposition est en place (pilotage).
+   */
+  appliquerLecture(id: string, parametres: Partial<ParametresLecture>): Promise<void> {
+    this.parametresLecture = { ...parametres }
+    const strat = strategieParId(id)
+    this.strategieCourante = strat
+    if (this.reglages.valeurs.strategie !== strat.id) {
+      ;(this.reglages.valeurs as Record<string, ValeurReglage>).strategie = strat.id
+      this.reglages.pane?.refresh()
+    }
+    this.lecture = deriverLecture(this.jeu, strat, this.parametresLecture)
+    this.selection = null
+    this.porteeActive = false
+    this.survol = null
+    this.emettre('lecture', { lecture: this.lecture })
+    return this.redisposer(undefined, false)
   }
 
   /** Modifie des paramètres de lecture et recalcule. */
@@ -743,6 +753,36 @@ export class VueRaisonnement {
     const t0 = performance.now()
     for (let t = 0; t <= ms; t += pas) this.image(t0 + t)
   }
+
+  /**
+   * Relit tout de suite la taille de la scène (sans attendre le ResizeObserver) et, si le format a
+   * nettement changé, recalcule la disposition et recadre. Le pilotage l'appelle après chaque commande
+   * pour que les cadrages suivants soient déterministes.
+   */
+  async ajusterDimensions(): Promise<void> {
+    const l = this.largeur, h = this.hauteur
+    this.prendreDimensions()
+    if (this.largeur === l && this.hauteur === h) return
+    clearTimeout(this.minuterieAspect)
+    await this.redisposerSiAspect()
+  }
+
+  private prendreDimensions(): void {
+    this.mesurer()
+    this.dimensionnerCalques()
+    this.camera.redimensionner(this.largeur, this.hauteur)
+    this.demanderRendu()
+  }
+
+  private async redisposerSiAspect(): Promise<void> {
+    const a = this.largeur / this.hauteur
+    if (!this.reglages.valeurs.ajusterAspect || !this.lecture || Math.abs(Math.log(a / this.aspectDispose)) <= 0.15) return
+    this.aspectDispose = a
+    await this.redisposer()
+  }
+
+  private aspectDispose = 1
+  private minuterieAspect = 0
 
   detruire(): void {
     cancelAnimationFrame(this.raf)

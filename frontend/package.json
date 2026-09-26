@@ -8,9 +8,11 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "lint": "oxlint",
-    "test": "vitest run"
+    "test": "vitest run",
+    "e2e": "playwright test"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@tweakpane/core": "^2.0.5",
     "graphology-types": "^0.24.8",
     "oxlint": "^1.85.0",

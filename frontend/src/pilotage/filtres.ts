@@ -4,13 +4,10 @@
 
 import type { NoeudR } from '../graphe/raisonnement/donnees'
 import type { ReducteurPoint, VueRaisonnement } from '../graphe/raisonnement/vue'
+import { filtresVides } from './etat'
 import type { EtatFiltres } from './protocole'
 
 export const OPACITE_ESTOMPEE = 0.12
-
-export function filtresVides(): EtatFiltres {
-  return { conversation: null, statuts: [], types: [], periode: { debut: null, fin: null }, texte: '', mode: 'masquer' }
-}
 
 export function filtresActifs(f: EtatFiltres): boolean {
   return f.conversation !== null || f.statuts.length > 0 || f.types.length > 0 || f.periode.debut !== null

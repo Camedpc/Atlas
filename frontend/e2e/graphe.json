@@ -1,0 +1,17 @@
+{
+  "noeuds": [
+    { "id": "def_pair", "nom": "Entier pair", "enonce": "$n$ est pair s'il existe $k$ tel que $n = 2k$.", "admis": true, "parents": [], "enfants": ["lemme_somme", "prop_pair"], "conversation_id": null, "cree_le": "2026-09-20T10:00:00Z", "modifie_le": "2026-09-20T10:00:00Z", "statut": "etabli", "demonstrations": [] },
+    { "id": "ax_anneau", "nom": "Anneau des entiers", "enonce": "$(\\mathbb{Z}, +, \\times)$ est un anneau.", "admis": true, "parents": [], "enfants": ["lemme_somme"], "conversation_id": null, "cree_le": "2026-09-20T10:00:00Z", "modifie_le": "2026-09-20T10:00:00Z", "statut": "etabli", "demonstrations": [] },
+    { "id": "lemme_somme", "nom": "Somme de deux doubles", "enonce": "$2k + 2l = 2(k + l)$.", "admis": false, "parents": ["ax_anneau", "def_pair"], "enfants": ["prop_pair"], "conversation_id": "3f2b8c1e-6a4d-4e2f-9b7a-1c2d3e4f5a6b", "cree_le": "2026-09-21T10:00:00Z", "modifie_le": "2026-09-21T10:00:00Z", "statut": "a_verifier",
+      "demonstrations": [{ "noeud_id": "lemme_somme", "nom_demonstration": "directe", "justifie_par": ["ax_anneau", "def_pair"], "demonstration": "Distributivité.", "validite": "a_verifier", "auteur": "orchestrateur", "cree_le": "2026-09-21T10:00:00Z", "modifie_le": "2026-09-21T10:00:00Z" }] },
+    { "id": "prop_pair", "nom": "Somme de deux pairs", "enonce": "La somme de deux entiers pairs est paire.", "admis": false, "parents": ["def_pair", "lemme_somme"], "enfants": [], "conversation_id": "3f2b8c1e-6a4d-4e2f-9b7a-1c2d3e4f5a6b", "cree_le": "2026-09-21T11:00:00Z", "modifie_le": "2026-09-21T11:00:00Z", "statut": "suspendu",
+      "demonstrations": [{ "noeud_id": "prop_pair", "nom_demonstration": "par le lemme", "justifie_par": ["def_pair", "lemme_somme"], "demonstration": "Par le lemme.", "validite": "valide", "auteur": "orchestrateur", "cree_le": "2026-09-21T11:00:00Z", "modifie_le": "2026-09-21T11:00:00Z" }] },
+    { "id": "conj_impair", "nom": "Somme de deux impairs", "enonce": "La somme de deux impairs est impaire.", "admis": false, "parents": [], "enfants": [], "conversation_id": null, "cree_le": "2026-09-22T09:00:00Z", "modifie_le": "2026-09-22T09:00:00Z", "statut": "ouvert", "demonstrations": [] }
+  ],
+  "aretes": [
+    { "source": "ax_anneau", "cible": "lemme_somme", "nom_demonstration": "directe", "validite": "a_verifier" },
+    { "source": "def_pair", "cible": "lemme_somme", "nom_demonstration": "directe", "validite": "a_verifier" },
+    { "source": "def_pair", "cible": "prop_pair", "nom_demonstration": "par le lemme", "validite": "valide" },
+    { "source": "lemme_somme", "cible": "prop_pair", "nom_demonstration": "par le lemme", "validite": "valide" }
+  ]
+}

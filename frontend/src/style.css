@@ -57,6 +57,15 @@ button:disabled {
   height: 100dvh;
 }
 
+/* Panneau des conversations masqué (commande P3 « panneau ») : le graphe prend toute la place. */
+#app.conversations-masquees {
+  grid-template-columns: 0 1fr;
+}
+
+#app.conversations-masquees .panneau-conversations {
+  display: none;
+}
+
 /* ── Conversations ───────────────────────────────────────── */
 
 .panneau-conversations {
@@ -330,4 +339,11 @@ button:disabled {
   border-radius: 6px;
   padding: 0.35rem 0.5rem;
   color: inherit;
+}
+
+@media (max-width: 800px) {
+  #app.conversations-masquees {
+    grid-template-columns: 1fr;
+    grid-template-rows: 0 100dvh;
+  }
 }

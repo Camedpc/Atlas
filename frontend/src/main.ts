@@ -1,18 +1,25 @@
 // Atlas : conversations avec l'orchestrateur à gauche, graphe de raisonnement à droite.
+//
+// L'écran du graphe est pilotable (P3, `pilotage/`) : les actions de l'application passent par des lots
+// de commandes, comme celles d'un agent, pour que l'état exporté (P4) soit toujours juste.
 import './style.css'
-import { api, type Graphe, type Noeud } from './api'
+import { api, type Graphe } from './api'
 import { PanneauConversations } from './conversations'
 import { LIBELLES_STATUT, STATUTS } from './graphe/raisonnement/donnees'
 import { VueGrapheAtlas } from './graphe/vueAtlas'
+import { Pilote } from './pilotage/pilote'
+import type { CompteRendu, EtatAffichage } from './pilotage/protocole'
 import { echapper, rendre } from './rendu'
 
 const INTERVALLE_GRAPHE_MS = 4000
 
-document.querySelector<HTMLElement>('#app')!.innerHTML = `
+const app = document.querySelector<HTMLElement>('#app')!
+app.innerHTML = `
   <aside class="panneau-conversations"></aside>
   <section class="panneau-graphe">
     <div class="vue-graphe"></div>
     <div class="barre">
+      <button type="button" class="basculer-panneau" title="Afficher ou masquer les conversations">Conversations</button>
       <label><input type="checkbox" class="filtre" /> Cette conversation seulement</label>
       <span class="compteur"></span>
       <button type="button" class="recentrer">Recentrer</button>
@@ -29,11 +36,21 @@ const legende = document.querySelector<HTMLElement>('.legende')!
 
 let graphe: Graphe = { noeuds: [], aretes: [] }
 let conversationId: string | null = null
+let ficheId: string | null = null
 let dernierChargement = 0
+let erreurGraphe: string | null = null
 
-const vue = new VueGrapheAtlas(document.querySelector<HTMLElement>('.vue-graphe')!, (id) =>
-  afficherDetail(id === null ? null : (graphe.noeuds.find((n) => n.id === id) ?? null)),
-)
+// Clic dans le graphe : la fiche suit la sélection de l'utilisateur.
+const vue = new VueGrapheAtlas(document.querySelector<HTMLElement>('.vue-graphe')!, (id) => afficherFiche(id))
+
+const pilote = new Pilote(vue, {
+  fiche: () => ficheId,
+  definirFiche: (id) => afficherFiche(id),
+  panneauOuvert: () => !app.classList.contains('conversations-masquees'),
+  definirPanneau: (ouvert) => app.classList.toggle('conversations-masquees', !ouvert),
+  conversationAffichee: () => conversationId,
+  recharger: () => chargerGraphe(),
+})
 
 // Couleurs de statut : celles du thème du moteur (variables CSS --statut-*).
 function dessinerLegende() {
@@ -43,10 +60,14 @@ function dessinerLegende() {
 vue.moteur.on('theme', dessinerLegende)
 dessinerLegende()
 
-function afficherDetail(n: Noeud | null) {
+/** Fiche (panneau de détail) d'un nœud, ou fermée ; relue dans les données courantes. */
+function afficherFiche(id: string | null) {
+  const n = id === null ? null : (graphe.noeuds.find((x) => x.id === id) ?? null)
+  ficheId = n?.id ?? null
   detail.hidden = !n
   // Les cadrages du moteur évitent le panneau de détail.
   vue.moteur.margesSures = { droite: n ? detail.offsetWidth + 8 : 0 }
+  pilote.signaler()
   if (!n) return
   const couleur = vue.moteur.palette.statut[n.statut]
   const liens = (ids: string[]) =>
@@ -68,15 +89,19 @@ function afficherDetail(n: Noeud | null) {
         </details>`,
       )
       .join('')}`
-  detail.querySelector('.fermer')!.addEventListener('click', () => vue.selectionner(null))
+  detail.querySelector('.fermer')!.addEventListener('click', () =>
+    void pilote.commander({ op: 'selectionner', cible: null }, { op: 'fiche', cible: null }),
+  )
   detail.querySelectorAll<HTMLButtonElement>('.lien').forEach((b) =>
-    b.addEventListener('click', () => vue.selectionner(b.dataset.id!)),
+    b.addEventListener('click', () => {
+      const cible = { noeud: b.dataset.id! }
+      void pilote.commander({ op: 'selectionner', cible }, { op: 'fiche', cible })
+    }),
   )
 }
 
-function filtrer() {
-  vue.filtrerConversation(filtre.checked ? conversationId : null)
-  compteur.textContent = `${vue.compter()} nœuds`
+function compter() {
+  compteur.textContent = erreurGraphe === null ? `${vue.compter()} nœuds` : `Graphe indisponible : ${erreurGraphe}`
 }
 
 async function chargerGraphe() {
@@ -84,21 +109,40 @@ async function chargerGraphe() {
   try {
     graphe = await api.graphe()
     await vue.afficher(graphe)
-    compteur.textContent = `${vue.compter()} nœuds`
+    // La fiche ouverte est relue (ou fermée si son nœud a disparu).
+    if (ficheId !== null) afficherFiche(ficheId)
+    erreurGraphe = null
   } catch (e) {
-    compteur.textContent = `Graphe indisponible : ${e instanceof Error ? e.message : String(e)}`
+    erreurGraphe = e instanceof Error ? e.message : String(e)
   }
+  compter()
 }
 
-filtre.addEventListener('change', filtrer)
-document.querySelector('.recentrer')!.addEventListener('click', () => vue.cadrer())
-document.querySelector('.recharger')!.addEventListener('click', () => void chargerGraphe())
+async function filtrerConversation() {
+  const conversation = filtre.checked ? conversationId : null
+  if (vue.filtres.etat.conversation === conversation) return
+  await pilote.commander({ op: 'filtres', patch: { conversation } }, { op: 'cadrer', cibles: 'tout' })
+}
+
+// Tout changement d'état (lot d'un agent compris) : case à cocher et compteur à jour.
+pilote.ecouter((e) => {
+  filtre.checked = e.filtres.conversation !== null
+  compter()
+})
+
+filtre.addEventListener('change', () => void filtrerConversation())
+document.querySelector('.basculer-panneau')!.addEventListener('click', () =>
+  void pilote.commander({ op: 'panneau', ouvert: app.classList.contains('conversations-masquees') }),
+)
+document.querySelector('.recentrer')!.addEventListener('click', () => void pilote.commander({ op: 'cadrer', cibles: 'tout' }))
+document.querySelector('.recharger')!.addEventListener('click', () => void pilote.commander({ op: 'recharger_donnees' }))
 
 const conversations = new PanneauConversations(
   document.querySelector<HTMLElement>('.panneau-conversations')!,
   (id) => {
     conversationId = id
-    filtrer()
+    pilote.signaler()
+    void filtrerConversation()
   },
   // Pendant une exécution, le graphe est relu au plus toutes les INTERVALLE_GRAPHE_MS.
   () => {
@@ -106,8 +150,14 @@ const conversations = new PanneauConversations(
   },
 )
 
-// Pratique pour déboguer depuis la console.
-;(window as unknown as { atlasVue: VueGrapheAtlas }).atlasVue = vue
+// Pilotage à la main depuis la console : atlasAffichage.executer(atlasAffichage.lot([{ op: 'mode', mode: '3d' }]))
+const atlasAffichage = {
+  ecran: pilote.ecran,
+  executer: (lot: unknown): Promise<CompteRendu> => pilote.executer(lot),
+  etat: (): EtatAffichage => pilote.etat(),
+  lot: pilote.lot.bind(pilote),
+}
+Object.assign(window, { atlasAffichage, atlasVue: vue })
 
 void chargerGraphe()
 void conversations.charger()

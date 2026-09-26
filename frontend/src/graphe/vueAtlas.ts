@@ -48,7 +48,10 @@ function dessinerRangs({ ctx, vue, hauteur }: ContexteDessinR): void {
 export class VueGrapheAtlas {
   readonly moteur: VueRaisonnement
   readonly filtres: FiltresVue
-  private version = ''
+  /** Empreinte des données affichées (P4 `version_donnees`). */
+  version = ''
+  /** Vrai pendant un changement programmatique (pilotage, rechargement) : la sélection ne remonte pas à l'application. */
+  silencieux = false
   private ids = ''
 
   constructor(conteneur: HTMLElement, surSelection: (id: string | null) => void) {
@@ -66,7 +69,9 @@ export class VueGrapheAtlas {
     v.definirTheme(SOMBRE.matches ? 'sombre' : 'clair')
     SOMBRE.addEventListener('change', () => v.definirTheme(SOMBRE.matches ? 'sombre' : 'clair'))
     this.filtres = new FiltresVue(v)
-    v.on('selection', ({ point }) => surSelection(point === null ? null : v.noeud(point).id))
+    v.on('selection', ({ point }) => {
+      if (!this.silencieux) surSelection(point === null ? null : v.noeud(point).id)
+    })
   }
 
   /** Affiche un graphe lu dans l'API. Ne fait rien si les données n'ont pas changé ; recadre si les nœuds changent. */
@@ -77,7 +82,12 @@ export class VueGrapheAtlas {
     const ids = graphe.noeuds.map((n) => n.id).sort().join(' ')
     const nouveaux = ids !== this.ids
     this.ids = ids
-    await this.moteur.remplacerJeu(depuisGrapheAtlas(graphe))
+    this.silencieux = true
+    try {
+      await this.moteur.remplacerJeu(depuisGrapheAtlas(graphe))
+    } finally {
+      this.silencieux = false
+    }
     if (nouveaux) this.cadrer()
   }
 
