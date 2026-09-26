@@ -26,20 +26,40 @@ dans `pipeline.py`, les sous-agents dans `sous_agents.py` — c'est Camille qui 
 - `noeuds.parents` / `noeuds.enfants` (parents = prémisses) sont maintenus par trigger depuis `demonstrations` :
   ne jamais les écrire. Le graphe est global ; `noeuds.conversation_id` dit seulement qui a créé le nœud.
 
-## Agents : local d'abord, VM ensuite
+## Architecture en production
 
-Les agents tournent d'abord sur la machine de Camille, puis migreront sur une VM cloud. Pour que la
-migration reste triviale :
-- toute config (clés, modèles, URL, ports, chemins) passe par des variables d'env lues au même endroit,
-  documentées dans `.env.example` ; rien de spécifique à Windows ou à la machine en dur ;
-- les agents tournent dans `atlas.serveur` (process longue durée), jamais dans `api/` : Vercel déploie chaque
-  fichier de `api/` en fonction à durée limitée et n'installe que `requirements.txt` (le SDK agents est dans
-  `requirements-agents.txt`) ; le front ne doit dépendre que d'une URL d'API configurable ;
-- l'état persiste dans Supabase, pas sur disque local.
+```
+navigateur ── https://atlas-nine-bay.vercel.app ── Vercel : front (frontend/dist) + api/index.py (lecture seule)
+     │ /api/conversations… (VITE_API_URL + Authorization: Bearer <jeton>)
+     └─→ https://2-28-235-109.sslip.io ── VM Hetzner : Caddy (HTTPS) → conteneur atlas (atlas.serveur)
+                                                         └─ Codex + serveur MCP atlas
+Supabase (uykaupigovrvgwsckbcn) : graphe, conversations, messages, journal — lu/écrit par Vercel, la VM et le local
+```
 
-Déploiement VM : `Dockerfile` + `docker-compose.yml` (Caddy) + `deploiement/` (script d'installation, guide).
-Sur la VM, `ATLAS_JETON_ACCES` est obligatoire : les routes `/api/conversations` lancent un agent qui exécute des
-commandes. Le front l'envoie en `Authorization: Bearer` (saisi une fois, gardé en localStorage, jamais dans le build).
+- **Vercel** (projet `atlas`, équipe `atlas-e95e`) : redéploie la production à chaque push sur `main`. Variables :
+  `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `VITE_API_URL` (intégrée au build : après modification, redéployer).
+  Ne sert que la lecture : `/api/conversations` y répond 404, c'est normal.
+- **VM** (Hetzner CPX32, Nuremberg, Ubuntu 26.04, serveur `atlas`, IP 2.28.235.109, accès `ssh root@2.28.235.109`
+  par clé) : code dans `/opt/atlas`, `.env` propre à la VM (`ATLAS_JETON_ACCES`, `ATLAS_DOMAINE`,
+  `ATLAS_CORS_ORIGINES`), volume Docker `atlas_donnees` = espace des agents + `CODEX_HOME` (connexion Codex).
+  **Pas de déploiement automatique** : après un push sur `main`,
+  `ssh root@2.28.235.109 "cd /opt/atlas && git pull && docker compose up -d --build"`. Guide : `deploiement/README.md`.
+- **Supabase** : partagé avec la couche vocale `AtlasVoice/` (tables `taches`, `taches_evenements`, `verrous`).
+  Migrations : `npx supabase db push` depuis un checkout de `main` (toutes les migrations doivent y être), avec
+  `SUPABASE_ACCESS_TOKEN` et `SUPABASE_DB_PASSWORD` du `.env` local ; `--dry-run` d'abord, jamais `--include-seed`.
+- **Codex** : connecté au compte ChatGPT de Camille (abonnement), en local comme sur la VM ; renseigner
+  `OPENAI_API_KEY` bascule sur les crédits API au tour suivant.
+- **Local** : `.env` sans `ATLAS_JETON_ACCES` (pas de contrôle), Vite proxifie `/api` vers `:8000`.
+- Le jeton d'accès ne s'affiche jamais : le lire ou le vérifier sur la VM (empreinte), ne pas le mettre dans la
+  conversation ni dans le build. Sans lui, les routes `/api/conversations` exposeraient un agent qui exécute des
+  commandes.
+
+Règles pour que ça reste déployable : toute config passe par des variables d'env documentées dans `.env.example`
+(rien de propre à Windows en dur) ; les agents tournent dans `atlas.serveur`, jamais dans `api/` (Vercel en fait
+des fonctions à durée limitée et n'installe que `requirements.txt`, le SDK agents est dans `requirements-agents.txt`) ;
+l'état persiste dans Supabase.
+
+## Agents
 
 L'orchestrateur est Codex via son SDK Python officiel `openai-codex` (pas `openai-codex-sdk`, sans dépôt officiel) :
 `Sandbox.full_access` + `ApprovalMode.deny_all` (jamais de demande d'approbation), un thread par conversation.
