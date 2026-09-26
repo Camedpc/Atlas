@@ -123,3 +123,17 @@ def test_phrases_de_fin():
     assert phrase_de_fin("au revoir")
     assert not phrase_de_fin("stop la tâche sur la dérivée")
     assert not phrase_de_fin("merci, et le résumé ?")
+
+
+def test_fin_par_la_reponse_d_atlas(registre):
+    from app.voix.session import reponse_de_fin
+
+    assert phrase_de_fin("À plus tard.")
+    assert reponse_de_fin("À plus tard.")
+    assert not reponse_de_fin("À plus tard, je te redis quand le résumé est prêt.")
+    s = SessionVocale(websocket=None, registre=registre, utilisateur_id="u1")
+    demandes = []
+    s._demander_fin = lambda: demandes.append(s._tour_atlas)
+    for morceau in ("À", "plus", "tard."):
+        s._sur_texte_atlas(morceau, 7)
+    assert demandes == [7]

@@ -59,7 +59,10 @@ async def cycle_de_vie(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="Atlas vocal", lifespan=cycle_de_vie)
-app.add_middleware(CORSMiddleware, allow_origins=config.CORS_ORIGINS, allow_methods=["*"], allow_headers=["*"])
+# En local, toute page servie depuis localhost ou 127.0.0.1 (quel que soit le port) est acceptée.
+app.add_middleware(CORSMiddleware, allow_origins=config.CORS_ORIGINS,
+                   allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
+                   allow_methods=["*"], allow_headers=["*"])
 app.include_router(taches.routeur)
 app.include_router(taches.agents)
 app.include_router(observabilite.routeur)

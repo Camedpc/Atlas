@@ -63,8 +63,13 @@ DATABASE_URL = _env("DATABASE_URL")
 GRADIUM_API_KEY = _env("GRADIUM_API_KEY")
 # Endpoint UE de Gradium (section 3.1).
 GRADIUM_BASE_URL = _env("GRADIUM_BASE_URL", "https://eu.api.gradium.ai/api/")
-# Voix française du catalogue (Gaspard par défaut ; voir gradbot.flagship_voices()).
-ATLAS_VOICE_ID = _env("ATLAS_VOICE_ID", "iEu63s1rhn_kegTr")
+# Voix française du catalogue (Damien par défaut ; voir gradbot.flagship_voices()).
+ATLAS_VOICE_ID = _env("ATLAS_VOICE_ID", "25AzBFyp6svYnJsj")
+# Réglages de la voix (json_config du TTS Gradium) :
+# vitesse de parole, de -4 (plus rapide) à 4 (plus lent), 0 par défaut ;
+ATLAS_TTS_PADDING_BONUS = float(_env("ATLAS_TTS_PADDING_BONUS", "0"))
+# température, de 0 (plus stable, plus régulière) à 1,4 (plus variée), 0,7 par défaut chez Gradium.
+ATLAS_TTS_TEMP = float(t) if (t := _env("ATLAS_TTS_TEMP")) else None
 # Silence traîné avant de considérer le tour fini (le VAD sémantique de Gradium décide en amont).
 ATLAS_FLUSH_S = float(_env("ATLAS_FLUSH_S", "0.3"))
 

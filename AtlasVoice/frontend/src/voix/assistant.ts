@@ -39,6 +39,7 @@ export interface Rappels {
 }
 
 const SILENCE_FIN_MS = 8000;
+const DELAI_FIN_MS = 1500;
 const DELAI_FAUX_REVEIL_MS = 6000;
 const TAMPON_REVEIL_S = 1.0;
 const MODELE_MOT_CLE = import.meta.env.VITE_MOT_CLE_MODELE ?? "hey_atlas.onnx";
@@ -53,7 +54,8 @@ export class AssistantVocal {
   private encodeur: EncodeurOpus | null = null;
   private enAttenteEnvoi: Float32Array[] | null = null;
   private derniereActivite = 0;
-  private finDemandee = false;
+  /** Instant (performance.now) où la fin a été demandée, ou null. */
+  private finDemandee: number | null = null;
   private fermetureVoulue = false;
   private minuterie: number | null = null;
   private timing: { stopS: number | null; tour: number | null; interrompu: boolean } =
@@ -93,7 +95,7 @@ export class AssistantVocal {
       this.motCle = motCle;
       this.rappels.surMotCle(true);
     } catch (e) {
-      this.rappels.surMotCle(false, `modèle ${MODELE_MOT_CLE} introuvable (${String(e).slice(0, 80)})`);
+      this.rappels.surMotCle(false, String(e instanceof Error ? e.message : e).slice(0, 120));
     }
   }
 
@@ -171,7 +173,7 @@ export class AssistantVocal {
 
   private ouvrirSession(prelude: Float32Array[]): void {
     this.changerEtat("connexion");
-    this.finDemandee = false;
+    this.finDemandee = null;
     this.fermetureVoulue = false;
     this.enAttenteEnvoi = [...prelude];
     const taux = this.micro.contexte?.sampleRate ?? 48000;
@@ -217,7 +219,7 @@ export class AssistantVocal {
         if (msg.event === "interrupted") this.lecteur?.vider();
         break;
       case "fin_demandee":
-        this.finDemandee = true;
+        this.finDemandee = performance.now();
         break;
       case "error":
         this.rappels.surErreur(msg.message);
@@ -279,8 +281,10 @@ export class AssistantVocal {
       return;
     }
     const silence = maintenant - this.derniereActivite;
-    if (this.etat === "ecoute" && ((this.finDemandee && !parle) || silence > SILENCE_FIN_MS)) {
-      this.finDemandee = false;
+    // Laisse à « À plus tard » le temps d'arriver et d'être joué avant de fermer.
+    const finPrete = this.finDemandee !== null && !parle && maintenant - this.finDemandee > DELAI_FIN_MS;
+    if (this.etat === "ecoute" && (finPrete || silence > SILENCE_FIN_MS)) {
+      this.finDemandee = null;
       this.finDeConversation();
     } else if (this.etat === "veille" && !this.rappels.tachesActives() && silence > SILENCE_FIN_MS) {
       this.fermerSession();

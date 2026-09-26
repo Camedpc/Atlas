@@ -7,7 +7,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 from collections.abc import AsyncIterator
 from typing import Any, Literal
@@ -79,11 +78,10 @@ def _flux_sse(request: Request, r: Registre, utilisateur_id: str | None) -> Stre
         initial = await r.stockage.lister(utilisateur_id)
         yield f"event: etat\ndata: {json.dumps([t.model_dump(mode='json') for t in initial])}\n\n"
         filtre = None if utilisateur_id is None else (lambda t: t.utilisateur_id == utilisateur_id)
-        async with r.abonnement(filtre) as flux_evt:
-            iterateur = aiter(flux_evt)
+        async with r.abonnement(filtre) as abonnement:
             while not await request.is_disconnected():
                 try:
-                    evt = await asyncio.wait_for(anext(iterateur), timeout=15)
+                    evt = await abonnement.suivant(delai=15)
                 except TimeoutError:
                     yield ": ping\n\n"
                     continue

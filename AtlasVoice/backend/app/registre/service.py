@@ -54,6 +54,28 @@ class ErreurRegistre(Exception):
         return res
 
 
+class Abonnement:
+    """Événements d'un abonné, filtrés. Itérable, ou `suivant(delai)` pour attendre avec délai."""
+
+    def __init__(self, filtre: Callable[[Tache], bool] | None) -> None:
+        self.file: asyncio.Queue[Evenement] = asyncio.Queue()
+        self._filtre = filtre
+
+    async def suivant(self, delai: float | None = None) -> Evenement:
+        """Prochain événement retenu ; lève TimeoutError après `delai` secondes sans événement."""
+        async with asyncio.timeout(delai):
+            while True:
+                evt = await self.file.get()
+                if self._filtre is None or self._filtre(evt.tache):
+                    return evt
+
+    def __aiter__(self) -> Abonnement:
+        return self
+
+    async def __anext__(self) -> Evenement:
+        return await self.suivant()
+
+
 class Registre:
     def __init__(self, stockage: Stockage) -> None:
         self.stockage = stockage
@@ -104,23 +126,14 @@ class Registre:
             file.put_nowait(evt)
 
     @contextlib.asynccontextmanager
-    async def abonnement(
-        self, filtre: Callable[[Tache], bool] | None = None
-    ) -> AsyncIterator[AsyncIterator[Evenement]]:
+    async def abonnement(self, filtre: Callable[[Tache], bool] | None = None) -> AsyncIterator[Abonnement]:
         """`async with registre.abonnement(f) as flux: async for evt in flux: ...`"""
-        file: asyncio.Queue[Evenement] = asyncio.Queue()
-        self._abonnes.add(file)
-
-        async def flux() -> AsyncIterator[Evenement]:
-            while True:
-                evt = await file.get()
-                if filtre is None or filtre(evt.tache):
-                    yield evt
-
+        abonnement = Abonnement(filtre)
+        self._abonnes.add(abonnement.file)
         try:
-            yield flux()
+            yield abonnement
         finally:
-            self._abonnes.discard(file)
+            self._abonnes.discard(abonnement.file)
 
     # ── création (Atlas, chat texte) ──────────────────────────────
 

@@ -9,8 +9,11 @@
  */
 
 import * as ort from "onnxruntime-web/wasm";
+// Runtime WebAssembly servi depuis le paquet (Vite en fait des fichiers du build) : rien ne vient d'un CDN.
+import ortMjs from "onnxruntime-web/ort-wasm-simd-threaded.mjs?url";
+import ortWasm from "onnxruntime-web/ort-wasm-simd-threaded.wasm?url";
 
-ort.env.wasm.wasmPaths = "/ort/";
+ort.env.wasm.wasmPaths = { mjs: ortMjs, wasm: ortWasm };
 ort.env.wasm.numThreads = 1;
 
 const TAUX = 16000;
@@ -82,9 +85,16 @@ export class MotCle {
   constructor(private options: OptionsMotCle) {}
 
   async charger(): Promise<void> {
-    const creer = (fichier: string) => ort.InferenceSession.create(`/wakeword/${fichier}`, {
-      executionProviders: ["wasm"],
-    });
+    const creer = async (fichier: string) => {
+      // Un fichier absent est servi comme la page d'accueil (HTML) : on le détecte avant ONNX.
+      const reponse = await fetch(`/wakeword/${fichier}`);
+      if (!reponse.ok || reponse.headers.get("content-type")?.includes("text/html")) {
+        throw new Error(`${fichier} absent de public/wakeword (npm run mot-cle)`);
+      }
+      return ort.InferenceSession.create(new Uint8Array(await reponse.arrayBuffer()), {
+        executionProviders: ["wasm"],
+      });
+    };
     [this.mel, this.embedding, this.modele] = await Promise.all([
       creer("melspectrogram.onnx"), creer("embedding_model.onnx"), creer(this.options.modele),
     ]);

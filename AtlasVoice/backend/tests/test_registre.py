@@ -180,3 +180,13 @@ async def test_resultat_oral_trop_long_refuse(registre):
     await registre.prendre(["explorateur"])
     with pytest.raises(ErreurRegistre):
         await registre.terminer(tache.id, "x" * 2000)
+
+
+async def test_abonnement_reste_utilisable_apres_un_delai(registre):
+    """Régression : le flux SSE attend 15 s puis envoie un ping ; l'abonnement ne doit pas se casser."""
+    async with registre.abonnement(lambda t: t.utilisateur_id == "u1") as abonnement:
+        with pytest.raises(TimeoutError):
+            await abonnement.suivant(delai=0.01)
+        tache = await nouvelle(registre)
+        evt = await abonnement.suivant(delai=1)
+        assert evt.tache.id == tache.id and evt.type == "creee"

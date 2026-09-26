@@ -30,16 +30,25 @@ from .outils import DEFINITIONS, Outils, rapport, schema_json
 
 log = logging.getLogger(__name__)
 
+# Chemin rapide : formules sans ambiguïté, reconnues dès la transcription.
 FIN_SESSION = re.compile(
-    r"^\W*(merci,?\s+atlas|stop|au revoir(\s+atlas)?|c'est tout,?\s+merci(\s+atlas)?|bonne nuit\s+atlas)\W*$",
+    r"^\W*(merci,?\s+atlas|stop|au revoir(\s+atlas)?|à plus( tard)?(\s+atlas)?|c'est tout,?\s+merci(\s+atlas)?"
+    r"|bonne nuit\s+atlas)\W*$",
     re.IGNORECASE,
 )
+# Toute autre façon de clore (« on arrête la conversation »…) : le prompt fait répondre
+# exactement « À plus tard. », et c'est cette réponse d'Atlas qui ferme la session.
+REPONSE_DE_FIN = re.compile(r"^\W*à plus tard\W*$", re.IGNORECASE)
 NB_ECHANGES_CONTEXTE = 6
 DELAI_MAJ_PROMPT_S = 0.3
 
 
 def phrase_de_fin(texte: str) -> bool:
     return bool(FIN_SESSION.match(texte.strip()))
+
+
+def reponse_de_fin(texte: str) -> bool:
+    return bool(REPONSE_DE_FIN.match(texte.strip()))
 
 
 def _outils_gradbot() -> list[gradbot.ToolDef]:
@@ -63,6 +72,9 @@ class SessionVocale:
         self.arret = asyncio.Event()
         self._maj_prompt: asyncio.Task | None = None
         self._tour: dict[str, float] = {}
+        self._tour_atlas: int | None = None
+        self._texte_atlas = ""
+        self._fin_envoyee_tour: int | None = None
         self._envoi = asyncio.Lock()
 
     # ── contexte transmis aux agents ──────────────────────────────
@@ -88,6 +100,8 @@ class SessionVocale:
             silence_timeout_s=0.0,
             flush_duration_s=config.ATLAS_FLUSH_S,
             tools=_outils_gradbot(),
+            padding_bonus=config.ATLAS_TTS_PADDING_BONUS,
+            tts_extra_config=json.dumps({"temp": config.ATLAS_TTS_TEMP}) if config.ATLAS_TTS_TEMP is not None else None,
         )
 
     async def _demarrer_gradbot(self) -> gradbot.SessionOutputHandle:
@@ -214,6 +228,8 @@ class SessionVocale:
                     continue
                 if msg.msg_type == "event" and msg.event is not None:
                     self._sur_evenement(msg.event.event_type, msg.event.data, msg.time_s)
+                if msg.msg_type == "tts_text" and msg.text:
+                    self._sur_texte_atlas(msg.text, msg.turn_idx)
                 schema = gradbot.schemas.from_msg(msg)
                 if schema is None:
                     continue
@@ -245,7 +261,7 @@ class SessionVocale:
                 self.echanges.append({"role": "utilisateur", "texte": texte})
                 self.journal.ecrire("utilisateur", texte=texte)
                 if phrase_de_fin(texte):
-                    self._lancer(self._envoyer_json({"type": "fin_demandee"}))
+                    self._demander_fin()
         elif nom == "previous_llm_gen" and isinstance(donnees, dict):
             texte = (donnees.get("agent_text") or "").strip()
             if texte:
@@ -256,6 +272,22 @@ class SessionVocale:
             self.journal.ecrire("interruption")
         if temps is not None:
             self._mesurer(nom, temps)
+
+    def _sur_texte_atlas(self, morceau: str, tour: int | None) -> None:
+        """Assemble la réponse d'Atlas du tour en cours ; « À plus tard. » clôt la session."""
+        if tour != self._tour_atlas:
+            self._tour_atlas, self._texte_atlas = tour, ""
+        self._texte_atlas = f"{self._texte_atlas} {morceau}".strip()
+        if reponse_de_fin(self._texte_atlas):
+            self._demander_fin()
+
+    def _demander_fin(self) -> None:
+        # Le client attend la fin de la lecture, puis ferme (ou passe en veille si une tâche tourne).
+        if self._fin_envoyee_tour == self._tour_atlas and self._tour_atlas is not None:
+            return
+        self._fin_envoyee_tour = self._tour_atlas
+        self.journal.ecrire("fin_demandee")
+        self._lancer(self._envoyer_json({"type": "fin_demandee"}))
 
     def _mesurer(self, nom: str, temps: float) -> None:
         """Budget de latence (section 6.1), mesuré sur l'horloge de Gradbot."""

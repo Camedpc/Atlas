@@ -40,13 +40,16 @@ export function jetonCourant(): string | null {
   return jeton;
 }
 
-function entetes(): HeadersInit {
-  return jeton ? { Authorization: `Bearer ${jeton}`, "Content-Type": "application/json" }
-    : { "Content-Type": "application/json" };
+/** Pas de Content-Type sur les lectures : le navigateur n'a pas à faire de requête préalable (CORS). */
+function entetes(avecCorps = false): HeadersInit {
+  const res: Record<string, string> = {};
+  if (jeton) res.Authorization = `Bearer ${jeton}`;
+  if (avecCorps) res["Content-Type"] = "application/json";
+  return res;
 }
 
 async function appel<T>(chemin: string, init?: RequestInit): Promise<T> {
-  const reponse = await fetch(`${URL_API}${chemin}`, { ...init, headers: entetes() });
+  const reponse = await fetch(`${URL_API}${chemin}`, { ...init, headers: entetes(init?.body !== undefined) });
   if (!reponse.ok) {
     const detail = await reponse.text();
     throw new Error(`${reponse.status} ${detail}`);
