@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Arbre plan · Atlas</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="../../commun/commun.css">
+  <link rel="stylesheet" href="../../commun/clair.css">
+  <style>
+    /* Plan technique : encre et gris Carbon, un seul accent bleu pour les agents actifs, rouge pour l'échec. */
+    :root {
+      --fond: #ffffff;
+      --fond-2: #ffffff;
+      --fond-3: #f4f4f4;
+      --trait: #e0e0e0;
+      --trait-fort: #c6c6c6;
+      --gris: #8d8d8d;
+      --texte: #161616;
+      --texte-2: #525252;
+      --texte-3: #8d8d8d;
+      --accent: #0f62fe;
+      --echec: #da1e28;
+      --ok: #0f62fe; /* pastille « actifs » de la barre commune */
+      --police: 'IBM Plex Sans', system-ui, 'Segoe UI', sans-serif;
+      --mono: 'IBM Plex Mono', ui-monospace, Consolas, monospace;
+    }
+
+    /* Barre commune alignée sur le plan : angles droits */
+    .barre { background: #fff; border-bottom-color: var(--trait-fort); }
+    .barre .groupe { border-radius: 0; background: #fff; border-color: var(--trait-fort); padding: 0; gap: 0; }
+    .barre .groupe button + button { border-left: 1px solid var(--trait); }
+    .barre button { border-radius: 0; font-family: var(--mono); }
+    .barre button.actif { background: var(--texte); }
+    .barre .pastille { border-radius: 0; }
+
+    .scene {
+      cursor: grab; user-select: none;
+      background-color: #fff;
+      background-image:
+        linear-gradient(to right, #f2f2f2 1px, transparent 1px),
+        linear-gradient(to bottom, #f2f2f2 1px, transparent 1px);
+      background-size: 24px 24px;
+    }
+    .scene:active { cursor: grabbing; }
+
+    .monde { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
+    .liens { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: visible; }
+    .noeuds { position: absolute; left: 0; top: 0; }
+
+    .picto { display: inline-flex; width: 14px; height: 14px; flex: none; color: var(--texte); }
+    .picto svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.25; stroke-linejoin: miter; }
+
+    /* ─── Question ─── */
+    .question {
+      position: absolute; left: 16px; top: 14px; max-width: 620px; z-index: 5; pointer-events: none;
+      padding: 8px 12px; background: #fff; border: 1px solid var(--trait-fort);
+      font: 400 13px/1.4 var(--police); color: var(--texte);
+    }
+    .question span {
+      display: block; margin-bottom: 2px;
+      font: 500 10px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--texte-3);
+    }
+
+    /* ─── Nœuds ─── */
+    .noeud { position: absolute; left: 0; top: 0; will-change: transform; }
+
+    .agent .carte {
+      position: relative; width: 264px; height: 90px; cursor: pointer;
+      display: grid; grid-template-rows: 25px 1fr 33px;
+      background: #fff; border: 1px solid var(--trait-fort); border-radius: 0;
+    }
+    .agent .carte:hover { border-color: var(--texte-2); }
+
+    .n-tete {
+      display: flex; align-items: center; gap: 7px; padding: 0 10px; min-width: 0;
+      border-bottom: 1px solid var(--trait);
+    }
+    .n-tete .code { font: 600 10.5px var(--mono); letter-spacing: 0.06em; color: var(--texte); }
+    .n-tete .role { font: 400 11.5px var(--police); color: var(--texte-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .n-tete .ident { margin-left: auto; font: 400 10px var(--mono); color: var(--texte-3); }
+
+    .n-corps { padding: 5px 10px 0; min-width: 0; }
+    .n-titre { font: 500 13px/1.3 var(--police); color: var(--texte); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .n-act { margin-top: 1px; font: 400 10.5px/1.35 var(--mono); color: var(--texte-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    .n-champs {
+      margin: 0; display: grid; grid-template-columns: 1.55fr 1fr 1fr 0.75fr;
+      border-top: 1px solid var(--trait);
+    }
+    .n-champs div { padding: 3px 0 0 10px; min-width: 0; }
+    .n-champs div + div { border-left: 1px solid var(--trait); padding-left: 8px; }
+    .n-champs dt { font: 500 8.5px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--texte-3); }
+    .n-champs dd {
+      margin: 1px 0 0; font: 500 11px var(--mono); color: var(--texte); font-variant-numeric: tabular-nums;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+
+    /* États */
+    .carte.actif { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+    .carte.actif .c-etat { color: var(--accent); font-weight: 600; }
+    .carte.etat-attend .c-etat { color: var(--texte); }
+    .carte.etat-en_file { border-style: dashed; border-color: var(--gris); }
+    .carte.etat-en_file .n-titre, .carte.etat-en_file .code { color: var(--texte-2); }
+    .carte.etat-en_file .c-etat, .carte.etat-en_file .n-act { color: var(--texte-3); }
+    .carte.etat-termine .n-titre, .carte.etat-termine .code, .carte.etat-termine .picto { color: var(--texte-2); }
+    .carte.etat-termine .c-etat { color: var(--texte-2); }
+    .carte.etat-echec { border-color: var(--echec); }
+    .carte.etat-echec .c-etat, .carte.etat-echec .n-act { color: var(--echec); }
+    .carte.choisi { outline: 1px solid var(--texte); outline-offset: 3px; }
+
+    .noeud .replier {
+      position: absolute; left: 255px; top: -9px; width: 18px; height: 18px; padding: 0;
+      display: none; place-items: center; cursor: pointer; border-radius: 0;
+      font: 500 12px/1 var(--mono); color: var(--texte); background: #fff; border: 1px solid var(--texte-2);
+    }
+    .noeud .replier:hover { background: var(--fond-3); }
+    .noeud.avec-replier .replier { display: grid; }
+
+    /* Grappe repliée */
+    .grappe .carte {
+      position: relative; width: 200px; height: 44px; padding: 0 30px 0 10px; cursor: pointer;
+      display: flex; flex-direction: column; justify-content: center; gap: 2px;
+      background: #fff; border: 1px dashed var(--gris); border-radius: 0; white-space: nowrap;
+    }
+    .grappe .carte:hover { border-color: var(--texte); }
+    .grappe .g-l1 { font: 500 12px var(--police); color: var(--texte); }
+    .grappe .g-l1 .echecs { color: var(--echec); font: 500 11px var(--mono); }
+    .grappe .g-l2 { font: 400 10px var(--mono); letter-spacing: 0.04em; color: var(--texte-3); overflow: hidden; text-overflow: ellipsis; }
+    .grappe .g-plus {
+      position: absolute; right: 8px; top: 50%; width: 14px; height: 14px; margin-top: -7px;
+      display: grid; place-items: center; border: 1px solid var(--texte-2); font: 500 11px/1 var(--mono); color: var(--texte-2);
+    }
+
+    /* ─── Connecteurs et cotes ─── */
+    .liens path.c { fill: none; stroke: var(--gris); stroke-width: 1; shape-rendering: crispEdges; marker-end: url(#pointe-gris); }
+    .liens path.c.actif { stroke: var(--accent); stroke-width: 2; marker-end: url(#pointe-bleu); }
+    .liens path.c.en_file { stroke-dasharray: 4 3; }
+    .liens path.c.chemin:not(.actif) { stroke: var(--texte); marker-end: url(#pointe-encre); }
+    .liens marker path { shape-rendering: geometricPrecision; }
+
+    .cote line { stroke: var(--texte-3); stroke-width: 1; shape-rendering: crispEdges; }
+    .cote .n { font: 600 11px var(--mono); fill: var(--texte); letter-spacing: 0.04em; }
+    .cote .nb { font: 400 10px var(--mono); fill: var(--texte-3); }
+
+    /* ─── Inspecteur ─── */
+    .inspecteur {
+      position: absolute; top: 0; right: 0; bottom: 0; width: 384px; z-index: 10;
+      display: none; flex-direction: column; overflow: hidden; cursor: default; user-select: text;
+      background: #fff; border-left: 1px solid var(--trait-fort);
+    }
+    .inspecteur.ouvert { display: flex; }
+    .i-tete {
+      display: flex; align-items: center; gap: 8px; height: 40px; flex: none; padding: 0 8px 0 16px;
+      border-bottom: 1px solid var(--trait-fort); font: 400 11px var(--mono); color: var(--texte-2);
+    }
+    .i-tete .i-code { font-weight: 600; color: var(--texte); letter-spacing: 0.06em; }
+    .i-tete .i-id { color: var(--texte-3); }
+    .i-fermer {
+      margin-left: auto; width: 28px; height: 28px; padding: 0; cursor: pointer; border: 1px solid transparent; border-radius: 0;
+      background: transparent; color: var(--texte-2); font: 400 18px/1 var(--police);
+    }
+    .i-fermer:hover { border-color: var(--trait-fort); color: var(--texte); }
+    .i-titre { flex: none; margin: 0; padding: 14px 16px; font: 600 16px/1.35 var(--police); color: var(--texte); border-bottom: 1px solid var(--trait); }
+    .i-table { flex: none; width: 100%; border-collapse: collapse; }
+    .i-table th, .i-table td { padding: 7px 16px; border-bottom: 1px solid var(--trait); vertical-align: top; text-align: left; }
+    .i-table th { width: 104px; padding-right: 0; font: 500 9.5px/17px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--texte-3); }
+    .i-table td { font: 400 12.5px/17px var(--police); color: var(--texte); }
+    .i-table td.mono { font: 500 12px/17px var(--mono); font-variant-numeric: tabular-nums; }
+    .i-table td.e-actif { color: var(--accent); font-weight: 600; }
+    .i-table td.e-echec, .i-table td.echec { color: var(--echec); }
+    .i-table td.lienable { cursor: pointer; text-decoration: underline; text-decoration-color: var(--trait-fort); text-underline-offset: 3px; }
+    .i-table td.lienable:hover { text-decoration-color: var(--texte); }
+    .i-jt {
+      display: flex; justify-content: space-between; flex: none; padding: 16px 16px 6px;
+      font: 500 9.5px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--texte-3);
+      border-bottom: 1px solid var(--trait-fort);
+    }
+    .i-journal { flex: 1; min-height: 0; overflow-y: auto; margin: 0; padding: 0; list-style: none; font: 400 11px/1.45 var(--mono); }
+    .i-journal li { display: grid; grid-template-columns: 40px 30px 1fr; gap: 8px; padding: 5px 16px; border-bottom: 1px solid var(--fond-3); }
+    .i-journal time { color: var(--texte-3); font-variant-numeric: tabular-nums; }
+    .i-journal b { font-weight: 500; color: var(--texte-3); }
+    .i-journal span { color: var(--texte-2); word-break: break-word; }
+    .i-journal li[data-t='termine'] b, .i-journal li[data-t='termine'] span { color: var(--texte); }
+    .i-journal li[data-t='echec'] b, .i-journal li[data-t='echec'] span { color: var(--echec); }
+
+    /* ─── Cartouche (légende) et recadrage ─── */
+    .cartouche {
+      position: absolute; left: 16px; bottom: 16px; z-index: 5; cursor: default;
+      display: flex; background: #fff; border: 1px solid var(--trait-fort);
+      font: 400 10.5px var(--mono); color: var(--texte-2);
+    }
+    .cartouche > div { padding: 6px 12px; display: flex; align-items: center; gap: 12px; }
+    .cartouche > div + div { border-left: 1px solid var(--trait); }
+    .cartouche span { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+    .cartouche b { font-weight: 600; color: var(--texte); letter-spacing: 0.06em; }
+    .cartouche em { font-style: normal; }
+    .cartouche svg.l { width: 22px; height: 8px; overflow: visible; }
+    .cartouche .rouge { color: var(--echec); }
+    .cartouche .aide { color: var(--texte-3); }
+    .cartouche .echelle { font-style: normal; color: var(--texte); font-variant-numeric: tabular-nums; }
+
+    .recadrer {
+      position: absolute; right: 16px; bottom: 16px; z-index: 6; padding: 6px 12px; cursor: pointer; display: none;
+      font: 500 11px var(--mono); color: var(--texte); background: #fff; border: 1px solid var(--texte-2); border-radius: 0;
+    }
+    .recadrer.visible { display: block; }
+    .recadrer:hover { background: var(--fond-3); }
+    .scene.panneau .recadrer { right: 400px; }
+
+    @media (max-width: 1500px) { .cartouche em, .cartouche .aide { display: none; } }
+    @media (max-width: 900px) { .cartouche { display: none; } }
+  </style>
+</head>
+<body>
+  <main class="scene"></main>
+  <script type="module" src="./vue.js"></script>
+</body>
+</html>

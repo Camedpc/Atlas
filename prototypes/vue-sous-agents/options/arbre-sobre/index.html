@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Arbre sobre · Atlas</title>
+  <link rel="stylesheet" href="../../commun/commun.css">
+  <link rel="stylesheet" href="../../commun/clair.css">
+  <style>
+    :root {
+      --fond-scene: #fafaf9;
+      --ombre-survol: 0 1px 2px rgba(24, 24, 27, 0.04), 0 4px 12px rgba(24, 24, 27, 0.06);
+      --ombre-choix: 0 1px 2px rgba(24, 24, 27, 0.06), 0 8px 24px rgba(24, 24, 27, 0.10);
+      --echec-doux: #fca5a5;
+      --echec-fond: #fef2f2;
+    }
+
+    .scene {
+      cursor: grab;
+      background-color: var(--fond-scene);
+      background-image: radial-gradient(circle, rgba(24, 24, 27, 0.07) 1px, transparent 1.2px);
+      background-size: 24px 24px;
+      user-select: none;
+    }
+    .scene:active { cursor: grabbing; }
+
+    .monde { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
+    .liens { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: visible; }
+    .noeuds { position: absolute; left: 0; top: 0; }
+
+    /* ─── Question ─── */
+    .question {
+      position: absolute; left: 12px; top: 10px; max-width: 600px; z-index: 5; padding: 6px 8px;
+      background: rgba(250, 250, 249, 0.92); border-radius: 6px;
+      pointer-events: none; font-size: 13px; line-height: 1.45; color: var(--texte);
+      font-weight: 500; letter-spacing: -0.005em;
+    }
+    .question span {
+      display: block; font: 500 10.5px var(--police); letter-spacing: 0.06em; text-transform: uppercase;
+      color: var(--texte-3); margin-bottom: 3px;
+    }
+
+    /* ─── Lettre de rôle (monochrome) ─── */
+    .lettre {
+      flex: none; display: inline-grid; place-items: center; width: 16px; height: 16px;
+      border-radius: 4px; border: 1px solid var(--trait); background: var(--fond-3);
+      font: 600 9.5px/1 var(--police); font-style: normal; color: var(--texte-2);
+    }
+
+    /* ─── Nœuds ─── */
+    .noeud { position: absolute; left: 0; top: 0; will-change: transform; transition: opacity 0.35s; }
+    .noeud.sort { opacity: 0; pointer-events: none; }
+
+    .agent .carte {
+      position: relative; width: 264px; height: 72px; padding: 9px 12px 0;
+      border-radius: 8px; overflow: hidden; cursor: pointer;
+      background: #fff; border: 1px solid var(--trait);
+      transition: border-color 0.3s, box-shadow 0.2s, background-color 0.3s;
+    }
+    .agent .carte:hover { border-color: var(--trait-fort); box-shadow: var(--ombre-survol); }
+
+    .l1 { display: flex; align-items: center; gap: 7px; height: 16px; min-width: 0; }
+    .role {
+      flex: none; white-space: nowrap;
+      font: 600 10px var(--police); letter-spacing: 0.06em; text-transform: uppercase; color: var(--c);
+    }
+    .etat {
+      flex: 1; min-width: 0; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      font: 500 11px var(--police); color: var(--texte-2);
+    }
+    .etat code { font: 500 10.5px var(--mono); }
+    .agent .titre {
+      margin-top: 6px; font: 500 13px/1.25 var(--police); letter-spacing: -0.005em; color: var(--texte);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .activite {
+      display: flex; align-items: baseline; gap: 10px; margin-top: 4px; min-width: 0;
+      font: 11px/1.4 var(--police); color: var(--texte-3); white-space: nowrap;
+    }
+    .activite .txt { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+    .activite .chrono { flex: none; font: 10.5px var(--mono); color: var(--texte-3); font-variant-numeric: tabular-nums; }
+
+    /* États */
+    .carte.vivant { border-color: var(--c); }
+    .carte.vivant:hover { border-color: var(--c); }
+    .carte.vivant .etat { color: var(--c); }
+    .carte.vivant .activite .txt { color: var(--texte-2); }
+    .carte.vivant::after {
+      content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; pointer-events: none;
+      background: linear-gradient(var(--c), var(--c)) no-repeat;
+      background-size: 28% 100%; opacity: 0.6;
+      animation: progression 2.6s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+    }
+
+    .carte.etat-attend { border-color: var(--trait-fort); }
+    .carte.etat-attend .etat { color: var(--texte); }
+
+    .carte.etat-en_file { background: var(--fond-scene); border-style: dashed; border-color: var(--trait-fort); }
+    .carte.etat-en_file .titre { color: var(--texte-2); }
+    .carte.etat-en_file .role { opacity: 0.7; }
+    .carte.etat-en_file .etat { color: var(--texte-3); }
+
+    .carte.etat-termine .titre { color: var(--texte-2); }
+    .carte.etat-termine .role { color: var(--texte-3); }
+    .carte.etat-termine .etat { color: var(--texte-3); }
+
+    .carte.etat-echec { border-color: var(--echec-doux); }
+    .carte.etat-echec:hover { border-color: var(--echec); }
+    .carte.etat-echec .etat { color: var(--echec); }
+    .carte.etat-echec .activite .txt { color: var(--echec); }
+
+    .carte.choisi, .carte.choisi:hover { box-shadow: var(--ombre-choix); border-color: var(--texte); }
+    .carte.choisi.etat-echec { border-color: var(--echec); }
+
+    .noeud .replier {
+      position: absolute; left: 253px; top: -8px; width: 20px; height: 20px; padding: 0;
+      display: none; place-items: center; border-radius: 50%; cursor: pointer;
+      font: 500 13px/1 var(--police); color: var(--texte-2);
+      background: #fff; border: 1px solid var(--trait-fort);
+    }
+    .noeud .replier:hover { color: var(--texte); border-color: var(--texte-2); }
+    .noeud.avec-replier .replier { display: grid; }
+
+    /* Grappe repliée */
+    .grappe .carte {
+      display: flex; align-items: center; gap: 8px; width: 196px; height: 34px; padding: 0 12px;
+      border-radius: 8px; cursor: pointer; white-space: nowrap;
+      font: 500 12px var(--police); color: var(--texte-2); background: #fff; border: 1px solid var(--trait);
+      transition: border-color 0.2s, box-shadow 0.2s, color 0.2s;
+    }
+    .grappe .carte:hover { color: var(--texte); border-color: var(--trait-fort); box-shadow: var(--ombre-survol); }
+    .grappe .coche { color: var(--texte-3); }
+    .grappe .txt { flex: 1; }
+    .grappe .echecs { color: var(--echec); font: 500 11px var(--police); }
+    .grappe .chevron { color: var(--texte-3); font-size: 13px; }
+
+    /* ─── Liens ─── */
+    .lien { transition: opacity 0.35s; }
+    .lien.sort { opacity: 0; }
+    .lien path { fill: none; stroke: #d4d4d0; stroke-width: 1; transition: stroke 0.3s, stroke-width 0.3s; }
+    .lien.vivant path { stroke: var(--c); stroke-width: 1.5; }
+    .lien.attend path { stroke: #a1a1aa; }
+    .lien.en_file path { stroke: #b4b4ae; stroke-dasharray: 2 4; stroke-linecap: round; }
+    .lien.echec path { stroke: var(--echec-doux); }
+    .lien.grappe path { stroke-dasharray: 3 3; }
+    .lien.chemin:not(.vivant):not(.echec) path { stroke: var(--texte-2); stroke-width: 1.5; }
+
+    /* ─── Inspecteur ─── */
+    .inspecteur {
+      position: absolute; top: 12px; right: 12px; bottom: 12px; width: 360px; z-index: 10;
+      display: flex; flex-direction: column; overflow: hidden; cursor: default; user-select: text;
+      background: #fff; border: 1px solid var(--trait); border-radius: 10px;
+      box-shadow: 0 1px 3px rgba(24, 24, 27, 0.05), 0 12px 32px -8px rgba(24, 24, 27, 0.12);
+      transform: translateX(calc(100% + 24px)); transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+    .inspecteur.ouvert { transform: none; }
+    .i-fermer {
+      position: absolute; top: 12px; right: 12px; width: 26px; height: 26px; padding: 0; cursor: pointer;
+      border: 0; border-radius: 6px; background: transparent; color: var(--texte-3); font-size: 18px;
+    }
+    .i-fermer:hover { background: var(--fond-3); color: var(--texte); }
+    .i-tete { display: flex; align-items: center; gap: 8px; padding: 18px 18px 0; }
+    .i-role { font: 600 10.5px var(--police); color: var(--c); text-transform: uppercase; letter-spacing: 0.06em; }
+    .i-modele { font: 11px var(--mono); color: var(--texte-3); }
+    .i-titre { margin: 10px 18px 12px; padding-right: 20px; font: 600 16px/1.35 var(--police); letter-spacing: -0.015em; color: var(--texte); }
+    .i-etat {
+      align-self: flex-start; margin: 0 18px; padding: 3px 8px; border-radius: 6px;
+      font: 500 11.5px var(--police); border: 1px solid var(--trait); color: var(--texte-2); background: var(--fond-scene);
+    }
+    .i-etat.e-reflechit, .i-etat.e-outil { color: var(--c); border-color: var(--c); background: #fff; }
+    .i-etat.e-attend { color: var(--texte); border-color: var(--trait-fort); }
+    .i-etat.e-en_file { border-style: dashed; color: var(--texte-3); }
+    .i-etat.e-termine { color: var(--texte-2); }
+    .i-etat.e-echec { color: var(--echec); border-color: var(--echec-doux); background: var(--echec-fond); }
+    .i-grille {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 18px 18px 0; padding: 14px 0 0;
+      border-top: 1px solid var(--trait);
+    }
+    .i-grille .large { grid-column: span 2; }
+    .i-grille dt { font: 500 10.5px var(--police); color: var(--texte-3); }
+    .i-grille dd {
+      margin: 3px 0 0; font: 500 13px var(--mono); color: var(--texte); font-variant-numeric: tabular-nums;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .i-grille .large dd { font: 500 12px var(--police); }
+    .i-grille dd.lienable { cursor: pointer; color: var(--accent); }
+    .i-grille dd.lienable:hover { text-decoration: underline; text-underline-offset: 3px; }
+    .inspecteur section { margin: 16px 18px 0; }
+    .inspecteur h3 { margin: 0 0 4px; font: 500 10.5px var(--police); color: var(--texte-3); }
+    .inspecteur section p { margin: 0; font-size: 13px; line-height: 1.5; color: var(--texte); }
+    .inspecteur section p.echec { color: var(--echec); }
+    .i-jt { margin: 20px 18px 6px !important; }
+    .i-journal {
+      flex: 1; min-height: 0; overflow-y: auto; margin: 0; padding: 0 18px 16px; list-style: none;
+      font: 11.5px/1.45 var(--police); border-top: 1px solid var(--trait);
+    }
+    .i-journal li {
+      display: grid; grid-template-columns: 42px 10px 1fr; gap: 6px; padding: 6px 0;
+      border-bottom: 1px solid #efefec;
+    }
+    .i-journal time { font: 10.5px/1.6 var(--mono); color: var(--texte-3); font-variant-numeric: tabular-nums; }
+    .i-journal li > i { width: 6px; height: 6px; margin-top: 6px; border-radius: 50%; background: #d4d4d0; }
+    .i-journal li[data-t='demarre'] > i, .i-journal li[data-e='reflechit'] > i, .i-journal li[data-e='outil'] > i { background: var(--texte-2); }
+    .i-journal li[data-t='termine'] > i { background: var(--ok); }
+    .i-journal li[data-t='echec'] > i { background: var(--echec); }
+    .i-journal li[data-t='echec'] span { color: var(--echec); }
+    .i-journal span { color: var(--texte-2); word-break: break-word; }
+
+    /* ─── Légende et recadrage ─── */
+    .legende-arbre {
+      position: absolute; left: 16px; bottom: 12px; z-index: 5; cursor: default;
+      display: flex; flex-direction: column; gap: 7px; padding: 10px 12px;
+      font-size: 11.5px; color: var(--texte-2);
+      background: rgba(255, 255, 255, 0.9); border: 1px solid var(--trait); border-radius: 8px;
+    }
+    .legende-arbre div { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+    .legende-arbre span { display: inline-flex; align-items: center; gap: 6px; }
+    .legende-arbre .r { font: 600 10px var(--police); letter-spacing: 0.06em; text-transform: uppercase; }
+    .legende-arbre svg { width: 20px; height: 6px; overflow: visible; }
+    .legende-arbre svg line { stroke-width: 1; }
+    .legende-arbre .aide { color: var(--texte-3); }
+
+    .recadrer {
+      position: absolute; right: 16px; bottom: 14px; z-index: 6; padding: 6px 12px; cursor: pointer;
+      font: 500 12px var(--police); color: var(--texte-2); background: #fff;
+      border: 1px solid var(--trait-fort); border-radius: 6px; box-shadow: 0 1px 2px rgba(24, 24, 27, 0.05);
+      opacity: 0; pointer-events: none; transform: translateY(6px);
+      transition: opacity 0.25s, transform 0.25s, right 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+    .recadrer.visible { opacity: 1; pointer-events: auto; transform: none; }
+    .recadrer:hover { color: var(--texte); border-color: var(--texte-3); }
+    .scene.panneau .recadrer { right: 392px; }
+
+    /* Barre de progression indéterminée : un segment traverse lentement le bas de la carte. */
+    @keyframes progression {
+      from { background-position: -45% 0; }
+      to { background-position: 145% 0; }
+    }
+  </style>
+</head>
+<body>
+  <main class="scene"></main>
+  <script type="module" src="./vue.js"></script>
+</body>
+</html>

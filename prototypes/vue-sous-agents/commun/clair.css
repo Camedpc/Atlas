@@ -1,0 +1,24 @@
+/* Thème clair : à charger APRÈS commun.css. Surcharge les jetons ; la barre commune suit. */
+
+:root {
+  --fond: #f6f6f4;
+  --fond-2: #ffffff;
+  --fond-3: #f0f0ed;
+  --trait: #e3e3df;
+  --trait-fort: #cdcdc7;
+  --texte: #18181b;
+  --texte-2: #52525b;
+  --texte-3: #8b8b93;
+  --accent: #2563eb;
+  --echec: #dc2626;
+  --ok: #15803d;
+  color-scheme: light;
+}
+
+.barre {
+  background: rgba(255, 255, 255, 0.92);
+  border-bottom-color: var(--trait);
+}
+.barre .groupe { background: var(--fond); }
+.barre button:hover { background: var(--fond-3); }
+.barre button.actif { color: #fff; background: var(--texte); }

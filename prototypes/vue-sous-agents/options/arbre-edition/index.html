@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Arbre édition · Atlas</title>
+  <link rel="stylesheet" href="../../commun/commun.css">
+  <link rel="stylesheet" href="../../commun/clair.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,500;0,8..60,600;1,8..60,400&family=Source+Sans+3:wght@400;500;600&display=swap">
+  <style>
+    :root {
+      --serif: 'Source Serif 4', Georgia, 'Times New Roman', serif;
+      --sans: 'Source Sans 3', 'Inter', system-ui, sans-serif;
+      --encre: #1c1c1f;
+      --encre-2: #55555c;
+      --encre-3: #8e8e96;
+      --encre-4: #bdbdc3;
+      --filet: #e6e6e2;
+      --rouge: #9b1c1c;
+    }
+
+    .scene { cursor: grab; background: #fff; user-select: none; }
+    .scene:active { cursor: grabbing; }
+
+    .monde { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
+    .liens { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: visible; }
+    .noeuds { position: absolute; left: 0; top: 0; }
+
+    /* ─── Légende de figure, en haut ─── */
+    .question {
+      position: absolute; left: 28px; top: 18px; max-width: 860px; z-index: 5; pointer-events: none;
+      font: italic 400 15px/1.4 var(--serif); color: var(--encre-2);
+      background: rgba(255, 255, 255, 0.94); padding: 0 10px 6px 0;
+    }
+    .question b {
+      font: 600 11px var(--sans); font-style: normal; letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--encre); margin-right: 8px;
+    }
+
+    /* ─── Nœuds : du texte posé sur la page ─── */
+    .noeud { position: absolute; left: 0; top: 0; will-change: transform; transition: opacity 0.4s; }
+    .noeud.sort { opacity: 0; pointer-events: none; }
+
+    .bloc { position: relative; width: 248px; cursor: pointer; transition: background-color 0.3s, box-shadow 0.3s; }
+    .bloc.choisi { background: #f4f3ef; box-shadow: 0 0 0 7px #f4f3ef; }
+
+    .meta {
+      display: flex; align-items: baseline; gap: 0; height: 15px; overflow: hidden; white-space: nowrap;
+      font: 500 10.5px/15px var(--sans); letter-spacing: 0.07em; text-transform: uppercase;
+      color: var(--encre-3); font-variant-numeric: tabular-nums;
+    }
+    .meta .sep { padding: 0 4px; color: var(--encre-4); }
+    .meta .modele, .meta .duree, .meta .tok { text-transform: none; letter-spacing: 0.01em; }
+    .meta .replier {
+      display: none; margin-left: auto; padding: 0; border: 0; background: none; cursor: pointer;
+      font: inherit; letter-spacing: inherit; text-transform: inherit; color: var(--encre-3);
+      text-decoration: underline; text-decoration-color: var(--encre-4); text-underline-offset: 2px;
+    }
+    .meta .replier:hover { color: var(--encre); }
+    .noeud.avec-replier .replier { display: inline; }
+
+    .titre {
+      position: relative; display: flex; align-items: baseline; gap: 7px; height: 22px;
+      font: 500 15.5px/22px var(--serif); color: var(--encre); white-space: nowrap;
+      transition: color 0.4s;
+    }
+    .titre .num { flex: none; font: 400 12px var(--sans); color: var(--encre-3); font-variant-numeric: tabular-nums; }
+    .titre .t { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+    .bloc:hover .titre .t { text-decoration: underline; text-decoration-color: var(--encre-4); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+    .carre {
+      position: absolute; left: -13px; top: 8px; width: 7px; height: 7px;
+      background: var(--c); opacity: 0; transition: opacity 0.3s;
+    }
+
+    .activite {
+      width: 100%; height: 19px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+      font: italic 400 13px/19px var(--serif); color: var(--encre-2);
+    }
+    .activite .outil {
+      font: 500 10.5px var(--mono); font-style: normal; color: var(--encre); margin-right: 6px;
+    }
+    .activite .fin { font: 400 12px var(--sans); font-style: normal; color: var(--encre-3); }
+
+    /* États : un seul accent, sur l'agent au travail */
+    .bloc.vivant .carre { opacity: 1; }
+    .bloc.vivant .activite { color: var(--encre); }
+
+    .bloc.etat-en_file .titre, .bloc.etat-en_file .activite { color: var(--encre-4); }
+    .bloc.etat-en_file .meta, .bloc.etat-en_file .num { color: var(--encre-4); }
+
+    .bloc.etat-termine .titre { color: var(--encre-3); }
+    .bloc.etat-termine .meta { color: var(--encre-4); }
+
+    .bloc.etat-echec .titre, .bloc.etat-echec .activite .fin { color: var(--rouge); }
+
+    /* Grappe repliée : une ligne de texte */
+    .grappe .bloc {
+      width: auto; height: 22px; white-space: nowrap;
+      font: 400 13px/22px var(--sans); color: var(--encre-3);
+    }
+    .grappe .bloc:hover { color: var(--encre); }
+    .grappe .bloc:hover .txt { text-decoration: underline; text-underline-offset: 3px; }
+    .grappe .plus { font-weight: 600; margin-right: 4px; }
+    .grappe .echecs { color: var(--rouge); margin-left: 6px; }
+
+    /* ─── Liens : traits d'encre coudés ─── */
+    .lien { transition: opacity 0.4s; }
+    .lien.sort { opacity: 0; }
+    .lien path {
+      fill: none; stroke: var(--encre-2); stroke-width: 1; stroke-linejoin: round;
+      transition: stroke 0.4s, stroke-width 0.3s;
+    }
+    .lien.vivant path { stroke: var(--c); stroke-width: 1.5; }
+    .lien.attend path { stroke: var(--encre); }
+    .lien.en_file path { stroke: var(--encre-4); stroke-dasharray: 2 3; }
+    .lien.termine path, .lien.grappe path { stroke: var(--encre-4); }
+    .lien.echec path { stroke: var(--rouge); }
+    .lien.chemin:not(.vivant) path { stroke: var(--encre); stroke-width: 1.6; }
+    .tronc { fill: none; stroke: var(--encre-4); stroke-width: 1; stroke-linejoin: round; transition: stroke 0.4s, opacity 0.4s; }
+    .tronc.chemin { stroke: var(--encre); stroke-width: 1.6; }
+    .tronc.sort { opacity: 0; }
+
+    /* ─── Inspecteur : note en marge ─── */
+    .inspecteur {
+      position: absolute; top: 0; right: 0; bottom: 0; width: 360px; z-index: 10;
+      display: flex; flex-direction: column; overflow: hidden; cursor: default; user-select: text;
+      background: #fcfcfa; border-left: 1px solid var(--filet);
+      transform: translateX(100%); transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+    .inspecteur.ouvert { transform: none; }
+    .i-fermer {
+      position: absolute; top: 16px; right: 16px; padding: 0; cursor: pointer; border: 0; background: none;
+      font: 500 11px var(--sans); letter-spacing: 0.07em; text-transform: uppercase; color: var(--encre-3);
+    }
+    .i-fermer:hover { color: var(--encre); }
+    .i-tete {
+      padding: 20px 28px 0; font: 500 10.5px var(--sans); letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--encre-3); font-variant-numeric: tabular-nums;
+    }
+    .i-titre {
+      display: flex; align-items: baseline; gap: 9px; margin: 10px 28px 4px; padding-right: 10px;
+      font: 600 20px/1.3 var(--serif); letter-spacing: -0.005em; color: var(--encre);
+    }
+    .i-titre .carre { position: static; flex: none; transform: translateY(-3px); }
+    .inspecteur.vivant .i-titre .carre { opacity: 1; }
+    .i-etat { margin: 0 28px; font: italic 400 14px/1.4 var(--serif); color: var(--encre-2); }
+    .i-etat.e-echec { color: var(--rouge); }
+    .i-grille {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px 12px; margin: 18px 28px 0;
+      padding: 12px 0; border-top: 1px solid var(--filet); border-bottom: 1px solid var(--filet);
+    }
+    .i-grille .large { grid-column: span 2; }
+    .i-grille dt { font: 500 10px var(--sans); text-transform: uppercase; letter-spacing: 0.08em; color: var(--encre-3); }
+    .i-grille dd {
+      margin: 3px 0 0; font: 400 15px var(--serif); color: var(--encre); font-variant-numeric: tabular-nums lining-nums;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .i-grille .large dd { font-size: 13.5px; }
+    .i-grille dd.lienable { cursor: pointer; text-decoration: underline; text-decoration-color: var(--encre-4); text-underline-offset: 3px; }
+    .inspecteur section { margin: 14px 28px 0; }
+    .inspecteur h3 {
+      margin: 0 0 4px; font: 500 10px var(--sans); text-transform: uppercase; letter-spacing: 0.08em; color: var(--encre-3);
+    }
+    .inspecteur section p { margin: 0; font: 400 14px/1.5 var(--serif); color: var(--encre); }
+    .inspecteur section p[data-i='activite'] { font-style: italic; color: var(--encre-2); }
+    .inspecteur section p.echec { color: var(--rouge); }
+    .i-jt { margin: 20px 28px 6px !important; }
+    .i-journal {
+      flex: 1; min-height: 0; overflow-y: auto; margin: 0; padding: 0 28px 20px; list-style: none;
+      font: 400 13px/1.45 var(--serif);
+    }
+    .i-journal li { display: grid; grid-template-columns: 42px 1fr; gap: 10px; padding: 5px 0; border-top: 1px solid #f0f0ec; }
+    .i-journal time { font: 400 11.5px/19px var(--sans); color: var(--encre-3); font-variant-numeric: tabular-nums; }
+    .i-journal span { color: var(--encre-2); word-break: break-word; }
+    .i-journal li[data-t='demarre'] span, .i-journal li[data-t='termine'] span { color: var(--encre); }
+    .i-journal li[data-t='echec'] span { color: var(--rouge); }
+
+    /* ─── Légende de figure, en bas ─── */
+    .legende-arbre {
+      position: absolute; left: 28px; bottom: 16px; z-index: 5; cursor: default; max-width: calc(100% - 200px);
+      font: 400 12px/1.6 var(--sans); color: var(--encre-3);
+      background: rgba(255, 255, 255, 0.94); padding: 6px 10px 4px 0;
+    }
+    .legende-arbre .roles { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+    .legende-arbre .roles span { display: inline-flex; align-items: center; gap: 5px; }
+    .legende-arbre .roles i { width: 7px; height: 7px; }
+    .legende-arbre .etats { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+    .legende-arbre .etats span { display: inline-flex; align-items: center; gap: 6px; }
+    .legende-arbre svg { width: 20px; height: 6px; overflow: visible; }
+    .legende-arbre svg line { stroke-width: 1; }
+    .legende-arbre .aide { color: var(--encre-4); }
+
+    .recadrer {
+      position: absolute; right: 24px; bottom: 16px; z-index: 6; padding: 0; cursor: pointer;
+      font: 500 11px var(--sans); letter-spacing: 0.07em; text-transform: uppercase; color: var(--encre-2);
+      background: none; border: 0; text-decoration: underline; text-decoration-color: var(--encre-4); text-underline-offset: 3px;
+      opacity: 0; pointer-events: none; transition: opacity 0.3s, right 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+    .recadrer.visible { opacity: 1; pointer-events: auto; }
+    .recadrer:hover { color: var(--encre); }
+    .scene.panneau .recadrer { right: 384px; }
+  </style>
+</head>
+<body>
+  <main class="scene"></main>
+  <script type="module" src="./vue.js"></script>
+</body>
+</html>

@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Arbre des sous-agents · thème clair</title>
+  <link rel="stylesheet" href="./commun/commun.css">
+  <link rel="stylesheet" href="./commun/clair.css">
+  <style>
+    html, body { height: auto; background: var(--fond); }
+    .page { max-width: 1280px; margin: 0 auto; padding: 48px 24px 80px; }
+    .sur { font: 500 11px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--texte-3); }
+    h1 { font-size: 28px; letter-spacing: -0.02em; margin: 6px 0 10px; font-weight: 600; }
+    .chapeau { color: var(--texte-2); max-width: 760px; line-height: 1.6; margin: 0; }
+    .chapeau a { color: var(--texte); }
+    h2.groupe { font-size: 13px; font-weight: 600; color: var(--texte-2); margin: 40px 0 14px; padding-bottom: 8px; border-bottom: 1px solid var(--trait); }
+    .grille { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 20px; }
+    .carte {
+      display: flex; flex-direction: column; text-decoration: none;
+      background: var(--fond-2); border: 1px solid var(--trait); border-radius: 10px; overflow: hidden;
+      transition: border-color .15s, box-shadow .15s;
+    }
+    .carte:hover { border-color: var(--trait-fort); box-shadow: 0 4px 16px -8px rgba(0, 0, 0, .18); }
+    .apercu { position: relative; aspect-ratio: 16 / 10; overflow: hidden; background: var(--fond); border-bottom: 1px solid var(--trait); }
+    .apercu iframe { position: absolute; top: 0; left: 0; width: 1440px; height: 900px; border: 0; transform-origin: 0 0; pointer-events: none; }
+    .texte { padding: 14px 16px 16px; }
+    .texte h3 { font-size: 15px; font-weight: 600; margin: 0; display: flex; gap: 8px; align-items: baseline; }
+    .texte h3 .num { font: 500 11px var(--mono); color: var(--texte-3); }
+    .texte p { margin: 6px 0 0; color: var(--texte-2); line-height: 1.5; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="sur">Itération 2 · thème clair</div>
+    <h1>Arbre des sous-agents</h1>
+    <p class="chapeau">
+      Cinq variantes à partir de l’Arbre vivant, sans pulsations, sans halo et sans barre latérale colorée.
+      Deux raffinements, deux directions inspirées d’Unreal Engine, une direction plan technique.
+      Même simulation que la <a href="./index.html">première itération</a>.
+    </p>
+    <div id="groupes"></div>
+  </div>
+
+  <script type="module">
+    const GROUPES = [
+      { titre: 'Raffiner l’Arbre vivant', options: [
+        { nom: 'arbre-sobre', titre: 'Arbre sobre', texte: 'Fidèle à l’Arbre vivant, façon Linear / Vercel : cartes blanches, état en toutes lettres, fine barre de progression pour les agents actifs.' },
+        { nom: 'arbre-edition', titre: 'Arbre édition', texte: 'Schéma de revue scientifique : plus de cartes, du texte posé sur la page, typo de labeur, traits d’encre coudés, numérotation de plan.' },
+      ] },
+      { titre: 'Inspiration Unreal Engine', options: [
+        { nom: 'blueprint', titre: 'Blueprint', texte: 'Chaque agent est un nœud Blueprint : en-tête coloré, broches d’exécution et de données, fils en splines, boîtes « Comment » par mission, panneau Détails.' },
+        { nom: 'arbre-comportement', titre: 'Arbre de comportement', texte: 'L’éditeur de Behavior Tree en débogage : de haut en bas, ordre d’exécution numéroté, chemin actif surligné, panneau Blackboard.' },
+      ] },
+      { titre: 'Autre direction', options: [
+        { nom: 'arbre-plan', titre: 'Arbre plan', texte: 'Schéma d’ingénierie façon IBM Carbon : monochrome, pictogrammes de rôle, connecteurs orthogonaux, une seule couleur d’accent pour ce qui tourne.' },
+      ] },
+    ]
+    const conteneur = document.getElementById('groupes')
+    let i = 0
+    for (const g of GROUPES) {
+      const h = document.createElement('h2')
+      h.className = 'groupe'
+      h.textContent = g.titre
+      const grille = document.createElement('div')
+      grille.className = 'grille'
+      for (const o of g.options) {
+        i++
+        const a = document.createElement('a')
+        a.className = 'carte'
+        a.href = `./options/${o.nom}/index.html`
+        a.innerHTML = `
+          <div class="apercu"><iframe loading="lazy" tabindex="-1" src="./options/${o.nom}/index.html?graine=7&vitesse=3&t=70" title="${o.titre}"></iframe></div>
+          <div class="texte"><h3><span class="num">0${i}</span>${o.titre}</h3><p>${o.texte}</p></div>`
+        grille.append(a)
+      }
+      conteneur.append(h, grille)
+    }
+    const ajuster = () => document.querySelectorAll('.apercu').forEach((el) => {
+      el.querySelector('iframe').style.transform = `scale(${el.clientWidth / 1440})`
+    })
+    new ResizeObserver(ajuster).observe(conteneur)
+  </script>
+</body>
+</html>
