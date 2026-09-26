@@ -13,8 +13,9 @@ import {
   creerDessinLibelle, creerDessinSurvol, lirePalette, rgbaGL,
   type AffichageArete, type AffichageNoeud, type InfoArete, type InfoUnite, type Palette,
 } from './apparence'
-import { Camera3D, ORIENTATIONS, Projection, type NomVue } from './camera3d'
+import { Camera3D, ORIENTATIONS, Projection, type Marges, type NomVue } from './camera3d'
 import { Controles, type ActionsControles } from './controles'
+import { Etendues, dessinerEtendues } from './etendues'
 import { genererJeuSynthetique, type JeuDonnees } from './donnees'
 import {
   calculerBarycentres, calculerDispositions, melangerDispositions, poidsFaces,
@@ -51,6 +52,13 @@ export type ReducteurArete = (info: InfoArete, a: AffichageArete, vue: VueGraphe
 export interface OptionsUI {
   panneau: boolean
   panneauOuvert: boolean
+  /**
+   * Montage du panneau gauche : 'surimpression' (défaut, au-dessus de la scène), 'pousse' (la scène
+   * rétrécit quand il s'ouvre) ou 'externe' (monté dans `conteneurPanneau`, sans bouton ☰).
+   */
+  panneauMode: 'surimpression' | 'pousse' | 'externe'
+  /** Conteneur du panneau en mode 'externe'. */
+  conteneurPanneau?: HTMLElement
   histogramme: boolean
   granularite: boolean
   gizmo: boolean
@@ -87,7 +95,30 @@ export interface OptionsVue {
   programmesNoeud?: Record<string, NodeProgramType>
   programmesArete?: Record<string, EdgeProgramType>
   reglagesSigma?: Partial<Settings>
+  // ─── Itération 2 ───
+  /** Marges d'interface propres à la variante (px), ajoutées à la zone sûre mesurée. */
+  margesSures?: Partial<Marges> | (() => Partial<Marges>)
+  /** Modifie les positions 3D affichées après la granularité (voir `ContextePositions`). */
+  apresPositions?: CrochetPositions
+  /** Modifie la projection écran avant qu'elle soit transmise à sigma (fisheye, lentilles…). */
+  apresProjection?: CrochetProjection
+  /** Dessine les étendues d'agrégats du moteur (réglage « etendues ») : défaut vrai. */
+  etenduesParDefaut?: boolean
 }
+
+/** Contexte du crochet de positions : ouverture et sens par catégorie pour adapter la transition. */
+export interface ContextePositions {
+  vue: VueGraphe
+  /** Positions affichées (3 × nU), modifiables en place. */
+  positions: Float32Array
+  /** Positions cibles (mélange des faces, avant granularité). */
+  base: Float32Array
+  /** Par catégorie : ouverture 0…1 et sens (1 sortie, -1 rentrée, 0 immobile). */
+  ouverture: Float32Array
+  sens: Int8Array
+}
+export type CrochetPositions = (c: ContextePositions) => void
+export type CrochetProjection = (p: Projection, vue: VueGraphe) => void
 
 export interface EvenementsVue {
   survol: { unite: number | null }
@@ -101,8 +132,11 @@ export interface EvenementsVue {
   image: { temps: number; dt: number }
 }
 
+/** Tolérance de pointage (px) au-delà du rayon affiché. */
+const TOLERANCE_POINTAGE = 4
+
 const UI_DEFAUT: OptionsUI = {
-  panneau: true, panneauOuvert: false, histogramme: true, granularite: true, gizmo: true, reglages: true, barreVues: true, fiche: true,
+  panneau: true, panneauOuvert: false, panneauMode: 'surimpression', histogramme: true, granularite: true, gizmo: true, reglages: true, barreVues: true, fiche: true,
 }
 
 // ─── Vue ─────────────────────────────────────────────────────────────────────
@@ -146,6 +180,12 @@ export class VueGraphe {
   readonly reducteursArete: ReducteurArete[] = []
   readonly dessinsDessous: HookDessin[] = []
   readonly dessinsDessus: HookDessin[] = []
+  readonly crochetsPositions: CrochetPositions[] = []
+  readonly crochetsProjection: CrochetProjection[] = []
+  /** Quantiles, tranches et répartition par type des agrégats (voir etendues.ts). */
+  readonly etendues: Etendues
+  /** Marges propres à la variante (px), ajoutées à la zone sûre mesurée. */
+  margesSures: Partial<Marges> | (() => Partial<Marges>) = {}
   rendreFiche: RenduFiche | null
   trajectoirePerso: Trajectoire | null
   courbePerso: Courbe | null
@@ -167,6 +207,8 @@ export class VueGraphe {
   private continu = 0
   private imagesRapides = 0
   private versions = { gran: -1, granEmise: -1, cam: -1, base: 0, baseCalculee: -1, lignee: -1 }
+  private versionCameraInitiale = -1
+  private libellesFiges: Set<string> | null = null
   private info: InfoUnite
   private infoArete: InfoArete
 
@@ -194,7 +236,9 @@ export class VueGraphe {
     this.filtres = new Filtres(h, () => this.surFiltres())
     this.lignee = new Lignee(h)
     this.lignee.inclureDescendants = R.descendants
-    this.dispositions = calculerDispositions(h)
+    this.dispositions = calculerDispositions(h, { placement: R.placementAgregats, bonusImportance: R.tailleImportance })
+    this.etendues = new Etendues(h, this.dispositions)
+    this.etendues.calculer()
     this.positionsBase = new Float32Array(h.nU * 3)
     this.positions = new Float32Array(h.nU * 3)
     this.projection = new Projection(h.nU)
@@ -210,7 +254,11 @@ export class VueGraphe {
 
     this.reducteursNoeud.push(...(options.reducteursNoeud ?? []))
     this.reducteursArete.push(...(options.reducteursArete ?? []))
+    if (options.etenduesParDefaut !== false) this.dessinsDessous.push(dessinerEtendues)
     if (options.dessinerDessous) this.dessinsDessous.push(options.dessinerDessous)
+    if (options.apresPositions) this.crochetsPositions.push(options.apresPositions)
+    if (options.apresProjection) this.crochetsProjection.push(options.apresProjection)
+    if (options.margesSures) this.margesSures = options.margesSures
     if (options.dessinerDessus) this.dessinsDessus.push(options.dessinerDessus)
     this.rendreFiche = options.rendreFiche ?? null
     this.trajectoirePerso = options.trajectoire ?? null
@@ -220,6 +268,7 @@ export class VueGraphe {
     this.mode = options.mode ?? '2d'
     this.camera.verrou2D = this.mode === '2d'
     this.camera.champVision = R.champVision
+    this.camera.courbeAnimations = COURBES[R.courbeVues] ?? COURBES.sortie
     this.camera.definirOrientation(ORIENTATIONS[options.vueInitiale ?? 'dessus'])
 
     // Rendu sigma
@@ -255,7 +304,8 @@ export class VueGraphe {
 
     // Premier calcul puis cadrage immédiat.
     this.calculer()
-    this.camera.cadrer(this.positions, this.unitesVisibles(), 1)
+    this.camera.cadrer(this.positions, this.unitesVisibles(), 1, 1.3, this.zoneSure())
+    this.versionCameraInitiale = this.camera.version
     this.demanderRendu()
   }
 
@@ -343,8 +393,67 @@ export class VueGraphe {
   }
 
   cadrer(unites: Iterable<number>): void {
-    this.camera.cadrer(this.positions, unites, this.reglages.valeurs.dureeVues)
+    this.camera.cadrer(this.positions, unites, this.reglages.valeurs.dureeVues, 1.3, this.zoneSure())
     this.demanderRendu()
+  }
+
+  /**
+   * Zone sûre : marges (px, relatives à la scène) occupées par l'interface visible. Mesure les
+   * éléments larges collés à un bord (barre, bas, panneau ouvert), tout élément marqué
+   * `data-zone-sure`, puis ajoute `margesSures` de la variante.
+   */
+  zoneSure(): Marges {
+    const m: Marges = { haut: 0, bas: 0, gauche: 0, droite: 0 }
+    const sc = this.scene.getBoundingClientRect()
+    if (sc.width < 10 || sc.height < 10) return m
+    const W = sc.width, H = sc.height
+    const mesurer = (el: Element, force = false) => {
+      const r = el.getBoundingClientRect()
+      if (r.width < 1 || r.height < 1) return
+      const st = getComputedStyle(el)
+      if (st.display === 'none' || st.visibility === 'hidden' || Number(st.opacity) === 0) return
+      const x0 = r.left - sc.left, x1 = r.right - sc.left, y0 = r.top - sc.top, y1 = r.bottom - sc.top
+      if (x1 <= 0 || y1 <= 0 || x0 >= W || y0 >= H) return
+      const large = force || r.width > W * 0.25, grand = force || r.height > H * 0.4
+      if (large && y0 < H * 0.2 && y1 < H * 0.5) m.haut = Math.max(m.haut, y1 + 8)
+      else if (large && y1 > H * 0.8 && y0 > H * 0.5) m.bas = Math.max(m.bas, H - y0 + 8)
+      else if (grand && x0 < W * 0.2 && x1 < W * 0.5) m.gauche = Math.max(m.gauche, x1 + 8)
+      else if (grand && x1 > W * 0.8 && x0 > W * 0.5) m.droite = Math.max(m.droite, W - x0 + 8)
+    }
+    for (const el of this.interface.querySelectorAll('.atlas-barre, .atlas-bas > *, .atlas-panneau.ouvert')) mesurer(el)
+    for (const el of document.querySelectorAll('[data-zone-sure]')) mesurer(el, true)
+    const sup = typeof this.margesSures === 'function' ? this.margesSures() : this.margesSures
+    m.haut += sup.haut ?? 0
+    m.bas += sup.bas ?? 0
+    m.gauche += sup.gauche ?? 0
+    m.droite += sup.droite ?? 0
+    return m
+  }
+
+  /** Force le survol d'une unité (tests, pilotage externe). */
+  definirSurvol(u: number | null): void {
+    this.changerSurvol(u)
+  }
+
+  /** Calcule immédiatement `ms` millisecondes d'animation (tests, onglet masqué). */
+  avancer(ms = 0, pas = 16): void {
+    const t0 = performance.now()
+    for (let t = 0; t <= ms; t += pas) this.image(t0 + t)
+  }
+
+  /** Ajoute un crochet de positions 3D (après granularité). Renvoie la fonction de retrait. */
+  ajouterCrochetPositions(f: CrochetPositions): () => void {
+    this.crochetsPositions.push(f)
+    this.versions.base++
+    this.demanderRendu()
+    return () => this.retirer(this.crochetsPositions, f)
+  }
+
+  /** Ajoute un crochet après projection (positions écran). Renvoie la fonction de retrait. */
+  ajouterApresProjection(f: CrochetProjection): () => void {
+    this.crochetsProjection.push(f)
+    this.demanderRendu()
+    return () => this.retirer(this.crochetsProjection, f)
   }
 
   cadrerTout(): void {
@@ -400,7 +509,8 @@ export class VueGraphe {
   /** Remplace une disposition par des positions de feuilles (3 × nF) ; les agrégats sont recalculés. */
   remplacerDisposition(nom: NomDisposition, feuilles: Float32Array): void {
     this.dispositions[nom].set(feuilles.subarray(0, this.h.nF * 3))
-    calculerBarycentres(this.h, this.dispositions, this.filtres.etat.mode === 'masquer' ? this.filtres.actives : undefined)
+    calculerBarycentres(this.h, this.dispositions, this.filtres.etat.mode === 'masquer' ? this.filtres.actives : undefined, this.reglages.valeurs.placementAgregats)
+    this.etendues.calculer(this.filtres.restrictif ? this.filtres.actives : undefined)
     this.versions.base++
     this.demanderRendu()
   }
@@ -436,14 +546,26 @@ export class VueGraphe {
 
   // ─── Boucle ──────────────────────────────────────────────────────────────
 
-  private image = (t: number): void => {
+  /** Calcule et dessine une image au temps t (appelée par requestAnimationFrame ; publique pour les tests). */
+  image = (t: number): void => {
     this.raf = 0
+    // Premier cadrage refait à la première image : l'interface de la variante existe alors.
+    if (this.versionCameraInitiale >= 0) {
+      if (this.camera.version === this.versionCameraInitiale && !this.camera.enAnimation) {
+        this.camera.cadrer(this.positions, this.unitesVisibles(), 1, 1.3, this.zoneSure())
+      }
+      this.versionCameraInitiale = -1
+    }
     const dt = this.dernierT ? Math.min(64, t - this.dernierT) : 16
     this.dernierT = t
     let bouge = this.animateur.mettreAJour(t)
     bouge = this.controles.mettreAJour(dt) || bouge
     bouge = this.camera.mettreAJour(t, dt) || bouge
     const encore = bouge || this.continu > 0 || this.animateur.enCours || this.camera.enAnimation
+    // Libellés stables : pendant un mouvement, on garde ceux affichés au départ.
+    if (encore && this.reglages.valeurs.libellesStables) {
+      this.libellesFiges ??= new Set(this.rendu.sigma.getNodeDisplayedLabels())
+    } else this.libellesFiges = null
     this.calculer()
     if (!encore) this.rendu.purgerAretes(this.aretes.paires.values())
     // Passe complète sigma (tri de profondeur, grille de libellés) à la dernière image d'un
@@ -452,7 +574,12 @@ export class VueGraphe {
     this.dessiner(t, this.imagesRapides === 0)
     this.emettre('image', { temps: t, dt })
     if (encore) this.demanderRendu()
-    else this.dernierT = 0
+    else {
+      this.dernierT = 0
+      // Fin de mouvement : le nœud sous un pointeur immobile a pu changer.
+      const m = this.controles.souris
+      if (m.dedans && !this.controles.enGeste && this.ui.fiche !== undefined) this.changerSurvol(this.uniteSous(m.x, m.y, TOLERANCE_POINTAGE))
+    }
   }
 
   /** Granularité → arêtes, orientation → mélange des faces, puis positions et projection. */
@@ -484,8 +611,13 @@ export class VueGraphe {
       const courbe = this.courbePerso ?? COURBES[R.courbe] ?? COURBES.douce
       const traj = this.trajectoirePerso ?? TRAJECTOIRES[R.trajectoire] ?? TRAJECTOIRES.droite
       g.calculerPositions(this.positionsBase, this.positions, courbe, traj)
+      if (this.crochetsPositions.length) {
+        const c: ContextePositions = { vue: this, positions: this.positions, base: this.positionsBase, ouverture: g.ouverture, sens: g.sens }
+        for (const f of this.crochetsPositions) f(c)
+      }
     }
     this.camera.projeter(this.positions, this.projection)
+    for (const f of this.crochetsProjection) f(this.projection, this)
     if (g.version !== this.versions.granEmise) {
       this.versions.granEmise = g.version
       this.emettre('granularite', { globale: g.globale })
@@ -502,7 +634,7 @@ export class VueGraphe {
     this.ui.gizmo?.dessiner()
     const fiche = this.ui.fiche
     if (fiche && fiche.uniteAffichee !== null && this.controles.souris.dedans) {
-      fiche.positionner(this.controles.souris.x, this.controles.souris.y, this.rendu.largeur, this.rendu.hauteur)
+      fiche.positionner(this.controles.souris.x + this.scene.offsetLeft, this.controles.souris.y + this.scene.offsetTop, this.racine.clientWidth, this.racine.clientHeight)
     }
   }
 
@@ -547,16 +679,19 @@ export class VueGraphe {
     if (R.taillePerspective) taille *= Math.max(0.15, info.echelle)
     const estompe = R.opaciteEstompe
     if (!info.actif && this.filtres.restrictif) opacite *= estompe
-    if (info.survol === 'autre') opacite *= Math.max(estompe, 0.25)
+    // Survol et lignée atténuent le contexte une seule fois (pas de cumul) : il reste lisible.
+    const contexte = R.opaciteContexte ?? 0.3
+    let attenuation = info.survol === 'autre' ? contexte : 1
     let couleurBordure = pal.bordureNoeud
     let tailleBordure = R.bordure
     let surligne = false
-    if (info.lignee === 'hors') opacite *= estompe
+    if (info.lignee === 'hors') attenuation = Math.min(attenuation, contexte)
     else if (info.lignee !== 'aucune') {
       surligne = true
       couleurBordure = info.lignee === 'selection' ? pal.accent : info.lignee === 'ancetre' ? pal.ancetre : pal.descendant
       tailleBordure = Math.max(0.32, R.bordure * 2)
     }
+    opacite *= attenuation
     if (R.brouillard && this.camera.perspective > 0) opacite *= 1 - R.intensiteBrouillard * this.camera.perspective * info.profondeur
     const nom = agr ? info.categorie!.nom : info.noeud!.nom
     let libelle: string | null = R.libelles === 'aucun' || (R.libelles === 'agregats' && !agr) ? null : nom
@@ -588,6 +723,7 @@ export class VueGraphe {
     const a = this.apparenceParDefaut(info)
     for (const r of this.reducteursNoeud) r(info, a, this)
     const cache = a.cache || a.opacite < 0.01
+    if (this.libellesFiges && a.libelle && !cache && a.opacite > 0.2 && this.libellesFiges.has(this.h.cles[u]!)) a.forceLibelle = true
     this.opaciteAffichee[u] = cache ? 0 : a.opacite
     this.tailleAffichee[u] = a.taille
     const res: Record<string, unknown> = {
@@ -647,7 +783,7 @@ export class VueGraphe {
       a.opacite = Math.max(a.opacite, 0.85 * moyen * (0.4 + 0.6 * Math.min(1, p.poidsLignee / Math.max(1e-6, p.poids))))
       a.taille *= 1.5
       a.zIndex = 1
-    } else if (l.active) a.opacite *= 0.5
+    } else if (l.active) a.opacite *= Math.min(1, (R.opaciteContexte ?? 0.3) * 1.6)
     for (const r of this.reducteursArete) r(i, a, this)
     const res: Record<string, unknown> = { size: a.taille, color: rgbaGL(a.couleur, a.opacite), hidden: a.cache || a.opacite < 0.004, zIndex: a.zIndex }
     if (a.type) res.type = a.type
@@ -657,7 +793,7 @@ export class VueGraphe {
 
   // ─── Événements ──────────────────────────────────────────────────────────
 
-  private definirSurvol(u: number | null): void {
+  private changerSurvol(u: number | null): void {
     if (u === this.survol) return
     this.survol = u
     this.voisinsSurvol = u === null ? new Set() : this.aretes.voisins(u)
@@ -667,7 +803,7 @@ export class VueGraphe {
       else {
         const defaut = () => ficheParDefaut(this, u)
         fiche.afficher(u, this.rendreFiche ? this.rendreFiche(u, this, defaut) : defaut())
-        fiche.positionner(this.controles.souris.x, this.controles.souris.y, this.rendu.largeur, this.rendu.hauteur)
+        fiche.positionner(this.controles.souris.x + this.scene.offsetLeft, this.controles.souris.y + this.scene.offsetTop, this.racine.clientWidth, this.racine.clientHeight)
       }
     }
     this.emettre('survol', { unite: u })
@@ -695,11 +831,12 @@ export class VueGraphe {
   private brancherSigma(): void {
     const s = this.rendu.sigma
     const unite = (cle: string) => this.h.uniteParCle.get(cle) ?? null
-    s.on('enterNode', ({ node }) => {
-      if (this.controles.enGeste) return
-      this.definirSurvol(unite(node))
-    })
-    s.on('leaveNode', () => this.definirSurvol(null))
+    // Survol et clics : pointage maison avec tolérance (TOLERANCE_POINTAGE px autour du disque),
+    // plus indulgent que le pointage exact de sigma sur les petits nœuds.
+    const local = (e: MouseEvent | PointerEvent) => {
+      const r = this.scene.getBoundingClientRect()
+      return { x: e.clientX - r.left, y: e.clientY - r.top }
+    }
     s.on('clickNode', ({ node, event }) => {
       if (this.clicAIgnorer()) return
       const u = unite(node)
@@ -708,8 +845,9 @@ export class VueGraphe {
     })
     s.on('clickStage', ({ event }) => {
       if (this.clicAIgnorer()) return
-      this.emettre('clic', { unite: null, original: event.original })
-      this.selectionner(null)
+      const u = this.uniteSous(event.x, event.y, TOLERANCE_POINTAGE)
+      this.emettre('clic', { unite: u, original: event.original })
+      this.selectionner(u)
     })
     s.on('doubleClickNode', ({ node, event, preventSigmaDefault }) => {
       preventSigmaDefault()
@@ -719,13 +857,18 @@ export class VueGraphe {
     s.on('doubleClickStage', ({ event, preventSigmaDefault }) => {
       preventSigmaDefault()
       event.preventSigmaDefault()
+      const u = this.uniteSous(event.x, event.y, TOLERANCE_POINTAGE)
+      if (u !== null) this.actionDouble(u, (event.original as MouseEvent).altKey)
     })
-    // La fiche suit le pointeur même quand aucune image n'est calculée.
-    this.scene.addEventListener('pointermove', () => {
+    this.scene.addEventListener('pointermove', (e) => {
+      if (e.pointerType === 'touch') return
+      const p = local(e)
+      if (!this.controles.enGeste) this.changerSurvol(this.uniteSous(p.x, p.y, TOLERANCE_POINTAGE))
+      // La fiche suit le pointeur même quand aucune image n'est calculée.
       const f = this.ui.fiche
-      if (f && f.uniteAffichee !== null) f.positionner(this.controles.souris.x, this.controles.souris.y, this.rendu.largeur, this.rendu.hauteur)
+      if (f && f.uniteAffichee !== null) f.positionner(p.x + this.scene.offsetLeft, p.y + this.scene.offsetTop, this.racine.clientWidth, this.racine.clientHeight)
     })
-    this.scene.addEventListener('pointerleave', () => this.definirSurvol(null))
+    this.scene.addEventListener('pointerleave', () => this.changerSurvol(null))
   }
 
   private actionsClavier(): ActionsControles {
@@ -735,8 +878,15 @@ export class VueGraphe {
         this.camera.opposee(this.reglages.valeurs.dureeVues)
         this.demanderRendu()
       },
-      orbiterPas: (axe, angle) => this.camera.orbiterPas(axe, angle),
-      basculerProjection: () => this.mode === '3d' && this.camera.basculerProjection(),
+      orbiterPas: (axe, angle) => {
+        // En 2D, orbiter (2/4/6/8) fait passer en 3D, comme quitter une vue d'axe dans Blender.
+        if (this.mode === '2d') this.definirMode('3d')
+        this.camera.orbiterPas(axe, angle, this.reglages.valeurs.dureeVues * 0.5)
+      },
+      basculerProjection: () => {
+        if (this.mode === '2d') this.definirMode('3d')
+        this.camera.basculerProjection()
+      },
       cadrerSelection: () => this.cadrerSelection(),
       cadrerTout: () => this.cadrerTout(),
       granularite: (pas) => this.pasGranularite(pas),
@@ -753,7 +903,7 @@ export class VueGraphe {
         if (fiche && u !== null) {
           const defaut = () => ficheParDefaut(this, u)
           fiche.afficher(u, this.rendreFiche ? this.rendreFiche(u, this, defaut) : defaut())
-          fiche.positionner(x, y, this.rendu.largeur, this.rendu.hauteur)
+          fiche.positionner(x + this.scene.offsetLeft, y + this.scene.offsetTop, this.racine.clientWidth, this.racine.clientHeight)
         } else fiche?.masquer()
       },
       tapeDouble: (x, y) => this.actionDouble(this.uniteSous(x, y, 10), false),
@@ -763,7 +913,8 @@ export class VueGraphe {
   private surFiltres(): void {
     const masquer = this.filtres.etat.mode === 'masquer'
     this.granularite.definirActives(this.filtres.actives, masquer)
-    calculerBarycentres(this.h, this.dispositions, masquer ? this.filtres.actives : undefined)
+    calculerBarycentres(this.h, this.dispositions, masquer ? this.filtres.actives : undefined, this.reglages.valeurs.placementAgregats)
+    this.etendues.calculer(this.filtres.restrictif ? this.filtres.actives : undefined)
     this.versions.base++
     this.emettre('filtres', { etat: this.filtres.etat, nbActives: this.filtres.nbActives })
     this.demanderRendu()
@@ -778,6 +929,11 @@ export class VueGraphe {
       case 'seuilLibelle': s.setSetting('labelRenderedSizeThreshold', valeur as number); break
       case 'descendants': this.lignee.definirDescendants(valeur as boolean); this.emettre('selection', { unite: this.lignee.selection }); break
       case 'mode3D': case 'nettete': case 'courbe': case 'trajectoire': this.versions.base++; this.granularite.version++; break
+      case 'courbeVues': this.camera.courbeAnimations = COURBES[valeur as keyof typeof COURBES] ?? COURBES.sortie; break
+      case 'placementAgregats':
+        calculerBarycentres(this.h, this.dispositions, this.filtres.etat.mode === 'masquer' ? this.filtres.actives : undefined, valeur as 'mediane' | 'moyenne')
+        this.versions.base++
+        break
     }
     this.emettre('reglage', { cle, valeur })
     this.demanderRendu()
@@ -807,7 +963,8 @@ export class VueGraphe {
     if (ui.granularite) this.ui.granularite = new CurseurGranularite(bas, this)
     if (ui.histogramme) this.ui.histogramme = new Histogramme(bas, this)
     if (ui.panneau) {
-      this.ui.panneau = new PanneauGauche(i, this, ui.panneauOuvert)
+      const externe = ui.panneauMode === 'externe' && ui.conteneurPanneau
+      this.ui.panneau = new PanneauGauche(externe ? ui.conteneurPanneau! : i, this, ui.panneauOuvert, { mode: externe ? 'externe' : ui.panneauMode })
       options.panneau?.(this.ui.panneau, this)
     }
     this.ui.menu = new MenuRadial(i, this)
@@ -824,9 +981,10 @@ export * from './donnees'
 export * from './anim'
 export * from './apparence'
 export * from './maths'
-export { Camera3D, Projection, ORIENTATIONS, NOMS_VUES, LIBELLES_VUES, type NomVue, type ModeProjection } from './camera3d'
+export { Camera3D, Projection, ORIENTATIONS, NOMS_VUES, LIBELLES_VUES, type NomVue, type ModeProjection, type Marges } from './camera3d'
 export { Hierarchie, Granularite, AretesAgregees, NOMS_NIVEAUX, statistiquesCategorie, type Categorie, type Paire, type StatsCategorie } from './hierarchie'
-export { calculerDispositions, calculerBarycentres, carteThematique, couloirs, centreCouloir, poidsFaces, Z_MAX, NOMS_DISPOSITIONS, type Dispositions, type NomDisposition } from './dispositions'
+export { calculerDispositions, calculerBarycentres, carteThematique, relaxerCollisions, quantile, couloirs, centreCouloir, poidsFaces, Z_MAX, NOMS_DISPOSITIONS, type Dispositions, type NomDisposition, type PlacementAgregats, type OptionsDispositions } from './dispositions'
+export { Etendues, dessinerEtendues, pointSurAxe, poidsAxes, etendueTempsEcran, type Quantiles, type EtendueAgregat } from './etendues'
 export { Filtres, etatFiltresVide, normaliserTexte, type EtatFiltres, type ModeFiltre } from './filtres'
 export { Lignee, ancetres, descendants, type RoleLignee } from './lignee'
 export { Reglages, DEFINITIONS_MOTEUR, type DefinitionReglage, type ReglagesMoteur, type ValeurReglage } from './reglages'

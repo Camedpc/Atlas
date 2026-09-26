@@ -11,6 +11,8 @@ import { statistiquesCategorie } from '../hierarchie'
 import { el, formaterDate, formaterDateCourte } from './dom'
 import { barreConfiance, barreStatuts } from './fiche'
 
+export type ModePanneau = 'surimpression' | 'pousse' | 'externe'
+
 interface Section {
   id: string
   element: HTMLDetailsElement
@@ -24,13 +26,27 @@ export class PanneauGauche {
   private sections = new Map<string, Section>()
   private arbre = new Map<number, { ligne: HTMLElement; etat: HTMLElement; case: HTMLInputElement }>()
 
-  constructor(parent: HTMLElement, private vue: VueGraphe, ouvert = false) {
+  readonly mode: ModePanneau
+
+  /**
+   * @param options.mode 'surimpression' (défaut) : tiroir au-dessus de la scène ; 'pousse' : la
+   *   scène rétrécit à l'ouverture ; 'externe' : monté tel quel dans `parent` (toujours ouvert,
+   *   sans bouton ☰ ni classe sur la vue).
+   */
+  constructor(parent: HTMLElement, private vue: VueGraphe, ouvert = false, options: { mode?: ModePanneau } = {}) {
+    this.mode = options.mode ?? 'surimpression'
     this.bouton = el('button', { class: 'atlas-bouton-menu', title: 'Panneau (filtres, légende, catégories)', 'aria-label': 'Ouvrir le panneau' }, '☰')
     this.bouton.addEventListener('click', () => this.basculer())
     this.contenu = el('div', { class: 'atlas-panneau-contenu' })
-    this.element = el('aside', { class: 'atlas-panneau' }, el('div', { class: 'atlas-panneau-entete' }, el('strong', {}, 'Atlas'), el('span', {}, `${vue.h.nF} nœuds`)), this.contenu)
-    parent.append(this.element, this.bouton)
-    if (ouvert) this.basculer(true)
+    this.element = el('aside', { class: `atlas-panneau mode-${this.mode}` }, el('div', { class: 'atlas-panneau-entete' }, el('strong', {}, 'Atlas'), el('span', {}, `${vue.h.nF} nœuds`)), this.contenu)
+    if (this.mode === 'externe') {
+      parent.append(this.element)
+      this.element.classList.add('ouvert')
+    } else {
+      parent.append(this.element, this.bouton)
+      if (this.mode === 'pousse') vue.racine.classList.add('panneau-pousse')
+      if (ouvert) this.basculer(true)
+    }
 
     this.ajouterSection('selection', 'Sélection', el('p', { class: 'atlas-vide' }, 'Cliquez un nœud pour afficher sa lignée.'))
     this.ajouterSection('filtres', 'Filtres', this.construireFiltres())
@@ -51,7 +67,7 @@ export class PanneauGauche {
   basculer(ouvrir = !this.ouvert): void {
     this.element.classList.toggle('ouvert', ouvrir)
     this.bouton.classList.toggle('actif', ouvrir)
-    this.vue.racine.classList.toggle('panneau-ouvert', ouvrir)
+    if (this.mode !== 'externe') this.vue.racine.classList.toggle('panneau-ouvert', ouvrir)
   }
 
   /** Ajoute une section repliable. `position` : id d'une section avant laquelle l'insérer. */

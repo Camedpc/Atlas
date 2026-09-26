@@ -478,6 +478,22 @@
 .atlas-panneau.ouvert {
   transform: none;
 }
+/* Mode « pousse » : la scène rétrécit, l'interface suit. */
+.atlas-vue.panneau-pousse .atlas-scene {
+  transition: left 0.25s ease;
+}
+.atlas-vue.panneau-pousse.panneau-ouvert .atlas-scene {
+  left: 340px;
+}
+/* Mode « externe » : panneau dans un conteneur de la variante. */
+.atlas-panneau.mode-externe {
+  position: relative;
+  transform: none;
+  width: 100%;
+  height: 100%;
+  box-shadow: none;
+  border-right: 0;
+}
 .atlas-panneau-entete {
   display: flex;
   align-items: baseline;

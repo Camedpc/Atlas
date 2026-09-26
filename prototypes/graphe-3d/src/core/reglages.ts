@@ -53,6 +53,13 @@ export interface ReglagesMoteur {
   intensiteBrouillard: number
   taillePerspective: boolean
   descendants: boolean
+  // Itération 2
+  opaciteContexte: number
+  courbeVues: NomCourbe
+  placementAgregats: 'mediane' | 'moyenne'
+  etendues: 'capsule' | 'tranches' | 'aucune'
+  etenduesCouloirs: boolean
+  libellesStables: boolean
 }
 
 const liste = <T extends string>(valeurs: readonly T[], libelles?: Partial<Record<T, string>>) =>
@@ -72,8 +79,8 @@ export const DEFINITIONS_MOTEUR: DefinitionReglage[] = [
   { cle: 'densiteLibelles', defaut: 0.5, dossier: 'Libellés', libelle: 'densité', min: 0, max: 3, pas: 0.05 },
   { cle: 'seuilLibelle', defaut: 7, dossier: 'Libellés', libelle: 'taille min.', min: 0, max: 30, pas: 0.5 },
   { cle: 'tailleLibelle', defaut: 12, dossier: 'Libellés', libelle: 'taille police', min: 8, max: 22, pas: 1 },
-  { cle: 'dureeTransition', defaut: 700, dossier: 'Transitions', libelle: 'durée (ms)', min: 50, max: 3000, pas: 10 },
-  { cle: 'courbe', defaut: 'douce', dossier: 'Transitions', libelle: 'courbe', options: liste(Object.keys(COURBES) as NomCourbe[]) },
+  { cle: 'dureeTransition', defaut: 650, dossier: 'Transitions', libelle: 'durée (ms)', min: 50, max: 3000, pas: 10 },
+  { cle: 'courbe', defaut: 'sortie', dossier: 'Transitions', libelle: 'courbe', options: liste(Object.keys(COURBES) as NomCourbe[]) },
   { cle: 'trajectoire', defaut: 'droite', dossier: 'Transitions', libelle: 'trajectoire', options: liste(Object.keys(TRAJECTOIRES) as NomTrajectoire[]) },
   { cle: 'mode3D', defaut: 'faces', dossier: 'Caméra', libelle: 'placement 3D', options: { 'faces sémantiques': 'faces', 'cube strict': 'cube' } },
   { cle: 'nettete', defaut: 4, dossier: 'Caméra', libelle: 'netteté faces', min: 1, max: 16, pas: 0.5 },
@@ -88,6 +95,12 @@ export const DEFINITIONS_MOTEUR: DefinitionReglage[] = [
   { cle: 'intensiteBrouillard', defaut: 0.55, dossier: 'Profondeur', libelle: 'intensité', min: 0, max: 1, pas: 0.01 },
   { cle: 'taillePerspective', defaut: true, dossier: 'Profondeur', libelle: 'taille ∝ perspective' },
   { cle: 'descendants', defaut: true, dossier: 'Lignée', libelle: 'inclure descendants' },
+  { cle: 'opaciteContexte', defaut: 0.3, dossier: 'Lignée', libelle: 'opacité du contexte', min: 0, max: 1, pas: 0.01 },
+  { cle: 'courbeVues', defaut: 'sortie', dossier: 'Caméra', libelle: 'courbe des vues', options: liste(Object.keys(COURBES) as NomCourbe[]) },
+  { cle: 'placementAgregats', defaut: 'mediane', dossier: 'Agrégats', libelle: 'placement', options: { médiane: 'mediane', moyenne: 'moyenne' } },
+  { cle: 'etendues', defaut: 'capsule', dossier: 'Agrégats', libelle: 'étendue (vue temps)', options: { capsule: 'capsule', 'tranches de période': 'tranches', aucune: 'aucune' } },
+  { cle: 'etenduesCouloirs', defaut: true, dossier: 'Agrégats', libelle: 'répartition par type' },
+  { cle: 'libellesStables', defaut: true, dossier: 'Libellés', libelle: 'stables en mouvement' },
 ]
 
 export class Reglages<T extends object = ReglagesMoteur> {
@@ -113,6 +126,7 @@ export class Reglages<T extends object = ReglagesMoteur> {
     }
     this.valeurs = {} as T & Record<string, ValeurReglage>
     this.ajouter(definitions, surcharges)
+    window.addEventListener('pagehide', () => this.enAttente && this.sauver())
   }
 
   /** Ajoute des réglages (valeur mémorisée > surcharge > défaut). */
@@ -122,6 +136,7 @@ export class Reglages<T extends object = ReglagesMoteur> {
       const i = this.definitions.findIndex((x) => x.cle === d.cle)
       if (i >= 0) this.definitions[i] = d
       else this.definitions.push(d)
+      this.initiales[d.cle] = surcharges[d.cle] ?? d.defaut
       const memo = this.stockees[d.cle]
       v[d.cle] = memo !== undefined && typeof memo === typeof d.defaut ? memo : surcharges[d.cle] ?? d.defaut
       if (this.panneau) this.lier(d)
@@ -146,30 +161,48 @@ export class Reglages<T extends object = ReglagesMoteur> {
   private notifier(cle: string, valeur: ValeurReglage): void {
     for (const f of this.ecouteurs) f(cle, valeur)
     clearTimeout(this.minuterie)
+    this.enAttente = true
     this.minuterie = window.setTimeout(() => this.sauver(), 250)
   }
 
-  private sauver(): void {
+  /**
+   * Écrit immédiatement les réglages (sinon différé de 250 ms, et forcé à la fermeture de la page).
+   * Seules les valeurs qui diffèrent de la valeur initiale (surcharge ou défaut) sont mémorisées :
+   * un changement de défaut dans le moteur s'applique donc aux réglages jamais touchés.
+   */
+  sauver(): void {
+    clearTimeout(this.minuterie)
+    this.enAttente = false
+    const v = this.valeurs as Record<string, ValeurReglage>
+    const memo: Record<string, ValeurReglage> = { ...this.stockees }
+    for (const d of this.definitions) {
+      if (v[d.cle] === this.initiales[d.cle]) delete memo[d.cle]
+      else memo[d.cle] = v[d.cle]!
+    }
+    this.stockees = memo
     try {
-      localStorage.setItem(this.cleStockage, JSON.stringify(this.valeurs))
+      localStorage.setItem(this.cleStockage, JSON.stringify(memo))
     } catch {
       // Stockage indisponible (navigation privée, quota) : on ignore.
     }
   }
+  private enAttente = false
+  private initiales: Record<string, ValeurReglage> = {}
 
   exporterJSON(): string {
     return JSON.stringify(this.valeurs, null, 2)
   }
 
   reinitialiser(): void {
-    for (const d of this.definitions) (this.valeurs as Record<string, ValeurReglage>)[d.cle] = d.defaut
+    for (const d of this.definitions) (this.valeurs as Record<string, ValeurReglage>)[d.cle] = this.initiales[d.cle] ?? d.defaut
+    this.stockees = {}
     try {
       localStorage.removeItem(this.cleStockage)
     } catch {
       // ignoré
     }
     this.panneau?.refresh()
-    for (const d of this.definitions) for (const f of this.ecouteurs) f(d.cle, d.defaut)
+    for (const d of this.definitions) for (const f of this.ecouteurs) f(d.cle, (this.valeurs as Record<string, ValeurReglage>)[d.cle]!)
   }
 
   /** Crée le panneau Tweakpane (replié par défaut). */

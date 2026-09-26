@@ -195,6 +195,8 @@ export class Rendu {
 
   /** Vérifie une fois que la formule écran ↔ graphe correspond bien à sigma. */
   private verifierCorrespondance(): void {
+    // Conteneur pas encore dimensionné (onglet masqué…) : on vérifiera plus tard.
+    if (this.largeur < 10 || this.hauteur < 10) return
     this.verifie = true
     const v = this.sigma.graphToViewport({ x: 0.5, y: 0.5 })
     const S = Math.min(this.largeur, this.hauteur)

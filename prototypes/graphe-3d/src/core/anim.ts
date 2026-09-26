@@ -28,6 +28,14 @@ export interface PointTrajectoire {
   t: number
   graine: number
   x: number; y: number; z: number
+  // Champs facultatifs (itération 2), toujours remplis par le moteur :
+  /** Unité placée et unité parente (dont elle sort / où elle rentre). */
+  unite?: number
+  parent?: number
+  /** Ouverture brute du parent (avant courbe), 0 = rentrée, 1 = sortie. */
+  o?: number
+  /** Sens de la transition du parent : 1 = sortie (on affine), -1 = rentrée (on agrège), 0 = immobile. */
+  sens?: -1 | 0 | 1
 }
 export type Trajectoire = (p: PointTrajectoire) => void
 
@@ -104,7 +112,8 @@ export class Animateur {
   /** Avance toutes les animations ; renvoie vrai s'il en reste. */
   mettreAJour(maintenant: number): boolean {
     for (const a of [...this.anims]) {
-      const brut = Math.min(1, (maintenant - a.debut) / a.duree)
+      // L'horodatage d'image peut précéder le lancement de l'animation : pas de temps négatif.
+      const brut = Math.max(0, Math.min(1, (maintenant - a.debut) / a.duree))
       a.etape(a.courbe(brut))
       if (brut >= 1) {
         a.active = false

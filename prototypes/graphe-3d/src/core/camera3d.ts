@@ -7,6 +7,14 @@
 import { COURBES, type Courbe } from './anim'
 import { clamp, quat, smoothstep, vec, type Quat, type Vec3 } from './maths'
 
+/** Marges d'interface en pixels (zone sûre). */
+export interface Marges {
+  haut: number
+  bas: number
+  gauche: number
+  droite: number
+}
+
 export const NOMS_VUES = ['dessus', 'dessous', 'face', 'arriere', 'droite', 'gauche', 'iso'] as const
 export type NomVue = (typeof NOMS_VUES)[number]
 export type ModeProjection = 'auto' | 'ortho' | 'persp'
@@ -81,6 +89,8 @@ export class Camera3D {
   hauteur = 1
   /** Incrémentée à chaque changement : sert à savoir s'il faut reprojeter. */
   version = 0
+  /** Courbe par défaut des animations de caméra (vues, cadrage, orbite par pas). */
+  courbeAnimations: Courbe = COURBES.sortie
 
   droite: Vec3 = [1, 0, 0]
   haut: Vec3 = [0, 1, 0]
@@ -174,7 +184,7 @@ export class Camera3D {
 
   // ─── Animations ────────────────────────────────────────────────────────────
 
-  animerVers(cible: { orientation?: Quat; cible?: Vec3; distance?: number }, duree = 450, courbe: Courbe = COURBES.douce): void {
+  animerVers(cible: { orientation?: Quat; cible?: Vec3; distance?: number }, duree = 450, courbe: Courbe = this.courbeAnimations): void {
     const fin = this.anim
     this.anim = {
       q0: this.orientation,
@@ -285,8 +295,11 @@ export class Camera3D {
     this.version++
   }
 
-  /** Cadre un ensemble de points (positions 3 × n ; indices facultatifs). */
-  cadrer(positions: Float32Array, indices?: Iterable<number> | null, duree = 450, marge = 1.3): void {
+  /**
+   * Cadre un ensemble de points (positions 3 × n ; indices facultatifs).
+   * `zone` : marges d'interface en pixels ; le contenu est centré dans la zone restante.
+   */
+  cadrer(positions: Float32Array, indices?: Iterable<number> | null, duree = 450, marge = 1.3, zone?: Partial<Marges>): void {
     const q = this.orientationVisee
     const r = quat.tourner(q, [1, 0, 0]), u = quat.tourner(q, [0, 1, 0]), b = quat.tourner(q, [0, 0, 1])
     let minR = Infinity, maxR = -Infinity, minU = Infinity, maxU = -Infinity, sommeB = 0, n = 0
@@ -304,11 +317,20 @@ export class Camera3D {
     if (indices) for (const i of indices) prendre(i)
     else for (let i = 0; i < positions.length / 3; i++) prendre(i)
     if (n === 0) return
+    const W = this.largeur, H = this.hauteur
+    const g = zone?.gauche ?? 0, d = zone?.droite ?? 0, h = zone?.haut ?? 0, ba = zone?.bas ?? 0
+    const Wz = Math.max(W * 0.25, W - g - d), Hz = Math.max(H * 0.25, H - h - ba)
     const cr = (minR + maxR) / 2, cu = (minU + maxU) / 2, cb = sommeB / n
     const demiL = Math.max(0.04, (maxR - minR) / 2), demiH = Math.max(0.04, (maxU - minU) / 2)
-    const demi = Math.max(demiH, (demiL * this.hauteur) / this.largeur)
-    const distance = (demi * marge) / Math.tan((this.champVision * Math.PI) / 360)
-    const cible: Vec3 = [r[0] * cr + u[0] * cu + b[0] * cb, r[1] * cr + u[1] * cu + b[1] * cb, r[2] * cr + u[2] * cu + b[2] * cb]
+    // Demi-hauteur visible (plan de la cible) nécessaire pour que le contenu tienne dans la zone.
+    const demi = Math.max((demiH * H) / Hz, (demiL * H) / Wz) * marge
+    const tan = Math.tan((this.champVision * Math.PI) / 360)
+    const distance = demi / tan
+    // Décalage pour centrer le contenu dans la zone (pixels → unités monde au plan de la cible).
+    const k = H / 2 / demi
+    const ox = (g - d) / 2 / k, oy = (h - ba) / 2 / k
+    const cx = cr - ox, cy = cu + oy
+    const cible: Vec3 = [r[0] * cx + u[0] * cy + b[0] * cb, r[1] * cx + u[1] * cy + b[1] * cb, r[2] * cx + u[2] * cy + b[2] * cb]
     this.animerVers({ cible, distance }, duree)
   }
 
@@ -352,14 +374,14 @@ export class Camera3D {
   }
 
   /** Projette un point isolé. */
-  projeterPoint(p: Vec3): { x: number; y: number; echelle: number; visible: boolean } {
+  projeterPoint(p: Vec3): { x: number; y: number; echelle: number; visible: boolean; profondeur: number } {
     const k = this.pixelsParUnite()
     const q = vec.soustraire(p, this.cible)
     const xc = vec.scalaire(q, this.droite), yc = vec.scalaire(q, this.haut)
     const zc = this.distance - vec.scalaire(q, this.arriere)
     const visible = this.perspective === 0 || zc > this.distance * 0.04
     const s = visible ? 1 + this.perspective * (this.distance / zc - 1) : 0
-    return { x: this.largeur / 2 + xc * s * k, y: this.hauteur / 2 - yc * s * k, echelle: s, visible }
+    return { x: this.largeur / 2 + xc * s * k, y: this.hauteur / 2 - yc * s * k, echelle: s, visible, profondeur: zc }
   }
 
   /** État sérialisable (pour mémoriser ou partager une vue). */

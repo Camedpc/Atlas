@@ -125,7 +125,7 @@ export class Controles {
     const p = this.local(e)
     this.souris.x = p.x
     this.souris.y = p.y
-    this.souris.dedans = true
+    this.souris.dedans = p.x >= 0 && p.y >= 0 && p.x <= this.element.clientWidth && p.y <= this.element.clientHeight
     if (!this.geste) return
     const dx = p.x - this.precedent.x, dy = p.y - this.precedent.y
     if (!this.deplace && Math.hypot(p.x - this.depart.x, p.y - this.depart.y) < 3) return

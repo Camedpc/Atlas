@@ -221,6 +221,9 @@ export class Granularite {
   /** Nombre de feuilles actives (filtres) par catégorie. */
   readonly nbActives: Int32Array
   readonly actives: Uint8Array
+  /** Sens de la dernière variation d'ouverture par catégorie : 1 sortie, -1 rentrée, 0 immobile. */
+  readonly sens: Int8Array
+  private ouverturePrecedente: Float32Array
   masquerInactives = false
   private surcharges = new Map<number, Surcharge>()
   private animGlobale?: Animation
@@ -237,6 +240,8 @@ export class Granularite {
     this.alpha = new Float32Array(h.nU)
     this.nbActives = new Int32Array(h.nC)
     this.actives = new Uint8Array(h.nF).fill(1)
+    this.sens = new Int8Array(h.nC)
+    this.ouverturePrecedente = new Float32Array(h.nC).fill(-1)
     this.definirActives(this.actives, false)
   }
 
@@ -266,10 +271,11 @@ export class Granularite {
     this.animGlobale?.annuler()
     const depart = this.globale
     const arrivee = clamp(g, 0, 3)
+    // Temps linéaire : l'accélération est appliquée une seule fois, sur les positions (réglage « courbe »).
     this.animGlobale = this.animateur.animer(duree * Math.max(0.35, Math.abs(arrivee - depart)), (t) => {
       this.globale = depart + (arrivee - depart) * t
       this.version++
-    })
+    }, { courbe: LINEAIRE })
   }
 
   /** Ouvre la catégorie c (et ses ancêtres) : ses enfants en sortent. */
@@ -313,11 +319,17 @@ export class Granularite {
     s.anim = this.animateur.animer(this.duree() * Math.max(0.3, 1 - lambda0), (t) => {
       s.lambda = lambda0 + (1 - lambda0) * t
       this.version++
-    })
+    }, { courbe: LINEAIRE })
     this.version++
   }
 
-  private retirer(c: number): void {
+  /** Retire la surcharge locale de c : retour animé à la granularité globale (sans forcer l'état). */
+  revenirAuGlobal(c: number): void {
+    this.retirer(c)
+  }
+
+  /** Alias historique de `revenirAuGlobal` (public depuis l'itération 2). */
+  retirer(c: number): void {
     const s = this.surcharges.get(c)
     if (!s) return
     s.anim?.annuler()
@@ -328,7 +340,7 @@ export class Granularite {
         s.lambda = l0 * (1 - t)
         this.version++
       },
-      { fin: () => this.surcharges.get(c) === s && this.surcharges.delete(c) },
+      { courbe: LINEAIRE, fin: () => this.surcharges.get(c) === s && this.surcharges.delete(c) },
     )
   }
 
@@ -356,6 +368,10 @@ export class Granularite {
       const s = this.surcharges.get(c.index)
       const o = s ? og + (s.cible - og) * s.lambda : og
       this.ouverture[c.index] = o
+      const avant = this.ouverturePrecedente[c.index]!
+      if (avant >= 0 && o !== avant) this.sens[c.index] = o > avant ? 1 : -1
+      else if (o <= 0 || o >= 1) this.sens[c.index] = 0
+      this.ouverturePrecedente[c.index] = o
       const u = nF + c.index
       const pres = c.parent < 0 ? 1 : this.presence[nF + c.parent]! * this.ouverture[c.parent]!
       this.presence[u] = pres
@@ -398,7 +414,11 @@ export class Granularite {
     const { h } = this
     const { nF } = h
     const p = POINT
-    const placer = (u: number, parentU: number, o: number) => {
+    const placer = (u: number, parentU: number, o: number, c: number) => {
+      p.unite = u
+      p.parent = parentU
+      p.o = o
+      p.sens = this.sens[c]! as -1 | 0 | 1
       p.dx = sortie[parentU * 3]!
       p.dy = sortie[parentU * 3 + 1]!
       p.dz = sortie[parentU * 3 + 2]!
@@ -418,16 +438,17 @@ export class Granularite {
         sortie[u * 3] = base[u * 3]!
         sortie[u * 3 + 1] = base[u * 3 + 1]!
         sortie[u * 3 + 2] = base[u * 3 + 2]!
-      } else placer(u, nF + c.parent, this.ouverture[c.parent]!)
+      } else placer(u, nF + c.parent, this.ouverture[c.parent]!, c.parent)
     }
     for (let f = 0; f < nF; f++) {
       const s = h.chaine[f * 3 + 2]!
-      placer(f, nF + s, this.ouverture[s]!)
+      placer(f, nF + s, this.ouverture[s]!, s)
     }
   }
 }
 
-const POINT: PointTrajectoire = { dx: 0, dy: 0, dz: 0, ax: 0, ay: 0, az: 0, t: 0, graine: 0, x: 0, y: 0, z: 0 }
+const POINT: PointTrajectoire = { dx: 0, dy: 0, dz: 0, ax: 0, ay: 0, az: 0, t: 0, graine: 0, x: 0, y: 0, z: 0, unite: 0, parent: -1, o: 1, sens: 0 }
+const LINEAIRE = (t: number) => t
 
 // ─── Arêtes agrégées ─────────────────────────────────────────────────────────
 
