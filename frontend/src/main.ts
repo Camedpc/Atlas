@@ -8,6 +8,7 @@ import { PanneauConversations } from './conversations'
 import { LIBELLES_STATUT, STATUTS } from './graphe/raisonnement/donnees'
 import { VueGrapheAtlas } from './graphe/vueAtlas'
 import { ClientRelais } from './pilotage/client'
+import { CommandeTexte } from './pilotage/commandeTexte'
 import { Pilote } from './pilotage/pilote'
 import type { CompteRendu, EtatAffichage } from './pilotage/protocole'
 import { echapper, rendre } from './rendu'
@@ -164,3 +165,5 @@ void chargerGraphe()
 void conversations.charger()
 // Pilotage par les agents via le relais d'AtlasVoice (VITE_AFFICHAGE_URL), si configuré.
 new ClientRelais(pilote).demarrer()
+// Demandes d'affichage à l'écrit (même chaîne que la voix), si le relais est configuré.
+if (CommandeTexte.configure()) new CommandeTexte(document.querySelector<HTMLElement>('.panneau-graphe')!)
