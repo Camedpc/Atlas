@@ -83,8 +83,11 @@ def _faux_supabase(monkeypatch):
             id="e1", conversation_id=cid, statut="en_cours", erreur=None, usage=None, debut=T0, fin=None
         ),
     )
+    monkeypatch.setattr(conversations, "derniere_execution", lambda cid: trace.get("precedente"))
     monkeypatch.setattr(
-        conversations, "ajouter_message", lambda cid, role, contenu, **_: trace["messages"].append((role, contenu))
+        conversations,
+        "ajouter_message",
+        lambda cid, role, contenu, **kw: trace["messages"].append((role, contenu, kw.get("agent"))),
     )
     monkeypatch.setattr(conversations, "modifier_conversation", lambda cid, **champs: trace.update(champs))
     monkeypatch.setattr(conversations, "terminer_execution", lambda eid, statut, **kw: trace.update(fin=(statut, kw)))
@@ -105,7 +108,7 @@ def test_execution_reussie_lance_le_pipeline(monkeypatch):
     trace = _faux_supabase(monkeypatch)
     etapes: list = []
 
-    async def faux_tour(conversation, texte, execution_id, sur_tour):
+    async def faux_tour(conversation, texte, execution_id, sur_tour, **_):
         sur_tour(SimpleNamespace())
         return agent.ResultatTour("terminee", usage={"total": {"totalTokens": 10}})
 
@@ -129,15 +132,15 @@ def test_execution_reussie_lance_le_pipeline(monkeypatch):
 
     asyncio.run(scenario())
     assert trace["titre"] == "Pourquoi le ciel est bleu ?"
-    assert trace["messages"] == [("utilisateur", "Pourquoi le ciel est bleu ?")]
+    assert trace["messages"] == [("utilisateur", "Pourquoi le ciel est bleu ?", None)]
     assert etapes == [("c1", "e1")]
-    assert trace["fin"] == ("terminee", {"erreur": None, "usage": {"total": {"totalTokens": 10}}})
+    assert trace["fin"] == ("terminee", {"erreur": None, "usage": {"total": {"totalTokens": 10}}, "agents": []})
 
 
 def test_execution_en_erreur_est_signalee(monkeypatch):
     trace = _faux_supabase(monkeypatch)
 
-    async def faux_tour(*_):
+    async def faux_tour(*_, **__):
         return agent.ResultatTour("erreur", "Quota dépassé.")
 
     monkeypatch.setattr(agent, "tour", faux_tour)
@@ -149,13 +152,13 @@ def test_execution_en_erreur_est_signalee(monkeypatch):
 
     asyncio.run(scenario())
     assert trace["fin"][0] == "erreur"
-    assert trace["messages"][-1] == ("systeme", "Quota dépassé.")
+    assert trace["messages"][-1] == ("systeme", "Quota dépassé.", None)
 
 
 def test_arret_demande_avant_le_lancement_du_tour(monkeypatch):
     trace = _faux_supabase(monkeypatch)
 
-    async def faux_tour(conversation, texte, execution_id, sur_tour):
+    async def faux_tour(conversation, texte, execution_id, sur_tour, **_):
         await asyncio.sleep(0)
         sur_tour(SimpleNamespace())  # lève Arret : l'arrêt a été demandé entre-temps
         raise AssertionError("inatteignable")
@@ -254,3 +257,61 @@ def test_jeton_d_acces(monkeypatch):
     assert client.get("/api/conversations").status_code == 401
     assert client.get("/api/conversations", headers={"Authorization": "Bearer faux"}).status_code == 401
     assert client.get("/api/conversations", headers={"Authorization": "Bearer secret"}).status_code == 200
+
+
+def test_message_pendant_un_tour_est_injecte_et_relaye_au_sous_agent(monkeypatch):
+    trace = _faux_supabase(monkeypatch)
+    injectes: list[str] = []
+    fin_du_tour = asyncio.Event()
+
+    class FauxTour:
+        async def steer(self, texte):
+            injectes.append(texte)
+
+    async def faux_tour(conversation, texte, execution_id, sur_tour, **_):
+        sur_tour(FauxTour())
+        await fin_du_tour.wait()
+        return agent.ResultatTour("terminee")
+
+    monkeypatch.setattr(agent, "tour", faux_tour)
+    monkeypatch.setattr(pipeline, "ETAPES_APRES_RECHERCHE", [])
+
+    async def scenario():
+        g = Gestionnaire()
+        await g.envoyer(CONVERSATION.model_copy(), "question")
+        await asyncio.sleep(0)
+        await g.envoyer(CONVERSATION.model_copy(), "précise la source", "/root/hydrures")
+        await g.envoyer(CONVERSATION.model_copy(), "et toi ?", "/root")
+        fin_du_tour.set()
+        await _attendre(g)
+
+    asyncio.run(scenario())
+    relais, direct = injectes
+    assert "/root/hydrures" in relais and "précise la source" in relais and "send_message" in relais
+    assert direct == "et toi ?"
+    assert trace["messages"] == [
+        ("utilisateur", "question", None),
+        ("utilisateur", "précise la source", "/root/hydrures"),
+        ("utilisateur", "et toi ?", None),
+    ]
+
+
+def test_message_a_un_sous_agent_hors_tour_lance_un_tour_de_relais(monkeypatch):
+    trace = _faux_supabase(monkeypatch)
+    consignes: list[str] = []
+
+    async def faux_tour(conversation, texte, execution_id, sur_tour, **_):
+        consignes.append(texte)
+        return agent.ResultatTour("terminee")
+
+    monkeypatch.setattr(agent, "tour", faux_tour)
+    monkeypatch.setattr(pipeline, "ETAPES_APRES_RECHERCHE", [])
+
+    async def scenario():
+        g = Gestionnaire()
+        await g.envoyer(CONVERSATION.model_copy(), "refais le calcul", "/root/hydrures/calcul")
+        await _attendre(g)
+
+    asyncio.run(scenario())
+    assert "followup_task" in consignes[0] and "refais le calcul" in consignes[0]
+    assert trace["messages"] == [("utilisateur", "refais le calcul", "/root/hydrures/calcul")]

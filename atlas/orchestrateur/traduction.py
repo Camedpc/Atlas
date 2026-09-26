@@ -19,14 +19,17 @@ class LigneMessage(NamedTuple):
 
 
 def traduire(item: Any) -> list[LigneMessage]:
-    """Lignes à enregistrer pour un item terminé (`item/completed`)."""
+    """Lignes à enregistrer pour un item terminé (`item/completed`) : modèle du SDK ou dict brut (sous-agents)."""
     element = getattr(item, "root", item)
-    type_ = element.type
+    if not isinstance(element, dict):
+        element = element.model_dump(mode="json", by_alias=True, exclude_none=True)
+    type_ = element.get("type", "?")
     if type_ == "agentMessage":
-        return [LigneMessage("assistant", element.text, None)] if element.text.strip() else []
+        texte = str(element.get("text") or "")
+        return [LigneMessage("assistant", texte, None)] if texte.strip() else []
     if type_ in IGNORES:
         return []
-    donnees = _tronquer(element.model_dump(mode="json", by_alias=True, exclude_none=True))
+    donnees = _tronquer(element)
     return [LigneMessage("outil", _resume(type_, donnees), donnees)]
 
 

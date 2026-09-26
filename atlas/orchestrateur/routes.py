@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 from .. import conversations
 from ..modeles import Conversation, Execution, Message
 from . import config
-from .gestionnaire import DejaEnCours, gestionnaire
+from .gestionnaire import TourIndisponible, gestionnaire
 
 
 def verifier_jeton(authorization: str | None = Header(default=None)) -> None:
@@ -27,6 +27,8 @@ class NouvelleConversation(BaseModel):
 
 class NouveauMessage(BaseModel):
     contenu: str = Field(min_length=1)
+    agent: str | None = None
+    """Chemin Codex du sous-agent destinataire (ex. /root/hydrures) ; absent = l'orchestrateur."""
 
 
 class EtatConversation(Conversation):
@@ -62,19 +64,35 @@ def lire(conversation_id: str) -> EtatConversation:
 
 
 @routeur.get("/{conversation_id}/messages")
-def messages(conversation_id: str, apres_id: int | None = None) -> list[Message]:
-    """Pour suivre une exécution en direct, rappeler avec `apres_id` = id du dernier message reçu."""
-    return conversations.lister_messages(conversation_id, apres_id=apres_id)
+def messages(conversation_id: str, apres_id: int | None = None, agent: str | None = None) -> list[Message]:
+    """Pour suivre une exécution en direct, rappeler avec `apres_id` = id du dernier message reçu.
+
+    Messages de l'orchestrateur, ou ceux d'un sous-agent avec `agent` = son chemin Codex.
+    """
+    return conversations.lister_messages(conversation_id, apres_id=apres_id, agent=agent)
+
+
+@routeur.get("/{conversation_id}/agents")
+def agents(conversation_id: str) -> list[dict]:
+    """Arbre des agents : en direct pendant une exécution, sinon tel que l'a laissé la dernière."""
+    en_direct = gestionnaire.agents(conversation_id)
+    if en_direct is not None:
+        return en_direct
+    derniere = conversations.derniere_execution(conversation_id)
+    return (derniere.agents if derniere else None) or []
 
 
 @routeur.post("/{conversation_id}/messages", status_code=202)
 async def envoyer(conversation_id: str, corps: NouveauMessage) -> Execution:
-    """Lance un tour de l'orchestrateur ; ses messages arrivent ensuite dans /messages."""
+    """Message à l'orchestrateur ou à un sous-agent (`agent`) : lance un tour, ou s'injecte dans le tour en cours.
+
+    Les réponses arrivent ensuite dans /messages.
+    """
     conversation = _conversation(conversation_id)
     try:
-        return await gestionnaire.lancer(conversation, corps.contenu)
-    except DejaEnCours:
-        raise HTTPException(409, "Une exécution est déjà en cours dans cette conversation.") from None
+        return await gestionnaire.envoyer(conversation, corps.contenu, corps.agent)
+    except TourIndisponible:
+        raise HTTPException(409, "L'orchestrateur démarre ou termine son tour : réessaie dans un instant.") from None
 
 
 @routeur.post("/{conversation_id}/arreter", status_code=202)

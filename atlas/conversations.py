@@ -35,6 +35,7 @@ def ajouter_message(
     *,
     execution_id: str | None = None,
     donnees: Any = None,
+    agent: str | None = None,
 ) -> Message:
     ligne = (
         supabase()
@@ -46,6 +47,7 @@ def ajouter_message(
                 "role": role,
                 "contenu": contenu,
                 "donnees": donnees,
+                **({"agent": agent} if agent else {}),
             }
         )
         .execute()
@@ -54,9 +56,15 @@ def ajouter_message(
     return Message.model_validate(ligne)
 
 
-def lister_messages(conversation_id: str, *, apres_id: int | None = None, limite: int = 500) -> list[Message]:
-    """Plus anciens d'abord. Pour suivre une exécution, repasser `apres_id` = id du dernier reçu."""
+def lister_messages(
+    conversation_id: str, *, apres_id: int | None = None, limite: int = 500, agent: str | None = None
+) -> list[Message]:
+    """Plus anciens d'abord. Pour suivre une exécution, repasser `apres_id` = id du dernier reçu.
+
+    Messages de l'orchestrateur par défaut, ou ceux d'un sous-agent (`agent` = son chemin Codex).
+    """
     q = supabase().table("messages").select("*").eq("conversation_id", conversation_id)
+    q = q.eq("agent", agent) if agent else q.is_("agent", "null")
     if apres_id is not None:
         q = q.gt("id", apres_id)
     lignes = q.order("id").limit(limite).execute().data
@@ -69,11 +77,17 @@ def creer_execution(conversation_id: str) -> Execution:
 
 
 def terminer_execution(
-    execution_id: str, statut: StatutExecution, *, erreur: str | None = None, usage: Any = None
+    execution_id: str,
+    statut: StatutExecution,
+    *,
+    erreur: str | None = None,
+    usage: Any = None,
+    agents: Any = None,
 ) -> None:
-    supabase().table("executions").update(
-        {"statut": statut, "erreur": erreur, "usage": usage, "fin": datetime.now(UTC).isoformat()}
-    ).eq("id", execution_id).execute()
+    champs = {"statut": statut, "erreur": erreur, "usage": usage, "fin": datetime.now(UTC).isoformat()}
+    if agents is not None:
+        champs["agents"] = agents
+    supabase().table("executions").update(champs).eq("id", execution_id).execute()
 
 
 def derniere_execution(conversation_id: str) -> Execution | None:

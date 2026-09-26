@@ -1,13 +1,20 @@
-"""Exécutions en arrière-plan : au plus une par conversation, plusieurs conversations en parallèle."""
+"""Exécutions en arrière-plan : au plus une par conversation, plusieurs conversations en parallèle.
+
+Un message envoyé pendant une exécution n'en lance pas une autre : il est injecté dans le tour en cours
+(`steer`), et relayé par l'orchestrateur quand il s'adresse à un sous-agent.
+"""
 
 import asyncio
 import logging
+import time
 
 from openai_codex import AsyncTurnHandle
 
 from .. import conversations
 from ..modeles import Conversation, Execution, StatutExecution
 from . import agent, pipeline
+from .consignes import relais
+from .suivi_agents import RACINE, SuiviAgents
 
 log = logging.getLogger(__name__)
 
@@ -16,6 +23,10 @@ LONGUEUR_MAX_TITRE = 80
 
 class DejaEnCours(Exception):
     pass
+
+
+class TourIndisponible(Exception):
+    """Une exécution est en cours mais son tour Codex ne prend pas de message (il démarre ou se termine)."""
 
 
 def titre_depuis(texte: str) -> str:
@@ -29,26 +40,65 @@ class Gestionnaire:
         self._tours: dict[str, AsyncTurnHandle | None] = {}
         self._arrets: set[str] = set()
         self._taches: set[asyncio.Task] = set()
+        self._executions: dict[str, Execution] = {}
+        # Arbre des agents de chaque conversation en cours (l'arbre final est gardé dans l'exécution).
+        self._suivis: dict[str, SuiviAgents] = {}
 
     def en_cours(self, conversation_id: str) -> bool:
         return conversation_id in self._tours
 
-    async def lancer(self, conversation: Conversation, texte: str) -> Execution:
+    def agents(self, conversation_id: str) -> list[dict] | None:
+        """Arbre des agents de l'exécution en cours, None s'il n'y en a pas."""
+        suivi = self._suivis.get(conversation_id)
+        return suivi.instantane() if suivi is not None else None
+
+    async def envoyer(self, conversation: Conversation, texte: str, agent_cible: str | None = None) -> Execution:
+        """Message de Camille à l'orchestrateur (`agent_cible` None) ou à l'un de ses sous-agents.
+
+        Pendant une exécution, il est injecté dans le tour en cours ; sinon il lance un nouveau tour.
+        """
+        cible = None if agent_cible in (None, "", RACINE) else agent_cible
+        cid = conversation.id
+        if cid not in self._tours:
+            return await self.lancer(conversation, texte, agent_cible=cible)
+        tour = self._tours[cid]
+        execution = self._executions.get(cid)
+        if tour is None or execution is None:
+            raise TourIndisponible(cid)
+        try:
+            await tour.steer(relais(cible, texte) if cible else texte)
+        except Exception as e:
+            log.warning("Message non injecté dans le tour de %s", cid, exc_info=True)
+            raise TourIndisponible(cid) from e
+        await asyncio.to_thread(
+            conversations.ajouter_message, cid, "utilisateur", texte, execution_id=execution.id, agent=cible
+        )
+        return execution
+
+    async def lancer(self, conversation: Conversation, texte: str, agent_cible: str | None = None) -> Execution:
         cid = conversation.id
         if cid in self._tours:
             raise DejaEnCours(cid)
         self._tours[cid] = None  # réservé avant tout await
         try:
+            precedente = await asyncio.to_thread(conversations.derniere_execution, cid)
             execution = await asyncio.to_thread(conversations.creer_execution, cid)
-            await asyncio.to_thread(conversations.ajouter_message, cid, "utilisateur", texte, execution_id=execution.id)
+            self._executions[cid] = execution
+            self._suivis[cid] = SuiviAgents.depuis(precedente.agents if precedente else None)
+            await asyncio.to_thread(
+                conversations.ajouter_message, cid, "utilisateur", texte, execution_id=execution.id, agent=agent_cible
+            )
             titre = titre_depuis(texte) if conversation.titre == conversations.TITRE_PAR_DEFAUT else conversation.titre
             # Réécrire le titre remonte aussi la conversation en tête de liste (modifie_le).
             await asyncio.to_thread(conversations.modifier_conversation, cid, titre=titre)
         except Exception:
             del self._tours[cid]
+            self._executions.pop(cid, None)
+            self._suivis.pop(cid, None)
             raise
 
-        tache = asyncio.create_task(self._executer(conversation, texte, execution.id))
+        consigne = relais(agent_cible, texte) if agent_cible else texte
+        tache = asyncio.create_task(self._executer(conversation, consigne, execution.id))
         self._taches.add(tache)
         tache.add_done_callback(self._taches.discard)
         return execution
@@ -73,7 +123,9 @@ class Gestionnaire:
         erreur: str | None = None
         usage = None
         try:
-            resultat = await agent.tour(conversation, texte, execution_id, lambda t: self._brancher(cid, t))
+            resultat = await agent.tour(
+                conversation, texte, execution_id, lambda t: self._brancher(cid, t), suivi=self._suivis[cid]
+            )
             usage = resultat.usage
             if cid in self._arrets:
                 statut = "arretee"
@@ -90,15 +142,31 @@ class Gestionnaire:
         finally:
             self._tours.pop(cid, None)
             self._arrets.discard(cid)
+            self._executions.pop(cid, None)
+            suivi = self._suivis.pop(cid, None)
+            agents = _clore(suivi, statut) if suivi is not None else None
 
         try:
             if erreur:
                 await asyncio.to_thread(
                     conversations.ajouter_message, cid, "systeme", erreur, execution_id=execution_id
                 )
-            await asyncio.to_thread(conversations.terminer_execution, execution_id, statut, erreur=erreur, usage=usage)
+            await asyncio.to_thread(
+                conversations.terminer_execution, execution_id, statut, erreur=erreur, usage=usage, agents=agents
+            )
         except Exception:
             log.exception("Impossible d'enregistrer la fin de l'exécution %s", execution_id)
+
+
+def _clore(suivi: SuiviAgents, statut: StatutExecution) -> list[dict]:
+    """Arbre final : un agent resté au travail quand le tour s'arrête ne l'est plus."""
+    fin = {"terminee": "termine", "arretee": "interrompu"}.get(statut, "echec")
+    for a in suivi.agents.values():
+        if a.etat in ("actif", "attend"):
+            a.etat, a.outil = fin, None
+            a.activite = {"termine": "Terminé", "interrompu": "Interrompu"}.get(fin, "Échec")
+            a.fin = a.fin or time.time()
+    return suivi.instantane()
 
 
 gestionnaire = Gestionnaire()

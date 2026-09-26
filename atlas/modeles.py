@@ -99,6 +99,8 @@ class Execution(BaseModel):
     erreur: str | None
     usage: Any
     """Consommation de jetons du thread Codex à la fin de ce tour."""
+    agents: Any = None
+    """Arbre des agents (orchestrateur et sous-agents) à la fin de ce tour, voir `orchestrateur/suivi_agents.py`."""
     debut: datetime
     fin: datetime | None
 
@@ -115,6 +117,8 @@ class Message(BaseModel):
     role: RoleMessage
     contenu: str
     donnees: Any
+    agent: str | None = None
+    """Chemin Codex du sous-agent (ex. /root/hydrures) ; None = l'orchestrateur."""
     cree_le: datetime
 
 

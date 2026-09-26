@@ -1,26 +1,41 @@
-// Atlas : conversations avec l'orchestrateur à gauche, graphe de raisonnement à droite.
+// Atlas : sessions à gauche, conversation au centre (avec l'arbre des agents au-dessus de la saisie),
+// et à droite le graphe de raisonnement ou l'agent graph.
 import './style.css'
+import { AgentGraph } from './agentgraph'
 import { api, type Graphe, type Noeud } from './api'
-import { PanneauConversations } from './conversations'
+import { PanneauConversation } from './conversations'
 import { COULEURS_STATUT, LIBELLES_STATUT, VueGraphe } from './graphe'
 import { echapper, rendre } from './rendu'
 
 const INTERVALLE_GRAPHE_MS = 4000
+const CLE_VUE = 'atlas.vue'
+
+type Vue = 'raisonnement' | 'agents'
 
 document.querySelector<HTMLElement>('#app')!.innerHTML = `
-  <aside class="panneau-conversations"></aside>
-  <section class="panneau-graphe">
-    <div class="sigma"></div>
-    <div class="barre">
-      <label><input type="checkbox" class="filtre" /> Cette conversation seulement</label>
-      <span class="compteur"></span>
-      <button type="button" class="recentrer">Recentrer</button>
-      <button type="button" class="recharger">Recharger</button>
+  <aside class="panneau-sessions"></aside>
+  <main class="panneau-conversation"></main>
+  <section class="panneau-droit">
+    <header class="droit-tete">
+      <div class="onglets" role="tablist">
+        <button type="button" role="tab" data-vue="raisonnement">Graphe de raisonnement</button>
+        <button type="button" role="tab" data-vue="agents">Agent graph</button>
+      </div>
+      <div class="outils-raisonnement">
+        <label><input type="checkbox" class="filtre" /> Cette conversation</label>
+        <span class="compteur"></span>
+        <button type="button" class="recentrer">Recentrer</button>
+        <button type="button" class="recharger">Recharger</button>
+      </div>
+    </header>
+    <div class="vue vue-raisonnement">
+      <div class="sigma"></div>
+      <ul class="legende">${Object.entries(LIBELLES_STATUT)
+        .map(([s, libelle]) => `<li><i style="background:${COULEURS_STATUT[s as Noeud['statut']]}"></i>${libelle}</li>`)
+        .join('')}</ul>
+      <article class="detail" hidden></article>
     </div>
-    <ul class="legende">${Object.entries(LIBELLES_STATUT)
-      .map(([s, libelle]) => `<li><i style="background:${COULEURS_STATUT[s as Noeud['statut']]}"></i>${libelle}</li>`)
-      .join('')}</ul>
-    <article class="detail" hidden></article>
+    <div class="vue vue-agents" hidden><div class="scene-agents"></div></div>
   </section>`
 
 const detail = document.querySelector<HTMLElement>('.detail')!
@@ -31,7 +46,7 @@ let graphe: Graphe = { noeuds: [], aretes: [] }
 let conversationId: string | null = null
 let dernierChargement = 0
 
-const vue = new VueGraphe(document.querySelector<HTMLElement>('.sigma')!, afficherDetail)
+const vueGraphe = new VueGraphe(document.querySelector<HTMLElement>('.sigma')!, afficherDetail)
 
 function afficherDetail(n: Noeud | null) {
   detail.hidden = !n
@@ -55,14 +70,14 @@ function afficherDetail(n: Noeud | null) {
         </details>`,
       )
       .join('')}`
-  detail.querySelector('.fermer')!.addEventListener('click', () => vue.selectionner(null))
+  detail.querySelector('.fermer')!.addEventListener('click', () => vueGraphe.selectionner(null))
   detail.querySelectorAll<HTMLButtonElement>('.lien').forEach((b) =>
-    b.addEventListener('click', () => vue.selectionner(b.dataset.id!)),
+    b.addEventListener('click', () => vueGraphe.selectionner(b.dataset.id!)),
   )
 }
 
 function redessiner() {
-  const visibles = vue.afficher(graphe, filtre.checked ? conversationId : null)
+  const visibles = vueGraphe.afficher(graphe, filtre.checked ? conversationId : null)
   compteur.textContent = `${visibles} nœuds`
 }
 
@@ -77,12 +92,40 @@ async function chargerGraphe() {
 }
 
 filtre.addEventListener('change', redessiner)
-document.querySelector('.recentrer')!.addEventListener('click', () => vue.recentrer())
+document.querySelector('.recentrer')!.addEventListener('click', () => vueGraphe.recentrer())
 document.querySelector('.recharger')!.addEventListener('click', () => void chargerGraphe())
 
-const conversations = new PanneauConversations(
-  document.querySelector<HTMLElement>('.panneau-conversations')!,
+// ─── Onglets du panneau de droite ───
+
+const agentGraph = new AgentGraph(document.querySelector<HTMLElement>('.scene-agents')!, () => conversation.focaliser())
+
+function montrer(vue: Vue) {
+  document.querySelectorAll<HTMLButtonElement>('.onglets [data-vue]').forEach((b) => {
+    b.classList.toggle('actif', b.dataset.vue === vue)
+    b.setAttribute('aria-selected', String(b.dataset.vue === vue))
+  })
+  document.querySelector<HTMLElement>('.vue-raisonnement')!.hidden = vue !== 'raisonnement'
+  document.querySelector<HTMLElement>('.vue-agents')!.hidden = vue !== 'agents'
+  document.querySelector<HTMLElement>('.outils-raisonnement')!.hidden = vue !== 'raisonnement'
+  agentGraph.afficher(vue === 'agents')
+  if (vue === 'raisonnement') vueGraphe.recentrer()
+  try {
+    localStorage.setItem(CLE_VUE, vue)
+  } catch {
+    // sans importance
+  }
+}
+
+document.querySelector('.onglets')!.addEventListener('click', (e) => {
+  const b = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-vue]')
+  if (b) montrer(b.dataset.vue as Vue)
+})
+
+const conversation = new PanneauConversation(
+  document.querySelector<HTMLElement>('.panneau-conversation')!,
+  document.querySelector<HTMLElement>('.panneau-sessions')!,
   (id) => {
+    if (id !== conversationId) agentGraph.reinitialiser()
     conversationId = id
     redessiner()
   },
@@ -90,7 +133,16 @@ const conversations = new PanneauConversations(
   () => {
     if (Date.now() - dernierChargement > INTERVALLE_GRAPHE_MS) void chargerGraphe()
   },
+  () => montrer('agents'),
 )
 
+let vueInitiale: Vue = 'raisonnement'
+try {
+  if (localStorage.getItem(CLE_VUE) === 'agents') vueInitiale = 'agents'
+} catch {
+  // stockage indisponible
+}
+montrer(vueInitiale)
+
 void chargerGraphe()
-void conversations.charger()
+void conversation.charger()

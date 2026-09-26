@@ -80,6 +80,26 @@ export interface Execution {
   usage: { total?: { totalTokens?: number } } | null
 }
 
+export type EtatAgent = 'actif' | 'attend' | 'termine' | 'echec' | 'interrompu'
+
+/** Un agent de la conversation (atlas/orchestrateur/suivi_agents.py) : l'orchestrateur (/root) ou un sous-agent. */
+export interface Agent {
+  chemin: string
+  thread_id: string
+  parent: string | null
+  role: string
+  surnom: string | null
+  modele: string | null
+  etat: EtatAgent
+  activite: string
+  outil: string | null
+  tokens: number
+  nb_outils: number
+  debut: number
+  fin: number | null
+  resultat: string | null
+}
+
 export interface EtatConversation extends Conversation {
   en_cours: boolean
   derniere_execution: Execution | null
@@ -91,6 +111,7 @@ export interface Message {
   role: 'utilisateur' | 'assistant' | 'outil' | 'systeme'
   contenu: string
   donnees: Record<string, unknown> | null
+  agent: string | null
   cree_le: string
 }
 
@@ -109,9 +130,18 @@ export const api = {
   conversations: () => appel<Conversation[]>('/api/conversations'),
   creerConversation: () => appel<Conversation>('/api/conversations', { method: 'POST', body: '{}' }),
   conversation: (id: string) => appel<EtatConversation>(`/api/conversations/${id}`),
-  messages: (id: string, apresId?: number) =>
-    appel<Message[]>(`/api/conversations/${id}/messages${apresId === undefined ? '' : `?apres_id=${apresId}`}`),
-  envoyer: (id: string, contenu: string) =>
-    appel<Execution>(`/api/conversations/${id}/messages`, { method: 'POST', body: JSON.stringify({ contenu }) }),
+  messages: (id: string, apresId?: number, agent?: string | null) => {
+    const params = new URLSearchParams()
+    if (apresId !== undefined) params.set('apres_id', String(apresId))
+    if (agent) params.set('agent', agent)
+    const requete = params.toString()
+    return appel<Message[]>(`/api/conversations/${id}/messages${requete ? `?${requete}` : ''}`)
+  },
+  agents: (id: string) => appel<Agent[]>(`/api/conversations/${id}/agents`),
+  envoyer: (id: string, contenu: string, agent?: string | null) =>
+    appel<Execution>(`/api/conversations/${id}/messages`, {
+      method: 'POST',
+      body: JSON.stringify(agent ? { contenu, agent } : { contenu }),
+    }),
   arreter: (id: string) => appel<unknown>(`/api/conversations/${id}/arreter`, { method: 'POST' }),
 }

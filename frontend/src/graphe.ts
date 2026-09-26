@@ -25,10 +25,9 @@ const COULEURS_VALIDITE: Record<Validite, string> = {
   invalide: '#d64545',
 }
 
-const SOMBRE = matchMedia('(prefers-color-scheme: dark)').matches
-// Couleurs opaques : sigma gère mal la transparence des nœuds.
-const COULEUR_ESTOMPEE = SOMBRE ? '#353942' : '#e3e5e9'
-const COULEUR_ETIQUETTE = SOMBRE ? '#e6e8ec' : '#1d2129'
+// Thème clair uniquement. Couleurs opaques : sigma gère mal la transparence des nœuds.
+const COULEUR_ESTOMPEE = '#e4e4e0'
+const COULEUR_ETIQUETTE = '#18181b'
 const TAILLE_NOEUD = 9
 const ECART_X = 3
 const ECART_Y = 2.5

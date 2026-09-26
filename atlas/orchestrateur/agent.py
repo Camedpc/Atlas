@@ -22,6 +22,7 @@ from ..modeles import Conversation
 from . import bunker, config
 from .consignes import consigne_complete
 from .sous_agents import sous_agents
+from .suivi_agents import METHODES_SUIVIES, SuiviAgents
 from .traduction import traduire
 
 log = logging.getLogger(__name__)
@@ -111,11 +112,15 @@ async def tour(
     texte: str,
     execution_id: str,
     sur_tour: Callable[[AsyncTurnHandle], None],
+    suivi: SuiviAgents | None = None,
 ) -> ResultatTour:
     """Fait travailler l'orchestrateur sur `texte` jusqu'à sa réponse finale.
 
-    `sur_tour` reçoit le tour dès qu'il est lancé, pour pouvoir l'interrompre ; il peut lever `Arret`.
+    `sur_tour` reçoit le tour dès qu'il est lancé, pour pouvoir l'interrompre ou l'orienter ; il peut lever
+    `Arret`. `suivi` est tenu à jour avec l'arbre des agents, et les items des sous-agents sont enregistrés
+    dans la conversation, rattachés à leur agent.
     """
+    suivi = suivi if suivi is not None else SuiviAgents()
     dossier = await asyncio.to_thread(bunker.preparer_session, conversation.id)
 
     async with AsyncCodex(config=config_codex()) as codex:
@@ -126,27 +131,51 @@ async def tour(
             await asyncio.to_thread(conversations.modifier_conversation, conversation.id, session_agent=thread.id)
             conversation.session_agent = thread.id
 
-        handle = await thread.turn(texte, effort=ReasoningEffort(config.EFFORT))
-        sur_tour(handle)
+        suivi.demarrer_racine(thread.id, config.MODELE)
+        file: asyncio.Queue = asyncio.Queue()
+        boucle = asyncio.get_running_loop()
+        retirer_espion = _espionner(codex, lambda *n: boucle.call_soon_threadsafe(file.put_nowait, n))
+        suiveur = asyncio.create_task(_suivre(codex, conversation.id, execution_id, suivi, file))
+        try:
+            return await _derouler(thread, texte, conversation.id, execution_id, sur_tour)
+        finally:
+            retirer_espion()
+            file.put_nowait(None)
+            try:
+                await asyncio.wait_for(suiveur, timeout=10)
+            except Exception:
+                log.warning("Suivi des agents interrompu", exc_info=True)
+                suiveur.cancel()
 
-        usage = None
-        fin = None
-        async for evenement in handle.stream():
-            charge = evenement.payload
-            if isinstance(charge, ItemCompletedNotification):
-                for ligne in traduire(charge.item):
-                    await asyncio.to_thread(
-                        conversations.ajouter_message,
-                        conversation.id,
-                        ligne.role,
-                        ligne.contenu,
-                        execution_id=execution_id,
-                        donnees=ligne.donnees,
-                    )
-            elif isinstance(charge, ThreadTokenUsageUpdatedNotification):
-                usage = charge.token_usage.model_dump(mode="json", by_alias=True)
-            elif isinstance(charge, TurnCompletedNotification):
-                fin = charge.turn
+
+async def _derouler(
+    thread: AsyncThread,
+    texte: str,
+    conversation_id: str,
+    execution_id: str,
+    sur_tour: Callable[[AsyncTurnHandle], None],
+) -> ResultatTour:
+    handle = await thread.turn(texte, effort=ReasoningEffort(config.EFFORT))
+    sur_tour(handle)
+
+    usage = None
+    fin = None
+    async for evenement in handle.stream():
+        charge = evenement.payload
+        if isinstance(charge, ItemCompletedNotification):
+            for ligne in traduire(charge.item):
+                await asyncio.to_thread(
+                    conversations.ajouter_message,
+                    conversation_id,
+                    ligne.role,
+                    ligne.contenu,
+                    execution_id=execution_id,
+                    donnees=ligne.donnees,
+                )
+        elif isinstance(charge, ThreadTokenUsageUpdatedNotification):
+            usage = charge.token_usage.model_dump(mode="json", by_alias=True)
+        elif isinstance(charge, TurnCompletedNotification):
+            fin = charge.turn
 
     if fin is None:
         return ResultatTour("erreur", "Le tour s'est terminé sans notification de fin.", usage)
@@ -158,6 +187,82 @@ async def tour(
         case statut:
             message = fin.error.message if fin.error is not None and fin.error.message else f"Tour {statut}."
             return ResultatTour("erreur", message, usage)
+
+
+def _espionner(codex: AsyncCodex, rappel: Callable[[str, Any], None]) -> Callable[[], None]:
+    """Fait suivre à `rappel` les notifications utiles de tous les threads, sous-agents compris.
+
+    Appelé depuis le fil de lecture du SDK. Passe par son routeur interne (aucune API publique ne donne les
+    événements des sous-agents) : si le SDK change, le tour continue, sans arbre des agents.
+    Renvoie de quoi retirer l'espion.
+    """
+    try:
+        routeur = codex._client._sync._router
+        origine = routeur.route_notification
+    except AttributeError:
+        log.warning("Routeur du SDK Codex introuvable : pas de suivi des sous-agents")
+        return lambda: None
+
+    def espion(notification: Any) -> None:
+        try:
+            if notification.method in METHODES_SUIVIES:
+                rappel(notification.method, notification.payload)
+        except Exception:
+            log.exception("Notification %s non suivie", getattr(notification, "method", "?"))
+        origine(notification)
+
+    routeur.route_notification = espion
+    return lambda: setattr(routeur, "route_notification", origine)
+
+
+def _en_dict(charge: Any) -> dict[str, Any]:
+    if isinstance(charge, dict):
+        return charge
+    if isinstance(params := getattr(charge, "params", None), dict):
+        return params
+    return charge.model_dump(mode="json", by_alias=True, exclude_none=True)
+
+
+async def _suivre(
+    codex: AsyncCodex, conversation_id: str, execution_id: str, suivi: SuiviAgents, file: asyncio.Queue
+) -> None:
+    """Tient `suivi` à jour et enregistre les items des sous-agents, jusqu'à recevoir None."""
+    enrichissements: set[asyncio.Task] = set()
+    while (notification := await file.get()) is not None:
+        methode, charge = notification
+        try:
+            evenements = suivi.recevoir(methode, _en_dict(charge))
+            for thread_id in evenements.nouveaux:
+                tache = asyncio.create_task(_enrichir(codex, suivi, thread_id))
+                enrichissements.add(tache)
+                tache.add_done_callback(enrichissements.discard)
+            for chemin, item in evenements.a_enregistrer:
+                for ligne in traduire(item):
+                    await asyncio.to_thread(
+                        conversations.ajouter_message,
+                        conversation_id,
+                        ligne.role,
+                        ligne.contenu,
+                        execution_id=execution_id,
+                        donnees=ligne.donnees,
+                        agent=chemin,
+                    )
+        except Exception:
+            log.exception("Suivi des agents : notification %s ignorée", methode)
+    for tache in enrichissements:
+        tache.cancel()
+
+
+async def _enrichir(codex: AsyncCodex, suivi: SuiviAgents, thread_id: str) -> None:
+    """Rôle, surnom et modèle d'un sous-agent, lus dans son thread (réessaie le temps qu'il soit écrit)."""
+    for essai in range(3):
+        try:
+            thread = (await codex._client.thread_read(thread_id, False)).thread
+        except Exception:
+            await asyncio.sleep(1 + essai)
+            continue
+        suivi.enrichir(thread_id, role=thread.agent_role, surnom=thread.agent_nickname, modele=thread.model)
+        return
 
 
 async def _connecter(codex: AsyncCodex) -> None:
