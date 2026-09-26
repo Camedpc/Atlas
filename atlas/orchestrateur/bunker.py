@@ -10,9 +10,11 @@
         sessions/<conversation>/            dossier de travail de la session
           conv/  docs_session/  scripts/  .tmp/
 
-Toujours actifs : l'arborescence, le Python partagé, les commandes sans les secrets du serveur, et la consigne de
-ne rien consulter hors de la session et du projet (`prompts/environnement.md`). La lecture n'est pas restreinte
-techniquement : c'est un choix, la consigne suffit.
+Toujours actifs : l'arborescence, le Python partagé, le TMPDIR de la session, et la consigne de ne rien consulter
+hors de la session et du projet (`prompts/environnement.md`). La lecture n'est pas restreinte techniquement : c'est
+un choix, la consigne suffit. `shell_environment_policy` retire les secrets du serveur des commandes sous Windows,
+mais Codex l'ignore sur la VM (même `inherit = "none"`) ; sans sandbox, l'agent a de toute façon le même utilisateur
+Unix que le serveur (il pourrait lire /proc/1/environ).
 
 Avec ATLAS_BUNKER=1, le sandbox de Codex confine en plus l'écriture à la session et au partage, pour toutes les
 commandes des agents et leurs descendants (les serveurs MCP, lancés par Codex, y échappent). Il marche sous Windows,

@@ -84,7 +84,8 @@ l'historique du parent, se perd, et Codex ignore le modèle de son rôle. Places
 que « sous-agent démarré / terminé » ; le détail est dans les rollouts de `CODEX_HOME/sessions/`.
 Bunker (`bunker.py`) : chaque conversation travaille dans `espace/utilisateurs/<utilisateur>/<projet>/sessions/<id>/`
 (`conv/`, `docs_session/`, `scripts/`, `.tmp/`) ; Python partagé dans `espace/partage/` (`pip install` sert à toutes
-les sessions) ; commandes lancées avec `shell_environment_policy.inherit = "core"` (pas les secrets du serveur). Le
+les sessions) ; `shell_environment_policy.inherit = "core"` masque les secrets du serveur aux commandes en local, mais
+Codex l'ignore sur la VM (les agents y voient toutes les variables, et partagent l'utilisateur Unix du serveur). Le
 confinement est une consigne (`prompts/environnement.md`, ajouté à tous les agents de la session) : Camille a choisi
 de ne pas restreindre la lecture techniquement. `ATLAS_BUNKER=1` ajoute un profil de permissions Codex
 (`default_permissions` + `[permissions.bunker]` : lecture partout, écriture dans la session et le partage), qui ne se
