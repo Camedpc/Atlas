@@ -1,0 +1,384 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Graphe de logique · Atlas</title>
+  <link rel="stylesheet" href="../../commun/commun.css">
+  <link rel="stylesheet" href="../../commun/clair.css">
+  <style>
+    :root {
+      --papier: #fafaf8;
+      --grille-fine: #efefeb;
+      --grille-majeure: #e0e0db;
+      --choix: #2563eb;
+      --panneau: 320px;
+      --v-valide: #52525b;
+      --v-a_verifier: #2563eb;
+      --v-invalide: #dc2626;
+    }
+
+    /* ─── Barre d'outils ─── */
+    .barre .probleme {
+      max-width: 440px; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; display: inline-block;
+    }
+    .barre button:disabled { opacity: 0.4; cursor: default; background: transparent; }
+    .barre kbd { font: 10px var(--mono); color: var(--texte-3); margin-left: 4px; }
+    .barre button.actif kbd { color: rgba(255, 255, 255, 0.7); }
+
+    /* ─── Papier millimétré ─── */
+    .scene {
+      right: var(--panneau);
+      cursor: default;
+      user-select: none;
+      background-color: var(--papier);
+      background-image:
+        linear-gradient(var(--grille-majeure) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grille-majeure) 1px, transparent 1px),
+        linear-gradient(var(--grille-fine) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grille-fine) 1px, transparent 1px);
+      background-size: 128px 128px, 128px 128px, 16px 16px, 16px 16px;
+    }
+    .scene.espace { cursor: grab; }
+    .scene.panoramique, .scene.panoramique * { cursor: grabbing !important; }
+    .scene.cablage, .scene.cablage * { cursor: crosshair !important; }
+
+    .monde { position: absolute; left: 0; top: 0; transform-origin: 0 0; --inv: 1; }
+    .commentaires, .noeuds { position: absolute; left: 0; top: 0; }
+    .fils { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: visible; pointer-events: none; }
+
+    /* ─── Boîtes « Comment » (catégories) ─── */
+    .commentaire {
+      position: absolute; left: 0; top: 0; border-radius: 4px; pointer-events: none;
+      background: color-mix(in srgb, var(--c) 6%, transparent);
+      border: 1px solid color-mix(in srgb, var(--c) 38%, transparent);
+    }
+    .commentaire.choisi { border-color: var(--choix); box-shadow: 0 0 0 1px var(--choix); }
+    .c-titre {
+      pointer-events: auto; cursor: default;
+      min-height: 32px; padding: 4px 12px; display: flex; align-items: center; gap: 10px;
+      font: 600 clamp(13px, calc(10px * var(--inv)), 34px)/1.25 var(--police);
+      color: color-mix(in srgb, var(--c) 82%, #000);
+      background: color-mix(in srgb, var(--c) 12%, transparent);
+      border-bottom: 1px solid color-mix(in srgb, var(--c) 25%, transparent);
+      border-radius: 3px 3px 0 0; white-space: nowrap; overflow: hidden;
+    }
+    .c-nom { min-width: 0; overflow: hidden; text-overflow: ellipsis; outline: none; }
+    .c-titre small { flex: none; font: 400 0.78em var(--mono); color: color-mix(in srgb, var(--c) 55%, #777); }
+    .poignee { position: absolute; pointer-events: auto; }
+    .p-n, .p-s { left: 8px; right: 8px; height: 8px; cursor: ns-resize; }
+    .p-e, .p-w { top: 8px; bottom: 8px; width: 8px; cursor: ew-resize; }
+    .p-n { top: -4px; } .p-s { bottom: -4px; } .p-e { right: -4px; } .p-w { left: -4px; }
+    .p-ne, .p-nw, .p-se, .p-sw { width: 14px; height: 14px; }
+    .p-ne { top: -5px; right: -5px; cursor: nesw-resize; }
+    .p-sw { bottom: -5px; left: -5px; cursor: nesw-resize; }
+    .p-nw { top: -5px; left: -5px; cursor: nwse-resize; }
+    .p-se { bottom: -5px; right: -5px; cursor: nwse-resize; }
+    .p-se::after {
+      content: ''; position: absolute; right: 7px; bottom: 7px; width: 7px; height: 7px;
+      border-right: 1.5px solid color-mix(in srgb, var(--c) 55%, transparent);
+      border-bottom: 1.5px solid color-mix(in srgb, var(--c) 55%, transparent);
+    }
+
+    /* ─── Fils ─── */
+    .fils path { fill: none; }
+    .fil { stroke-width: 2.2; stroke-linecap: round; }
+    .fil.v-valide { stroke: var(--v-valide); }
+    .fil.v-a_verifier { stroke: var(--v-a_verifier); stroke-dasharray: 7 5; }
+    .fil.v-invalide { stroke: var(--v-invalide); stroke-dasharray: 2 4; }
+    .fil.actif { stroke-width: 3.4; stroke-opacity: 1 !important; }
+    .fil-hit { stroke: transparent; stroke-width: 12; pointer-events: stroke; cursor: pointer; }
+    .fil-hit:hover + .fil { stroke-width: 3.4; stroke-opacity: 1 !important; }
+    .fil-temp { stroke: #3f3f46; stroke-width: 2.2; }
+
+    /* ─── Nœuds ─── */
+    .noeud {
+      position: absolute; left: 0; top: 0; width: 264px;
+      background: #fff; border: 1px solid #d4d4d8; border-radius: 7px;
+      box-shadow: 0 1px 2px rgba(24, 24, 27, 0.06), 0 6px 16px -10px rgba(24, 24, 27, 0.25);
+    }
+    .noeud:hover { border-color: #a1a1aa; }
+    .noeud.s-invalide { border-color: color-mix(in srgb, var(--echec) 55%, #d4d4d8); }
+    .noeud.choisi { outline: 2px solid var(--choix); outline-offset: 2px; }
+    .noeud.cible-ok { outline: 2px solid var(--choix); outline-offset: 2px; }
+    .noeud.cible-ko { outline: 2px solid var(--echec); outline-offset: 2px; }
+
+    .tete {
+      position: relative; height: 40px; display: flex; align-items: center; gap: 9px; padding: 0 30px 0 9px;
+      background: var(--c); color: #fff; border-radius: 6px 6px 0 0;
+    }
+    .ico {
+      flex: none; width: 22px; height: 22px; display: grid; place-items: center; border-radius: 4px;
+      font: 600 13px/1 var(--police); background: rgba(255, 255, 255, 0.18);
+    }
+    .tt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+    .tt b { font: 600 12.5px/1.25 var(--police); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; outline: none; }
+    .tt b.edition, .d-nom.edition, .c-nom.edition {
+      overflow: visible; text-overflow: clip; cursor: text; user-select: text;
+      background: #fff; color: var(--texte); border-radius: 2px; box-shadow: 0 0 0 2px #fff, 0 0 0 3px var(--choix);
+    }
+    .tt span { font: 10.5px/1.2 var(--police); opacity: 0.8; }
+
+    .enonce {
+      margin: 0; padding: 8px 10px 8px 12px; font: 11.5px/1.45 var(--police); color: var(--texte-2);
+      display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .enonce i { color: var(--texte-3); }
+
+    .rang {
+      height: 22px; display: flex; align-items: center; gap: 7px; padding: 0 10px 0 5px; min-width: 0;
+      font: 11.5px var(--police); color: var(--texte-2); white-space: nowrap;
+    }
+    .rang .lab { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+    .demo { border-top: 1px solid #efefec; padding-bottom: 3px; }
+    .d-tete { background: #fafaf8; border-bottom: 1px solid #f1f1ee; margin-bottom: 2px; cursor: pointer; }
+    .d-tete:hover { background: #f4f4f2; }
+    .d-nom { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; font: 500 10.5px var(--mono); color: var(--texte); outline: none; }
+    .demo.choisie .d-tete { background: color-mix(in srgb, var(--choix) 9%, #fff); }
+    .demo.choisie .d-nom { color: var(--choix); }
+    .chip {
+      flex: none; padding: 0 5px; border-radius: 3px; font: 500 10px/16px var(--police);
+      color: var(--v); background: color-mix(in srgb, var(--v) 8%, #fff); border: 1px solid color-mix(in srgb, var(--v) 30%, #fff);
+    }
+    .chip b { font: 500 10px var(--mono); margin-left: 4px; }
+    .v-valide { --v: #15803d; --tc: var(--v-valide); }
+    .v-a_verifier { --v: #2563eb; --tc: var(--v-a_verifier); }
+    .v-invalide { --v: #dc2626; --tc: var(--v-invalide); }
+    .nouvelle .lab { color: var(--texte-3); font-style: italic; }
+    .nouvelle { border-top: 1px solid #efefec; height: 26px; }
+
+    /* Broches */
+    .pin { flex: none; width: 14px; height: 14px; display: grid; place-items: center; cursor: crosshair; border-radius: 50%; }
+    .pin i { width: 9px; height: 9px; border-radius: 50%; border: 2px solid var(--tc, #71717a); background: #fff; transition: transform 0.1s; }
+    .pin.plein i { background: var(--tc, #71717a); }
+    .pin:hover i, .pin.cible-ok i { transform: scale(1.3); }
+    .pin.cible-ko i { border-color: var(--echec); }
+    .pin.ajout i { border-style: dashed; background: #fff; }
+    .pin.sortie { position: absolute; right: 7px; top: 13px; }
+    .pin.sortie i { border-color: #fff; background: transparent; }
+    .pin.sortie.plein i { background: #fff; }
+
+    .pied {
+      height: 24px; display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 0 10px;
+      border-top: 1px solid #efefec; font: 10.5px var(--police); color: var(--texte-2); white-space: nowrap; border-radius: 0 0 6px 6px;
+    }
+    .statut { display: inline-flex; align-items: center; gap: 6px; }
+    .statut i { width: 8px; height: 8px; border-radius: 2px; background: var(--s); }
+    .pied .util { color: var(--texte-3); font-family: var(--mono); font-size: 10px; }
+
+    /* ─── Rectangle de sélection, infos, légende ─── */
+    .rectangle { position: absolute; display: none; border: 1px solid var(--choix); background: color-mix(in srgb, var(--choix) 7%, transparent); pointer-events: none; z-index: 4; }
+    .info-cable {
+      position: absolute; display: none; z-index: 8; pointer-events: none; padding: 3px 8px; border-radius: 4px;
+      font: 11.5px var(--police); color: #fff; background: rgba(24, 24, 27, 0.88); white-space: nowrap;
+    }
+    .info-cable.ko { background: var(--echec); }
+    .zoom-info { position: absolute; top: 10px; right: 14px; z-index: 5; font: 11px var(--mono); color: var(--texte-3); pointer-events: none; }
+    .legende-bp {
+      position: absolute; left: 12px; bottom: 12px; z-index: 5; cursor: default;
+      display: flex; flex-wrap: wrap; align-items: center; gap: 14px; padding: 7px 12px; max-width: calc(100% - 24px);
+      font-size: 11.5px; color: var(--texte-2); background: rgba(255, 255, 255, 0.94);
+      border: 1px solid var(--trait); border-radius: 6px;
+    }
+    .legende-bp span { display: inline-flex; align-items: center; gap: 6px; }
+    .legende-bp svg { display: block; }
+    .legende-bp .sep { width: 1px; height: 14px; background: var(--trait); }
+    .legende-bp .statut i { width: 8px; height: 8px; }
+    .legende-bp .aide-l { color: var(--texte-3); }
+    .toast {
+      position: absolute; left: 50%; bottom: 60px; z-index: 9; transform: translateX(-50%); padding: 7px 14px;
+      font: 12px var(--police); color: #fff; background: #27272a; border-radius: 6px; pointer-events: none;
+      opacity: 0; transition: opacity 0.2s;
+    }
+    .toast.visible { opacity: 1; }
+
+    /* ─── Menu contextuel « Toutes les actions » ─── */
+    .menu {
+      position: absolute; z-index: 20; width: 290px; max-height: 420px; display: flex; flex-direction: column;
+      background: #fff; border: 1px solid var(--trait-fort); border-radius: 6px;
+      box-shadow: 0 12px 32px -12px rgba(24, 24, 27, 0.35); overflow: hidden; cursor: default;
+    }
+    .menu[hidden] { display: none; }
+    .m-tete { padding: 8px 10px 6px; font: 600 12px var(--police); color: var(--texte); display: flex; justify-content: space-between; align-items: baseline; }
+    .m-tete small { font: 400 11px var(--police); color: var(--texte-3); }
+    .m-recherche {
+      margin: 0 8px 6px; padding: 5px 8px; font: 12px var(--police); color: var(--texte);
+      border: 1px solid var(--trait-fort); border-radius: 4px; outline: none; background: #fff;
+    }
+    .m-recherche:focus { border-color: var(--choix); }
+    .m-liste { overflow-y: auto; padding-bottom: 6px; border-top: 1px solid var(--trait); }
+    .m-groupe { padding: 7px 10px 3px; font: 600 10.5px var(--police); color: var(--texte-3); text-transform: uppercase; letter-spacing: 0.04em; }
+    .m-item { display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 10px 0 16px; font: 12.5px var(--police); color: var(--texte); cursor: pointer; }
+    .m-item.actif { background: color-mix(in srgb, var(--choix) 10%, #fff); }
+    .m-item .m-ico { width: 16px; height: 16px; display: grid; place-items: center; border-radius: 3px; font: 600 10px/1 var(--police); color: #fff; background: var(--c, #71717a); }
+    .m-item .m-ico.vide { background: transparent; color: var(--texte-2); border: 1px solid var(--trait-fort); }
+    .m-item kbd { margin-left: auto; font: 10.5px var(--mono); color: var(--texte-3); }
+    .m-vide { padding: 10px 16px; color: var(--texte-3); font-size: 12px; }
+
+    /* ─── Aide ─── */
+    .aide {
+      position: absolute; top: 12px; right: 12px; z-index: 15; width: 360px; padding: 12px 14px 10px;
+      background: #fff; border: 1px solid var(--trait-fort); border-radius: 6px; box-shadow: 0 12px 32px -12px rgba(24, 24, 27, 0.35);
+    }
+    .aide[hidden] { display: none; }
+    .aide h3 { margin: 0 0 6px; font: 600 12.5px var(--police); }
+    .aide h4 { margin: 10px 0 4px; font: 600 10.5px var(--police); color: var(--texte-3); text-transform: uppercase; letter-spacing: 0.04em; }
+    .aide dl { margin: 0; display: grid; grid-template-columns: 132px 1fr; gap: 3px 10px; font-size: 12px; }
+    .aide dt { font: 11px var(--mono); color: var(--texte); }
+    .aide dd { margin: 0; color: var(--texte-2); }
+
+    /* ─── Panneau Détails ─── */
+    .details {
+      position: fixed; top: var(--barre); right: 0; bottom: 0; width: var(--panneau); z-index: 10;
+      display: flex; flex-direction: column; background: #fff; border-left: 1px solid var(--trait-fort);
+    }
+    .d-onglet {
+      flex: none; height: 34px; display: flex; align-items: center; padding: 0 12px;
+      font: 600 12px var(--police); color: var(--texte); background: #f4f4f2; border-bottom: 1px solid var(--trait);
+    }
+    .d-contenu { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+    .d-tete { flex: none; display: flex; gap: 10px; padding: 12px; border-bottom: 1px solid var(--trait); }
+    .d-ico { flex: none; width: 30px; height: 30px; display: grid; place-items: center; border-radius: 5px; color: #fff; background: var(--c); font: 600 15px var(--police); }
+    .d-tete > div { min-width: 0; }
+    .d-role { font: 500 11px var(--police); color: var(--texte-3); }
+    .d-titre { margin: 2px 0 0; font: 600 14px/1.35 var(--police); color: var(--texte); overflow-wrap: anywhere; }
+    .d-defil { flex: 1; min-height: 0; overflow-y: auto; }
+    .details details { border-bottom: 1px solid var(--trait); }
+    .details summary {
+      list-style: none; cursor: pointer; display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px;
+      font: 600 11.5px var(--police); color: var(--texte); background: #fafaf8; border-bottom: 1px solid var(--trait);
+    }
+    .details summary::-webkit-details-marker { display: none; }
+    .details summary::before { content: '▸'; width: 10px; font-size: 10px; color: var(--texte-2); }
+    .details details[open] summary::before { content: '▾'; }
+    .details summary small { margin-left: auto; font: 10.5px var(--mono); color: var(--texte-3); font-weight: 400; }
+    .props { padding: 6px 0; }
+    .ligne { display: grid; grid-template-columns: 92px 1fr; gap: 8px; align-items: center; padding: 4px 12px; font-size: 12px; }
+    .ligne.haute { align-items: start; }
+    .ligne > span:first-child { color: var(--texte-2); }
+    .ligne.haute > span:first-child { padding-top: 5px; }
+    .details input[type='text'], .details input[type='number'], .details textarea, .details select {
+      width: 100%; min-width: 0; padding: 4px 7px; font: 12px/1.4 var(--police); color: var(--texte);
+      background: #fff; border: 1px solid #d4d4d8; border-radius: 4px; outline: none;
+    }
+    .details textarea { resize: vertical; min-height: 64px; }
+    .details input:focus, .details textarea:focus, .details select:focus { border-color: var(--choix); box-shadow: 0 0 0 2px color-mix(in srgb, var(--choix) 15%, transparent); }
+    .details input.mono { font-family: var(--mono); font-size: 11.5px; }
+    .case { display: inline-flex; align-items: center; gap: 6px; color: var(--texte-2); }
+    .explication { margin: 2px 12px 8px; padding: 6px 8px; font-size: 11.5px; line-height: 1.45; color: var(--texte-2); background: #fafaf8; border: 1px solid var(--trait); border-radius: 4px; }
+    .segments { display: flex; border: 1px solid #d4d4d8; border-radius: 4px; overflow: hidden; }
+    .segments button { flex: 1; padding: 4px 0; font: 500 11.5px var(--police); color: var(--texte-2); background: #fff; border: 0; border-left: 1px solid #e4e4e7; cursor: pointer; }
+    .segments button:first-child { border-left: 0; }
+    .segments button:hover { background: #f4f4f2; }
+    .segments button.actif { color: #fff; background: var(--v); }
+    .confiance { display: flex; align-items: center; gap: 8px; }
+    .confiance input[type='range'] { flex: 1; min-width: 0; accent-color: var(--texte-2); }
+    .confiance output { width: 34px; text-align: right; font: 11.5px var(--mono); color: var(--texte); }
+    .liste { list-style: none; margin: 0; padding: 4px 0 6px; }
+    .liste li { display: flex; align-items: center; gap: 8px; padding: 3px 12px; font-size: 12px; min-height: 26px; }
+    .liste .vide { color: var(--texte-3); }
+    .lien { padding: 0; border: 0; background: none; font: inherit; color: var(--choix); cursor: pointer; text-align: left; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .lien:hover { text-decoration: underline; }
+    .lien.mono { font: 11.5px var(--mono); }
+    .liste .chip { margin-left: auto; }
+    .retirer { margin-left: auto; flex: none; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 3px; background: none; color: var(--texte-3); cursor: pointer; font-size: 14px; line-height: 1; }
+    .retirer:hover { background: #f1f1ee; color: var(--echec); }
+    .palette { display: flex; gap: 6px; flex-wrap: wrap; }
+    .palette button { width: 22px; height: 22px; padding: 0; border-radius: 4px; border: 1px solid rgba(0, 0, 0, 0.12); background: var(--c); cursor: pointer; }
+    .palette button.actif { box-shadow: 0 0 0 2px #fff, 0 0 0 3.5px var(--texte); }
+    .d-actions { display: flex; flex-wrap: wrap; gap: 6px; padding: 12px; }
+    .d-actions button, .ajouter {
+      padding: 5px 10px; font: 500 12px var(--police); color: var(--texte); background: #fff;
+      border: 1px solid #d4d4d8; border-radius: 4px; cursor: pointer;
+    }
+    .d-actions button:hover, .ajouter:hover { background: #f4f4f2; }
+    .d-actions button.danger { color: var(--echec); }
+    .ajouter { margin: 0 12px 8px; }
+    .stats { display: grid; grid-template-columns: 1fr auto; gap: 4px 8px; padding: 8px 12px; font-size: 12px; color: var(--texte-2); }
+    .stats b { font: 500 12px var(--mono); color: var(--texte); text-align: right; }
+    .conseil { margin: 4px 12px 12px; font-size: 11.5px; line-height: 1.5; color: var(--texte-3); }
+    .conseil kbd { font: 10.5px var(--mono); color: var(--texte-2); padding: 0 3px; border: 1px solid var(--trait); border-radius: 3px; background: #fafaf8; }
+  </style>
+</head>
+<body>
+  <header class="barre">
+    <a class="retour" href="../../logique.html">← Propositions</a>
+    <span class="titre">Graphe de logique <small class="probleme"></small></span>
+    <span class="espace"></span>
+    <div class="groupe">
+      <button data-a="annuler" title="Annuler (Ctrl+Z)">Annuler</button>
+      <button data-a="retablir" title="Rétablir (Ctrl+Y)">Rétablir</button>
+    </div>
+    <div class="groupe">
+      <button data-a="cadrer" title="Cadrer la sélection ou tout le graphe">Cadrer<kbd>F</kbd></button>
+      <button data-a="commentaire" title="Boîte de catégorie autour de la sélection">Commentaire<kbd>C</kbd></button>
+      <button data-a="grille" title="Aimanter les déplacements à la grille de 16">Grille</button>
+    </div>
+    <div class="groupe">
+      <button data-a="reinitialiser" title="Revenir au jeu d’exemple (annulable)">Réinitialiser l’exemple</button>
+      <button data-a="aide" title="Raccourcis clavier (?)">Raccourcis</button>
+    </div>
+  </header>
+
+  <main class="scene">
+    <div class="monde">
+      <div class="commentaires"></div>
+      <svg class="fils"><g class="g-fils"></g><path class="fil-temp" style="display: none"></path></svg>
+      <div class="noeuds"></div>
+    </div>
+    <div class="rectangle"></div>
+    <div class="info-cable"></div>
+    <div class="zoom-info"></div>
+    <div class="toast"></div>
+    <div class="legende-bp">
+      <span><svg width="24" height="6"><path d="M1 3H23" stroke="var(--v-valide)" stroke-width="2.2"/></svg>valide</span>
+      <span><svg width="24" height="6"><path d="M1 3H23" stroke="var(--v-a_verifier)" stroke-width="2.2" stroke-dasharray="7 5"/></svg>à vérifier</span>
+      <span><svg width="24" height="6"><path d="M1 3H23" stroke="var(--v-invalide)" stroke-width="2.2" stroke-dasharray="2 4" stroke-linecap="round"/></svg>invalide</span>
+      <span class="aide-l">opacité = confiance</span>
+      <i class="sep"></i>
+      <span class="statuts-l"></span>
+    </div>
+    <div class="menu" hidden>
+      <div class="m-tete"><span class="m-titre">Toutes les actions</span><small class="m-sous"></small></div>
+      <input class="m-recherche" type="text" placeholder="Rechercher" spellcheck="false">
+      <div class="m-liste"></div>
+    </div>
+    <div class="aide" hidden>
+      <h3>Raccourcis</h3>
+      <h4>Navigation</h4>
+      <dl>
+        <dt>Clic droit glissé</dt><dd>Se déplacer (ou molette maintenue, Espace + glisser)</dd>
+        <dt>Molette</dt><dd>Zoomer sous le curseur</dd>
+        <dt>F / Origine</dt><dd>Cadrer la sélection / tout le graphe</dd>
+      </dl>
+      <h4>Nœuds</h4>
+      <dl>
+        <dt>Clic droit</dt><dd>Toutes les actions (créer un nœud)</dd>
+        <dt>Glisser le fond</dt><dd>Rectangle de sélection (Maj : ajouter)</dd>
+        <dt>Maj / Ctrl + clic</dt><dd>Ajouter ou retirer de la sélection</dd>
+        <dt>Double-clic, F2</dt><dd>Renommer</dd>
+        <dt>Ctrl+D · Suppr</dt><dd>Dupliquer · Supprimer</dd>
+        <dt>Alt en glissant</dt><dd>Ignorer la grille</dd>
+      </dl>
+      <h4>Liaisons</h4>
+      <dl>
+        <dt>Sortie → entrée</dt><dd>Ajouter une prémisse à une démonstration</dd>
+        <dt>Relâcher dans le vide</dt><dd>Créer un nœud déjà relié</dd>
+        <dt>Alt + clic</dt><dd>Couper les liens d’une broche ou d’un fil</dd>
+      </dl>
+      <h4>Catégories et historique</h4>
+      <dl>
+        <dt>C</dt><dd>Boîte « Comment » autour de la sélection</dd>
+        <dt>Ctrl+Z · Ctrl+Y</dt><dd>Annuler · Rétablir</dd>
+      </dl>
+    </div>
+  </main>
+
+  <aside class="details">
+    <div class="d-onglet">Détails</div>
+    <div class="d-contenu"></div>
+  </aside>
+
+  <script type="module" src="./vue.js"></script>
+</body>
+</html>

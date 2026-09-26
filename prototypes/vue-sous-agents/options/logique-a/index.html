@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Graphe de logique · Atlas</title>
+  <link rel="stylesheet" href="../../commun/commun.css">
+  <link rel="stylesheet" href="../../commun/clair.css">
+  <style>
+    :root {
+      --papier: #fafaf8;
+      --grille-fine: #efefeb;
+      --grille-majeure: #e0e0db;
+      --sel: #e0901f;
+      --panneau: 340px;
+      --champ: #fafaf8;
+      --champ-trait: #deded9;
+    }
+    [hidden] { display: none !important; }
+
+    /* ─── Barre ─── */
+    .barre .probleme { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--texte-2); font-size: 13px; }
+    .barre .sep { width: 1px; height: 20px; background: var(--trait); flex: none; }
+    .barre button[disabled] { opacity: 0.38; cursor: default; background: transparent; }
+    .barre button kbd { margin-left: 5px; font: 10px var(--mono); color: var(--texte-3); }
+    .barre button.actif kbd { color: rgba(255, 255, 255, 0.7); }
+
+    /* ─── Papier millimétré ─── */
+    .graphe {
+      position: absolute; inset: 0 var(--panneau) 0 0; overflow: hidden;
+      user-select: none; touch-action: none; cursor: default;
+      background-color: var(--papier);
+      background-image:
+        linear-gradient(var(--grille-majeure) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grille-majeure) 1px, transparent 1px),
+        linear-gradient(var(--grille-fine) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grille-fine) 1px, transparent 1px);
+      background-size: 128px 128px, 128px 128px, 16px 16px, 16px 16px;
+    }
+    .graphe.espace { cursor: grab; }
+    .graphe.panoramique, .graphe.panoramique * { cursor: grabbing !important; }
+    .graphe.liaison, .graphe.liaison * { cursor: crosshair !important; }
+
+    .monde { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+    .commentaires, .noeuds { position: absolute; left: 0; top: 0; }
+    .fils { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: visible; pointer-events: none; }
+
+    /* ─── Fils : couleur = validité de la démonstration, épaisseur = confiance ─── */
+    .fil { fill: none; stroke-width: calc(var(--l, 2) * 1px); stroke-linecap: round; }
+    .fil.v-valide { stroke: #8b8b93; }
+    .fil.v-a_verifier { stroke: #2563eb; stroke-dasharray: 7 5; stroke-opacity: 0.75; }
+    .fil.v-invalide { stroke: #dc2626; stroke-opacity: 0.75; }
+    .fil.actif { stroke-width: calc(var(--l, 2) * 1px + 1.2px); stroke-opacity: 1; }
+    .fil.v-valide.actif { stroke: #27272a; }
+    .fil-temp { fill: none; stroke: #3f3f46; stroke-width: 2; }
+
+    /* ─── Boîtes « Comment » = catégories ─── */
+    .commentaire {
+      position: absolute; left: 0; top: 0; border-radius: 4px; pointer-events: none;
+      background: color-mix(in srgb, var(--c) 5%, transparent);
+      border: 1px solid color-mix(in srgb, var(--c) 36%, transparent);
+    }
+    .commentaire.choisi { outline: 2px solid var(--sel); outline-offset: 1px; }
+    .c-titre {
+      pointer-events: auto; cursor: move; display: flex; align-items: center; gap: 8px;
+      height: calc(30px * var(--tk, 1)); padding: 0 calc(10px * var(--tk, 1));
+      font: 600 calc(13px * var(--tk, 1)) var(--police); letter-spacing: -0.005em;
+      color: color-mix(in srgb, var(--c) 78%, #000);
+      background: color-mix(in srgb, var(--c) 12%, transparent);
+      border-bottom: 1px solid color-mix(in srgb, var(--c) 22%, transparent);
+      border-radius: 3px 3px 0 0; white-space: nowrap; overflow: hidden;
+    }
+    .c-titre .c-nom { overflow: hidden; text-overflow: ellipsis; }
+    .poignee { position: absolute; pointer-events: auto; }
+    .p-n { top: -4px; left: 10px; right: 10px; height: 8px; cursor: ns-resize; }
+    .p-s { bottom: -4px; left: 10px; right: 10px; height: 8px; cursor: ns-resize; }
+    .p-e { right: -4px; top: 10px; bottom: 10px; width: 8px; cursor: ew-resize; }
+    .p-w { left: -4px; top: 10px; bottom: 10px; width: 8px; cursor: ew-resize; }
+    .p-ne, .p-nw, .p-se, .p-sw { width: 14px; height: 14px; }
+    .p-ne { top: -5px; right: -5px; cursor: nesw-resize; }
+    .p-sw { bottom: -5px; left: -5px; cursor: nesw-resize; }
+    .p-nw { top: -5px; left: -5px; cursor: nwse-resize; }
+    .p-se { bottom: -5px; right: -5px; cursor: nwse-resize; }
+    .p-se::after {
+      content: ''; position: absolute; right: 8px; bottom: 8px; width: 7px; height: 7px;
+      border-right: 1.5px solid color-mix(in srgb, var(--c) 45%, transparent);
+      border-bottom: 1.5px solid color-mix(in srgb, var(--c) 45%, transparent);
+    }
+
+    /* ─── Nœuds ─── */
+    .noeud {
+      position: absolute; left: 0; top: 0;
+      background: #fff; border: 1px solid #d4d4d8; border-radius: 7px;
+      box-shadow: 0 1px 2px rgba(24, 24, 27, 0.06), 0 6px 16px -10px rgba(24, 24, 27, 0.25);
+    }
+    .noeud:hover { border-color: #a1a1aa; }
+    .noeud.st-invalide { border-color: #efb1b1; }
+    .noeud.choisi { outline: 2px solid var(--sel); outline-offset: 2px; }
+    .tete {
+      height: 40px; display: flex; align-items: center; gap: 9px; padding: 0 9px;
+      background: var(--c); color: #fff; border-radius: 6px 6px 0 0; cursor: move;
+    }
+    .ico {
+      flex: none; width: 22px; height: 22px; display: grid; place-items: center; border-radius: 4px;
+      font: 600 12px/1 var(--police); background: rgba(255, 255, 255, 0.18);
+    }
+    .tt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+    .tt b { font: 600 12.5px/1.2 var(--police); letter-spacing: -0.005em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tt span { font: 10.5px/1.2 var(--police); opacity: 0.78; }
+    .renommage {
+      width: 100%; font: 600 12.5px/1.2 var(--police); color: var(--texte); background: #fff;
+      border: 1px solid var(--sel); border-radius: 3px; padding: 1px 4px; outline: none;
+    }
+    .c-titre .renommage { font: inherit; height: 76%; }
+
+    .corps { padding: 5px 0 4px; }
+    .rang {
+      height: 22px; display: flex; align-items: center; gap: 6px; min-width: 0; padding: 0 10px 0 5px;
+      font: 11.5px var(--police); color: var(--texte-2); white-space: nowrap;
+    }
+    .rang .lab { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+    .rang.demo { color: var(--texte); cursor: pointer; }
+    .rang.demo + .rang.demo, .rang.prem + .rang.demo { margin-top: 3px; }
+    .rang.demo .lab { font: 500 11px var(--mono); }
+    .rang.demo .val { flex: none; font: 500 10.5px var(--mono); }
+    .rang.demo:hover { background: #f5f5f3; }
+    .rang.demo.choisie { background: #fdf3e4; }
+    .rang.prem { padding-left: 19px; }
+    .rang.ajout { color: var(--texte-3); font-size: 11px; }
+    .rang.cible { background: #e8effc; }
+
+    .pin { flex: none; width: 12px; height: 12px; display: grid; place-items: center; cursor: crosshair; }
+    .pin i { display: block; }
+    .pin.rond i { width: 9px; height: 9px; border-radius: 50%; border: 2px solid var(--tc, #a1a1aa); background: #fff; }
+    .pin.rond.plein i { background: var(--tc, #a1a1aa); }
+    .pin.losange i { width: 7px; height: 7px; border-radius: 1px; transform: rotate(45deg); background: var(--tc); }
+    .tete .pin { width: 14px; height: 14px; }
+    .tete .pin.rond i { width: 12px; height: 12px; border-color: #fff; background: rgba(255, 255, 255, 0.2); }
+    .tete .pin.rond.plein i { background: var(--tc); }
+    .pin.cible i { box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25); }
+
+    .enonce {
+      margin: 0; padding: 2px 10px 8px; font: 11.5px/1.45 var(--police); color: var(--texte-2);
+      display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .enonce.vide { color: var(--texte-3); font-style: italic; }
+    .pied {
+      height: 24px; display: flex; align-items: center; gap: 8px; padding: 0 10px;
+      border-top: 1px solid #efefec; font: 10.5px var(--mono); color: var(--texte-3); white-space: nowrap;
+    }
+    .pied .st { display: inline-flex; align-items: center; gap: 6px; color: var(--tc); font-weight: 500; }
+    .pied .st i, .carre { flex: none; width: 7px; height: 7px; border-radius: 1.5px; background: var(--tc); }
+    .pied .txt { margin-left: auto; }
+
+    /* ─── Surcouches du graphe ─── */
+    .lasso { position: absolute; border: 1px solid var(--sel); background: rgba(224, 144, 31, 0.07); pointer-events: none; }
+    .zoom-info { position: absolute; top: 10px; right: 14px; font: 500 12px var(--police); color: #a1a1aa; pointer-events: none; }
+    .filigrane {
+      position: absolute; right: 18px; bottom: 12px; pointer-events: none;
+      font: 700 24px var(--police); letter-spacing: 0.14em; color: rgba(24, 24, 27, 0.07);
+    }
+    .legende-bp {
+      position: absolute; left: 12px; bottom: 12px; z-index: 5; cursor: default;
+      display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 7px 12px; max-width: calc(100% - 200px);
+      font-size: 11.5px; color: var(--texte-2); background: rgba(255, 255, 255, 0.94);
+      border: 1px solid var(--trait); border-radius: 6px;
+    }
+    .legende-bp span { display: inline-flex; align-items: center; gap: 6px; }
+    .legende-bp .trait { width: 22px; height: 0; border-top: 2px solid; }
+    .legende-bp .sep { width: 1px; height: 14px; background: var(--trait); }
+    .toast {
+      position: absolute; left: 50%; bottom: 58px; transform: translateX(-50%); z-index: 6; pointer-events: none;
+      padding: 7px 12px; border-radius: 5px; font: 500 12px var(--police); color: #fff; background: #27272a;
+      opacity: 0; transition: opacity 0.2s;
+    }
+    .toast.visible { opacity: 1; }
+
+    /* ─── Panneau Détails ─── */
+    .details {
+      position: absolute; top: 0; right: 0; bottom: 0; width: var(--panneau); z-index: 10;
+      display: flex; flex-direction: column; background: #fff; border-left: 1px solid var(--trait-fort);
+    }
+    .d-onglet {
+      flex: none; height: 34px; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 12px;
+      font: 600 12px var(--police); color: var(--texte); background: #f4f4f2; border-bottom: 1px solid var(--trait);
+    }
+    .d-onglet span { flex: 1; }
+    .d-onglet small { font: 11px var(--police); color: var(--texte-3); }
+    .d-contenu { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+    .d-tete { flex: none; display: flex; gap: 10px; padding: 12px; border-bottom: 1px solid var(--trait); }
+    .d-ico { flex: none; width: 30px; height: 30px; display: grid; place-items: center; border-radius: 5px; color: #fff; background: var(--c); font: 600 14px var(--police); }
+    .d-tete > div { min-width: 0; }
+    .d-role { font: 500 11px var(--police); color: var(--texte-3); }
+    .d-titre { margin: 2px 0 0; font: 600 14px/1.35 var(--police); color: var(--texte); overflow-wrap: anywhere; }
+    .d-defil { flex: 1; min-height: 0; overflow-y: auto; }
+    .details details { border-bottom: 1px solid var(--trait); }
+    .details summary {
+      list-style: none; cursor: pointer; display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px;
+      font: 600 11.5px var(--police); color: var(--texte); background: #fafaf8; border-bottom: 1px solid var(--trait);
+    }
+    .details summary::-webkit-details-marker { display: none; }
+    .details summary::before { content: '▸'; width: 10px; font-size: 10px; color: var(--texte-2); }
+    .details details[open] summary::before { content: '▾'; }
+    .details summary small { margin-left: auto; font: 10.5px var(--mono); color: var(--texte-3); font-weight: 400; }
+    .bloc { padding: 6px 0; }
+    .champ { display: grid; grid-template-columns: 88px 1fr; gap: 8px; align-items: start; padding: 4px 12px; font-size: 12px; }
+    .champ > label { color: var(--texte-2); padding-top: 5px; }
+    .details input:not([type=checkbox]):not([type=range]), .details textarea, .details select {
+      width: 100%; min-width: 0; font: 12px/1.45 var(--police); color: var(--texte);
+      background: var(--champ); border: 1px solid var(--champ-trait); border-radius: 4px; padding: 4px 7px; outline: none;
+    }
+    .details input:focus, .details textarea:focus, .details select:focus { border-color: #2563eb; background: #fff; }
+    .details textarea { resize: vertical; display: block; }
+    .details .mono { font-family: var(--mono) !important; font-size: 11.5px !important; }
+    .case { display: flex; align-items: baseline; gap: 8px; padding: 6px 12px 4px 108px; font-size: 12px; color: var(--texte); cursor: pointer; }
+    .case small { color: var(--texte-3); }
+    .segments { display: flex; border: 1px solid var(--champ-trait); border-radius: 5px; overflow: hidden; }
+    .segments button {
+      flex: 1; border: 0; border-right: 1px solid var(--champ-trait); background: #fff; padding: 4px 0; cursor: pointer;
+      font: 500 11.5px var(--police); color: var(--texte-2);
+    }
+    .segments button:last-child { border-right: 0; }
+    .segments button:hover { background: #f4f4f2; }
+    .segments button.actif { color: #fff; background: var(--tc); }
+    .conf { display: flex; align-items: center; gap: 8px; min-height: 26px; }
+    .conf input { flex: 1; min-width: 0; accent-color: #52525b; }
+    .conf input.vide { opacity: 0.35; }
+    .conf output { width: 34px; font: 11.5px var(--mono); color: var(--texte); }
+    .conf button { border: 1px solid var(--champ-trait); background: #fff; border-radius: 4px; font: 11px var(--police); color: var(--texte-2); padding: 2px 6px; cursor: pointer; }
+    .statut { display: flex; align-items: center; gap: 8px; padding: 8px 12px 0; color: var(--tc); font: 600 13px var(--police); }
+    .statut .carre { width: 9px; height: 9px; }
+    .explic { margin: 4px 12px 2px; font: 12px/1.5 var(--police); color: var(--texte-2); }
+    .note { margin: 2px 12px 8px; font: 11px/1.45 var(--police); color: var(--texte-3); }
+    .d-lien {
+      display: flex; width: 100%; align-items: center; gap: 8px; padding: 5px 12px; border: 0; background: none;
+      text-align: left; font: 12px var(--police); color: var(--texte); cursor: pointer; min-width: 0;
+    }
+    .d-lien:hover { background: #f4f4f2; }
+    .d-lien > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .d-lien small { margin-left: auto; flex: none; font: 10.5px var(--mono); color: var(--texte-3); }
+    .champ .d-lien { padding: 4px 0; }
+    .losange { flex: none; width: 7px; height: 7px; border-radius: 1px; transform: rotate(45deg); background: var(--tc); margin: 0 1px; }
+    .retirer { margin-left: auto; flex: none; border: 0; background: none; color: var(--texte-3); font-size: 15px; line-height: 1; cursor: pointer; padding: 0 2px; border-radius: 3px; }
+    .retirer:hover { color: var(--echec); background: #fbeaea; }
+    .ligne-prem { display: flex; align-items: center; }
+    .ligne-prem .d-lien { flex: 1; }
+    .ligne-prem .retirer { margin-right: 8px; }
+    .vide-liste { padding: 6px 12px; font-size: 12px; color: var(--texte-3); }
+    .d-actions { display: flex; flex-wrap: wrap; gap: 6px; padding: 12px; }
+    .d-bouton {
+      padding: 5px 10px; font: 500 12px var(--police); color: var(--texte); cursor: pointer;
+      border: 1px solid #d4d4d8; border-radius: 5px; background: #fff;
+    }
+    .d-bouton:hover { background: #f4f4f2; }
+    .d-bouton.danger { color: #b91c1c; }
+    .d-bouton kbd { margin-left: 4px; font: 10px var(--mono); color: var(--texte-3); }
+    .bloc > .d-bouton { margin: 4px 12px 6px; }
+    .nuancier { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 3px; }
+    .nuancier button { width: 22px; height: 22px; border-radius: 4px; border: 2px solid #fff; box-shadow: 0 0 0 1px #d4d4d8; background: var(--c); cursor: pointer; padding: 0; }
+    .nuancier button.actif { box-shadow: 0 0 0 2px #18181b; }
+    .aides { margin: 0; padding: 8px 12px 10px 28px; font: 12px/1.7 var(--police); color: var(--texte-2); }
+
+    /* ─── Menu contextuel « Toutes les actions » ─── */
+    .menu {
+      position: fixed; z-index: 200; width: 300px; background: #fff; border: 1px solid #cdcdc7; border-radius: 6px;
+      box-shadow: 0 14px 34px -14px rgba(24, 24, 27, 0.35), 0 2px 6px rgba(24, 24, 27, 0.08); font-size: 12.5px;
+    }
+    .m-titre { padding: 8px 10px 6px; font: 600 11.5px var(--police); color: var(--texte-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .m-recherche {
+      display: block; width: calc(100% - 16px); margin: 0 8px 6px; padding: 5px 8px; outline: none;
+      font: 12.5px var(--police); color: var(--texte); background: var(--champ); border: 1px solid var(--champ-trait); border-radius: 4px;
+    }
+    .m-recherche:focus { border-color: #2563eb; background: #fff; }
+    .m-liste { max-height: 330px; overflow-y: auto; padding-bottom: 6px; }
+    .m-groupe { padding: 6px 10px 2px; font: 600 11px var(--police); color: var(--texte-3); }
+    .m-item { display: flex; align-items: center; gap: 8px; padding: 5px 10px 5px 16px; cursor: pointer; color: var(--texte); }
+    .m-item.actif { background: #e8effc; }
+    .m-item .m-ico { width: 16px; text-align: center; font: 600 12px var(--police); color: var(--c, var(--texte-2)); }
+    .m-item kbd { margin-left: auto; font: 10.5px var(--mono); color: var(--texte-3); }
+    .m-item.danger { color: #b91c1c; }
+    .m-vide { padding: 8px 16px; color: var(--texte-3); }
+
+    /* ─── Infobulle de liaison, aide ─── */
+    .bulle {
+      position: fixed; z-index: 150; pointer-events: none; max-width: 320px; padding: 5px 9px; border-radius: 4px;
+      font: 12px/1.4 var(--police); color: var(--texte); background: #fff; border: 1px solid #cdcdc7;
+      box-shadow: 0 4px 12px -6px rgba(0, 0, 0, 0.25);
+    }
+    .bulle b { font-weight: 600; margin-right: 5px; }
+    .bulle .ok { color: var(--ok); }
+    .bulle .non { color: var(--echec); }
+    .bulle small { display: block; color: var(--texte-3); font-size: 11px; }
+    .aide { position: fixed; inset: 0; z-index: 300; display: grid; place-items: center; background: rgba(24, 24, 27, 0.2); }
+    .aide-carte { width: min(640px, calc(100vw - 32px)); background: #fff; border: 1px solid var(--trait-fort); border-radius: 8px; box-shadow: 0 20px 50px -20px rgba(0, 0, 0, 0.4); }
+    .aide-carte h2 { margin: 0; padding: 12px 16px; font: 600 14px var(--police); border-bottom: 1px solid var(--trait); display: flex; }
+    .aide-carte h2 span { flex: 1; }
+    .aide-carte dl { margin: 0; padding: 10px 16px 14px; display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; font-size: 12.5px; }
+    .aide-carte dt { white-space: nowrap; }
+    .aide-carte dd { margin: 0; color: var(--texte-2); }
+    kbd.t { display: inline-block; padding: 0 5px; font: 11px/18px var(--mono); color: var(--texte); background: #f4f4f2; border: 1px solid #deded9; border-bottom-width: 2px; border-radius: 3px; }
+    .fermer { border: 0; background: none; font-size: 18px; line-height: 1; color: var(--texte-2); cursor: pointer; border-radius: 4px; width: 24px; height: 24px; }
+    .fermer:hover { background: #f0f0ed; }
+  </style>
+</head>
+<body>
+  <header class="barre">
+    <a class="retour" href="../../logique.html">← Propositions</a>
+    <span class="titre">Graphe de logique</span>
+    <span class="sep"></span>
+    <span class="probleme"></span>
+    <span class="espace"></span>
+    <div class="groupe">
+      <button data-action="annuler" title="Annuler (Ctrl+Z)">Annuler</button>
+      <button data-action="retablir" title="Rétablir (Ctrl+Y)">Rétablir</button>
+    </div>
+    <div class="groupe">
+      <button data-action="cadrer" title="Cadrer la sélection, ou tout le graphe (F)">Cadrer<kbd>F</kbd></button>
+      <button data-action="commentaire" title="Boîte de catégorie autour de la sélection (C)">Commentaire<kbd>C</kbd></button>
+      <button data-action="aimanter" title="Aimanter à la grille (G)">Grille<kbd>G</kbd></button>
+    </div>
+    <div class="groupe">
+      <button data-action="reinitialiser" title="Revenir au graphe d’exemple (annulable)">Réinitialiser l’exemple</button>
+      <button data-action="aide" title="Raccourcis clavier (?)">Aide</button>
+    </div>
+  </header>
+
+  <main class="scene">
+    <div class="graphe">
+      <div class="monde">
+        <div class="commentaires"></div>
+        <svg class="fils"><g class="g-fils"></g><path class="fil-temp"></path></svg>
+        <div class="noeuds"></div>
+      </div>
+      <div class="lasso" hidden></div>
+      <div class="zoom-info"></div>
+      <div class="filigrane">LOGIQUE</div>
+      <div class="toast"></div>
+      <div class="legende-bp"></div>
+    </div>
+    <aside class="details">
+      <div class="d-onglet"><span>Détails</span><small class="d-compte"></small></div>
+      <div class="d-contenu"></div>
+    </aside>
+  </main>
+
+  <div class="menu" hidden></div>
+  <div class="bulle" hidden></div>
+  <div class="aide" hidden>
+    <div class="aide-carte">
+      <h2><span>Raccourcis de l’éditeur</span><button class="fermer" title="Fermer (Échap)">×</button></h2>
+      <dl>
+        <dt><kbd class="t">Clic droit</kbd> sur le fond</dt><dd>Menu « Toutes les actions » : créer une assertion, un fait, une hypothèse, un commentaire</dd>
+        <dt><kbd class="t">Clic droit</kbd> / <kbd class="t">molette</kbd> maintenus</dt><dd>Se déplacer dans le graphe (ou <kbd class="t">Espace</kbd> + glisser)</dd>
+        <dt><kbd class="t">Molette</kbd></dt><dd>Zoom centré sur le curseur</dd>
+        <dt><kbd class="t">F</kbd> · <kbd class="t">Origine</kbd></dt><dd>Cadrer la sélection (ou tout) · tout cadrer</dd>
+        <dt>Glisser sur le fond</dt><dd>Rectangle de sélection · <kbd class="t">Maj</kbd> ajoute, <kbd class="t">Ctrl</kbd> bascule</dd>
+        <dt>Glisser un nœud</dt><dd>Le déplacer (avec la sélection) · <kbd class="t">G</kbd> aimante à la grille</dd>
+        <dt>Double-clic sur un nom</dt><dd>Renommer en place (ou <kbd class="t">F2</kbd>)</dd>
+        <dt>Broche → broche</dt><dd>Relier : la sortie d’une assertion devient prémisse d’une démonstration</dd>
+        <dt>Fil relâché dans le vide</dt><dd>Créer un nœud déjà relié</dd>
+        <dt><kbd class="t">Alt</kbd> + clic sur une broche</dt><dd>Couper ses liens</dd>
+        <dt><kbd class="t">C</kbd></dt><dd>Boîte de catégorie autour de la sélection ; glisser son titre déplace son contenu</dd>
+        <dt><kbd class="t">Suppr</kbd> · <kbd class="t">Ctrl</kbd>+<kbd class="t">D</kbd></dt><dd>Supprimer · dupliquer</dd>
+        <dt><kbd class="t">Ctrl</kbd>+<kbd class="t">Z</kbd> · <kbd class="t">Ctrl</kbd>+<kbd class="t">Y</kbd></dt><dd>Annuler · rétablir</dd>
+      </dl>
+    </div>
+  </div>
+
+  <script type="module" src="./vue.js"></script>
+</body>
+</html>

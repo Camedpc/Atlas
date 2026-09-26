@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Blueprint épuré · Atlas</title>
+  <link rel="stylesheet" href="../../commun/commun.css">
+  <link rel="stylesheet" href="../../commun/clair.css">
+  <style>
+    :root {
+      --toile: #fcfcfb;
+      --point: #dcdcd7;
+      --v-valide: #2f6b45;
+      --v-a_verifier: #2563eb;
+      --v-invalide: #dc2626;
+      --fil-neutre: #a1a1aa;
+      --panneau: 320px;
+    }
+
+    body { font-variant-numeric: tabular-nums; }
+
+    /* ─── Barre ─── */
+    .barre .probleme {
+      min-width: 0; max-width: 42vw; overflow: hidden; text-overflow: ellipsis;
+      font-size: 12.5px; color: var(--texte-3); padding-left: 14px; border-left: 1px solid var(--trait);
+    }
+    .barre .groupe button { display: inline-flex; align-items: center; gap: 6px; height: 26px; }
+    .barre .groupe button svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+    .barre button:disabled { opacity: 0.35; cursor: default; background: transparent; }
+    @media (max-width: 1280px) { .barre .probleme { display: none; } }
+
+    .scene { display: flex; }
+
+    /* ─── Toile ─── */
+    .toile {
+      position: relative; flex: 1; min-width: 0; overflow: hidden; user-select: none; cursor: default;
+      background-color: var(--toile);
+      background-image: radial-gradient(circle at 1px 1px, var(--point) 1px, transparent 1.4px);
+    }
+    .toile.deplace { cursor: grabbing; }
+    .monde { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+    .c-commentaires, .c-noeuds { position: absolute; left: 0; top: 0; }
+    svg.fils { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: visible; pointer-events: none; }
+
+    /* ─── Boîtes « Comment » ─── */
+    .commentaire {
+      position: absolute; left: 0; top: 0; border-radius: 14px; pointer-events: none;
+      background: color-mix(in srgb, var(--c) 5%, transparent);
+      border: 1px solid color-mix(in srgb, var(--c) 13%, transparent);
+    }
+    .commentaire.choisi { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+    .c-titre {
+      height: 52px; padding: 0 20px; display: flex; align-items: center; pointer-events: auto; cursor: default;
+      font: 600 21px/1 var(--police); letter-spacing: -0.02em;
+      color: color-mix(in srgb, var(--c) 72%, #18181b);
+    }
+    .c-nom { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .c-titre .renommage { font: inherit; letter-spacing: inherit; color: inherit; width: 100%; }
+    .c-poignee {
+      position: absolute; right: 2px; bottom: 2px; width: 16px; height: 16px; pointer-events: auto; cursor: nwse-resize; opacity: 0;
+      background: linear-gradient(135deg, transparent 0 55%, color-mix(in srgb, var(--c) 45%, transparent) 55% 62%, transparent 62% 74%, color-mix(in srgb, var(--c) 45%, transparent) 74% 81%, transparent 81%);
+    }
+    .commentaire:hover .c-poignee, .commentaire.choisi .c-poignee { opacity: 1; }
+    .c-titre:hover ~ .c-poignee { opacity: 1; }
+
+    /* ─── Nœuds ─── */
+    .noeud {
+      position: absolute; left: 0; top: 0; width: 248px; border-radius: 10px; background: #fff;
+      box-shadow: inset 0 3px 0 var(--c), 0 0 0 1px rgba(24, 24, 27, 0.07), 0 1px 2px rgba(24, 24, 27, 0.04), 0 8px 22px -12px rgba(24, 24, 27, 0.16);
+    }
+    .noeud.choisi {
+      box-shadow: inset 0 3px 0 var(--c), 0 0 0 1.5px var(--accent), 0 1px 2px rgba(24, 24, 27, 0.04), 0 10px 26px -12px rgba(24, 24, 27, 0.22);
+    }
+    .tete { height: 38px; padding: 3px 12px 0; display: flex; align-items: center; gap: 10px; }
+    .nom {
+      flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      font: 600 13px var(--police); letter-spacing: -0.01em; color: var(--texte);
+    }
+    .statut { flex: none; display: inline-flex; align-items: center; gap: 5px; font: 500 11px var(--police); color: var(--texte-2); }
+    .statut i { width: 6px; height: 6px; border-radius: 50%; }
+    .renommage {
+      font: inherit; color: inherit; width: 100%; padding: 1px 5px; margin-left: -6px;
+      border: 1px solid var(--accent); border-radius: 5px; outline: none; background: #fff;
+    }
+    .corps { display: grid; grid-template-columns: minmax(0, 1fr) auto; border-top: 1px solid #f0f0ed; padding: 5px 0 0; }
+    .col { display: flex; flex-direction: column; min-width: 0; }
+    .rang { height: 22px; display: flex; align-items: center; gap: 7px; min-width: 0; font: 10.5px var(--mono); color: var(--texte-2); }
+    .col.g .rang { padding-left: 6px; }
+    .col.d .rang { justify-content: flex-end; padding-right: 6px; }
+    .rang .lab { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .rang.ajout { color: var(--texte-3); opacity: 0; }
+    .noeud:hover .rang.ajout, .noeud.choisi .rang.ajout, .tire-sortie .rang.ajout { opacity: 1; }
+    .admis { padding: 0 5px; border-radius: 4px; font: 10px/16px var(--mono); color: var(--texte-2); background: #f4f4f2; }
+
+    .broche {
+      flex: none; width: 10px; height: 10px; border-radius: 50%; cursor: crosshair; box-sizing: border-box;
+      border: 1.5px solid var(--fil-neutre); background: #fff;
+    }
+    .broche.reliee { background: radial-gradient(circle, #71717a 0 2px, #fff 2.5px); }
+    .broche.plus { border-style: dashed; }
+    .broche:hover { border-color: var(--texte); }
+    .tire-sortie .broche.entree, .tire-entree .broche.sortie { border-color: var(--texte-2); }
+    .tire-sortie .broche.entree:hover, .tire-entree .broche.sortie:hover { border-color: var(--accent); background: var(--accent); }
+
+    .enonce {
+      margin: 0; padding: 3px 12px 11px; font: 11.5px/1.45 var(--police); color: var(--texte-2);
+      display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .enonce.vide { color: var(--texte-3); font-style: italic; }
+
+    /* ─── Fils ─── */
+    .fil path { fill: none; }
+    .fil .zone { stroke: transparent; stroke-width: 12; pointer-events: stroke; cursor: pointer; }
+    .fil .trait { stroke: var(--fil-neutre); stroke-width: 1.5; }
+    .fil.v-valide .trait { stroke: var(--v-valide); }
+    .fil.v-a_verifier .trait { stroke: var(--v-a_verifier); stroke-dasharray: 6 4; }
+    .fil.v-invalide .trait { stroke: var(--v-invalide); stroke-width: 1.25; }
+    .fil:hover .trait, .fil.lie .trait { stroke-width: 2.25; }
+    .fil.choisi .trait { stroke-width: 2.75; }
+    .croix circle { fill: #fff; }
+    .croix path { stroke: var(--v-invalide); stroke-width: 1.5; stroke-linecap: round; }
+    .etiquette rect { fill: #fff; stroke: #e4e4e0; }
+    .etiquette text, .mono-svg { font: 500 10px var(--mono); fill: var(--texte-2); font-variant-numeric: tabular-nums; }
+    .reroute { fill: #fff; stroke-width: 1.5; stroke: var(--fil-neutre); pointer-events: all; cursor: move; }
+    .reroute.v-valide { stroke: var(--v-valide); }
+    .reroute.v-a_verifier { stroke: var(--v-a_verifier); }
+    .reroute.v-invalide { stroke: var(--v-invalide); }
+    .reroute.choisi { fill: var(--accent); stroke: var(--accent); }
+    .fil-temp { fill: none; stroke: #71717a; stroke-width: 1.5; }
+
+    /* ─── Surcouches de la toile ─── */
+    .rectangle { position: absolute; display: none; border: 1px solid var(--accent); background: rgba(37, 99, 235, 0.06); pointer-events: none; }
+    .zoom { position: absolute; right: 14px; top: 12px; font: 500 11px var(--mono); color: var(--texte-3); pointer-events: none; }
+    .minicarte {
+      position: absolute; right: 14px; bottom: 14px; border-radius: 8px; cursor: pointer;
+      background: rgba(255, 255, 255, 0.92); box-shadow: 0 0 0 1px var(--trait), 0 4px 14px -8px rgba(24, 24, 27, 0.18);
+    }
+    .aide {
+      position: absolute; left: 14px; bottom: 14px; pointer-events: none;
+      font-size: 11.5px; color: var(--texte-3); padding: 4px 8px; margin-left: -8px; border-radius: 6px;
+      background: rgba(252, 252, 251, 0.9);
+    }
+    .aide b { font-weight: 500; color: var(--texte-2); }
+
+    /* ─── Panneau Détails ─── */
+    .details {
+      flex: none; width: var(--panneau); display: flex; flex-direction: column; min-height: 0;
+      background: #fff; border-left: 1px solid var(--trait); user-select: text;
+    }
+    .d-onglet {
+      flex: none; height: 36px; display: flex; align-items: center; padding: 0 16px;
+      font: 600 12px var(--police); color: var(--texte); border-bottom: 1px solid var(--trait);
+    }
+    .d-defil { flex: 1; min-height: 0; overflow-y: auto; padding-bottom: 24px; }
+    .d-tete { padding: 14px 16px 12px; border-bottom: 1px solid var(--trait); }
+    .d-type { display: block; font: 500 11px var(--police); color: var(--texte-3); margin-bottom: 6px; }
+    .d-nom, .d-nom-fixe { font: 600 15px/1.35 var(--police); letter-spacing: -0.01em; color: var(--texte); }
+    .d-fleche { color: var(--texte-3); font-weight: 400; }
+    .details section { padding: 14px 16px 4px; }
+    .details h3 { margin: 0 0 8px; font: 600 11px var(--police); letter-spacing: 0.03em; text-transform: uppercase; color: var(--texte-3); }
+    .details h3 small { margin-left: 6px; font: 400 11px var(--police); letter-spacing: 0; text-transform: none; }
+    .details input[type='text'], .details input:not([type]), .details input[type='number'], .details textarea {
+      width: 100%; padding: 6px 8px; font: 13px/1.45 var(--police); color: var(--texte);
+      background: #fff; border: 1px solid #e4e4e0; border-radius: 6px; outline: none; resize: vertical;
+    }
+    .details input.d-nom { padding: 4px 6px; margin-left: -7px; width: calc(100% + 7px); border-color: transparent; font: 600 15px/1.35 var(--police); }
+    .details input.d-nom:hover { border-color: #e4e4e0; }
+    .details input:focus, .details textarea:focus, .details input.d-nom:focus { border-color: var(--accent); }
+    .details .mono { font-family: var(--mono); font-size: 12px; }
+    .pt { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 7px; vertical-align: 1px; flex: none; }
+    .pt.carre { border-radius: 2px; }
+    .d-statut { display: flex; align-items: center; font: 500 13px var(--police); margin-bottom: 10px; }
+    .d-case { display: flex; gap: 9px; align-items: flex-start; font-size: 13px; cursor: pointer; }
+    .d-case input { margin: 2px 0 0; accent-color: var(--texte); }
+    .d-case small { display: block; font-size: 11.5px; color: var(--texte-3); margin-top: 1px; }
+    .d-note { margin: 0 0 8px; font-size: 12px; line-height: 1.5; color: var(--texte-3); }
+    .d-demo { padding: 10px; margin-bottom: 10px; border: 1px solid var(--trait); border-radius: 8px; display: flex; flex-direction: column; gap: 8px; }
+    .d-segments { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; padding: 2px; background: #f4f4f2; border-radius: 7px; }
+    .d-segments button {
+      display: flex; align-items: center; justify-content: center; gap: 5px; height: 26px; padding: 0 4px;
+      font: 500 11.5px var(--police); color: var(--texte-2); background: transparent; border: 0; border-radius: 5px; cursor: pointer;
+    }
+    .d-segments button.actif { color: var(--texte); background: #fff; box-shadow: 0 0 0 1px #e4e4e0, 0 1px 2px rgba(24, 24, 27, 0.06); }
+    .d-grille { display: grid; grid-template-columns: 88px 1fr; gap: 8px; }
+    .d-grille label, .d-lab { font-size: 11.5px; color: var(--texte-2); display: flex; flex-direction: column; gap: 3px; }
+    .d-lab { flex-direction: row; gap: 6px; }
+    .d-lab small { color: var(--texte-3); }
+    .d-puces { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 6px; }
+    .d-puce { display: inline-flex; align-items: center; border: 1px solid #e4e4e0; border-radius: 6px; background: #fafaf9; max-width: 100%; }
+    .d-puce.marque { border-color: var(--accent); }
+    .d-puce button { border: 0; background: transparent; cursor: pointer; font: 12px var(--police); color: var(--texte); padding: 3px 7px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .d-puce button:hover { color: var(--accent); }
+    .d-puce .d-retirer { padding: 3px 7px 3px 2px; color: var(--texte-3); font-size: 13px; line-height: 1; }
+    .d-puce .d-retirer:hover { color: var(--echec); }
+    .d-bouton {
+      width: 100%; height: 30px; font: 500 12.5px var(--police); color: var(--texte); cursor: pointer;
+      background: #fff; border: 1px solid #e4e4e0; border-radius: 6px; margin-bottom: 8px;
+    }
+    .d-bouton:hover { background: #f6f6f4; }
+    .d-lien-danger { align-self: flex-start; border: 0; background: none; padding: 0; font: 12px var(--police); color: var(--texte-3); cursor: pointer; }
+    .d-lien-danger:hover { color: var(--echec); }
+    .d-comptes, .d-legende { list-style: none; margin: 0 0 8px; padding: 0; }
+    .d-comptes li, .d-legende li { display: flex; align-items: center; gap: 10px; height: 26px; font-size: 13px; color: var(--texte); }
+    .d-comptes li { gap: 0; }
+    .d-comptes b { margin-left: auto; font: 500 12px var(--mono); color: var(--texte-2); }
+    .d-raccourcis { margin: 0; }
+    .d-raccourcis div { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 4px 0; font-size: 12px; border-bottom: 1px solid #f2f2ef; }
+    .d-raccourcis dt { color: var(--texte); font-weight: 500; }
+    .d-raccourcis dd { margin: 0; color: var(--texte-2); }
+    .d-couleurs { display: flex; gap: 8px; flex-wrap: wrap; }
+    .d-couleurs button { width: 24px; height: 24px; border-radius: 6px; cursor: pointer; border: 0; background: color-mix(in srgb, var(--k) 16%, #fff); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--k) 40%, #fff); }
+    .d-couleurs button.actif { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--k) 40%, #fff), 0 0 0 2px #fff, 0 0 0 3.5px var(--k); }
+    .d-actions { display: flex; flex-direction: column; gap: 4px; }
+    .d-actions button {
+      display: flex; align-items: center; justify-content: space-between; height: 30px; padding: 0 10px; cursor: pointer;
+      font: 500 12.5px var(--police); color: var(--texte); background: #fff; border: 1px solid #e4e4e0; border-radius: 6px;
+    }
+    .d-actions button:hover { background: #f6f6f4; }
+    kbd { font: 500 10.5px var(--mono); color: var(--texte-3); }
+
+    /* ─── Menu contextuel ─── */
+    .menu {
+      position: fixed; z-index: 1000; width: 320px; max-height: min(460px, 80vh); display: flex; flex-direction: column; outline: none;
+      background: #fff; border-radius: 10px; overflow: hidden; font-size: 13px;
+      box-shadow: 0 0 0 1px rgba(24, 24, 27, 0.08), 0 16px 36px -14px rgba(24, 24, 27, 0.28), 0 2px 6px rgba(24, 24, 27, 0.05);
+    }
+    .m-titre { flex: none; padding: 10px 12px 6px; font: 600 11px var(--police); letter-spacing: 0.03em; text-transform: uppercase; color: var(--texte-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .m-recherche { flex: none; padding: 2px 8px 6px; border-bottom: 1px solid var(--trait); }
+    .m-recherche input { width: 100%; height: 30px; padding: 0 9px; font: 13px var(--police); border: 1px solid #e4e4e0; border-radius: 6px; outline: none; }
+    .m-recherche input:focus { border-color: var(--accent); }
+    .m-liste { overflow-y: auto; padding: 4px; }
+    .m-groupe { padding: 8px 8px 3px; font: 500 11px var(--police); color: var(--texte-3); }
+    .m-item {
+      width: 100%; height: 30px; display: flex; align-items: center; gap: 8px; padding: 0 8px; cursor: pointer;
+      font: 13px var(--police); color: var(--texte); background: transparent; border: 0; border-radius: 6px; text-align: left;
+    }
+    .m-item span { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .m-item.actif { background: #f2f2ef; }
+    .m-item.desactive { color: var(--texte-3); cursor: default; }
+    .m-pastille { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+    .m-vide { padding: 12px; color: var(--texte-3); }
+  </style>
+</head>
+<body>
+  <header class="barre">
+    <a class="retour" href="../../logique.html">← Propositions</a>
+    <span class="titre">Blueprint épuré <small>graphe de logique</small></span>
+    <span class="probleme"></span>
+    <span class="espace"></span>
+    <div class="groupe">
+      <button type="button" data-outil="annuler" title="Annuler (Ctrl+Z)"><svg viewBox="0 0 16 16"><path d="M5.5 3.5 2.5 6.5l3 3M2.5 6.5h7a3.5 3.5 0 0 1 0 7H8"/></svg></button>
+      <button type="button" data-outil="retablir" title="Rétablir (Ctrl+Y)"><svg viewBox="0 0 16 16"><path d="M10.5 3.5l3 3-3 3M13.5 6.5h-7a3.5 3.5 0 0 0 0 7H8"/></svg></button>
+    </div>
+    <div class="groupe">
+      <button type="button" data-outil="commentaire" title="Commentaire autour de la sélection (C)"><svg viewBox="0 0 16 16"><path d="M2.5 3.5h11v9h-11zM2.5 6.5h11"/></svg>Commentaire</button>
+    </div>
+    <div class="groupe">
+      <button type="button" data-outil="haut" title="Aligner en haut (Maj+W)"><svg viewBox="0 0 16 16"><path d="M2 2.5h12M4.5 5h3v8.5h-3zM9.5 5h3v5h-3z"/></svg></button>
+      <button type="button" data-outil="gauche" title="Aligner à gauche (Maj+A)"><svg viewBox="0 0 16 16"><path d="M2.5 2v12M5 4.5h8.5v3H5zM5 9.5h5v3H5z"/></svg></button>
+      <button type="button" data-outil="bas" title="Aligner en bas (Maj+S)"><svg viewBox="0 0 16 16"><path d="M2 13.5h12M4.5 2.5h3V11h-3zM9.5 6h3v5h-3z"/></svg></button>
+      <button type="button" data-outil="droite" title="Aligner à droite (Maj+D)"><svg viewBox="0 0 16 16"><path d="M13.5 2v12M2.5 4.5H11v3H2.5zM6 9.5h5v3H6z"/></svg></button>
+      <button type="button" data-outil="repartir-h" title="Répartir horizontalement (Maj+H)"><svg viewBox="0 0 16 16"><path d="M2.5 2v12M13.5 2v12M6.5 4.5h3v7h-3z"/></svg></button>
+      <button type="button" data-outil="repartir-v" title="Répartir verticalement (Maj+V)"><svg viewBox="0 0 16 16"><path d="M2 2.5h12M2 13.5h12M4.5 6.5h7v3h-7z"/></svg></button>
+    </div>
+    <div class="groupe">
+      <button type="button" data-outil="cadrer" title="Cadrer la sélection ou tout (F)"><svg viewBox="0 0 16 16"><path d="M2.5 5.5v-3h3M10.5 2.5h3v3M13.5 10.5v3h-3M5.5 13.5h-3v-3"/></svg>Cadrer</button>
+      <button type="button" data-outil="reinitialiser" title="Revenir au graphe d’exemple (annulable)">Réinitialiser l’exemple</button>
+    </div>
+  </header>
+  <main class="scene">
+    <div class="toile">
+      <div class="monde">
+        <div class="c-commentaires"></div>
+        <svg class="fils"><g class="g-fils"></g><g class="g-etiquettes"></g><g class="g-reroutes"></g></svg>
+        <div class="c-noeuds"></div>
+        <svg class="fils"><path class="fil-temp" style="display:none"/></svg>
+      </div>
+      <div class="rectangle"></div>
+      <div class="zoom"></div>
+      <div class="aide"><b>Clic droit</b> : toutes les actions · <b>Maj + glisser</b> : sélection · <b>C</b> : commentaire · <b>F</b> : cadrer</div>
+      <canvas class="minicarte"></canvas>
+    </div>
+    <aside class="details"></aside>
+  </main>
+  <script type="module" src="./vue.js"></script>
+</body>
+</html>

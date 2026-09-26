@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Flux de résolution · Atlas</title>
+  <link rel="stylesheet" href="../../commun/commun.css">
+  <link rel="stylesheet" href="../../commun/clair.css">
+  <style>
+    :root {
+      --papier: #fafaf8;
+      --grille-fine: #efefeb;
+      --grille-majeure: #e0e0db;
+      --encre: #27272a;
+      --choix: #2563eb;
+      --panneau: 320px;
+      --t-evenement: #a4442e;
+      --t-etape: #2f5d8c;
+      --t-controle: #52525b;
+    }
+
+    .barre .retour { margin-right: 4px; }
+    .barre .pas-lib { font: 500 12px var(--police); color: var(--texte); padding: 0 8px; min-width: 190px; max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
+    .barre .groupe[hidden] { display: none; }
+    .barre button:disabled { opacity: 0.4; cursor: default; }
+    .barre { gap: 10px; }
+    @media (max-width: 1500px) { .barre .titre small { display: none; } }
+    @media (max-width: 1320px) { .barre .titre { display: none; } .barre .pas-lib { min-width: 120px; } }
+    @media (max-width: 1100px) { .barre .compteurs { display: none; } }
+    .barre button:disabled:hover { background: transparent; color: var(--texte-2); }
+
+    /* ─── Papier millimétré ─── */
+    .scene {
+      right: var(--panneau);
+      user-select: none;
+      background-color: var(--papier);
+      background-image:
+        linear-gradient(var(--grille-majeure) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grille-majeure) 1px, transparent 1px),
+        linear-gradient(var(--grille-fine) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grille-fine) 1px, transparent 1px);
+      background-size: 128px 128px, 128px 128px, 16px 16px, 16px 16px;
+    }
+    .scene.pan { cursor: grabbing; }
+    .monde { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+    .commentaires, .noeuds { position: absolute; left: 0; top: 0; }
+    .fils { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: visible; pointer-events: none; }
+
+    /* ─── Boîtes « Comment » ─── */
+    .cm {
+      position: absolute; left: 0; top: 0; border-radius: 4px; pointer-events: none;
+      background: color-mix(in srgb, var(--c) 6%, transparent);
+      border: 1px solid color-mix(in srgb, var(--c) 38%, transparent);
+    }
+    .cm .c-titre {
+      pointer-events: auto; cursor: move;
+      height: 30px; padding: 0 10px; display: flex; align-items: center;
+      font: 600 13px var(--police); color: color-mix(in srgb, var(--c) 85%, #000);
+      background: color-mix(in srgb, var(--c) 12%, transparent);
+      border-bottom: 1px solid color-mix(in srgb, var(--c) 25%, transparent);
+      white-space: nowrap; overflow: hidden; border-radius: 3px 3px 0 0;
+    }
+    .cm .c-poignee {
+      pointer-events: auto; position: absolute; right: 0; bottom: 0; width: 14px; height: 14px; cursor: nwse-resize;
+      background: linear-gradient(135deg, transparent 0 55%, color-mix(in srgb, var(--c) 45%, transparent) 55% 62%, transparent 62% 75%, color-mix(in srgb, var(--c) 45%, transparent) 75% 82%, transparent 82%);
+    }
+    .cm.choisi { border-color: var(--choix); box-shadow: 0 0 0 1px var(--choix); }
+
+    /* ─── Fils ─── */
+    .fils path { fill: none; }
+    .fil.exec { stroke: var(--encre); stroke-width: 2.6; }
+    .fil.donnee { stroke-width: 1.5; stroke-opacity: 0.8; }
+    .fil-hit { stroke: transparent; stroke-width: 12; pointer-events: stroke; cursor: pointer; }
+    .fil-hit:hover + .fil.exec { stroke-width: 3.6; }
+    .fil-hit:hover + .fil.donnee { stroke-width: 2.6; stroke-opacity: 1; }
+    .fil.temp { stroke-dasharray: 6 4; }
+    .scene.pas .fil.exec { stroke: #c4c4c8; }
+    .scene.pas .fil.exec.parcouru { stroke: var(--encre); stroke-width: 3.2; }
+    .scene.pas .fil.donnee { stroke-opacity: 0.25; }
+    .scene.pas .fil.donnee.actif { stroke-opacity: 1; stroke-width: 2.2; }
+
+    /* ─── Nœuds ─── */
+    .nd {
+      position: absolute; left: 0; top: 0; cursor: default;
+      background: #fff; border: 1px solid #d4d4d8; border-radius: 6px;
+      box-shadow: 0 1px 2px rgba(24, 24, 27, 0.06), 0 6px 16px -10px rgba(24, 24, 27, 0.25);
+      font: 12px var(--police); color: var(--texte);
+    }
+    .nd.choisi { outline: 2px solid var(--choix); outline-offset: 1px; }
+    .tete { display: flex; align-items: center; gap: 8px; padding: 0 10px 0 8px; border-radius: 5px 5px 0 0; cursor: move; }
+    .tete .ico { flex: none; width: 18px; text-align: center; font: 600 13px/1 var(--police); }
+    .tete .nom { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tete input, .c-titre input {
+      font: inherit; color: var(--texte); background: #fff; border: 1px solid var(--choix); border-radius: 3px;
+      padding: 1px 4px; width: 100%; min-width: 60px; outline: none;
+    }
+
+    /* Nœuds d'exécution (impurs) */
+    .nd.flux .tete { height: 38px; color: #fff; background: var(--tc); }
+    .nd.flux .tete .tt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+    .nd.flux .tete b { font: 600 12.5px/1.2 var(--police); }
+    .nd.flux .tete small { font: 10.5px/1.2 var(--police); opacity: 0.8; }
+    .nd.evenement { border-radius: 10px; }
+    .nd.evenement .tete { border-radius: 9px 9px 0 0; }
+    .nd .note { padding: 2px 10px 9px; font: 11.5px/1.45 var(--police); color: var(--texte-2); white-space: normal; }
+
+    /* Nœuds purs (assertions) : en-tête vert pâle, sans broche d'exécution */
+    .nd.pur .tete { height: 28px; background: #e2efdd; color: #1f3a1a; border-bottom: 1px solid #cfe2c8; }
+    .nd.pur .tete .ico { color: #3f7a2e; }
+    .nd.pur .tete .nom { font-weight: 600; }
+    .enonce {
+      padding: 6px 10px 2px; font: 11px/1.4 var(--police); color: var(--texte-2);
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    }
+
+    /* Nœuds fonction (démonstrations) : compacts */
+    .nd.demo .tete { height: 26px; background: #e7ebf1; color: #1e293b; border-bottom: 1px solid #d5dbe4; }
+    .nd.demo .tete .ico { color: #475569; font-style: italic; }
+    .nd.demo .tete .nom { font: 500 11px var(--mono); }
+
+    .corps { padding: 5px 0; }
+    .rang { height: 22px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .rang .g, .rang .d { display: flex; align-items: center; gap: 6px; min-width: 0; height: 22px; }
+    .rang .g { flex: 1 1 auto; padding-left: 6px; }
+    .rang .d { flex: none; padding-right: 6px; margin-left: auto; }
+    .lab { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; color: var(--texte-2); }
+    .lab.vide { color: var(--texte-3); }
+    .rang.exec .lab { color: var(--texte); font-weight: 500; }
+    .champ {
+      padding: 1px 6px; border-radius: 3px; font: 10.5px var(--mono); color: var(--texte-2);
+      background: #f4f4f2; border: 1px solid #e4e4e0; white-space: nowrap;
+    }
+    .rang input[type='checkbox'] { margin: 0; accent-color: #9f1239; cursor: pointer; }
+    .ajout { cursor: pointer; }
+    .ajout .lab { color: var(--texte-3); }
+    .ajout:hover .lab { color: var(--texte); }
+
+    .pied {
+      height: 24px; display: flex; align-items: center; gap: 8px; padding: 0 10px;
+      border-top: 1px solid #efefec; font: 11px var(--police); color: var(--texte-2); white-space: nowrap;
+    }
+    .pied .conf { margin-left: auto; font: 500 11px var(--mono); color: var(--texte); }
+    .pastille { flex: none; }
+
+    /* Broches */
+    .pin { flex: none; width: 14px; height: 14px; display: grid; place-items: center; cursor: crosshair; }
+    .pin svg { display: block; overflow: visible; }
+    .pin.exec path { fill: #fff; stroke: var(--encre); stroke-width: 1.4; stroke-linejoin: round; }
+    .pin.exec.plein path { fill: var(--encre); }
+    .pin.donnee i { width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--tc); background: #fff; }
+    .pin.donnee.plein i { background: var(--tc); }
+    .pin:hover i, .pin:hover svg { transform: scale(1.25); }
+    .scene.tire .pin.ko { opacity: 0.25; }
+    .scene.tire .pin.ok i, .scene.tire .pin.ok svg { transform: scale(1.3); }
+
+    /* Pas à pas : état statique, sans animation */
+    .scene.pas .nd.flux:not(.atteint) { opacity: 0.55; }
+    .nd.courant { outline: 2px solid var(--encre); outline-offset: 3px; }
+    .nd.courant .tete::after { content: 'étape courante'; margin-left: auto; font: 500 10px var(--police); padding: 1px 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.2); }
+    .nd.entree-active { border-color: #71717a; }
+
+    .rectangle { position: absolute; border: 1px solid var(--choix); background: rgba(37, 99, 235, 0.07); pointer-events: none; }
+
+    /* ─── Légende ─── */
+    .legende-bp {
+      position: absolute; left: 12px; bottom: 12px; z-index: 5;
+      display: flex; flex-direction: column; gap: 6px; padding: 8px 12px;
+      font-size: 11.5px; color: var(--texte-2); background: rgba(255, 255, 255, 0.94);
+      border: 1px solid var(--trait); border-radius: 6px; max-width: calc(100% - 24px);
+    }
+    .legende-bp .ligne { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; }
+    .legende-bp span { display: inline-flex; align-items: center; gap: 6px; }
+    .legende-bp .l-exec { width: 22px; height: 3px; background: var(--encre); }
+    .legende-bp .pin { cursor: default; }
+    .legende-bp .aide { color: var(--texte-3); font-size: 11px; }
+
+    /* ─── Panneau Détails ─── */
+    .details {
+      position: fixed; top: var(--barre); right: 0; bottom: 0; width: var(--panneau); z-index: 10;
+      display: flex; flex-direction: column; background: #fff; border-left: 1px solid var(--trait-fort);
+    }
+    .d-onglet {
+      flex: none; height: 34px; display: flex; align-items: center; padding: 0 12px;
+      font: 600 12px var(--police); color: var(--texte); background: #f4f4f2; border-bottom: 1px solid var(--trait);
+    }
+    .d-defil { flex: 1; min-height: 0; overflow-y: auto; }
+    .d-tete { display: flex; gap: 10px; align-items: center; padding: 12px; border-bottom: 1px solid var(--trait); }
+    .d-ico { flex: none; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 5px; font: 600 14px var(--police); color: #fff; background: var(--tc); }
+    .d-role { font: 500 11px var(--police); color: var(--texte-3); }
+    .d-titre { margin: 1px 0 0; font: 600 14px/1.3 var(--police); color: var(--texte); overflow-wrap: anywhere; }
+    .d-section { border-bottom: 1px solid var(--trait); }
+    .d-section h3 { margin: 0; height: 30px; display: flex; align-items: center; padding: 0 12px; font: 600 11.5px var(--police); color: var(--texte); background: #fafaf8; border-bottom: 1px solid var(--trait); }
+    .props { margin: 0; padding: 6px 0; }
+    .props > div { display: grid; grid-template-columns: 96px 1fr; gap: 8px; align-items: start; padding: 4px 12px; font-size: 12px; }
+    .props dt { color: var(--texte-2); padding-top: 4px; }
+    .props dd { margin: 0; min-width: 0; color: var(--texte); overflow-wrap: anywhere; padding-top: 4px; }
+    .props dd.ctl { padding-top: 0; }
+    .props input[type='text'], .props input[type='number'], .props textarea, .props select {
+      width: 100%; font: 12px var(--police); color: var(--texte); background: #fff;
+      border: 1px solid var(--trait-fort); border-radius: 4px; padding: 4px 6px;
+    }
+    .props textarea { resize: vertical; min-height: 64px; line-height: 1.45; }
+    .props input:focus, .props textarea:focus, .props select:focus { outline: none; border-color: var(--choix); }
+    .props .lien { color: var(--choix); cursor: pointer; display: block; }
+    .props .lien:hover { text-decoration: underline; }
+    .props .mono { font: 11.5px var(--mono); }
+    .nuancier { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 3px; }
+    .nuancier button { width: 20px; height: 20px; border-radius: 4px; border: 2px solid #fff; box-shadow: 0 0 0 1px var(--trait-fort); cursor: pointer; padding: 0; }
+    .nuancier button.actif { box-shadow: 0 0 0 2px var(--texte); }
+    .d-boutons { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 12px; }
+    .d-boutons button {
+      font: 500 12px var(--police); color: var(--texte); background: #fff; border: 1px solid var(--trait-fort);
+      border-radius: 5px; padding: 5px 10px; cursor: pointer;
+    }
+    .d-boutons button:hover { background: #f4f4f2; }
+    .raccourcis { margin: 0; padding: 8px 12px 12px; list-style: none; font-size: 11.5px; color: var(--texte-2); }
+    .raccourcis li { display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; }
+    .raccourcis kbd { font: 10.5px var(--mono); color: var(--texte); background: #f4f4f2; border: 1px solid #e4e4e0; border-radius: 3px; padding: 0 5px; white-space: nowrap; }
+
+    /* ─── Menu « Toutes les actions » ─── */
+    .menu {
+      position: fixed; z-index: 200; width: 290px; max-height: 420px; display: flex; flex-direction: column;
+      background: #fff; border: 1px solid var(--trait-fort); border-radius: 6px;
+      box-shadow: 0 10px 30px -12px rgba(0, 0, 0, 0.35); font-size: 12px;
+    }
+    .menu[hidden] { display: none; }
+    .menu .m-titre { padding: 8px 10px 6px; font: 600 11.5px var(--police); color: var(--texte); display: flex; justify-content: space-between; }
+    .menu .m-titre small { color: var(--texte-3); font-weight: 400; }
+    .menu input { margin: 0 8px 6px; font: 12px var(--police); padding: 5px 7px; border: 1px solid var(--trait-fort); border-radius: 4px; outline: none; }
+    .menu input:focus { border-color: var(--choix); }
+    .menu ul { list-style: none; margin: 0; padding: 0 0 6px; overflow-y: auto; }
+    .menu .m-cat { padding: 6px 10px 2px; font: 600 10.5px var(--police); color: var(--texte-3); text-transform: uppercase; letter-spacing: 0.04em; }
+    .menu .m-item { display: flex; justify-content: space-between; gap: 8px; padding: 5px 10px 5px 18px; cursor: pointer; color: var(--texte); }
+    .menu .m-item small { color: var(--texte-3); font: 10.5px var(--mono); }
+    .menu .m-item.actif { background: #eef2fb; }
+    .menu .m-vide { padding: 8px 12px; color: var(--texte-3); }
+  </style>
+</head>
+<body>
+  <header class="barre">
+    <a class="retour" href="../../logique.html">← Propositions</a>
+    <span class="titre">Flux de résolution <small>la méthode comme fil d’exécution, les assertions comme données</small></span>
+    <span class="espace"></span>
+    <span class="compteurs"></span>
+    <div class="groupe">
+      <button data-a="annuler" title="Annuler (Ctrl+Z)">Annuler</button>
+      <button data-a="retablir" title="Rétablir (Ctrl+Y)">Rétablir</button>
+    </div>
+    <div class="groupe">
+      <button data-a="commentaire" title="Commentaire autour de la sélection (C)">Commentaire</button>
+      <button data-a="cadrer" title="Cadrer la sélection ou tout (F)">Cadrer</button>
+      <button data-a="pas" title="Suivre le fil d’exécution étape par étape">Pas à pas</button>
+    </div>
+    <div class="groupe pas-nav" hidden>
+      <button data-a="precedent" title="Étape précédente (←)">‹</button>
+      <span class="pas-lib"></span>
+      <button data-a="suivant" title="Étape suivante (→)">›</button>
+    </div>
+    <div class="groupe">
+      <button data-a="reinitialiser" title="Revenir au graphe d’exemple">Réinitialiser l’exemple</button>
+    </div>
+  </header>
+  <main class="scene"></main>
+  <aside class="details"></aside>
+  <div class="menu" hidden></div>
+  <script type="module" src="./vue.js"></script>
+</body>
+</html>

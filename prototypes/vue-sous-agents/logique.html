@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Graphe de logique · propositions</title>
+  <link rel="stylesheet" href="./commun/commun.css">
+  <link rel="stylesheet" href="./commun/clair.css">
+  <style>
+    html, body { height: auto; background: var(--fond); }
+    .page { max-width: 1280px; margin: 0 auto; padding: 48px 24px 80px; }
+    .sur { font: 500 11px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--texte-3); }
+    h1 { font-size: 28px; letter-spacing: -0.02em; margin: 6px 0 10px; font-weight: 600; }
+    .chapeau { color: var(--texte-2); max-width: 780px; line-height: 1.6; margin: 0; }
+    .chapeau a { color: var(--texte); }
+    h2.groupe { font-size: 13px; font-weight: 600; color: var(--texte-2); margin: 40px 0 4px; }
+    .note { font-size: 12.5px; color: var(--texte-3); margin: 0 0 14px; padding-bottom: 10px; border-bottom: 1px solid var(--trait); }
+    .grille { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 20px; }
+    .carte {
+      display: flex; flex-direction: column; text-decoration: none;
+      background: var(--fond-2); border: 1px solid var(--trait); border-radius: 10px; overflow: hidden;
+      transition: border-color .15s, box-shadow .15s;
+    }
+    .carte:hover { border-color: var(--trait-fort); box-shadow: 0 4px 16px -8px rgba(0, 0, 0, .18); }
+    .apercu {
+      position: relative; aspect-ratio: 16 / 10; overflow: hidden; border-bottom: 1px solid var(--trait);
+      background-color: #fbfbfa;
+      background-image: linear-gradient(var(--trait) 1px, transparent 1px), linear-gradient(90deg, var(--trait) 1px, transparent 1px);
+      background-size: 24px 24px;
+      display: grid; place-items: center; color: var(--texte-3); font-size: 12px;
+    }
+    .apercu iframe { position: absolute; top: 0; left: 0; width: 1440px; height: 900px; border: 0; transform-origin: 0 0; pointer-events: none; background: #fff; }
+    .texte { padding: 14px 16px 16px; }
+    .texte h3 { font-size: 15px; font-weight: 600; margin: 0; display: flex; gap: 8px; align-items: baseline; }
+    .texte h3 .num { font: 500 11px var(--mono); color: var(--texte-3); }
+    .texte p { margin: 6px 0 0; color: var(--texte-2); line-height: 1.5; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="sur">Itération 3 · éditeur de logique</div>
+    <h1>Graphe de logique</h1>
+    <p class="chapeau">
+      Huit propositions d’éditeur façon Blueprint d’Unreal Engine pour un raisonnement scientifique : nœud = assertion,
+      démonstration = liaison depuis ses prémisses, statut recalculé à chaque modification. Même problème partout
+      (<code>commun/raisonnement.js</code>). On s’y déplace, on crée des catégories (touche C), on renomme au double-clic,
+      on relie en tirant un fil. Chaque éditeur garde tes modifications dans le navigateur.
+      Survole une carte pour charger son aperçu. <a href="./clair.html">← Itération 2</a>
+    </p>
+    <div id="groupes"></div>
+  </div>
+
+  <script type="module">
+    const GROUPES = [
+      { titre: 'Même consigne, quatre interprétations', note: 'Quatre sous-agents ont reçu exactement le même prompt : « le meilleur éditeur de logique dans le style Blueprint ».', options: [
+        { nom: 'logique-a', titre: 'Blueprint A', texte: 'Interprétation libre du style Blueprint clair.' },
+        { nom: 'logique-b', titre: 'Blueprint B', texte: 'Interprétation libre du style Blueprint clair.' },
+        { nom: 'logique-c', titre: 'Blueprint C', texte: 'Interprétation libre du style Blueprint clair.' },
+        { nom: 'logique-d', titre: 'Blueprint D', texte: 'Interprétation libre du style Blueprint clair.' },
+      ] },
+      { titre: 'Quatre directions différentes', note: 'Chaque sous-agent a reçu une piste distincte, toujours dans l’univers Unreal Engine.', options: [
+        { nom: 'logique-flux', titre: 'Flux de résolution', texte: 'Graphe d’événements : la méthode de résolution est le fil d’exécution (Branch, Sequence), les assertions sont des nœuds de données purs.' },
+        { nom: 'logique-materiau', titre: 'Éditeur de matériau', texte: 'Tout converge vers un grand nœud « Conclusion », nœuds à aperçu repliable, palette à gauche, statistiques en bas.' },
+        { nom: 'logique-pile', titre: 'Piles de démonstration', texte: 'Façon Niagara : chaque assertion est une pile de modules de démonstration, réordonnables et désactivables.' },
+        { nom: 'logique-epure', titre: 'Blueprint épuré', texte: 'Toute la grammaire Blueprint, dessinée au plus sobre : reroute nodes, alignements, validité portée par le style des fils.' },
+      ] },
+    ]
+    const conteneur = document.getElementById('groupes')
+    let i = 0
+    for (const g of GROUPES) {
+      const h = document.createElement('h2')
+      h.className = 'groupe'
+      h.textContent = g.titre
+      const note = document.createElement('p')
+      note.className = 'note'
+      note.textContent = g.note
+      const grille = document.createElement('div')
+      grille.className = 'grille'
+      for (const o of g.options) {
+        i++
+        const a = document.createElement('a')
+        a.className = 'carte'
+        a.href = `./options/${o.nom}/index.html`
+        a.innerHTML = `
+          <div class="apercu">Aperçu au survol</div>
+          <div class="texte"><h3><span class="num">0${i}</span>${o.titre}</h3><p>${o.texte}</p></div>`
+        // Aperçu chargé à la demande : huit éditeurs ouverts en même temps pèseraient trop lourd.
+        a.addEventListener('mouseenter', () => {
+          const apercu = a.querySelector('.apercu')
+          if (apercu.querySelector('iframe')) return
+          const f = document.createElement('iframe')
+          f.tabIndex = -1
+          f.src = `./options/${o.nom}/index.html`
+          f.style.transform = `scale(${apercu.clientWidth / 1440})`
+          apercu.textContent = ''
+          apercu.append(f)
+        }, { once: true })
+        grille.append(a)
+      }
+      conteneur.append(h, note, grille)
+    }
+  </script>
+</body>
+</html>
