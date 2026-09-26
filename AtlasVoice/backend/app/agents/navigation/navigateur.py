@@ -494,4 +494,7 @@ async def principal() -> None:
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
-    asyncio.run(principal())
+    try:
+        asyncio.run(principal())
+    except KeyboardInterrupt:
+        log.info("Arrêt demandé (Ctrl+C).")
