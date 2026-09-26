@@ -12,7 +12,7 @@ Harness de hackathon : des agents IA transforment leurs raisonnements scientifiq
 | `atlas/orchestrateur/` | Orchestrateur de recherche (SDK Codex) et ses routes |
 | `atlas/serveur.py` | Serveur longue durée : lecture + conversations (local, puis VM) |
 | `api/index.py` | Lecture seule, déployée comme fonction Python sur Vercel |
-| `frontend/` | Coquille Vite vide qui vérifie que tout répond |
+| `frontend/` | Interface : conversations à gauche, graphe sigma.js à droite |
 | `tests/` | Tests Python (sans réseau) |
 
 ## API
