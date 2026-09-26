@@ -18,6 +18,12 @@
       "runtimeExecutable": "backend/.venv/Scripts/python.exe",
       "runtimeArgs": ["-m", "http.server", "5190", "--bind", "127.0.0.1", "--directory", "C:/Users/User/AppData/Local/Temp/claude/C--Users-User-Documents-Atlas-AtlasVoice/d6c3773a-1a32-4d19-8dc5-6cdb47d3f110/scratchpad/athena-test"],
       "port": 5190
+    },
+    {
+      "name": "graphe-3d",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "../prototypes/graphe-3d", "run", "dev"],
+      "port": 5180
     }
   ]
 }

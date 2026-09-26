@@ -9,6 +9,7 @@ Recommande le plus rapide qui passe les seuils, et le suivant comme secours.
 
     python bench/lancer_bench.py                     # tous les modèles dont la clé est définie
     python bench/lancer_bench.py --modeles haiku --limite 20
+    python bench/lancer_bench.py --modeles gpt-4.1-mini --prefixes N     # les 20 énoncés de navigation
 
 À relancer à chaque changement de prompt, d'outil ou de modèle.
 """
@@ -213,10 +214,16 @@ async def principal() -> None:
     parseur = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parseur.add_argument("--modeles", nargs="*", help="Filtre sur le nom des modèles (sous-chaîne)")
     parseur.add_argument("--limite", type=int, help="N'utiliser que les N premiers énoncés")
+    parseur.add_argument("--prefixes", nargs="*",
+                         help="Seulement les énoncés dont l'id commence par ces préfixes (ex. N TN : navigation)")
     options = parseur.parse_args()
 
     etats = json.loads((ICI / "etats.json").read_text(encoding="utf-8"))
-    enonces = charger_enonces()[: options.limite]
+    enonces = charger_enonces()
+    if options.prefixes:
+        # « N » ne prend pas « TN » : le préfixe est suivi de chiffres.
+        enonces = [e for e in enonces if any(e["id"][len(p):].isdigit() and e["id"].startswith(p) for p in options.prefixes)]
+    enonces = enonces[: options.limite]
     configs = json.loads((ICI / "modeles.json").read_text(encoding="utf-8"))
     if options.modeles:
         configs = [c for c in configs if any(f.lower() in c["nom"].lower() for f in options.modeles)]
