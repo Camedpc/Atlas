@@ -1,0 +1,305 @@
+/* R2 · Plan de métro des arguments : palette des lignes et des zones, légende, bulles. */
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: #fbfbfd;
+}
+body:has(.rsn-vue[data-theme='sombre']) {
+  background: #0f1218;
+}
+#app {
+  position: fixed;
+  inset: 0;
+}
+.retour {
+  position: fixed;
+  top: 18px;
+  left: 56px;
+  font: 12px system-ui, sans-serif;
+  color: #5d6679;
+  text-decoration: none;
+  z-index: 5;
+}
+.retour:hover {
+  color: #3b5bdb;
+}
+body:has(.rsn-vue.panneau-ouvert) .retour {
+  display: none;
+}
+
+/* Palette : lignes (un fil d'argument chacune), zones tarifaires, stations. */
+.rsn-vue {
+  --ligne-1: #1f6fcf;
+  --ligne-2: #c2255c;
+  --ligne-3: #0a8f86;
+  --ligne-4: #b07d12;
+  --ligne-5: #6d4fc2;
+  --ligne-6: #2f9e44;
+  --zone-fond-0: #f1ead9;
+  --zone-trait-0: #cdb88a;
+  --zone-texte-0: #8a6f36;
+  --zone-fond-1: #ebe5f8;
+  --zone-trait-1: #a592dc;
+  --zone-texte-1: #6a55b0;
+  --zone-fond-2: #e1f0e8;
+  --zone-trait-2: #86bea0;
+  --zone-texte-2: #3f7d5c;
+  --station-fond: #ffffff;
+  --station-trait: #1b2130;
+}
+.rsn-vue[data-theme='sombre'] {
+  --ligne-1: #4f95f0;
+  --ligne-2: #ec5f93;
+  --ligne-3: #2cc2b3;
+  --ligne-4: #dfab3f;
+  --ligne-5: #9d85ff;
+  --ligne-6: #56c26b;
+  --zone-fond-0: #2b261b;
+  --zone-trait-0: #85714a;
+  --zone-texte-0: #c9b27c;
+  --zone-fond-1: #26203b;
+  --zone-trait-1: #6a5bb0;
+  --zone-texte-1: #aa98ee;
+  --zone-fond-2: #1b2a23;
+  --zone-trait-2: #3f7258;
+  --zone-texte-2: #86c7a3;
+  --station-fond: #171b23;
+  --station-trait: #e6e9f0;
+}
+
+/* Légende façon plan de métro : bandeau en bas, quatre colonnes. */
+.r2-legende {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 68px;
+  background: var(--surface);
+  border: 1px solid var(--bord);
+  border-radius: 10px;
+  box-shadow: var(--ombre);
+  padding: 8px 14px 8px;
+  font-size: 11.5px;
+  line-height: 1.3;
+  z-index: 6;
+  pointer-events: auto;
+}
+.r2-legende-corps {
+  display: grid;
+  grid-template-columns: minmax(250px, 1.05fr) minmax(360px, 1.65fr) minmax(330px, 1.5fr) minmax(190px, 0.75fr);
+  gap: 0 18px;
+}
+.r2-col + .r2-col {
+  border-left: 1px solid var(--bord);
+  padding-left: 16px;
+}
+.r2-legende.repliee {
+  left: auto;
+  padding: 5px 10px;
+}
+.r2-legende.repliee .r2-legende-corps {
+  display: none;
+}
+.r2-legende.repliee .r2-legende-replier {
+  position: static;
+}
+.r2-legende-replier {
+  position: absolute;
+  top: 6px;
+  right: 10px;
+  border: 0;
+  background: none;
+  color: var(--texte-doux);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 0;
+}
+.r2-legende-replier:hover {
+  color: var(--accent);
+}
+.r2-legende-titre {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--texte-doux);
+  margin: 1px 0 5px;
+}
+.r2-ligne {
+  display: grid;
+  grid-template-columns: 24px auto 1fr;
+  align-items: center;
+  column-gap: 7px;
+  padding: 2px 4px;
+  margin: 0 -4px 1px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.r2-ligne:hover,
+.r2-ligne.actif {
+  background: var(--surface-2);
+}
+.r2-ligne.masquee {
+  opacity: 0.4;
+}
+.r2-ligne-nom {
+  font-weight: 600;
+  color: var(--texte);
+  white-space: nowrap;
+}
+.r2-ligne-info {
+  font-size: 10.5px;
+  color: var(--texte-doux);
+  text-align: right;
+  white-space: nowrap;
+}
+.r2-pastille-ligne {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 17px;
+  border-radius: 5px;
+  color: #fff;
+  font-weight: 700;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.r2-pastille-ligne.creuse {
+  background: var(--surface) !important;
+  border: 2.5px solid currentColor;
+  color: inherit;
+}
+.r2-symboles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px 12px;
+}
+.r2-symbole {
+  display: grid;
+  grid-template-columns: 30px 1fr;
+  align-items: center;
+  column-gap: 6px;
+  color: var(--texte-doux);
+  font-size: 11px;
+  min-height: 19px;
+}
+.r2-symbole svg {
+  display: block;
+}
+.r2-symbole b {
+  font-weight: 600;
+  color: var(--texte);
+}
+.r2-zone-tete {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 1px 0 3px;
+  color: var(--texte-doux);
+}
+.r2-zone-tete b {
+  font-weight: 700;
+}
+.r2-puces {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px 5px;
+  margin: 0 0 5px 30px;
+}
+.r2-puce {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px 1px 3px;
+  border: 1px solid var(--bord);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--texte);
+  cursor: pointer;
+  white-space: nowrap;
+  font-size: 11px;
+}
+.r2-puce:hover,
+.r2-puce:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+}
+.r2-fleche {
+  color: var(--texte-doux);
+}
+.r2-pied {
+  font-size: 11px;
+  color: var(--texte-doux);
+  line-height: 1.45;
+}
+.r2-pied b {
+  color: var(--texte);
+  font-variant-numeric: tabular-nums;
+}
+.r2-total {
+  margin-top: 2px;
+  padding-top: 2px;
+  border-top: 1px solid var(--bord);
+}
+
+/* Fiche : en-tête des lignes, bulle de tronçon. */
+.r2-fiche-lignes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--texte-doux);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.r2-fiche-lignes .r2-pastille-ligne {
+  width: 20px;
+  height: 16px;
+  font-size: 10.5px;
+  text-transform: none;
+}
+.r2-bulle {
+  width: 300px;
+}
+.r2-bulle .r2-etapes {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  color: var(--texte-doux);
+  font-size: 11.5px;
+}
+.r2-bulle .r2-etapes li {
+  margin: 1px 0;
+}
+
+/* Panneau ☰ : section « Plan de métro ». */
+.r2-panneau-lignes label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 3px 0;
+  font-size: 12px;
+}
+.r2-panneau-boutons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.r2-panneau-boutons .rsn-bouton {
+  margin: 0;
+}
+.r2-deplies {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-size: 11.5px;
+  color: var(--texte-doux);
+}
+body:has(.rsn-vue.panneau-ouvert) .r2-legende {
+  left: 352px;
+}

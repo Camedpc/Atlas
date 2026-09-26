@@ -1,0 +1,235 @@
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: #fbfbfd;
+}
+#app {
+  position: fixed;
+  inset: 0;
+}
+.retour {
+  position: fixed;
+  top: 18px;
+  left: 56px;
+  font: 12px system-ui, sans-serif;
+  color: #5d6679;
+  text-decoration: none;
+  z-index: 5;
+}
+.retour:hover {
+  color: #3b5bdb;
+}
+body:has(.rsn-vue.panneau-ouvert) .retour {
+  display: none;
+}
+body:has(.rsn-vue[data-theme='sombre']) {
+  background: #0f1218;
+}
+
+/* Le gizmo ne sert qu'en 3D. */
+.rsn-vue.r3-2d .atlas-gizmo {
+  display: none;
+}
+
+/* Bandeau « et si ? » (bas, entre le compteur et les réglages). */
+.r3-bandeau {
+  position: absolute;
+  bottom: 14px;
+  left: calc(50% + 150px);
+  transform: translate(-50%, 6px);
+  width: max-content;
+  max-width: min(600px, calc(100% - 40px));
+  padding: 10px 14px 10px 16px;
+  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid color-mix(in srgb, var(--contredit) 45%, var(--bord));
+  border-left: 4px solid var(--contredit);
+  box-shadow: var(--ombre);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--texte);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s, transform 0.2s;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  column-gap: 14px;
+  align-items: center;
+}
+.r3-bandeau.visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
+  pointer-events: auto;
+}
+@media (max-width: 1350px) {
+  .r3-bandeau {
+    bottom: auto;
+    top: 62px;
+    left: 50%;
+  }
+}
+.r3-bandeau > div {
+  grid-column: 1;
+}
+.r3-bandeau-titre {
+  font-weight: 500;
+}
+.r3-bandeau-cles {
+  color: var(--texte-doux);
+  font-size: 11.5px;
+}
+.r3-bandeau-fermer {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  border: 1px solid var(--bord);
+  background: var(--surface-2);
+  color: var(--texte);
+  border-radius: 6px;
+  padding: 5px 10px;
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+.r3-rouge {
+  color: var(--contredit);
+}
+
+/* Fiche : étape de l'histoire, portée. */
+.r3-histoire {
+  margin: 4px 0 6px;
+  font-size: 11.5px;
+  color: var(--texte-doux);
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.r3-num {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--contredit);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  flex: none;
+}
+.r3-barre-statut {
+  display: flex;
+  height: 5px;
+  border-radius: 3px;
+  overflow: hidden;
+  margin: 6px 0 2px;
+  gap: 1px;
+}
+
+/* Journal des décisions. */
+.r3-journal {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.r3-entree {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--bord);
+  border-left: 3px solid var(--couche-2);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--texte);
+  padding: 7px 9px 8px;
+  font: inherit;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.r3-entree:hover {
+  background: var(--surface-2);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--bord));
+  border-left-color: var(--couche-2);
+}
+.r3-entree-tete {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10.5px;
+  color: var(--texte-doux);
+}
+.r3-date {
+  font-variant-numeric: tabular-nums;
+  min-width: 44px;
+}
+.r3-genre {
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 700;
+  color: var(--couche-2);
+}
+.r3-auteur {
+  margin-left: auto;
+  padding: 0 6px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 10px;
+  line-height: 16px;
+}
+.r3-auteur.humain {
+  background: color-mix(in srgb, var(--origine-humain) 14%, transparent);
+  color: var(--origine-humain);
+}
+.r3-auteur.ia {
+  background: color-mix(in srgb, var(--origine-ia) 16%, transparent);
+  color: var(--origine-ia);
+}
+.r3-entree-titre {
+  font-weight: 600;
+  font-size: 12.5px;
+  margin: 3px 0 1px;
+}
+.r3-entree-q {
+  font-size: 11.5px;
+  color: var(--texte-doux);
+  font-style: italic;
+}
+.r3-entree-raison {
+  font-size: 11.5px;
+  line-height: 1.4;
+  margin-top: 2px;
+}
+.r3-entree-pied {
+  font-size: 10.5px;
+  color: var(--texte-doux);
+  margin-top: 3px;
+}
+
+/* Légende. */
+.r3-glyphe {
+  display: inline-block;
+  min-width: 18px;
+  text-align: center;
+  color: var(--texte-doux);
+  font-weight: 700;
+}
+.r3-carte-mini {
+  display: inline-block;
+  width: 16px;
+  height: 11px;
+  border: 1px solid var(--bord);
+  border-left: 3px solid var(--statut-valide);
+  border-radius: 2px;
+  background: var(--surface);
+}
+.r3-barre-mini {
+  display: inline-flex;
+  width: 16px;
+  height: 4px;
+  gap: 1px;
+}
+.r3-barre-mini i {
+  flex: 1;
+}
+.rsn-legende .r3-num {
+  margin: 0 1px;
+}

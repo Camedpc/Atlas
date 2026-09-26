@@ -1,0 +1,556 @@
+/* V5 · Lentille — styles propres à la variante. Les couleurs viennent des variables du moteur
+   (thème clair par défaut, sombre via data-theme). */
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: #f8f9fb;
+}
+#app {
+  position: fixed;
+  inset: 0;
+}
+
+#app .atlas-vue {
+  --fond: #f8f9fb;
+  --verre: rgba(255, 255, 255, 0.82);
+  --verre-bord: rgba(27, 33, 48, 0.1);
+  --marque: rgba(59, 91, 219, 0.14);
+}
+#app .atlas-vue[data-theme="sombre"] {
+  --fond: #0e1117;
+  --verre: rgba(22, 26, 34, 0.84);
+  --verre-bord: rgba(255, 255, 255, 0.09);
+  --marque: rgba(123, 147, 255, 0.22);
+}
+
+.retour {
+  position: fixed;
+  top: 20px;
+  left: 56px;
+  font: 12px system-ui, sans-serif;
+  color: #5d6679;
+  text-decoration: none;
+  z-index: 5;
+}
+.retour:hover {
+  color: #3b5bdb;
+}
+body:has(.atlas-vue.panneau-ouvert) .retour,
+body:has(.atlas-vue[data-theme='sombre']) .retour {
+  color: #9aa3b5;
+}
+body:has(.atlas-vue.panneau-ouvert) .retour {
+  display: none;
+}
+
+kbd {
+  font: 600 10px/1 var(--police, system-ui);
+  padding: 2px 5px;
+  border-radius: 4px;
+  border: 1px solid var(--bord);
+  border-bottom-width: 2px;
+  background: var(--surface-2);
+  color: var(--texte-doux);
+  white-space: nowrap;
+}
+
+/* ─── Barre d'outils sous ☰ ───────────────────────────────────────────── */
+
+.v5-outils {
+  position: absolute;
+  top: 54px;
+  left: 10px;
+  display: flex;
+  gap: 6px;
+  z-index: 5;
+  transition: opacity 0.2s ease;
+}
+.atlas-vue.panneau-ouvert .v5-outils {
+  opacity: 0;
+  pointer-events: none;
+}
+.v5-puce {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid var(--bord);
+  background: var(--verre);
+  backdrop-filter: blur(8px);
+  box-shadow: var(--ombre);
+  color: var(--texte);
+  font: 500 12px var(--police);
+  cursor: pointer;
+}
+.v5-puce:hover {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--bord));
+}
+.v5-puce.actif {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--bord));
+}
+.v5-puce.inactif {
+  color: var(--texte-doux);
+}
+.v5-puce-carree {
+  width: 30px;
+  padding: 0;
+  justify-content: center;
+  font-size: 14px;
+}
+.v5-puce-icone {
+  font-size: 15px;
+  color: var(--texte-doux);
+}
+.v5-icone-lentille {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1.5px dashed var(--texte-doux);
+}
+.v5-icone-lentille.epinglee {
+  border: 2px solid var(--accent);
+  background: radial-gradient(circle, var(--accent) 0 2px, transparent 2.5px);
+}
+
+/* ─── Panneau gauche en surimpression ─────────────────────────────────── */
+
+#app .atlas-panneau {
+  top: 10px;
+  bottom: 10px;
+  left: 10px;
+  width: 340px;
+  border: 1px solid var(--verre-bord);
+  border-radius: 14px;
+  background: var(--verre);
+  backdrop-filter: blur(14px) saturate(1.2);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  overflow: hidden;
+}
+#app .atlas-panneau:not(.ouvert) {
+  transform: translateX(calc(-100% - 20px));
+}
+#app .atlas-bouton-menu.actif {
+  left: 304px;
+  top: 20px;
+}
+#app .atlas-vue.panneau-ouvert .atlas-bas {
+  left: 362px;
+}
+#app .atlas-panneau-entete {
+  padding: 16px 16px 8px;
+  border-bottom: none;
+}
+
+.v5-ariane {
+  padding: 2px 16px 12px;
+  border-bottom: 1px solid var(--bord);
+}
+.v5-ariane-miettes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 4px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.v5-miette {
+  border: none;
+  background: none;
+  padding: 1px 4px;
+  margin: 0 -2px;
+  border-radius: 5px;
+  font: inherit;
+  color: var(--texte-doux);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  text-align: left;
+}
+.v5-miette[style*='--pastille']::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--pastille);
+  flex: none;
+}
+button.v5-miette:hover {
+  background: var(--surface-2);
+  color: var(--texte);
+}
+.v5-miette.courante {
+  color: var(--texte);
+  font-weight: 600;
+}
+.v5-sep {
+  color: var(--texte-doux);
+  opacity: 0.55;
+}
+.v5-ariane-source {
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--texte-doux);
+  font-style: italic;
+}
+
+.v5-lecture {
+  display: grid;
+  grid-template-columns: 50px 1fr;
+  gap: 4px 10px;
+  font-size: 12px;
+  color: var(--texte-doux);
+  line-height: 1.45;
+}
+.v5-lecture-glyphe {
+  color: var(--texte);
+  padding-top: 4px;
+}
+.v5-lecture ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 5px;
+}
+.v5-lecture b {
+  color: var(--texte);
+  font-weight: 600;
+}
+.v5-lecture-touches {
+  grid-column: 1 / -1;
+  margin-top: 6px;
+  line-height: 2;
+}
+
+/* ─── Fiche de survol ─────────────────────────────────────────────────── */
+
+#app .atlas-fiche {
+  padding: 0;
+  min-width: 250px;
+  max-width: 300px;
+  border-radius: 11px;
+  overflow: hidden;
+}
+.v5-fiche {
+  font-size: 12px;
+  color: var(--texte);
+}
+.v5-fiche-titre {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px 8px;
+  font-weight: 600;
+  font-size: 13.5px;
+  line-height: 1.3;
+}
+.v5-anneau {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  margin-top: 3px;
+  border-radius: 50%;
+  border: 2.5px solid;
+}
+.v5-disque {
+  flex: none;
+  width: 11px;
+  height: 11px;
+  margin-top: 2px;
+  border-radius: 50%;
+}
+.v5-niveau {
+  margin-left: auto;
+  font-weight: 500;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--texte-doux);
+  padding-top: 2px;
+}
+.v5-cles {
+  display: grid;
+  gap: 6px;
+  padding: 0 12px 10px;
+}
+.v5-cle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.v5-colonne {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 3px;
+}
+.v5-doux {
+  color: var(--texte-doux);
+}
+.v5-statut {
+  font-weight: 600;
+  min-width: 58px;
+}
+.v5-num {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.v5-num small,
+.v5-statut-val small {
+  font-weight: 400;
+  color: var(--texte-doux);
+}
+.v5-intervalle .v5-piste {
+  fill: var(--bord);
+}
+.v5-intervalle .v5-estimation {
+  fill: var(--texte);
+}
+.v5-badge {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 8px;
+  color: #fff;
+  background: var(--validation-aucune);
+}
+.v5-badge.v-ia {
+  background: var(--validation-ia);
+}
+.v5-badge.v-humain {
+  background: var(--validation-humain);
+}
+.v5-badge.v-ia_humain {
+  background: var(--validation-ia-humain);
+}
+.v5-badge.v-aucune {
+  background: none;
+  color: var(--texte-doux);
+  border: 1px solid var(--bord);
+}
+
+.v5-statuts {
+  display: grid;
+  gap: 3px;
+}
+.v5-statut-ligne {
+  display: grid;
+  grid-template-columns: 62px 1fr 64px;
+  align-items: center;
+  gap: 8px;
+}
+.v5-statut-nom {
+  color: var(--texte-doux);
+}
+.v5-statut-piste {
+  height: 6px;
+  display: block;
+}
+.v5-statut-piste i {
+  display: block;
+  height: 100%;
+  border-radius: 0 3px 3px 0;
+  min-width: 2px;
+}
+.v5-statut-val {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.v5-histo-dates .v5-axe {
+  stroke: var(--bord);
+}
+.v5-histo-axe {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--texte-doux);
+}
+
+.v5-fiche-detail {
+  padding: 9px 12px 10px;
+  border-top: 1px solid var(--bord);
+  background: var(--surface-2);
+  display: grid;
+  gap: 6px;
+}
+.v5-chemin {
+  color: var(--texte-doux);
+  font-size: 11px;
+}
+.v5-grille {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 10px;
+  margin: 0;
+}
+.v5-grille dt {
+  color: var(--texte-doux);
+}
+.v5-grille dd {
+  margin: 0;
+}
+.v5-enonce {
+  margin: 0;
+  line-height: 1.45;
+  color: var(--texte);
+}
+.v5-principaux ol {
+  margin: 2px 0 0;
+  padding-left: 18px;
+}
+.v5-fiche-aide {
+  padding: 5px 12px 6px;
+  border-top: 1px solid var(--bord);
+  font-size: 10.5px;
+  color: var(--texte-doux);
+}
+
+/* ─── Palette de commandes ─────────────────────────────────────────────── */
+
+.v5-palette {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: none;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 12vh 16px 16px;
+  background: color-mix(in srgb, var(--fond) 35%, transparent);
+  backdrop-filter: blur(2px);
+}
+.v5-palette.ouverte {
+  display: flex;
+}
+.v5-palette-boite {
+  width: min(600px, 100%);
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--bord);
+  border-radius: 14px;
+  box-shadow: 0 2px 6px rgba(20, 25, 40, 0.08), 0 24px 60px rgba(20, 25, 40, 0.22);
+  overflow: hidden;
+  animation: v5-apparition 0.14s ease-out;
+}
+@keyframes v5-apparition {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.99);
+  }
+}
+.v5-palette-entete {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--bord);
+}
+.v5-palette-loupe {
+  font-size: 18px;
+  color: var(--texte-doux);
+}
+.v5-palette-champ {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: none;
+  font: 15px var(--police);
+  color: var(--texte);
+}
+.v5-palette-champ::placeholder {
+  color: var(--texte-doux);
+}
+.v5-palette-liste {
+  overflow: auto;
+  padding: 4px 6px 8px;
+}
+.v5-palette-groupe {
+  padding: 10px 10px 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--texte-doux);
+}
+.v5-palette-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.v5-palette-item.actif {
+  background: var(--surface-2);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+.v5-palette-pastille {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--bord);
+}
+.v5-palette-textes {
+  flex: 1;
+  min-width: 0;
+}
+.v5-palette-titre {
+  font-size: 13px;
+  color: var(--texte);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.v5-palette-titre mark {
+  background: var(--marque);
+  color: inherit;
+  border-radius: 2px;
+}
+.v5-palette-sous {
+  font-size: 11px;
+  color: var(--texte-doux);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.v5-palette-vide {
+  padding: 18px;
+  text-align: center;
+  color: var(--texte-doux);
+}
+.v5-palette-pied {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 8px 14px;
+  border-top: 1px solid var(--bord);
+  font-size: 11px;
+  color: var(--texte-doux);
+}
+.v5-palette-pied kbd {
+  margin: 0 1px;
+}
+
+@media (max-width: 760px) {
+  .v5-outils kbd,
+  .v5-palette-pied {
+    display: none;
+  }
+  #app .atlas-panneau {
+    width: calc(100% - 20px);
+  }
+  #app .atlas-bouton-menu.actif {
+    left: calc(100% - 56px);
+  }
+}

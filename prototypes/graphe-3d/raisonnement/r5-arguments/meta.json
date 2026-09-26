@@ -1,0 +1,13 @@
+{
+  "id": "r5-arguments",
+  "titre": "R5 · Carte d’arguments",
+  "resume": "Le raisonnement lu comme une suite d’arguments (Toulmin + IBIS) : 28 cartes « conclusion + raisons + garantie + qualificatif » enchaînées de gauche à droite, objections en rouge, questions ouvertes et décisions tranchées, hypothèses de travail en bandeau ; zoom sémantique.",
+  "idees": [
+    "Stratégie de dérivation maison : chaque lemme, calcul ou mesure est absorbé dans l’argument qu’il sert (224 nœuds → 28 cartes)",
+    "Garantie de Toulmin (lemme outil, définition) écrite sur la flèche ; qualificatif = statut + intervalle de confiance",
+    "Objection « Pente 0,26 » en rouge sous la conjecture qu’elle réfute, réponse par la décision « correction d’Itô »",
+    "Décisions posées au-dessus des cartes qu’elles gouvernent (✓ retenu / ✗ rejeté), conjectures en bulles « ? »",
+    "Couloirs par sous-problème, données H1–H7 citées par étiquette, bandeau des hypothèses de travail M1–M6 avec leur portée"
+  ],
+  "ordre": 5
+}

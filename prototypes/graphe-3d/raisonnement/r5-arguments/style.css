@@ -1,0 +1,759 @@
+/* R5 · Carte d'arguments. Couleurs : variables de la vue (.rsn-vue[data-theme]) + quelques-unes à nous. */
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: #fbfbfd;
+}
+#app {
+  position: fixed;
+  inset: 0;
+}
+.retour {
+  position: fixed;
+  top: 18px;
+  left: 56px;
+  font: 12px system-ui, sans-serif;
+  color: #5d6679;
+  text-decoration: none;
+  z-index: 5;
+}
+.retour:hover {
+  color: #3b5bdb;
+}
+body:has(.rsn-vue.panneau-ouvert) .retour {
+  display: none;
+}
+
+.rsn-vue {
+  --r5-carte: #ffffff;
+  --r5-carte-bord: #d5dae3;
+  --r5-question: #6741d9;
+  --r5-decision: var(--couche-2);
+  --r5-objection: var(--statut-refute);
+  --r5-reserve: #c98a00;
+  --r5-modele: #b5540b;
+  --r5-ombre: 0 1px 2px rgba(20, 25, 40, 0.07), 0 2px 8px rgba(20, 25, 40, 0.05);
+}
+.rsn-vue[data-theme='sombre'] {
+  --r5-carte: #1a1f29;
+  --r5-carte-bord: #323a48;
+  --r5-question: #a48bff;
+  --r5-reserve: #f2b631;
+  --r5-modele: #ff9d5c;
+  --r5-ombre: 0 1px 2px rgba(0, 0, 0, 0.35), 0 3px 10px rgba(0, 0, 0, 0.25);
+}
+
+/* ─── Calque des cartes (au-dessus des canvas sigma, sous l'interface) ────── */
+
+.r5-calque {
+  position: absolute;
+  inset: 0;
+  z-index: 0; /* contexte d'empilement propre : la fiche et le panneau restent au-dessus des cartes */
+  overflow: hidden;
+  pointer-events: none;
+  font-family: var(--police);
+}
+
+.r5-carte {
+  --f: 1;
+  --c: var(--couche-3);
+  position: absolute;
+  left: 0;
+  top: 0;
+  box-sizing: border-box;
+  padding: calc(5px * var(--f)) calc(8px * var(--f)) calc(7px * var(--f)) calc(10px * var(--f));
+  background: var(--r5-carte);
+  border: 1px solid var(--r5-carte-bord);
+  border-left: 3px solid var(--c);
+  border-radius: 6px;
+  box-shadow: var(--r5-ombre);
+  color: var(--texte);
+  font-size: calc(var(--r5-police, 12px) * var(--f));
+  line-height: 1.25;
+  pointer-events: none;
+  overflow: visible;
+  transform-origin: 0 0;
+  will-change: transform;
+  transition: box-shadow 0.12s, border-color 0.12s;
+}
+.r5-carte.niv-1,
+.r5-carte.niv-2 {
+  overflow: hidden;
+  padding-bottom: calc(11px * var(--f));
+}
+.r5-carte.genre-argument[class*='niv'] {
+  --c: var(--couche-3);
+}
+.r5-carte.genre-decision {
+  --c: var(--r5-decision);
+  background: color-mix(in srgb, var(--r5-decision) 5%, var(--r5-carte));
+}
+.r5-carte.genre-question {
+  --c: var(--r5-question);
+  border: 1.5px dashed color-mix(in srgb, var(--r5-question) 55%, var(--r5-carte-bord));
+  border-left: 3px solid var(--r5-question);
+  border-radius: 14px;
+}
+.r5-carte.genre-objection {
+  --c: var(--r5-objection);
+  border-color: color-mix(in srgb, var(--r5-objection) 55%, var(--r5-carte-bord));
+  background: color-mix(in srgb, var(--r5-objection) 6%, var(--r5-carte));
+}
+.r5-carte.etat-refutee {
+  background: repeating-linear-gradient(-45deg, var(--r5-carte) 0 7px, color-mix(in srgb, var(--r5-objection) 6%, var(--r5-carte)) 7px 9px);
+}
+.r5-carte.etat-refutee .r5-titre {
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--r5-objection) 70%, transparent);
+}
+.r5-carte.abandonnee {
+  border-style: dashed;
+  box-shadow: none;
+}
+.r5-carte.abandonnee .r5-titre {
+  color: var(--texte-doux);
+}
+/* Résultats (couche « résultats ») : conclusion finale bien visible. */
+.r5-carte.type-resultat {
+  --c: var(--couche-6);
+}
+
+/* États : survol, lignée, portée. */
+.r5-carte.survolee {
+  box-shadow: 0 0 0 2px var(--accent), var(--r5-ombre);
+}
+.r5-carte.selection {
+  box-shadow: 0 0 0 2.5px var(--accent), 0 4px 16px rgba(20, 25, 40, 0.18);
+}
+.r5-carte.ancetre {
+  box-shadow: 0 0 0 2px var(--ancetre), var(--r5-ombre);
+}
+.r5-carte.descendant {
+  box-shadow: 0 0 0 2px var(--descendant), var(--r5-ombre);
+}
+.r5-carte.portee {
+  box-shadow: 0 0 0 2px var(--r5-modele), var(--r5-ombre);
+}
+
+/* En-tête : genre / question + qualificatif. */
+.r5-tete {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: space-between;
+  font-size: calc(9.5px * var(--f));
+  letter-spacing: 0.03em;
+  color: var(--c);
+  font-weight: 650;
+  margin-bottom: calc(2px * var(--f));
+  white-space: nowrap;
+}
+.r5-genre {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+}
+.niv-1.genre-decision .r5-genre,
+.niv-2.genre-decision .r5-genre {
+  text-transform: none;
+  font-style: italic;
+  font-weight: 600;
+  letter-spacing: 0;
+  font-size: calc(10px * var(--f));
+}
+.r5-qualif {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--texte-doux);
+  font-weight: 600;
+  letter-spacing: 0;
+  flex: none;
+}
+.r5-statut {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+  background: var(--statut-valide);
+}
+.r5-statut.statut-incertain {
+  background: var(--statut-incertain);
+}
+.r5-statut.statut-refute {
+  background: var(--statut-refute);
+}
+.r5-valid {
+  font-size: calc(8.5px * var(--f));
+  padding: 0 3px;
+  border-radius: 3px;
+  border: 1px solid var(--bord);
+  color: var(--texte-doux);
+}
+.r5-valid.valid-ia_humain {
+  color: var(--validation-ia-humain);
+  border-color: color-mix(in srgb, var(--validation-ia-humain) 40%, transparent);
+}
+.rsn-vue[data-theme='sombre'] .r5-valid.valid-ia_humain {
+  color: #8fb3ff;
+}
+.r5-valid.valid-ia {
+  color: var(--validation-ia);
+}
+.r5-valid.valid-humain {
+  color: var(--validation-humain);
+}
+
+.r5-titre {
+  font-weight: 620;
+  font-size: calc(var(--r5-police, 12px) * var(--f) * 1.04);
+  line-height: 1.22;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.niv-1 .r5-titre,
+.niv-2 .r5-titre {
+  -webkit-line-clamp: 3;
+}
+.r5-enonce {
+  margin-top: 3px;
+  color: var(--texte-doux);
+  font-size: 0.9em;
+  font-style: italic;
+}
+.r5-raisons,
+.r5-alternatives,
+.r5-reserves {
+  list-style: none;
+  margin: 5px 0 0;
+  padding: 4px 0 0;
+  border-top: 1px solid var(--bord);
+  font-size: 0.92em;
+}
+.r5-raisons li,
+.r5-alternatives li,
+.r5-reserves li {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.45;
+}
+.r5-raisons i {
+  font-style: normal;
+  color: var(--texte-doux);
+  display: inline-block;
+  width: 1.1em;
+}
+.r5-raisons li.autre {
+  color: var(--texte-doux);
+}
+.r5-raisons li.autre i {
+  color: var(--accent);
+}
+.r5-raisons em {
+  font-style: normal;
+  color: var(--texte-doux);
+  font-size: 0.9em;
+}
+.r5-raisons li.plus {
+  color: var(--texte-doux);
+  font-style: italic;
+}
+.r5-alternatives li {
+  color: var(--texte-doux);
+}
+.r5-alternatives b {
+  color: var(--statut-refute);
+}
+.r5-alternatives span {
+  font-size: 0.9em;
+}
+.r5-garantie {
+  margin-top: 4px;
+  font-size: 0.88em;
+  font-style: italic;
+  color: var(--texte-doux);
+}
+.r5-garantie b {
+  font-style: normal;
+  font-weight: 600;
+}
+.r5-reserves li {
+  color: var(--r5-reserve);
+}
+.r5-reserves li.grave {
+  color: var(--statut-refute);
+}
+.r5-attaque {
+  margin-top: 4px;
+  font-size: 0.9em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.r5-attaque.contredit {
+  color: var(--statut-refute);
+}
+.r5-attaque.resout {
+  color: var(--statut-valide);
+}
+.r5-pied {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+  font-size: 0.82em;
+  color: var(--texte-doux);
+}
+.r5-pied-h {
+  color: var(--couche-0);
+  font-weight: 600;
+}
+.r5-pied-v {
+  color: var(--statut-valide);
+}
+
+/* Bandeau « hypothèses de travail » posé sur le bord haut de la carte. */
+.r5-carte-m {
+  position: absolute;
+  right: 8px;
+  top: 0;
+  transform: translateY(-100%);
+  padding: 0 5px;
+  font-size: calc(9px * var(--f));
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1.5;
+  color: var(--r5-modele);
+  background: color-mix(in srgb, var(--r5-modele) 10%, var(--r5-carte));
+  border: 1px solid color-mix(in srgb, var(--r5-modele) 35%, transparent);
+  border-bottom: 0;
+  border-radius: 4px 4px 0 0;
+  white-space: nowrap;
+}
+.niv-1 .r5-carte-m,
+.niv-2 .r5-carte-m {
+  position: static;
+  transform: none;
+  display: inline-block;
+  border-bottom: 1px solid color-mix(in srgb, var(--r5-modele) 35%, transparent);
+  border-radius: 4px;
+  margin-bottom: 3px;
+}
+
+/* Onglets latéraux : attaquée (rouge), réserves (ambre). */
+.r5-onglets {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translate(calc(100% - 1px), -50%);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.niv-1 .r5-onglets,
+.niv-2 .r5-onglets {
+  top: 6px;
+  transform: none;
+  right: 6px;
+  flex-direction: row;
+}
+.r5-onglet {
+  font-size: calc(9.5px * var(--f));
+  font-weight: 700;
+  line-height: 1;
+  padding: 2px 3px;
+  border-radius: 0 4px 4px 0;
+  color: #fff;
+}
+.niv-1 .r5-onglet,
+.niv-2 .r5-onglet {
+  border-radius: 4px;
+}
+.r5-onglet.attaque {
+  background: var(--statut-refute);
+}
+.r5-onglet.reserve {
+  background: color-mix(in srgb, var(--r5-reserve) 88%, #000);
+}
+.niv-1 .r5-tete,
+.niv-2 .r5-tete {
+  padding-right: 48px;
+}
+
+/* Qualificatif : intervalle de confiance en bas de la carte. */
+.r5-ic {
+  position: absolute;
+  left: 10px;
+  right: 8px;
+  bottom: 3px;
+  height: 3px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--texte) 8%, transparent);
+}
+.r5-ic-int {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--c) 55%, transparent);
+}
+.r5-ic-pt {
+  position: absolute;
+  top: -1.5px;
+  width: 2px;
+  height: 6px;
+  margin-left: -1px;
+  background: var(--texte);
+  border-radius: 1px;
+}
+.genre-question .r5-ic,
+.genre-decision .r5-ic {
+  left: 14px;
+  right: 12px;
+}
+
+/* 3D : cartes simplifiées. */
+.r5-carte.en-3d {
+  box-shadow: none;
+  padding: 3px 6px;
+}
+.r5-carte.en-3d .r5-tete {
+  display: none;
+}
+
+/* ─── Bloc des données (H) et bandeau des hypothèses de travail (M) ──────── */
+
+.r5-donnees,
+.r5-bandeau {
+  --f: 1;
+  position: absolute;
+  left: 0;
+  top: 0;
+  box-sizing: border-box;
+  pointer-events: none;
+  color: var(--texte);
+  font-size: calc(11.5px * var(--f));
+  transform-origin: 0 0;
+}
+.r5-donnees {
+  padding: calc(8px * var(--f)) calc(10px * var(--f));
+  background: color-mix(in srgb, var(--couche-0) 5%, var(--r5-carte));
+  border: 1px solid color-mix(in srgb, var(--couche-0) 30%, var(--r5-carte-bord));
+  border-radius: 8px;
+}
+.r5-bloc-titre,
+.r5-bandeau-titre {
+  font-size: calc(10px * var(--f));
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--couche-0);
+  margin-bottom: calc(4px * var(--f));
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  white-space: nowrap;
+}
+.r5-bloc-titre span,
+.r5-bandeau-titre span {
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 450;
+  color: var(--texte-doux);
+}
+.r5-h {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  padding: calc(2px * var(--f)) 4px;
+  margin: 0 -4px;
+  border-radius: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.r5-h.survolee {
+  background: color-mix(in srgb, var(--couche-0) 12%, transparent);
+}
+.r5-h b {
+  color: var(--couche-0);
+  flex: none;
+  width: 1.9em;
+}
+.r5-h span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.r5-h.statut-incertain span::after {
+  content: ' · incertaine';
+  color: var(--r5-reserve);
+  font-size: 0.9em;
+}
+.r5-bandeau-titre {
+  color: var(--r5-modele);
+}
+.r5-bandeau-puces {
+  display: flex;
+  gap: calc(6px * var(--f));
+  flex-wrap: nowrap;
+}
+.r5-m {
+  display: flex;
+  gap: 5px;
+  align-items: baseline;
+  padding: calc(3px * var(--f)) calc(8px * var(--f));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--r5-modele) 9%, var(--r5-carte));
+  border: 1px solid color-mix(in srgb, var(--r5-modele) 35%, transparent);
+  white-space: nowrap;
+  min-width: 0;
+}
+.r5-m.survolee {
+  background: color-mix(in srgb, var(--r5-modele) 20%, var(--r5-carte));
+}
+.r5-m b {
+  color: var(--r5-modele);
+}
+.r5-m span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.r5-m em {
+  font-style: normal;
+  color: var(--texte-doux);
+  font-size: 0.85em;
+}
+.r5-m-dec {
+  font-style: normal;
+  color: var(--r5-decision);
+  font-size: 0.85em;
+}
+
+/* ─── Fiche de survol ───────────────────────────────────────────────────── */
+
+.r5-fiche .r5-f-genre {
+  font-weight: 700;
+}
+.r5-fiche.genre-question .r5-f-genre {
+  color: var(--r5-question);
+}
+.r5-fiche.genre-decision .r5-f-genre {
+  color: var(--r5-decision);
+}
+.r5-fiche.genre-objection .r5-f-genre {
+  color: var(--r5-objection);
+}
+.r5-f-bloc {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--bord);
+}
+.r5-f-titre {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--texte-doux);
+  margin-bottom: 3px;
+}
+.r5-f-bloc.decision .r5-f-titre {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 12px;
+  font-style: italic;
+  color: var(--r5-decision);
+}
+.r5-f-bloc.reserves .r5-f-titre {
+  color: var(--r5-reserve);
+}
+.r5-f-bloc.attaques .r5-f-titre {
+  color: var(--r5-objection);
+}
+.r5-f-liste {
+  margin: 0;
+  padding-left: 16px;
+}
+.r5-f-liste li.grave {
+  color: var(--statut-refute);
+}
+.r5-f-renvoi {
+  color: var(--accent);
+  font-size: 11px;
+}
+.r5-f-statut.statut-incertain {
+  color: var(--r5-reserve);
+}
+.r5-f-statut.statut-refute {
+  color: var(--statut-refute);
+}
+.r5-f-puce {
+  display: inline-block;
+  margin: 1px 4px 1px 0;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 11px;
+}
+.r5-f-puce.h {
+  background: color-mix(in srgb, var(--couche-0) 12%, transparent);
+}
+.r5-f-puce.m {
+  background: color-mix(in srgb, var(--r5-modele) 14%, transparent);
+}
+.r5-f-lien {
+  margin: 2px 0;
+}
+.r5-f-lien.contredit b {
+  color: var(--statut-refute);
+}
+.r5-f-lien.resout b {
+  color: var(--statut-valide);
+}
+.r5-f-refutee {
+  background: color-mix(in srgb, var(--statut-refute) 14%, transparent);
+  color: var(--statut-refute);
+}
+
+/* ─── Panneau ☰ ─────────────────────────────────────────────────────────── */
+
+.r5-anatomie {
+  display: grid;
+  grid-template-columns: 150px 1fr;
+  gap: 10px;
+  align-items: start;
+  font-size: 11.5px;
+}
+.r5-anat-carte {
+  position: relative;
+  margin-top: 14px;
+  padding: 4px 6px 9px 8px;
+  background: var(--r5-carte);
+  border: 1px solid var(--r5-carte-bord);
+  border-left: 3px solid var(--couche-3);
+  border-radius: 6px;
+  box-shadow: var(--r5-ombre);
+}
+.r5-anat-m {
+  position: absolute;
+  right: 6px;
+  top: 0;
+  transform: translateY(-100%);
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--r5-modele);
+  border: 1px solid color-mix(in srgb, var(--r5-modele) 35%, transparent);
+  border-bottom: 0;
+  border-radius: 4px 4px 0 0;
+  padding: 0 4px;
+  background: color-mix(in srgb, var(--r5-modele) 10%, var(--r5-carte));
+}
+.r5-anat-tete {
+  display: flex;
+  justify-content: space-between;
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--couche-3);
+}
+.r5-anat-tete span {
+  color: var(--texte-doux);
+}
+.r5-anat-titre {
+  font-weight: 650;
+  margin: 1px 0 3px;
+}
+.r5-anat-l {
+  font-size: 10px;
+  color: var(--texte-doux);
+  white-space: nowrap;
+}
+.r5-anat-ic {
+  position: absolute;
+  left: 8px;
+  right: 6px;
+  bottom: 3px;
+  height: 3px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, transparent 58%, color-mix(in srgb, var(--couche-3) 55%, transparent) 58% 86%, transparent 86%), color-mix(in srgb, var(--texte) 8%, transparent);
+}
+.r5-anat-legende {
+  margin: 0;
+  padding-left: 14px;
+  color: var(--texte-doux);
+  line-height: 1.4;
+}
+.r5-anat-legende b {
+  color: var(--texte);
+}
+.r5-anat-legende .rouge {
+  color: var(--statut-refute);
+}
+.r5-anat-legende .ambre {
+  color: var(--r5-reserve);
+}
+.r5-anat-legende .orange {
+  color: var(--r5-decision);
+}
+.r5-liste {
+  list-style: none;
+  margin: 0 0 6px;
+  padding: 0;
+}
+.r5-lien {
+  border: 0;
+  background: none;
+  padding: 2px 4px;
+  margin: 0 -4px;
+  border-radius: 4px;
+  text-align: left;
+  cursor: pointer;
+  width: 100%;
+  font-size: 12px;
+  line-height: 1.35;
+}
+.r5-lien:hover {
+  background: var(--surface-2);
+}
+.r5-liste .decision .r5-lien {
+  color: var(--r5-decision);
+}
+.r5-liste .objection .r5-lien,
+.r5-liste .question.refutee .r5-lien {
+  color: var(--statut-refute);
+}
+.r5-liste .question.ouverte .r5-lien {
+  color: var(--r5-question);
+}
+.r5-liste .question.abandonnee .r5-lien {
+  color: var(--texte-doux);
+}
+.r5-liste b {
+  color: var(--r5-modele);
+}
+.r5-d-titre {
+  font-weight: 650;
+  margin-bottom: 4px;
+}
+.r5-d-liste {
+  margin: 0 0 6px;
+  padding-left: 20px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.r5-d-liste li.statut-incertain {
+  color: var(--r5-reserve);
+}
+.r5-d-liste li.statut-refute {
+  color: var(--statut-refute);
+}
+.r5-d-type {
+  display: inline-block;
+  min-width: 74px;
+  font-size: 10px;
+  color: var(--texte-doux);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}

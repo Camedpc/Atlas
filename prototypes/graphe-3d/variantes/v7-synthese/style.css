@@ -1,0 +1,1315 @@
+/* V7 · Synthèse — un seul langage visuel : la figure de revue de V1 (papier, encre, palette
+   désaturée), habillée en application. Les variables sont posées sur <body> (panneau, palette,
+   bouton) et sur « #app .atlas-vue » (spécificité supérieure à la feuille du moteur, injectée après). */
+
+body[data-theme='clair'],
+#app .atlas-vue[data-theme='clair'] {
+  --police: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --police-titre: 'Source Serif 4', 'Source Serif Pro', Georgia, 'Times New Roman', serif;
+  --police-mono: 'Cascadia Mono', 'SF Mono', Consolas, ui-monospace, monospace;
+  --fond: #f6f4ee;
+  --surface: #fdfcf9;
+  --surface-2: #efece4;
+  --bord: #dcd7cb;
+  --filet: #cfc9bb;
+  --ombre: 0 1px 1px rgba(40, 32, 20, 0.05), 0 6px 18px rgba(40, 32, 20, 0.07);
+  --texte: #1f1d1a;
+  --texte-doux: #6b665c;
+  --accent: #22477a;
+  --bordure-noeud: #f6f4ee;
+  --arete: #8f8a80;
+  --ancetre: #b8612a;
+  --descendant: #6a4c93;
+  --statut-valide: #4d8a6a;
+  --statut-incertain: #c99a3c;
+  --statut-refute: #b5524a;
+  --validation-aucune: #bdb7aa;
+  --validation-ia: #8a7fb0;
+  --validation-humain: #4f6f98;
+  --validation-ia-humain: #22477a;
+  --origine-humain: #4f6f98;
+  --origine-ia: #8a7fb0;
+  --origine-ordinateur: #6f8a73;
+  --domaine-0: #4e6e9a;
+  --domaine-1: #8a6d9e;
+  --domaine-2: #3f8583;
+  --domaine-3: #a9744f;
+  --domaine-4: #7d8a3e;
+  --domaine-5: #b0607a;
+  --axe-x: #b5524a;
+  --axe-y: #4d8a6a;
+  --axe-z: #4e6e9a;
+  --gizmo-fond: rgba(40, 32, 20, 0.06);
+  --gizmo-texte: #fdfcf9;
+  --grain-opacite: 0.5;
+  --voile: rgba(31, 29, 26, 0.18);
+}
+
+body[data-theme='sombre'],
+#app .atlas-vue[data-theme='sombre'] {
+  --police: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --police-titre: 'Source Serif 4', 'Source Serif Pro', Georgia, serif;
+  --police-mono: 'Cascadia Mono', 'SF Mono', Consolas, ui-monospace, monospace;
+  --fond: #16171a;
+  --surface: #1e2024;
+  --surface-2: #26292e;
+  --bord: #363940;
+  --filet: #3e4148;
+  --ombre: 0 1px 2px rgba(0, 0, 0, 0.35), 0 8px 22px rgba(0, 0, 0, 0.35);
+  --texte: #ebe7df;
+  --texte-doux: #a39e94;
+  --accent: #8fb0e0;
+  --bordure-noeud: #16171a;
+  --arete: #7d7a74;
+  --ancetre: #e0915a;
+  --descendant: #a78bd0;
+  --statut-valide: #74b892;
+  --statut-incertain: #dcb462;
+  --statut-refute: #dd7c70;
+  --validation-aucune: #6c6960;
+  --validation-ia: #a79ccc;
+  --validation-humain: #7f9cc6;
+  --validation-ia-humain: #b5cdef;
+  --origine-humain: #7f9cc6;
+  --origine-ia: #a79ccc;
+  --origine-ordinateur: #8fae93;
+  --domaine-0: #7f9cc6;
+  --domaine-1: #b095c4;
+  --domaine-2: #6bb1ae;
+  --domaine-3: #cc9a74;
+  --domaine-4: #a7b566;
+  --domaine-5: #d58aa2;
+  --axe-x: #dd7c70;
+  --axe-y: #74b892;
+  --axe-z: #7f9cc6;
+  --gizmo-fond: rgba(255, 255, 255, 0.07);
+  --gizmo-texte: #16171a;
+  --grain-opacite: 0.35;
+  --voile: rgba(0, 0, 0, 0.4);
+}
+
+/* ─── Mise en page : panneau + scène ────────────────────────────────────── */
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+}
+body {
+  display: flex;
+  background: var(--fond);
+  color: var(--texte);
+  font-family: var(--police);
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+}
+body *,
+body *::before,
+body *::after {
+  box-sizing: border-box;
+}
+#app {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+}
+body button {
+  font: inherit;
+  color: inherit;
+}
+kbd {
+  font: 10.5px var(--police);
+  padding: 0 4px;
+  min-width: 16px;
+  display: inline-block;
+  text-align: center;
+  border: 1px solid var(--bord);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--texte-doux);
+  line-height: 15px;
+}
+
+/* ─── Panneau gauche ────────────────────────────────────────────────────── */
+
+.v7-panneau {
+  --largeur-panneau: 356px;
+  flex: none;
+  width: 0;
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+  z-index: 30;
+  background: var(--surface);
+  border-right: 1px solid transparent;
+  transition: width 0.22s cubic-bezier(0.2, 0.7, 0.2, 1), border-color 0.22s, transform 0.22s cubic-bezier(0.2, 0.7, 0.2, 1), box-shadow 0.22s;
+}
+body.panneau-ouvert .v7-panneau {
+  width: var(--largeur-panneau);
+  border-right-color: var(--bord);
+}
+/* Surimpression : le panneau flotte au-dessus de la scène, qui garde toute la largeur. */
+body[data-panneau='surimpression'] .v7-panneau {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: var(--largeur-panneau);
+  transform: translateX(-102%);
+}
+body[data-panneau='surimpression'].panneau-ouvert .v7-panneau {
+  transform: none;
+  box-shadow: 0 0 0 1px var(--bord), 0 18px 48px rgba(40, 32, 20, 0.16);
+}
+body.sans-transition .v7-panneau {
+  transition: none;
+}
+.v7-panneau-interieur {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--largeur-panneau);
+  display: flex;
+  flex-direction: column;
+}
+.v7-moteur {
+  display: none;
+}
+.v7-panneau-entete {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 12px 8px 58px;
+  min-height: 56px;
+}
+.v7-marque {
+  flex: 1;
+  font-family: var(--police-titre);
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.v7-marque span {
+  font-family: var(--police);
+  font-size: 11px;
+  font-weight: 500;
+  font-variant: small-caps;
+  text-transform: lowercase;
+  letter-spacing: 0.07em;
+  color: var(--texte-doux);
+}
+.v7-bouton-icone {
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  border: 1px solid var(--bord);
+  background: var(--surface);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--texte-doux);
+}
+.v7-bouton-icone:hover {
+  color: var(--texte);
+  border-color: var(--texte-doux);
+}
+
+.v7-onglets {
+  display: flex;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--bord);
+}
+.v7-onglets button {
+  position: relative;
+  flex: 1;
+  border: 0;
+  background: none;
+  padding: 9px 2px 8px;
+  cursor: pointer;
+  color: var(--texte-doux);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+.v7-onglets button:hover,
+.v7-onglets button.actif {
+  color: var(--texte);
+}
+.v7-onglets button.actif::after {
+  content: '';
+  position: absolute;
+  left: 16%;
+  right: 16%;
+  bottom: -1px;
+  height: 2px;
+  background: var(--texte);
+}
+.v7-pastille-onglet {
+  display: none;
+  position: absolute;
+  top: 7px;
+  right: 12%;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.v7-onglets button.signal .v7-pastille-onglet {
+  display: block;
+}
+.v7-panneau-corps {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-width: thin;
+}
+.v7-page {
+  display: none;
+  padding: 12px 18px 22px;
+}
+.v7-panneau[data-onglet='graphe'] .v7-page[data-page='graphe'],
+.v7-panneau[data-onglet='noeud'] .v7-page[data-page='noeud'],
+.v7-panneau[data-onglet='activite'] .v7-page[data-page='activite'],
+.v7-panneau[data-onglet='reglages'] .v7-page[data-page='reglages'] {
+  display: block;
+}
+.v7-panneau-pied {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 8px 16px 10px;
+  border-top: 1px solid var(--bord);
+  font-size: 11px;
+  color: var(--texte-doux);
+}
+.v7-panneau-pied a {
+  margin-left: auto;
+  color: var(--texte-doux);
+  text-decoration: none;
+  border-bottom: 1px dotted currentColor;
+}
+.v7-panneau-pied a:hover {
+  color: var(--accent);
+}
+
+/* Titres de groupe : petites capitales, comme une légende de figure. */
+.v7-page h5,
+.v7-legende h5 {
+  margin: 16px 0 6px;
+  font-size: 11px;
+  font-weight: 600;
+  font-variant: small-caps;
+  text-transform: lowercase;
+  letter-spacing: 0.07em;
+  color: var(--texte-doux);
+}
+.v7-doux {
+  color: var(--texte-doux);
+}
+.v7-mono {
+  font-family: var(--police-mono);
+  font-size: 11px;
+}
+.v7-bouton {
+  padding: 5px 10px;
+  border-radius: 5px;
+  border: 1px solid var(--bord);
+  background: var(--surface);
+  cursor: pointer;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.v7-bouton:hover:not(:disabled) {
+  border-color: var(--texte-doux);
+}
+.v7-bouton:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.v7-boutons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.v7-lien {
+  border: 0;
+  background: none;
+  padding: 1px 0;
+  color: var(--accent);
+  cursor: pointer;
+  text-align: left;
+  font-size: 12.5px;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.v7-lien:hover {
+  text-decoration: underline;
+}
+.v7-point {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+}
+
+/* Sections du moteur (filtres, catégories) déplacées dans l'onglet Graphe. */
+.v7-page .atlas-section {
+  border-bottom: 1px solid var(--bord);
+  margin: 0 -18px;
+}
+.v7-page .atlas-section > summary {
+  padding: 10px 18px;
+  font-family: var(--police-titre);
+  font-size: 14.5px;
+  font-weight: 600;
+}
+.v7-page .atlas-section-corps {
+  padding: 0 18px 14px;
+}
+.v7-page .atlas-groupe-titre {
+  font-size: 11px;
+  font-weight: 600;
+  font-variant: small-caps;
+  text-transform: lowercase;
+  letter-spacing: 0.07em;
+}
+.v7-page .atlas-puce,
+.v7-page .atlas-bouton,
+.v7-page .atlas-recherche {
+  border-radius: 4px;
+}
+.v7-page .atlas-puce {
+  background: var(--surface);
+}
+.v7-page .atlas-recherche {
+  background: var(--surface);
+}
+.v7-page .atlas-arbre-ligne.niveau-0 .atlas-arbre-nom {
+  font-weight: 600;
+}
+.v7-page .atlas-arbre-ligne.niveau-2 .atlas-arbre-nom {
+  font-family: var(--police-titre);
+  font-style: italic;
+}
+
+.v7-apercu {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 2px 0 14px;
+  border-bottom: 1px solid var(--bord);
+  margin: 0 -18px;
+  padding-left: 18px;
+  padding-right: 18px;
+}
+.v7-apercu-ligne {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+}
+.v7-apercu-ligne b {
+  font-size: 15px;
+  font-family: var(--police-titre);
+}
+
+/* Légende */
+.v7-legende {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.v7-legende h5:first-child {
+  margin-top: 0;
+}
+.v7-legende-ligne {
+  display: grid;
+  grid-template-columns: 26px 1fr;
+  align-items: center;
+  gap: 8px;
+  min-height: 22px;
+  line-height: 1.35;
+  font-size: 12.5px;
+}
+.v7-legende-ligne svg {
+  display: block;
+  justify-self: center;
+}
+.v7-legende-ligne small {
+  color: var(--texte-doux);
+  font-size: 11.5px;
+}
+.v7-legende-note {
+  color: var(--texte-doux);
+  line-height: 1.8;
+  font-size: 12px;
+  margin: 0;
+}
+
+/* Nœud sélectionné */
+.v7-vide {
+  padding: 18px 0;
+}
+.v7-vide p {
+  margin: 0 0 8px;
+  line-height: 1.5;
+}
+.v7-surtitre {
+  font-size: 11px;
+  font-weight: 600;
+  font-variant: small-caps;
+  text-transform: lowercase;
+  letter-spacing: 0.07em;
+  color: var(--texte-doux);
+}
+.v7-surtitre .v7-mono {
+  font-variant: normal;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 400;
+}
+.v7-titre {
+  margin: 2px 0 4px;
+  font-family: var(--police-titre);
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.22;
+}
+.v7-fil {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 6px;
+  align-items: baseline;
+  font-family: var(--police-titre);
+  font-style: italic;
+  color: var(--texte-doux);
+}
+.v7-fil .v7-lien {
+  font-size: 12.5px;
+  color: var(--texte-doux);
+}
+.v7-fil .v7-lien:hover {
+  color: var(--accent);
+}
+.v7-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0 4px;
+}
+.v7-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  padding: 1px 8px;
+  border-radius: 3px;
+  border: 1px solid var(--bord);
+}
+.v7-enonce {
+  margin: 10px 0;
+  padding: 2px 0 2px 12px;
+  border-left: 2px solid var(--filet);
+  font-family: var(--police-titre);
+  font-size: 14.5px;
+  line-height: 1.5;
+}
+.v7-confiance {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+.v7-num {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.v7-num small {
+  font-weight: 400;
+  color: var(--texte-doux);
+}
+.v7-lignee {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  align-items: center;
+  font-size: 12.5px;
+}
+.v7-lignee > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.v7-demos,
+.v7-journal,
+.v7-agents,
+.v7-verrous,
+.v7-conflits,
+.v7-sessions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.v7-demos li {
+  padding: 7px 0;
+  border-top: 1px solid var(--bord);
+}
+.v7-demo-tete {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.v7-validite {
+  font-size: 10.5px;
+  font-weight: 600;
+  font-variant: small-caps;
+  text-transform: lowercase;
+  letter-spacing: 0.05em;
+  padding: 0 6px;
+  border-radius: 3px;
+  background: var(--surface-2);
+}
+.v7-validite.valide {
+  color: var(--statut-valide);
+}
+.v7-validite.invalide {
+  color: var(--statut-refute);
+}
+.v7-validite.a_verifier {
+  color: var(--statut-incertain);
+}
+.v7-liens {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-top: 3px;
+}
+.v7-journal {
+  position: relative;
+  padding-left: 14px;
+}
+.v7-journal::before {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 6px;
+  bottom: 6px;
+  width: 1px;
+  background: var(--filet);
+}
+.v7-journal li {
+  position: relative;
+  padding: 3px 0 5px;
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+.v7-journal li::before {
+  content: '';
+  position: absolute;
+  left: -14px;
+  top: 8px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 1px solid var(--texte-doux);
+}
+.v7-journal time {
+  display: block;
+  font-size: 11px;
+  color: var(--texte-doux);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Activité (maquette) */
+.v7-maquette {
+  font-size: 11.5px;
+  color: var(--texte-doux);
+  font-style: italic;
+  font-family: var(--police-titre);
+  padding: 6px 10px;
+  border: 1px dashed var(--filet);
+  border-radius: 4px;
+}
+.v7-agents li,
+.v7-verrous li {
+  display: grid;
+  grid-template-columns: 30px 1fr;
+  gap: 10px;
+  padding: 8px 0;
+  border-top: 1px solid var(--bord);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+.v7-avatar {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  font-size: 10px;
+  font-weight: 700;
+  border: 1.5px solid var(--c);
+  color: var(--c);
+  background: var(--surface);
+  border-radius: 6px;
+}
+.v7-avatar.humain {
+  border-radius: 50%;
+  background: var(--c);
+  color: #fff;
+}
+.v7-avatar.calcul {
+  border-radius: 2px;
+}
+.v7-agent-tete {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+.v7-etat {
+  font-size: 10.5px;
+  font-weight: 600;
+  font-variant: small-caps;
+  text-transform: lowercase;
+  letter-spacing: 0.05em;
+  color: var(--texte-doux);
+}
+.v7-etat.actif {
+  color: #3b9a62;
+}
+.v7-etat.actif::before {
+  content: '●';
+  margin-right: 3px;
+  font-size: 8px;
+}
+.v7-agent-zone .v7-lien {
+  font-size: 12px;
+  display: inline;
+}
+.v7-cadenas {
+  width: 14px;
+  height: 16px;
+  margin: 3px auto 0;
+  position: relative;
+}
+.v7-cadenas::before {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 0;
+  width: 8px;
+  height: 8px;
+  border: 1.5px solid var(--texte);
+  border-bottom: 0;
+  border-radius: 5px 5px 0 0;
+}
+.v7-cadenas::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 7px;
+  width: 14px;
+  height: 9px;
+  border-radius: 2px;
+  background: var(--texte);
+}
+.v7-conflits li {
+  padding: 8px 10px;
+  margin: 6px 0;
+  border: 1px solid var(--bord);
+  border-left: 3px solid var(--statut-incertain);
+  border-radius: 4px;
+  font-size: 12.5px;
+  line-height: 1.4;
+  background: var(--surface);
+}
+.v7-conflit-tete strong {
+  font-family: var(--police-titre);
+  font-size: 13.5px;
+}
+.v7-sessions li {
+  display: grid;
+  grid-template-columns: 44px 1fr auto;
+  gap: 8px;
+  padding: 5px 0;
+  border-top: 1px solid var(--bord);
+  font-size: 12px;
+  align-items: baseline;
+}
+
+/* Réglages d'usage */
+.v7-reglage {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 8px 0 10px;
+  font-size: 12.5px;
+}
+.v7-segment {
+  display: flex;
+  border: 1px solid var(--bord);
+  border-radius: 5px;
+  overflow: hidden;
+}
+.v7-segment button {
+  flex: 1;
+  border: 0;
+  background: var(--surface);
+  padding: 5px 6px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--texte-doux);
+}
+.v7-segment button + button {
+  border-left: 1px solid var(--bord);
+}
+.v7-segment button.actif {
+  background: var(--texte);
+  color: var(--fond);
+}
+.v7-bascule {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  position: relative;
+}
+.v7-bascule > span {
+  display: flex;
+  flex-direction: column;
+}
+.v7-bascule small {
+  color: var(--texte-doux);
+  font-size: 11px;
+  margin-top: 1px;
+}
+.v7-bascule input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.v7-bascule i {
+  flex: none;
+  width: 30px;
+  height: 17px;
+  border-radius: 9px;
+  background: var(--surface-2);
+  border: 1px solid var(--bord);
+  position: relative;
+  transition: background 0.15s;
+}
+.v7-bascule i::after {
+  content: '';
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  transition: transform 0.15s;
+}
+.v7-bascule input:checked + i {
+  background: var(--texte);
+  border-color: var(--texte);
+}
+.v7-bascule input:checked + i::after {
+  transform: translateX(13px);
+}
+.v7-bascule input:focus-visible + i {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.v7-raccourcis {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 5px 12px;
+  margin: 0;
+  font-size: 12px;
+  align-items: baseline;
+}
+.v7-raccourcis dt {
+  text-align: right;
+}
+.v7-raccourcis dd {
+  margin: 0;
+  color: var(--texte-doux);
+}
+
+/* ─── Bouton ☰ ──────────────────────────────────────────────────────────── */
+
+.v7-bouton-panneau {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 40;
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  border: 1px solid var(--bord);
+  background: var(--surface);
+  box-shadow: var(--ombre);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+.v7-bouton-panneau:hover {
+  border-color: var(--texte-doux);
+}
+.v7-burger {
+  display: grid;
+  gap: 3.5px;
+  width: 16px;
+}
+.v7-burger i {
+  display: block;
+  height: 1.6px;
+  border-radius: 1px;
+  background: var(--texte);
+  transition: transform 0.2s, opacity 0.2s;
+}
+.v7-bouton-panneau.actif .v7-burger i:nth-child(1) {
+  transform: translateY(5.1px) rotate(45deg);
+}
+.v7-bouton-panneau.actif .v7-burger i:nth-child(2) {
+  opacity: 0;
+}
+.v7-bouton-panneau.actif .v7-burger i:nth-child(3) {
+  transform: translateY(-5.1px) rotate(-45deg);
+}
+.v7-signal {
+  display: none;
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px var(--surface);
+}
+.v7-bouton-panneau.signal .v7-signal {
+  display: block;
+}
+
+/* ─── Racine de la vue : papier, grain, interface du moteur restylée ───── */
+
+#app .atlas-vue.v7 {
+  font-family: var(--police);
+}
+.atlas-vue.v7::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: calc(var(--grain-opacite) * var(--grain, 1));
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='g'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.45  0 0 0 0 0.4  0 0 0 0 0.3  0 0 0 0.09 0'/></filter><rect width='100%' height='100%' filter='url(%23g)'/></svg>");
+}
+.atlas-vue.v7[data-theme='sombre']::before {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='g'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.05 0'/></filter><rect width='100%' height='100%' filter='url(%23g)'/></svg>");
+}
+.atlas-vue.v7 .atlas-barre,
+.atlas-vue.v7 .atlas-gran,
+.atlas-vue.v7 .atlas-histo {
+  border-radius: 6px;
+}
+.atlas-vue.v7 .atlas-barre button {
+  border-radius: 4px;
+}
+.atlas-vue.v7 .atlas-barre button.actif {
+  background: var(--texte);
+  color: var(--fond);
+}
+.atlas-vue.v7 .atlas-gran-entete {
+  font-family: var(--police-titre);
+  font-weight: 600;
+}
+.atlas-vue.v7 .atlas-gran-ligne input,
+.atlas-vue.v7 .atlas-groupe input[type='range'] {
+  accent-color: var(--texte);
+}
+.atlas-vue.v7 .atlas-reglages.masque {
+  display: none;
+}
+.atlas-vue.v7 .atlas-aide {
+  border-radius: 6px;
+}
+
+/* Légende de figure (en haut à gauche, à côté du bouton ☰) */
+.v7-legende-figure {
+  position: absolute;
+  top: 12px;
+  left: 60px;
+  font-family: var(--police-titre);
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--texte-doux);
+  pointer-events: none !important;
+  transition: left 0.22s;
+}
+body.panneau-ouvert[data-panneau='pousse'] .v7-legende-figure {
+  left: 14px;
+}
+.v7-panneau-lettre {
+  font-family: var(--police);
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--texte);
+  margin-right: 6px;
+}
+.v7-legende-titre {
+  font-weight: 600;
+  color: var(--texte);
+}
+/* La légende ne doit jamais passer sous la barre des vues (centrée, ~560 px) : largeur bornée
+   par la moitié de la scène, et masquée quand la scène est trop étroite. */
+#app .atlas-vue.v7 {
+  container-type: inline-size;
+}
+.v7-legende-figure {
+  max-width: min(330px, calc(50% - 350px));
+}
+@container (max-width: 1180px) {
+  .v7-legende-figure {
+    display: none;
+  }
+}
+body.panneau-ouvert[data-panneau='surimpression'] .v7-legende-figure {
+  opacity: 0;
+}
+/* Surimpression : le bas de l'interface (granularité, histogramme) se décale à droite du panneau. */
+.atlas-vue.v7 .atlas-bas {
+  transition: left 0.22s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+body.panneau-ouvert[data-panneau='surimpression'] .atlas-vue.v7 .atlas-bas {
+  left: calc(var(--largeur-panneau, 356px) + 12px);
+}
+
+/* ─── Fiche de survol ───────────────────────────────────────────────────── */
+
+.atlas-vue.v7 .atlas-fiche {
+  border-radius: 4px;
+  padding: 11px 14px 10px;
+  min-width: 260px;
+  max-width: 320px;
+  background: var(--surface);
+  border: 1px solid var(--bord);
+  box-shadow: var(--ombre);
+}
+.v7-fiche {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.v7-fiche-surtitre {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10.5px;
+  font-weight: 600;
+  font-variant: small-caps;
+  text-transform: lowercase;
+  letter-spacing: 0.08em;
+  color: var(--texte-doux);
+}
+.v7-disque {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.v7-fiche-titre {
+  font-family: var(--police-titre);
+  font-weight: 600;
+  font-size: 16px;
+  line-height: 1.25;
+  margin-top: -2px;
+}
+.v7-cles {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding-top: 6px;
+  border-top: 1px solid var(--bord);
+}
+.v7-cle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  flex-wrap: wrap;
+}
+.v7-colonne {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+}
+.v7-statut {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 600;
+  min-width: 70px;
+}
+.v7-statut i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.v7-grand {
+  font-family: var(--police-titre);
+  font-size: 17px;
+}
+.v7-echelle .v7-piste {
+  stroke: var(--texte-doux);
+  stroke-width: 0.8;
+  opacity: 0.6;
+}
+.v7-echelle .v7-graduation {
+  stroke: var(--texte-doux);
+  stroke-width: 0.8;
+}
+.v7-echelle .v7-losange {
+  stroke: var(--surface);
+  stroke-width: 1;
+}
+.v7-glyphe {
+  flex: none;
+}
+.v7-statuts {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.v7-statuts-barre {
+  display: flex;
+  gap: 2px;
+  height: 7px;
+  max-width: 100%;
+}
+.v7-statuts-barre span {
+  border-radius: 1px;
+}
+.v7-statuts-legende {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  font-size: 11.5px;
+  color: var(--texte-doux);
+}
+.v7-statuts-legende span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.v7-statuts-legende i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+.v7-statuts-legende b {
+  color: var(--texte);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.v7-histo .v7-axe {
+  stroke: var(--texte-doux);
+  stroke-width: 0.8;
+}
+.v7-histo-axe {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10.5px;
+  color: var(--texte-doux);
+  width: 240px;
+}
+.v7-principaux {
+  font-size: 12px;
+}
+.v7-principaux ol {
+  margin: 2px 0 0;
+  padding-left: 18px;
+  font-family: var(--police-titre);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+.v7-principaux small {
+  font-family: var(--police);
+  color: var(--texte-doux);
+  font-size: 11px;
+}
+.v7-fiche-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding-top: 6px;
+  border-top: 1px dotted var(--bord);
+}
+.v7-fiche-chemin {
+  font-family: var(--police-titre);
+  font-style: italic;
+  font-size: 12px;
+  color: var(--texte-doux);
+}
+.v7-fiche-enonce {
+  margin: 0;
+  font-family: var(--police-titre);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+.v7-grille {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 10px;
+  margin: 0;
+  font-size: 11.5px;
+}
+.v7-grille dt {
+  color: var(--texte-doux);
+}
+.v7-grille dd {
+  margin: 0;
+}
+.v7-fiche-aide {
+  font-size: 10.5px;
+  color: var(--texte-doux);
+  font-style: italic;
+  font-family: var(--police-titre);
+  border-top: 1px solid var(--bord);
+  padding-top: 5px;
+  margin-top: 1px;
+}
+
+/* ─── Palette de commandes ──────────────────────────────────────────────── */
+
+.v7-palette {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: none;
+  background: var(--voile);
+  padding-top: 12vh;
+}
+.v7-palette.ouverte {
+  display: block;
+}
+.v7-palette-boite {
+  width: min(620px, calc(100% - 32px));
+  margin: 0 auto;
+  background: var(--surface);
+  border: 1px solid var(--bord);
+  border-radius: 6px;
+  box-shadow: 0 24px 60px rgba(20, 16, 10, 0.25);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  max-height: 66vh;
+}
+.v7-palette-entete {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--bord);
+}
+.v7-palette-loupe {
+  font-size: 18px;
+  color: var(--texte-doux);
+}
+.v7-palette-champ {
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--texte);
+  font: 16px var(--police-titre);
+}
+.v7-palette-liste {
+  overflow: auto;
+  padding: 4px 0 8px;
+}
+.v7-palette-groupe {
+  padding: 10px 16px 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+  font-variant: small-caps;
+  text-transform: lowercase;
+  letter-spacing: 0.08em;
+  color: var(--texte-doux);
+}
+.v7-palette-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 16px;
+  cursor: pointer;
+}
+.v7-palette-item.actif {
+  background: var(--surface-2);
+  box-shadow: inset 2px 0 0 var(--texte);
+}
+.v7-palette-pastille {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--bord);
+}
+.v7-palette-textes {
+  flex: 1;
+  min-width: 0;
+}
+.v7-palette-titre {
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.v7-palette-titre mark {
+  background: none;
+  color: var(--accent);
+  font-weight: 600;
+}
+.v7-palette-sous {
+  font-size: 11.5px;
+  color: var(--texte-doux);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.v7-palette-vide {
+  padding: 16px;
+  color: var(--texte-doux);
+}
+.v7-palette-pied {
+  display: flex;
+  gap: 16px;
+  padding: 8px 14px;
+  border-top: 1px solid var(--bord);
+  font-size: 11px;
+  color: var(--texte-doux);
+}
+
+@media (max-width: 760px) {
+  .v7-panneau {
+    --largeur-panneau: min(356px, 92vw);
+  }
+  body[data-panneau='pousse'] .v7-panneau {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+  }
+}

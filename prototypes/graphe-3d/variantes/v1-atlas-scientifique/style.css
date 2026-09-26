@@ -1,0 +1,547 @@
+/* V1 · Atlas scientifique — esthétique de figure de revue (papier, encre, palette désaturée).
+   Les variables sont posées à la fois sur <body> (panneau latéral, bouton) et sur la racine
+   .atlas-vue.v1 (spécificité supérieure à celle du moteur, dont la feuille est injectée après). */
+
+body[data-theme='clair'],
+.atlas-vue.v1[data-theme='clair'] {
+  --police: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --police-titre: 'Source Serif 4', 'Source Serif Pro', Georgia, 'Times New Roman', serif;
+  --fond: #f6f4ee;
+  --surface: #fdfcf9;
+  --surface-2: #efece4;
+  --bord: #dcd7cb;
+  --ombre: 0 1px 1px rgba(40, 32, 20, 0.05), 0 6px 18px rgba(40, 32, 20, 0.07);
+  --texte: #1f1d1a;
+  --texte-doux: #6b665c;
+  --accent: #22477a;
+  --bordure-noeud: #f6f4ee;
+  --arete: #8f8a80;
+  --ancetre: #b8612a;
+  --descendant: #6a4c93;
+  --statut-valide: #4d8a6a;
+  --statut-incertain: #c99a3c;
+  --statut-refute: #b5524a;
+  --validation-aucune: #bdb7aa;
+  --validation-ia: #8a7fb0;
+  --validation-humain: #4f6f98;
+  --validation-ia-humain: #22477a;
+  --origine-humain: #4f6f98;
+  --origine-ia: #8a7fb0;
+  --origine-ordinateur: #6f8a73;
+  --domaine-0: #4e6e9a;
+  --domaine-1: #8a6d9e;
+  --domaine-2: #3f8583;
+  --domaine-3: #a9744f;
+  --domaine-4: #7d8a3e;
+  --domaine-5: #b0607a;
+  --axe-x: #b5524a;
+  --axe-y: #4d8a6a;
+  --axe-z: #4e6e9a;
+  --gizmo-fond: rgba(40, 32, 20, 0.06);
+  --gizmo-texte: #fdfcf9;
+  --grain-opacite: 0.5;
+  --filet: #cfc9bb;
+}
+
+body[data-theme='sombre'],
+.atlas-vue.v1[data-theme='sombre'] {
+  --police: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --police-titre: 'Source Serif 4', 'Source Serif Pro', Georgia, serif;
+  --fond: #16171a;
+  --surface: #1e2024;
+  --surface-2: #26292e;
+  --bord: #363940;
+  --ombre: 0 1px 2px rgba(0, 0, 0, 0.35), 0 8px 22px rgba(0, 0, 0, 0.35);
+  --texte: #ebe7df;
+  --texte-doux: #a39e94;
+  --accent: #8fb0e0;
+  --bordure-noeud: #16171a;
+  --arete: #7d7a74;
+  --ancetre: #e0915a;
+  --descendant: #a78bd0;
+  --statut-valide: #74b892;
+  --statut-incertain: #dcb462;
+  --statut-refute: #dd7c70;
+  --validation-aucune: #6c6960;
+  --validation-ia: #a79ccc;
+  --validation-humain: #7f9cc6;
+  --validation-ia-humain: #b5cdef;
+  --origine-humain: #7f9cc6;
+  --origine-ia: #a79ccc;
+  --origine-ordinateur: #8fae93;
+  --domaine-0: #7f9cc6;
+  --domaine-1: #b095c4;
+  --domaine-2: #6bb1ae;
+  --domaine-3: #cc9a74;
+  --domaine-4: #a7b566;
+  --domaine-5: #d58aa2;
+  --axe-x: #dd7c70;
+  --axe-y: #74b892;
+  --axe-z: #7f9cc6;
+  --gizmo-fond: rgba(255, 255, 255, 0.07);
+  --gizmo-texte: #16171a;
+  --grain-opacite: 0.35;
+  --filet: #3e4148;
+}
+
+/* Choix de police (réglage « police ») */
+body[data-police='inter'],
+.atlas-vue.v1[data-police='inter'] {
+  --police-titre: 'Inter', system-ui, sans-serif;
+}
+body[data-police='plex'],
+.atlas-vue.v1[data-police='plex'] {
+  --police: 'IBM Plex Sans', 'Inter', system-ui, sans-serif;
+  --police-titre: 'IBM Plex Serif', Georgia, serif;
+}
+
+/* ─── Mise en page : le panneau pousse le graphe ─────────────────────────── */
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+}
+body {
+  display: flex;
+  background: var(--fond);
+  color: var(--texte);
+  font-family: var(--police);
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+}
+body *,
+body *::before,
+body *::after {
+  box-sizing: border-box;
+}
+#app {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+}
+
+.v1-cote {
+  flex: none;
+  width: 0;
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+  background: var(--surface);
+  border-right: 1px solid transparent;
+  transition: width 0.28s cubic-bezier(0.2, 0.7, 0.2, 1), border-color 0.28s;
+}
+body.cote-ouvert .v1-cote {
+  width: 344px;
+  border-right-color: var(--bord);
+}
+.v1-cote-interieur {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 344px;
+  display: flex;
+  flex-direction: column;
+}
+
+.v1-bouton-cote {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 40;
+  width: 34px;
+  height: 34px;
+  border-radius: 6px;
+  border: 1px solid var(--bord);
+  background: var(--surface);
+  color: var(--texte);
+  box-shadow: var(--ombre);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+.v1-bouton-cote:hover,
+body.cote-ouvert .v1-bouton-cote {
+  border-color: var(--texte-doux);
+}
+
+/* Le panneau du moteur est monté dans notre colonne : on neutralise son positionnement. */
+.v1-cote .atlas-panneau {
+  position: relative;
+  inset: auto;
+  flex: 1;
+  width: auto;
+  min-height: 0;
+  transform: none;
+  box-shadow: none;
+  border-right: 0;
+  background: transparent;
+  z-index: auto;
+}
+.v1-cote .atlas-bouton-menu {
+  display: none;
+}
+.v1-cote button {
+  font: inherit;
+  color: inherit;
+}
+.v1-cote .atlas-panneau-entete {
+  padding: 16px 16px 8px 58px;
+  border-bottom: 0;
+  font-family: var(--police-titre);
+}
+.v1-cote .atlas-panneau-entete strong {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.v1-cote .atlas-panneau-entete span {
+  font-family: var(--police);
+  font-size: 11px;
+  font-variant: small-caps;
+  letter-spacing: 0.06em;
+  text-transform: lowercase;
+}
+
+/* Onglets */
+.v1-onglets {
+  display: flex;
+  gap: 0;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--bord);
+}
+.v1-onglets button {
+  position: relative;
+  flex: 1;
+  border: 0;
+  background: none;
+  padding: 9px 2px 8px;
+  cursor: pointer;
+  color: var(--texte-doux);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+.v1-onglets button:hover {
+  color: var(--texte);
+}
+.v1-onglets button.actif {
+  color: var(--texte);
+}
+.v1-onglets button.actif::after {
+  content: '';
+  position: absolute;
+  left: 18%;
+  right: 18%;
+  bottom: -1px;
+  height: 2px;
+  background: var(--texte);
+}
+.v1-onglets button .v1-pastille-onglet {
+  display: none;
+  position: absolute;
+  top: 7px;
+  right: 10%;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.v1-onglets button.signal .v1-pastille-onglet {
+  display: block;
+}
+.v1-cote .atlas-section {
+  display: none;
+  border-bottom: 0;
+}
+.v1-cote .atlas-section > summary {
+  display: none;
+}
+.v1-cote[data-onglet='filtres'] .atlas-section[data-id='filtres'],
+.v1-cote[data-onglet='categories'] .atlas-section[data-id='categories'],
+.v1-cote[data-onglet='selection'] .atlas-section[data-id='selection'],
+.v1-cote[data-onglet='legende'] .atlas-section[data-id='legende'] {
+  display: block;
+}
+.v1-cote .atlas-section-corps {
+  padding: 14px 18px 18px;
+}
+.v1-cote .atlas-groupe-titre {
+  font-size: 11px;
+  font-variant: small-caps;
+  text-transform: lowercase;
+  letter-spacing: 0.07em;
+  font-weight: 600;
+  color: var(--texte-doux);
+}
+.v1-cote .atlas-puce {
+  border-radius: 3px;
+  background: var(--surface);
+}
+.v1-cote .atlas-bouton {
+  border-radius: 4px;
+}
+.v1-cote .atlas-recherche {
+  border-radius: 4px;
+  background: var(--surface);
+}
+.v1-cote .atlas-detail h3 {
+  font-family: var(--police-titre);
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+.v1-cote .atlas-enonce {
+  font-family: var(--police-titre);
+  font-size: 14px;
+  background: none;
+  border-left: 2px solid var(--filet);
+  border-radius: 0;
+  padding: 2px 0 2px 12px;
+}
+.v1-cote .atlas-badge {
+  border-radius: 3px;
+}
+.v1-cote .atlas-arbre-ligne.niveau-0 .atlas-arbre-nom {
+  font-weight: 600;
+}
+.v1-cote .atlas-arbre-ligne.niveau-2 .atlas-arbre-nom {
+  font-family: var(--police-titre);
+  font-style: italic;
+}
+
+/* ─── Légende (onglet) ──────────────────────────────────────────────────── */
+
+.v1-legende {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.v1-legende h5 {
+  margin: 12px 0 4px;
+  font-size: 11px;
+  font-variant: small-caps;
+  text-transform: lowercase;
+  letter-spacing: 0.07em;
+  color: var(--texte-doux);
+  font-weight: 600;
+}
+.v1-legende h5:first-child {
+  margin-top: 0;
+}
+.v1-legende-ligne {
+  display: grid;
+  grid-template-columns: 34px 1fr;
+  align-items: center;
+  gap: 8px;
+  min-height: 26px;
+  line-height: 1.35;
+}
+.v1-legende-ligne svg {
+  display: block;
+}
+.v1-legende-ligne small {
+  color: var(--texte-doux);
+}
+.v1-legende-grand {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  gap: 8px;
+  align-items: center;
+}
+.v1-legende-note {
+  color: var(--texte-doux);
+  line-height: 1.5;
+  font-size: 12px;
+}
+.v1-legende kbd {
+  font: 10.5px var(--police);
+  padding: 0 4px;
+  border: 1px solid var(--bord);
+  border-radius: 3px;
+  background: var(--surface-2);
+}
+
+/* ─── Racine de la vue ──────────────────────────────────────────────────── */
+
+.atlas-vue.v1 {
+  font-family: var(--police);
+}
+.atlas-vue.v1::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: calc(var(--grain-opacite) * var(--grain, 1));
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='g'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.45  0 0 0 0 0.4  0 0 0 0 0.3  0 0 0 0.09 0'/></filter><rect width='100%' height='100%' filter='url(%23g)'/></svg>");
+}
+.atlas-vue.v1[data-theme='sombre']::before {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='g'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.05 0'/></filter><rect width='100%' height='100%' filter='url(%23g)'/></svg>");
+}
+.atlas-vue.v1 .atlas-bouton-menu {
+  display: none;
+}
+.atlas-vue.v1.panneau-ouvert .atlas-bas {
+  left: 12px;
+}
+.atlas-vue.v1 .atlas-barre,
+.atlas-vue.v1 .atlas-gran,
+.atlas-vue.v1 .atlas-histo {
+  border-radius: 6px;
+}
+.atlas-vue.v1 .atlas-barre button {
+  border-radius: 4px;
+}
+.atlas-vue.v1 .atlas-barre button.actif {
+  background: var(--texte);
+  color: var(--fond);
+}
+.atlas-vue.v1 .atlas-gran-entete {
+  font-family: var(--police-titre);
+  font-weight: 600;
+}
+
+/* ─── Légende de figure (en haut à gauche) ──────────────────────────────── */
+
+.v1-figure {
+  position: absolute;
+  top: 52px;
+  left: 8px;
+  max-width: 310px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--fond) 86%, transparent);
+  font-family: var(--police-titre);
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--texte);
+  pointer-events: auto;
+}
+.v1-figure b.v1-panel {
+  font-family: var(--police);
+  font-weight: 700;
+  font-size: 15px;
+  margin-right: 6px;
+}
+.v1-figure .v1-figure-titre {
+  font-weight: 600;
+}
+.v1-figure .v1-figure-corps {
+  color: var(--texte-doux);
+  font-size: 12.5px;
+}
+.v1-figure a {
+  font-family: var(--police);
+  font-size: 11px;
+  color: var(--texte-doux);
+  text-decoration: none;
+  border-bottom: 1px dotted currentColor;
+}
+.v1-figure a:hover {
+  color: var(--accent);
+}
+
+/* ─── Fiche de survol : légende de figure ───────────────────────────────── */
+
+.atlas-vue.v1 .atlas-fiche {
+  border-radius: 4px;
+  padding: 12px 14px 12px;
+  min-width: 260px;
+  max-width: 320px;
+  background: var(--surface);
+  border: 1px solid var(--bord);
+  box-shadow: var(--ombre);
+}
+.v1-fiche {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.v1-fiche-surtitre {
+  font-size: 10.5px;
+  font-variant: small-caps;
+  text-transform: lowercase;
+  letter-spacing: 0.08em;
+  font-weight: 600;
+  color: var(--texte-doux);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.v1-fiche-titre {
+  font-family: var(--police-titre);
+  font-weight: 600;
+  font-size: 16px;
+  line-height: 1.25;
+  margin: -2px 0 0;
+}
+.v1-fiche-chemin {
+  font-family: var(--police-titre);
+  font-style: italic;
+  font-size: 12px;
+  color: var(--texte-doux);
+  margin-top: -3px;
+}
+.v1-fiche-meta {
+  font-size: 11px;
+  font-variant: small-caps;
+  text-transform: lowercase;
+  letter-spacing: 0.06em;
+  color: var(--texte-doux);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  border-top: 1px solid var(--bord);
+  padding-top: 6px;
+}
+.v1-fiche-meta b {
+  font-weight: 600;
+  color: var(--texte);
+}
+.v1-fiche-statut {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.v1-fiche-statut svg {
+  flex: none;
+}
+.v1-fiche-statut strong {
+  font-weight: 600;
+}
+.v1-fiche-section {
+  font-size: 10.5px;
+  font-variant: small-caps;
+  text-transform: lowercase;
+  letter-spacing: 0.08em;
+  color: var(--texte-doux);
+  font-weight: 600;
+  margin-top: 2px;
+}
+.v1-fiche svg text {
+  font-family: var(--police);
+}
+.v1-fiche-pied {
+  font-size: 11px;
+  color: var(--texte-doux);
+  border-top: 1px solid var(--bord);
+  padding-top: 6px;
+  font-style: italic;
+  font-family: var(--police-titre);
+}
+.v1-fiche-principaux {
+  margin: 0;
+  padding-left: 18px;
+  font-family: var(--police-titre);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+.v1-fiche-n {
+  font-family: var(--police-titre);
+  font-size: 13px;
+}
+.v1-fiche-n i {
+  font-style: italic;
+}

@@ -1,0 +1,13 @@
+{
+  "id": "r4-pourquoi",
+  "titre": "R4 · Lecture progressive : pourquoi ?",
+  "resume": "On part de ce qui compte : les résultats à droite, les hypothèses et choix fondateurs à gauche, le raisonnement replié entre les deux. « pourquoi ? » déplie un niveau de prémisses à la fois, comme on remonte une preuve ; « comment ? » part d'une hypothèse.",
+  "idees": [
+    "À l'ouverture : 6 résultats, 15 fondations et 5 fils repliés avec leur compteur d'étapes",
+    "« pourquoi ? » déplie un niveau ; la prémisse principale reste sur la même ligne horizontale",
+    "Fil d'Ariane Résultat ← Étape ← … ← Hypothèse et lecture guidée pas à pas (« de A et B, on déduit C »)",
+    "Encarts « ici on a choisi X plutôt que Y parce que… » sur les décisions, mode inverse « comment ? »",
+    "Ruban de vue d'ensemble : où l'on est dans les 160 unités du graphe de lecture"
+  ],
+  "ordre": 4
+}

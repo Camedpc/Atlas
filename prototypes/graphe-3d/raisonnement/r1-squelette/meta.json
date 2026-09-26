@@ -1,0 +1,13 @@
+{
+  "id": "r1-squelette",
+  "titre": "R1 · Squelette déductif",
+  "resume": "La preuve telle qu'on la dessine au tableau : seule la colonne vertébrale des déductions, en colonnes nommées (hypothèses & choix → outils → étapes → résultats), sous-arguments repliés en étapes dépliables, contexte en pastilles, décisions en losanges avec leurs impasses.",
+  "idees": [
+    "Dérivation maison : contexte en pastilles, élagage vers les résultats majeurs, réduction transitive, repli des sous-arguments exclusifs",
+    "41 éléments visibles sur 224 nœuds ; double-clic sur une étape pour la déplier sur place",
+    "Colonnes nommées, rangées horizontales, arêtes orthogonales (ou lissées)",
+    "Choix de modélisation en drapeaux dans la marge : bande de portée au survol, épinglable",
+    "Niveau de détail : squelette / + auxiliaires / tout"
+  ],
+  "ordre": 1
+}

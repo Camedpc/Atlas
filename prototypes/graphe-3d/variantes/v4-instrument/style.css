@@ -1,0 +1,788 @@
+/* V4 · Instrument — thème clair « papier de mesure » (prioritaire), thème sombre « oscilloscope ».
+   Les couleurs du moteur sont redéfinies ici (spécificité body .atlas-vue > .atlas-vue). */
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: #f5f6f8;
+}
+#app {
+  position: fixed;
+  inset: 0;
+}
+
+body .atlas-vue {
+  --police: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --police-mono: 'Cascadia Mono', 'JetBrains Mono', 'IBM Plex Mono', Consolas, ui-monospace, monospace;
+  --fond: #f5f6f8;
+  --surface: #ffffff;
+  --surface-2: #f0f2f5;
+  --bord: #d9dde5;
+  --ombre: 0 1px 2px rgba(16, 22, 36, 0.06), 0 6px 18px rgba(16, 22, 36, 0.07);
+  --texte: #161c2a;
+  --texte-doux: #586176;
+  --accent: #2b59c3;
+  --accent-doux: rgba(43, 89, 195, 0.1);
+  --bordure-noeud: #f5f6f8;
+  --arete: #7f8aa0;
+  --ancetre: #d9480f;
+  --descendant: #6741d9;
+  --statut-valide: #1f8a66;
+  --statut-incertain: #d08c00;
+  --statut-refute: #d0344f;
+  --validation-ia: #8a63f0;
+  --validation-humain: #1971c2;
+  --domaine-0: #3b5bdb;
+  --domaine-1: #0c8599;
+  --domaine-2: #9c36b5;
+  --domaine-3: #5c677d;
+  --domaine-4: #e8590c;
+  --domaine-5: #2b8a3e;
+  --axe-x: #d93b4a;
+  --axe-y: #4d9a17;
+  --axe-z: #2f6fd6;
+  --face-cube: #e4e8f0;
+  --rampe-debut: #a5b8e3;
+  --rampe-fin: #1c3a8c;
+  --entete: rgba(255, 255, 255, 0.94);
+  --gizmo-fond: rgba(22, 28, 42, 0.06);
+}
+
+body .atlas-vue[data-theme='sombre'] {
+  --fond: #0f1218;
+  --surface: #171b23;
+  --surface-2: #1e232d;
+  --bord: #2b313d;
+  --ombre: 0 1px 2px rgba(0, 0, 0, 0.35), 0 8px 22px rgba(0, 0, 0, 0.35);
+  --texte: #e4e8f0;
+  --texte-doux: #97a1b4;
+  --accent: #7c96ff;
+  --accent-doux: rgba(124, 150, 255, 0.14);
+  --bordure-noeud: #0f1218;
+  --arete: #69738a;
+  --ancetre: #ff922b;
+  --descendant: #9775fa;
+  --statut-valide: #3cc58f;
+  --statut-incertain: #f0b429;
+  --statut-refute: #f26581;
+  --validation-ia: #b197fc;
+  --validation-humain: #4dabf7;
+  --domaine-0: #748ffc;
+  --domaine-1: #3bc9db;
+  --domaine-2: #da77f2;
+  --domaine-3: #a5b0c3;
+  --domaine-4: #ffa94d;
+  --domaine-5: #69db7c;
+  --axe-x: #ff5a6a;
+  --axe-y: #8ad33a;
+  --axe-z: #4c9bff;
+  --face-cube: #1b212c;
+  --rampe-debut: #34487a;
+  --rampe-fin: #a5bcff;
+  --entete: rgba(23, 27, 35, 0.95);
+  --gizmo-fond: rgba(255, 255, 255, 0.07);
+}
+
+.v4 .v4-mono {
+  font-family: var(--police-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.94em;
+}
+
+/* ─── En-tête de viewport ─────────────────────────────────────────────── */
+
+.v4 .v4-entete {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 8px 0 0;
+  background: var(--entete);
+  border-bottom: 1px solid var(--bord);
+  backdrop-filter: blur(6px);
+  font-size: 12.5px;
+  z-index: 25;
+  user-select: none;
+}
+.v4 .v4-groupe {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.v4 .v4-espace {
+  flex: 1;
+}
+.v4 .v4-bouton-panneau {
+  width: 34px;
+  height: 35px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 3px;
+  border: 0;
+  border-right: 1px solid var(--bord);
+  background: var(--surface-2);
+  cursor: pointer;
+}
+.v4 .v4-bouton-panneau span {
+  width: 14px;
+  height: 1.6px;
+  background: var(--texte-doux);
+  border-radius: 1px;
+  transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), background 0.15s;
+}
+.v4 .v4-bouton-panneau.actif span,
+.v4 .v4-bouton-panneau:hover span {
+  background: var(--accent);
+}
+.v4 .v4-bouton-panneau.actif span:nth-child(1) {
+  transform: translateX(-3px) scaleX(0.6);
+}
+.v4 .v4-bouton-panneau.actif span:nth-child(3) {
+  transform: translateX(-3px) scaleX(0.6);
+}
+.v4 .v4-marque {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 0 4px 0 6px;
+}
+.v4 .v4-marque b {
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+.v4 .v4-marque span {
+  font-family: var(--police-mono);
+  font-size: 10.5px;
+  color: var(--texte-doux);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.v4 .v4-menus {
+  gap: 0;
+  padding-left: 6px;
+  border-left: 1px solid var(--bord);
+}
+.v4 .v4-menu {
+  position: relative;
+}
+.v4 .v4-menu-bouton {
+  border: 0;
+  background: transparent;
+  padding: 5px 9px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.v4 .v4-menu-bouton:hover,
+.v4 .v4-menu.ouvert .v4-menu-bouton {
+  background: var(--surface-2);
+}
+.v4 .v4-menu-liste {
+  position: absolute;
+  top: calc(100% + 5px);
+  left: 0;
+  min-width: 250px;
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--bord);
+  border-radius: 8px;
+  box-shadow: var(--ombre);
+  display: none;
+  z-index: 40;
+}
+.v4 .v4-menu.ouvert .v4-menu-liste {
+  display: block;
+  animation: v4-apparition 0.14s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes v4-apparition {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+.v4 .v4-menu-item {
+  display: grid;
+  grid-template-columns: 16px 1fr auto;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+.v4 .v4-menu-item:hover:not(:disabled) {
+  background: var(--accent);
+  color: #fff;
+}
+.v4 .v4-menu-item:hover:not(:disabled) kbd,
+.v4 .v4-menu-item:hover:not(:disabled) .v4-coche {
+  color: #fff;
+}
+.v4 .v4-menu-item:disabled {
+  opacity: 0.42;
+  cursor: default;
+}
+.v4 .v4-coche {
+  color: var(--accent);
+  font-size: 11px;
+}
+.v4 .v4-menu-item kbd,
+.v4 .v4-segment kbd {
+  font: 10.5px var(--police-mono);
+  color: var(--texte-doux);
+}
+.v4 .v4-menu-sep {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--bord);
+}
+.v4 .v4-menu-titre {
+  padding: 6px 8px 3px 30px;
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--texte-doux);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 300px;
+}
+.v4 .v4-nom-vue {
+  padding: 3px 10px;
+  border-radius: 5px;
+  background: var(--surface-2);
+  font-weight: 600;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.v4 .v4-etiquette {
+  color: var(--texte-doux);
+  font-size: 11.5px;
+}
+.v4 .v4-curseur {
+  width: 118px;
+  accent-color: var(--accent);
+}
+.v4 .v4-gran-valeur {
+  min-width: 132px;
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.v4 .v4-segment {
+  display: inline-flex;
+  border: 1px solid var(--bord);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--surface);
+}
+.v4 .v4-segment button {
+  border: 0;
+  background: transparent;
+  padding: 4px 9px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.v4 .v4-segment button + button {
+  border-left: 1px solid var(--bord);
+}
+.v4 .v4-segment button:hover {
+  background: var(--surface-2);
+}
+.v4 .v4-segment button.actif {
+  background: var(--accent-doux);
+  color: var(--accent);
+  font-weight: 600;
+}
+.v4 .v4-icone {
+  width: 28px;
+  height: 26px;
+  border: 1px solid var(--bord);
+  border-radius: 6px;
+  background: var(--surface);
+  cursor: pointer;
+}
+.v4 .v4-icone:hover {
+  background: var(--surface-2);
+}
+@media (max-width: 1320px) {
+  .v4 .v4-placement,
+  .v4 .v4-marque span {
+    display: none;
+  }
+}
+@media (max-width: 1040px) {
+  .v4 .v4-gran .v4-etiquette,
+  .v4 .v4-gran-valeur {
+    display: none;
+  }
+}
+
+/* Aide des raccourcis */
+.v4 .v4-aide {
+  position: absolute;
+  top: 44px;
+  right: 110px;
+  width: 460px;
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--bord);
+  border-radius: 8px;
+  box-shadow: var(--ombre);
+  display: none;
+  z-index: 40;
+}
+.v4 .v4-aide.visible {
+  display: block;
+}
+.v4 .v4-aide-titre {
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.v4 .v4-aide-grille {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 14px;
+}
+.v4 .v4-aide-ligne {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  font-size: 12px;
+  color: var(--texte-doux);
+}
+.v4 .v4-aide-ligne kbd {
+  font: 11px var(--police-mono);
+  color: var(--texte);
+  white-space: nowrap;
+}
+
+/* Surimpression d'état (coin haut gauche, comme Blender) */
+.v4 .v4-surimp {
+  position: absolute;
+  top: 44px;
+  right: 116px;
+  text-align: right;
+  pointer-events: none !important;
+  line-height: 1.45;
+  text-shadow: 0 0 3px var(--fond), 0 0 6px var(--fond);
+}
+.v4 .v4-surimp-titre {
+  font-weight: 650;
+  font-size: 13px;
+}
+.v4 .v4-surimp-ligne {
+  font-size: 11.5px;
+  color: var(--texte-doux);
+}
+
+/* Emplacements des éléments du moteur */
+.v4 .atlas-gizmo {
+  top: 46px;
+}
+.v4 .atlas-reglages {
+  top: 146px;
+  max-height: calc(100% - 250px);
+}
+.v4 .atlas-bas {
+  left: 46px;
+}
+.v4.v4-npanel-ouvert .atlas-bas {
+  left: 362px;
+}
+.v4 .atlas-histo {
+  border-radius: 8px;
+}
+
+/* ─── N-panel (à gauche, onglets verticaux) ───────────────────────────── */
+
+.v4 .v4-npanel {
+  position: absolute;
+  top: 36px;
+  left: 0;
+  bottom: 0;
+  width: 34px;
+  z-index: 20;
+}
+.v4 .v4-onglets {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: 8px;
+  background: var(--surface-2);
+  border-right: 1px solid var(--bord);
+}
+.v4 .v4-onglet {
+  writing-mode: vertical-rl;
+  padding: 12px 0;
+  border: 0;
+  border-left: 2px solid transparent;
+  background: transparent;
+  color: var(--texte-doux);
+  font-size: 11.5px;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+}
+.v4 .v4-onglet:hover {
+  color: var(--texte);
+  background: var(--surface);
+}
+.v4 .v4-onglet.actif {
+  color: var(--accent);
+  background: var(--surface);
+  border-left-color: var(--accent);
+  font-weight: 600;
+}
+.v4 .v4-tiroir {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 34px;
+  width: 316px;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border-right: 1px solid var(--bord);
+  box-shadow: var(--ombre);
+  transform: translateX(-104%);
+  visibility: hidden;
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), visibility 0s linear 0.22s;
+}
+.v4 .v4-npanel.ouvert .v4-tiroir {
+  transform: none;
+  visibility: visible;
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.v4 .v4-tiroir-entete {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px 8px 16px;
+  border-bottom: 1px solid var(--bord);
+}
+.v4 .v4-tiroir-titre {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--texte-doux);
+  font-weight: 600;
+}
+.v4 .v4-fermer {
+  border: 0;
+  background: transparent;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--texte-doux);
+}
+.v4 .v4-npanel-contenu {
+  flex: 1;
+  overflow: auto;
+}
+.v4 .v4-npanel-contenu .atlas-section > summary {
+  padding: 9px 14px;
+  font-size: 12px;
+}
+.v4 .v4-npanel-contenu .atlas-section-corps {
+  padding: 0 14px 12px;
+}
+
+.v4 .v4-transfo-titre {
+  font-size: 11.5px;
+  color: var(--texte-doux);
+  margin-bottom: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.v4 .v4-transfo-titre b {
+  color: var(--texte);
+}
+.v4 .v4-transfo-ligne {
+  display: grid;
+  grid-template-columns: 20px 62px 1fr;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 0;
+}
+.v4 .v4-axe {
+  font: 700 11px var(--police-mono);
+  text-align: center;
+  border-radius: 3px;
+  color: #fff;
+  padding: 1px 0;
+}
+.v4 .axe-x .v4-axe {
+  background: var(--axe-x);
+}
+.v4 .axe-y .v4-axe {
+  background: var(--axe-y);
+}
+.v4 .axe-z .v4-axe {
+  background: var(--axe-z);
+}
+.v4 .v4-valeur {
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--surface-2);
+  text-align: right;
+}
+.v4 .v4-lecture {
+  font-size: 11.5px;
+  color: var(--texte-doux);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.v4 .v4-transfo-pied {
+  margin-top: 6px;
+  color: var(--texte-doux);
+}
+.v4 .v4-grille-vues {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+}
+.v4 .v4-grille-vues .atlas-bouton {
+  margin: 0;
+  padding: 5px 4px;
+  font-size: 11.5px;
+  border-radius: 5px;
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  align-items: baseline;
+}
+.v4 .v4-grille-vues kbd {
+  font: 9.5px var(--police-mono);
+  color: var(--texte-doux);
+}
+.v4 .v4-cases,
+.v4 .v4-colonne {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.v4 .v4-colonne .atlas-bouton {
+  margin: 0;
+}
+.v4 .v4-case {
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+.v4 .v4-case input {
+  accent-color: var(--accent);
+}
+.v4 .v4-ligne-select {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  gap: 8px;
+  margin-top: 4px;
+}
+.v4 .v4-select {
+  font: inherit;
+  color: var(--texte);
+  background: var(--surface-2);
+  border: 1px solid var(--bord);
+  border-radius: 5px;
+  padding: 3px 6px;
+}
+.v4 .v4-radios {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+.v4 .v4-radios input {
+  accent-color: var(--accent);
+}
+.v4 .v4-note {
+  font-size: 11.5px;
+  color: var(--texte-doux);
+  margin: 4px 0 0;
+}
+.v4 .v4-legende-ligne {
+  display: grid;
+  grid-template-columns: 22px 1fr;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  margin: 3px 0;
+}
+.v4 .v4-legende-ligne small {
+  display: block;
+  font-size: 10.5px;
+  color: var(--texte-doux);
+}
+.v4 .v4-icone-legende {
+  display: inline-flex;
+  justify-content: center;
+}
+
+/* ─── Fiche technique de survol ───────────────────────────────────────── */
+
+.v4 .atlas-fiche {
+  padding: 9px 11px 8px;
+  border-radius: 7px;
+  min-width: 250px;
+  max-width: 320px;
+}
+.v4 .v4-fiche {
+  font-size: 12px;
+}
+.v4 .v4-fiche-titre {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  font-weight: 650;
+  font-size: 13px;
+  line-height: 1.25;
+}
+.v4 .v4-fiche-icone {
+  flex: none;
+  display: inline-flex;
+}
+.v4 .v4-fiche-chemin {
+  margin: 2px 0 6px 21px;
+  font-size: 11px;
+  color: var(--texte-doux);
+}
+.v4 .v4-fiche-table {
+  display: grid;
+  grid-template-columns: 50px 1fr;
+  gap: 2px 8px;
+  margin: 4px 0;
+  padding-top: 5px;
+  border-top: 1px solid var(--bord);
+}
+.v4 .v4-fiche-table dt {
+  font: 10.5px var(--police-mono);
+  color: var(--texte-doux);
+  text-transform: lowercase;
+  padding-top: 1px;
+}
+.v4 .v4-fiche-table dd {
+  margin: 0;
+  min-width: 0;
+}
+.v4 .v4-fiche-table small {
+  color: var(--texte-doux);
+}
+.v4 .v4-echelle-conf {
+  display: block;
+  margin: 2px 0 2px 58px;
+}
+.v4 .v4-fiche-compte {
+  margin: 2px 0 4px;
+}
+.v4 .v4-grand {
+  font-size: 14px;
+  font-weight: 600;
+}
+.v4 .v4-fiche-principaux {
+  font-size: 11.5px;
+  border-top: 1px solid var(--bord);
+  padding-top: 4px;
+}
+.v4 .v4-fiche-principaux > span {
+  font: 10.5px var(--police-mono);
+  color: var(--texte-doux);
+}
+.v4 .v4-fiche-principaux ol {
+  margin: 2px 0 0;
+  padding-left: 18px;
+}
+.v4 .v4-fiche-aide {
+  margin-top: 5px;
+  font-size: 10.5px;
+  color: var(--texte-doux);
+}
+
+/* ─── Menu circulaire des vues ────────────────────────────────────────── */
+
+.v4 .atlas-radial.v4-pie {
+  background: radial-gradient(circle at center, transparent 0, rgba(10, 14, 24, 0.05) 100%);
+}
+.v4 .v4-pie-centre {
+  position: absolute;
+  margin: -32px 0 0 -32px;
+  overflow: visible;
+  pointer-events: none;
+}
+.v4 .v4-pie-centre circle {
+  fill: var(--surface);
+  stroke: var(--bord);
+  stroke-width: 1.5;
+}
+.v4 .v4-pie-centre circle.point {
+  fill: var(--accent);
+  stroke: none;
+}
+.v4 .v4-pie-centre line {
+  stroke: var(--accent);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+}
+.v4 .atlas-radial.v4-pie button.v4-pie-part {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--bord);
+  background: var(--surface);
+  box-shadow: var(--ombre);
+  font-size: 12.5px;
+  font-weight: 500;
+  opacity: 0;
+  transform: translate(calc(-50% + var(--dx) * 0.6), calc(-50% + var(--dy) * 0.6)) scale(0.85);
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.14s ease-out, background 0.08s;
+}
+.v4 .atlas-radial.v4-pie.deploye button.v4-pie-part {
+  opacity: 1;
+  transform: translate(-50%, -50%);
+}
+.v4 .atlas-radial.v4-pie button.v4-pie-part kbd {
+  font: 10px var(--police-mono);
+  color: var(--texte-doux);
+}
+.v4 .atlas-radial.v4-pie button.v4-pie-part.courante {
+  border-color: var(--accent);
+}
+.v4 .atlas-radial.v4-pie button.v4-pie-part.choisie,
+.v4 .atlas-radial.v4-pie button.v4-pie-part:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.v4 .atlas-radial.v4-pie button.v4-pie-part.choisie kbd,
+.v4 .atlas-radial.v4-pie button.v4-pie-part:hover kbd {
+  color: rgba(255, 255, 255, 0.8);
+}
+.v4 .v4-pie-legende {
+  position: absolute;
+  transform: translateX(-50%);
+  font-size: 11px;
+  color: var(--texte-doux);
+  white-space: nowrap;
+  pointer-events: none;
+}
+.v4 a.v4-marque { color: inherit; text-decoration: none; }
+.v4 a.v4-marque:hover b { color: var(--accent); }

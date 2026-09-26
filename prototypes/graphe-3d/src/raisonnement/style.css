@@ -1,0 +1,570 @@
+/* Vue du graphe de raisonnement. Toutes les couleurs sont des variables CSS : une vision les
+   redéfinit sur .rsn-vue[data-theme="…"] (ou sa propre classe) pour changer de palette. */
+
+.rsn-vue {
+  --police: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --fond: #fbfbfd;
+  --surface: #ffffff;
+  --surface-2: #f2f4f8;
+  --bord: #e0e4eb;
+  --ombre: 0 1px 2px rgba(20, 25, 40, 0.06), 0 4px 16px rgba(20, 25, 40, 0.08);
+  --texte: #1b2130;
+  --texte-doux: #5d6679;
+  --accent: #3b5bdb;
+  --arete: #6f7a90;
+  --arete-complete: #aeb6c5;
+  --ancetre: #e8590c;
+  --descendant: #7048e8;
+  --contredit: #d6336c;
+  --statut-valide: #2b9a74;
+  --statut-incertain: #e3a008;
+  --statut-refute: #d94862;
+  --validation-aucune: #b8bfcc;
+  --validation-ia: #9775fa;
+  --validation-humain: #1c7ed6;
+  --validation-ia-humain: #1b3a6b;
+  --origine-humain: #1c7ed6;
+  --origine-ia: #9775fa;
+  --origine-ordinateur: #5c7c6a;
+  --role-principale: #3b5bdb;
+  --role-auxiliaire: #6a86c9;
+  --role-technique: #8b8fa3;
+  --role-contexte: #b6bcc9;
+  /* Couches de type : hypothèses, définitions, choix/décisions, assertions/lemmes, expériences, calculs, résultats. */
+  --couche-0: #6d4fc2;
+  --couche-1: #7a8699;
+  --couche-2: #d9480f;
+  --couche-3: #1f6fcf;
+  --couche-4: #0b8a8a;
+  --couche-5: #5f8f14;
+  --couche-6: #16233f;
+  --sp-0: #5c677d;
+  --sp-1: #1f6fcf;
+  --sp-2: #c2255c;
+  --sp-3: #0b8a8a;
+  --sp-4: #a07a1e;
+  --axe-x: #e5484d;
+  --axe-y: #30a46c;
+  --axe-z: #3e63dd;
+  --gizmo-fond: rgba(30, 40, 60, 0.07);
+  --gizmo-texte: #ffffff;
+
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--fond);
+  color: var(--texte);
+  font-family: var(--police);
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+}
+
+.rsn-vue[data-theme='sombre'] {
+  --fond: #0f1218;
+  --surface: #171b23;
+  --surface-2: #1e232d;
+  --bord: #2b313d;
+  --ombre: 0 1px 2px rgba(0, 0, 0, 0.3), 0 6px 20px rgba(0, 0, 0, 0.35);
+  --texte: #e6e9f0;
+  --texte-doux: #9aa3b5;
+  --accent: #7b93ff;
+  --arete: #8590a6;
+  --arete-complete: #4a5263;
+  --ancetre: #ff922b;
+  --descendant: #a48bff;
+  --contredit: #f06595;
+  --statut-valide: #38c793;
+  --statut-incertain: #f2b631;
+  --statut-refute: #f06580;
+  --role-principale: #7b93ff;
+  --role-auxiliaire: #7f95c9;
+  --role-technique: #7d8396;
+  --role-contexte: #555d6e;
+  --couche-0: #9a82ec;
+  --couche-1: #97a3b6;
+  --couche-2: #ff8a4c;
+  --couche-3: #5b9cf0;
+  --couche-4: #2fc2c2;
+  --couche-5: #95c94a;
+  --couche-6: #e6e9f0;
+  --gizmo-fond: rgba(255, 255, 255, 0.08);
+  --gizmo-texte: #0f1218;
+}
+
+.rsn-vue *,
+.rsn-vue *::before,
+.rsn-vue *::after {
+  box-sizing: border-box;
+}
+.rsn-scene {
+  position: absolute;
+  inset: 0;
+}
+.rsn-interface {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.rsn-interface > * {
+  pointer-events: auto;
+}
+.rsn-vue button,
+.rsn-vue select {
+  font: inherit;
+  color: inherit;
+}
+
+/* ─── Gizmo (repris du moteur) et réglages ───────────────────────────────── */
+
+.rsn-vue .atlas-gizmo {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  cursor: grab;
+  touch-action: none;
+}
+/* Réglages en bas à droite : le panneau replié ne masque pas le graphe, il s'ouvre vers le haut. */
+.rsn-reglages {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  width: 290px;
+  max-height: calc(100% - 130px);
+  overflow: auto;
+  --tp-base-background-color: var(--surface);
+  --tp-base-shadow-color: rgba(0, 0, 0, 0.08);
+  --tp-button-background-color: var(--surface-2);
+  --tp-button-background-color-active: var(--bord);
+  --tp-button-background-color-focus: var(--bord);
+  --tp-button-background-color-hover: var(--bord);
+  --tp-button-foreground-color: var(--texte);
+  --tp-container-background-color: var(--surface-2);
+  --tp-container-background-color-active: var(--bord);
+  --tp-container-background-color-focus: var(--bord);
+  --tp-container-background-color-hover: var(--bord);
+  --tp-container-foreground-color: var(--texte);
+  --tp-groove-foreground-color: var(--bord);
+  --tp-input-background-color: var(--surface-2);
+  --tp-input-background-color-active: var(--bord);
+  --tp-input-background-color-focus: var(--bord);
+  --tp-input-background-color-hover: var(--bord);
+  --tp-input-foreground-color: var(--texte);
+  --tp-label-foreground-color: var(--texte-doux);
+  --tp-monitor-background-color: var(--surface-2);
+  --tp-monitor-foreground-color: var(--texte-doux);
+}
+.rsn-reglages .tp-rotv {
+  box-shadow: var(--ombre);
+  border: 1px solid var(--bord);
+}
+
+/* ─── Barre ─────────────────────────────────────────────────────────────── */
+
+.rsn-barre {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--bord);
+  border-radius: 10px;
+  box-shadow: var(--ombre);
+}
+.rsn-barre-groupe {
+  display: flex;
+  gap: 2px;
+}
+.rsn-barre-groupe + .rsn-barre-groupe {
+  padding-left: 6px;
+  border-left: 1px solid var(--bord);
+}
+.rsn-barre button {
+  border: 0;
+  background: transparent;
+  padding: 5px 10px;
+  border-radius: 7px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.rsn-barre button:hover {
+  background: var(--surface-2);
+}
+.rsn-barre button.actif {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* ─── Compteur ──────────────────────────────────────────────────────────── */
+
+.rsn-compteur {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 7px 12px;
+  background: var(--surface);
+  border: 1px solid var(--bord);
+  border-radius: 10px;
+  box-shadow: var(--ombre);
+  font-variant-numeric: tabular-nums;
+  transition: left 0.25s ease;
+}
+.rsn-compteur .rsn-select {
+  flex: none;
+  font-weight: 600;
+}
+.rsn-compteur-texte {
+  white-space: nowrap;
+}
+.rsn-vue.panneau-ouvert .rsn-compteur {
+  left: 352px;
+}
+
+/* ─── Fiche ─────────────────────────────────────────────────────────────── */
+
+.rsn-fiche {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 340px;
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--bord);
+  border-radius: 10px;
+  box-shadow: var(--ombre);
+  pointer-events: none !important;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+  z-index: 20;
+  line-height: 1.4;
+}
+.rsn-fiche.visible {
+  opacity: 1;
+}
+.rsn-fiche-type {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--texte-doux);
+  text-transform: none;
+}
+.rsn-fiche-titre {
+  font-weight: 600;
+  font-size: 14px;
+  margin: 3px 0 2px;
+  line-height: 1.3;
+}
+.rsn-fiche-enonce {
+  color: var(--texte);
+  font-size: 12.5px;
+  margin-bottom: 6px;
+}
+.rsn-icone {
+  display: inline-flex;
+}
+.rsn-doux {
+  color: var(--texte-doux);
+}
+.rsn-petit {
+  font-size: 11.5px;
+  margin: 4px 0 8px;
+}
+.rsn-grille {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 1px 10px;
+  margin: 6px 0 4px;
+  font-size: 12px;
+}
+.rsn-grille dt {
+  color: var(--texte-doux);
+}
+.rsn-grille dd {
+  margin: 0;
+}
+.rsn-pastille {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  vertical-align: baseline;
+}
+.rsn-pastille.anneau {
+  background: transparent;
+  border: 2.5px solid;
+  width: 11px;
+  height: 11px;
+}
+.rsn-pastille.petite {
+  width: 6px;
+  height: 6px;
+}
+.rsn-confiance {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  color: var(--texte-doux);
+}
+.rsn-confiance-piste {
+  position: relative;
+  flex: 1;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--surface-2);
+  border: 1px solid var(--bord);
+}
+.rsn-confiance-intervalle {
+  position: absolute;
+  top: 1px;
+  bottom: 1px;
+  border-radius: 3px;
+  opacity: 0.45;
+}
+.rsn-confiance-point {
+  position: absolute;
+  top: -2px;
+  width: 3px;
+  height: 10px;
+  margin-left: -1.5px;
+  border-radius: 1px;
+}
+.rsn-bloc {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--bord);
+  font-size: 12px;
+}
+.rsn-bloc-titre {
+  font-weight: 600;
+  margin-bottom: 3px;
+}
+.rsn-alternatives {
+  margin: 2px 0 4px;
+  padding-left: 0;
+  list-style: none;
+}
+.rsn-alternatives li {
+  margin: 2px 0;
+}
+.rsn-alternatives li.retenue b {
+  color: var(--statut-valide);
+}
+.rsn-alternatives li.rejetee b {
+  color: var(--statut-refute);
+}
+.rsn-chaine {
+  margin: 2px 0 0;
+  padding-left: 18px;
+}
+.rsn-premisses {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--bord);
+  font-size: 12px;
+}
+.rsn-contexte {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-top: 4px;
+}
+.rsn-puce-role {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--bord);
+  background: var(--surface-2);
+  white-space: nowrap;
+}
+.rsn-puce-role.role-principale {
+  border-color: var(--role-principale);
+  color: var(--role-principale);
+}
+.rsn-puce-role.role-auxiliaire {
+  border-color: var(--role-auxiliaire);
+}
+.rsn-puce-role.role-technique {
+  border-style: dashed;
+}
+.rsn-puce-role.role-contexte {
+  color: var(--texte-doux);
+}
+.rsn-etiquette {
+  display: inline-block;
+  font-size: 11px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  margin-bottom: 4px;
+}
+.rsn-abandon {
+  background: var(--surface-2);
+  color: var(--texte-doux);
+  border: 1px dashed var(--texte-doux);
+}
+.rsn-aide {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--texte-doux);
+}
+
+/* ─── Panneau gauche ────────────────────────────────────────────────────── */
+
+.rsn-bouton-menu {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  border: 1px solid var(--bord);
+  background: var(--surface);
+  box-shadow: var(--ombre);
+  cursor: pointer;
+  font-size: 17px;
+  z-index: 12;
+}
+.rsn-bouton-menu.actif {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+.rsn-panneau {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 340px;
+  padding: 54px 0 12px;
+  background: var(--surface);
+  border-right: 1px solid var(--bord);
+  box-shadow: var(--ombre);
+  transform: translateX(-102%);
+  transition: transform 0.25s ease;
+  display: flex;
+  flex-direction: column;
+  z-index: 11;
+}
+.rsn-panneau.ouvert {
+  transform: none;
+}
+.rsn-panneau-entete {
+  padding: 0 16px 10px;
+  border-bottom: 1px solid var(--bord);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.rsn-panneau-entete span {
+  color: var(--texte-doux);
+  font-size: 12px;
+}
+.rsn-panneau-contenu {
+  overflow: auto;
+  flex: 1;
+  padding: 4px 0;
+}
+.rsn-section {
+  border-bottom: 1px solid var(--bord);
+}
+.rsn-section summary {
+  padding: 9px 16px;
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+}
+.rsn-section summary::before {
+  content: '▸ ';
+  color: var(--texte-doux);
+}
+.rsn-section[open] summary::before {
+  content: '▾ ';
+}
+.rsn-section-corps {
+  padding: 0 16px 12px;
+}
+.rsn-vide {
+  color: var(--texte-doux);
+  margin: 0;
+}
+.rsn-champ {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.rsn-champ span {
+  color: var(--texte-doux);
+}
+.rsn-select {
+  flex: 1;
+  padding: 4px 6px;
+  border-radius: 7px;
+  border: 1px solid var(--bord);
+  background: var(--surface-2);
+}
+.rsn-case {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0 8px;
+  cursor: pointer;
+}
+.rsn-stats {
+  display: grid;
+  gap: 2px;
+  margin: 4px 0 8px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.rsn-stats div {
+  display: flex;
+  justify-content: space-between;
+}
+.rsn-stats span {
+  color: var(--texte-doux);
+}
+.rsn-journal {
+  margin: 2px 0 0;
+  padding-left: 18px;
+  font-size: 12px;
+  color: var(--texte-doux);
+}
+.rsn-legende-ligne {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 2px 0;
+}
+.rsn-groupe-titre {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--texte-doux);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 10px 0 4px;
+}
+.rsn-detail .rsn-fiche-enonce {
+  margin-bottom: 4px;
+}
+.rsn-demo {
+  margin: 4px 0 8px;
+  font-size: 12px;
+}
+.rsn-bouton {
+  margin: 8px 0 2px;
+  padding: 5px 10px;
+  border-radius: 7px;
+  border: 1px solid var(--bord);
+  background: var(--surface-2);
+  cursor: pointer;
+}
+.rsn-bouton:hover {
+  border-color: var(--accent);
+}

@@ -1,0 +1,14 @@
+{
+  "id": "v2-cartographie",
+  "titre": "V2 · Cartographie",
+  "resume": "Le graphe comme une carte topographique : zoom sémantique (loin = domaines, près = nœuds), territoires qui se fendent en sous-territoires, courbes de niveau, toponymes, halo de confiance et mini-carte.",
+  "idees": [
+    "Zoom sémantique avec hystérésis (paliers) ou continu ; curseur manuel toujours disponible",
+    "Territoires = isolignes lissées d'un champ de densité par catégorie ; un territoire se fend en sous-territoires quand on zoome",
+    "Courbes de niveau de densité, quadrillage adaptatif et cadre de feuille en damier",
+    "Toponymes en capitales espacées qui apparaissent selon le zoom et la place disponible",
+    "Halo de confiance : rayon = largeur de l'intervalle (flou = incertain), couleur = statut ; pictogrammes de validation dans la fiche",
+    "Rail d'icônes (Filtres, Couches, Recherche, Sélection), fiche type info-bulle de carte, mini-carte cliquable"
+  ],
+  "ordre": 2
+}

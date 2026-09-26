@@ -1,0 +1,15 @@
+{
+  "id": "v3-constellation",
+  "titre": "V3 · Constellation",
+  "resume": "Le graphe comme une constellation lumineuse en profondeur : halos qui encodent la confiance, profondeur de champ, étincelles aux transitions, lignée parcourue par des impulsions, squelette par importance.",
+  "idees": [
+    "Halos lumineux paramétrables : éclat et netteté = estimation, largeur = incertitude, couleur au choix (statut, domaine, origine)",
+    "Profondeur de champ en 3D : les points lointains rapetissent, pâlissent et se floutent (mise au point réglable)",
+    "Agrégation alternative « squelette par importance » : les nœuds clés restent, les autres se replient vers leur ancêtre clé le plus proche",
+    "Transitions en étincelles : trajectoire spiralée et traînée courte qui s'efface",
+    "Lignée animée : des impulsions lumineuses coulent des ancêtres vers le nœud puis vers ses descendants",
+    "Scintillement discret des nœuds incertains, couronne perlée pour les validations IA + humain",
+    "Fiche de survol en verre dépoli, tiroir translucide à sections repliables"
+  ],
+  "ordre": 3
+}
