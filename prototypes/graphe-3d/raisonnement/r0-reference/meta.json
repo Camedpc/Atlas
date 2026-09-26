@@ -1,0 +1,12 @@
+{
+  "id": "r0-reference",
+  "titre": "R0 · Référence",
+  "resume": "Vision sobre qui montre toutes les fondations : graphe de lecture dérivé du graphe de justification, disposition gauche → droite, bascule 3D par couches de type, lignée, liens complets.",
+  "idees": [
+    "Sélecteur de stratégie de lecture et compteur « graphe complet → lecture »",
+    "Formes distinctes : décision en losange, choix de modélisation en hexagone, étape en capsule",
+    "Repères de rangs logiques et bordure de validation en option (réducteur + calque)",
+    "Vue de côté 3D : profondeur = type (hypothèses → résultats)"
+  ],
+  "ordre": 0
+}

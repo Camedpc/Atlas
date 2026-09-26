@@ -2,14 +2,16 @@ import { defineConfig } from 'vite'
 import { readdirSync, existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-// Pages à construire : le catalogue + chaque variantes/<id>/index.html découverte automatiquement.
+// Pages à construire : le catalogue + chaque variantes/<id>/index.html et raisonnement/<id>/index.html
+// découverte automatiquement.
 const racine = import.meta.dirname
-const dossierVariantes = resolve(racine, 'variantes')
 const pages: Record<string, string> = { catalogue: resolve(racine, 'index.html') }
-if (existsSync(dossierVariantes)) {
-  for (const id of readdirSync(dossierVariantes)) {
-    const page = resolve(dossierVariantes, id, 'index.html')
-    if (existsSync(page)) pages[`variantes/${id}`] = page
+for (const serie of ['variantes', 'raisonnement']) {
+  const dossier = resolve(racine, serie)
+  if (!existsSync(dossier)) continue
+  for (const id of readdirSync(dossier)) {
+    const page = resolve(dossier, id, 'index.html')
+    if (existsSync(page)) pages[`${serie}/${id}`] = page
   }
 }
 

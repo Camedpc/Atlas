@@ -16,5 +16,5 @@
     "skipLibCheck": true,
     "noEmit": true
   },
-  "include": ["src", "variantes", "vite.config.ts"]
+  "include": ["src", "variantes", "raisonnement", "vite.config.ts"]
 }

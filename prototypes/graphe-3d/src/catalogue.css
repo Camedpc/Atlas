@@ -114,3 +114,25 @@ footer {
   border: 1px solid rgba(0, 0, 0, 0.08);
   margin-bottom: 12px;
 }
+
+/* Séries (graphe de raisonnement en tête, série précédente en dessous) */
+.serie {
+  margin-top: 40px;
+}
+.serie + .serie {
+  padding-top: 32px;
+  border-top: 1px solid var(--bord);
+}
+.serie-titre {
+  margin: 0 0 6px;
+  font-size: 20px;
+}
+.serie-chapo {
+  margin: 0;
+  max-width: 760px;
+  color: var(--texte-doux);
+  font-size: 14px;
+}
+.serie .grille {
+  margin-top: 20px;
+}
