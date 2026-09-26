@@ -3,7 +3,11 @@
   "private": true,
   "scripts": {
     "db:push": "supabase db push --include-seed",
-    "db:diff": "supabase db diff"
+    "db:diff": "supabase db diff",
+    "db:local": "supabase start",
+    "db:local:env": "supabase status -o env",
+    "db:local:reset": "supabase db reset",
+    "db:local:stop": "supabase stop"
   },
   "devDependencies": {
     "supabase": "^2.118.0"
