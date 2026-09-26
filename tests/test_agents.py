@@ -1,0 +1,143 @@
+import asyncio
+import json
+from datetime import datetime
+
+import pytest
+import tomllib
+
+from atlas import ecriture, lecture
+from atlas.modeles import Demonstration, LigneNoeud
+from atlas.orchestrateur import agent, config, sous_agents, verificateur
+from atlas.orchestrateur.consignes import DOSSIER_PROMPTS, consigne
+from atlas.orchestrateur.verificateur import Verdict
+
+MAINTENANT = datetime(2026, 9, 26)
+
+
+def _noeud(id: str) -> LigneNoeud:
+    return LigneNoeud(
+        id=id, nom=id.upper(), enonce=f"Énoncé de {id}", admis=False, cree_le=MAINTENANT, modifie_le=MAINTENANT
+    )
+
+
+def _demo(noeud_id: str, premisses: list[str], validite: str = "a_verifier") -> Demonstration:
+    return Demonstration(
+        noeud_id=noeud_id,
+        nom_demonstration="Directe",
+        justifie_par=premisses,
+        demonstration="Argument",
+        validite=validite,
+        auteur="ia",
+        cree_le=MAINTENANT,
+        modifie_le=MAINTENANT,
+    )
+
+
+# ── Rôles ────────────────────────────────────────────────────────────────────
+
+
+def test_chaque_agent_a_son_prompt():
+    for nom in ["orchestrateur", "verificateur", *(r.nom for r in sous_agents.ROLES)]:
+        assert (DOSSIER_PROMPTS / f"{nom}.md").exists(), nom
+
+
+def test_toml_role_se_relit_a_l_identique():
+    consignes = 'Guillemets " et \\ et accents é\net `code` ```bloc```'
+    lu = tomllib.loads(sous_agents.toml_role("gpt-6-sol", "high", consignes, {"web_search": "disabled"}))
+    assert lu == {
+        "model": "gpt-6-sol",
+        "model_reasoning_effort": "high",
+        "developer_instructions": consignes,
+        "web_search": "disabled",
+    }
+
+
+def test_sous_agents_ecrit_les_couches_et_suit_l_environnement(monkeypatch, tmp_path):
+    monkeypatch.setattr(config, "CODEX_HOME", tmp_path)
+    monkeypatch.setenv("ATLAS_MODELE_GRAPHISTE", "gpt-6-luna")
+    agents = sous_agents.sous_agents()
+    graphiste = tomllib.loads((tmp_path / "roles" / "graphiste.toml").read_text(encoding="utf-8"))
+    assert agents["graphiste"]["config_file"] == str(tmp_path / "roles" / "graphiste.toml")
+    assert graphiste["model"] == "gpt-6-luna"
+    assert graphiste["developer_instructions"] == consigne("graphiste")
+    assert (
+        tomllib.loads((tmp_path / "roles" / "directeur_de_labo.toml").read_text(encoding="utf-8"))["model"]
+        == "gpt-6-astra"
+    )
+
+
+# ── Vérificateur ─────────────────────────────────────────────────────────────
+
+
+def test_demande_contient_noeud_premisses_et_demonstration():
+    texte = verificateur.demande(_demo("thm", ["lemme", "absent"]), {"thm": _noeud("thm"), "lemme": _noeud("lemme")})
+    assert "Énoncé de thm" in texte and "Énoncé de lemme" in texte
+    assert "absent" in texte and "introuvable" in texte
+    assert "Argument" in texte
+
+
+def test_lire_verdict_borne_la_confiance_et_refuse_l_illisible():
+    verdict = verificateur.lire_verdict(
+        json.dumps({"validite": "valide", "confiance": 1.4, "justification": " ok "}), "m"
+    )
+    assert verdict == Verdict("valide", 1.0, "ok", "m")
+    with pytest.raises(ValueError):
+        verificateur.lire_verdict(json.dumps({"validite": "peut-etre", "confiance": 0.5, "justification": ""}), "m")
+
+
+def test_a_rejuger():
+    assert verificateur.a_rejuger(Verdict("invalide", 0.99, "", "m"), 0.8)
+    assert verificateur.a_rejuger(Verdict("valide", 0.5, "", "m"), 0.8)
+    assert not verificateur.a_rejuger(Verdict("valide", 0.9, "", "m"), 0.8)
+
+
+def test_a_verifier_filtre_par_validite_et_par_noeud():
+    demos = [_demo("a", []), _demo("b", []), _demo("c", [], "valide")]
+    assert [d.noeud_id for d in verificateur.a_verifier(demos, [])] == ["a", "b"]
+    assert [d.noeud_id for d in verificateur.a_verifier(demos, ["b", "c"])] == ["b"]
+
+
+class _FauxCodex:
+    def __init__(self, **_):
+        pass
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *_):
+        return None
+
+
+def test_verifier_rejuge_les_cas_douteux_et_isole_les_erreurs(monkeypatch):
+    monkeypatch.setattr(
+        lecture, "lister_demonstrations", lambda: [_demo("sur", []), _demo("douteux", []), _demo("casse", [])]
+    )
+    monkeypatch.setattr(lecture, "lister_noeuds", lambda: [_noeud("sur"), _noeud("douteux"), _noeud("casse")])
+    monkeypatch.setattr(verificateur, "AsyncCodex", _FauxCodex)
+
+    async def connecter(_):
+        return None
+
+    monkeypatch.setattr(agent, "_connecter", connecter)
+    appels: list[tuple[str, str]] = []
+
+    async def juger(_codex, texte, modele, _effort):
+        noeud = texte.split("—")[0].split(":")[1].strip()
+        appels.append((noeud, modele))
+        if noeud == "casse":
+            raise RuntimeError("panne")
+        confiance = 0.5 if noeud == "douteux" and modele == "gpt-6-luna" else 0.95
+        return Verdict("valide", confiance, "ok", modele)
+
+    monkeypatch.setattr(verificateur, "juger", juger)
+    notes: list[dict] = []
+    monkeypatch.setattr(ecriture, "noter_demonstration", lambda **champs: notes.append(champs))
+
+    resultats = {r["noeud_id"]: r for r in asyncio.run(verificateur.verifier([]))}
+
+    assert resultats["sur"]["modele"] == "gpt-6-luna"
+    assert resultats["douteux"]["modele"] == "gpt-6-sol"
+    assert resultats["casse"]["erreur"] == "panne"
+    assert ("douteux", "gpt-6-sol") in appels and ("sur", "gpt-6-sol") not in appels
+    assert sorted(n["noeud_id"] for n in notes) == ["douteux", "sur"]
+    assert all(n["auteur"] == "verificateur" for n in notes)

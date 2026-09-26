@@ -48,13 +48,16 @@ def test_traduire_ignore_raisonnement_et_message_vide():
     assert traduire(item(type="agentMessage", id="i5", text="  ")) == []
 
 
-def test_surcharges_declarent_le_serveur_mcp_et_coupent_les_hooks():
+def test_surcharges_declarent_le_serveur_mcp_et_coupent_les_hooks(monkeypatch, tmp_path):
+    monkeypatch.setattr(agent.config, "CODEX_HOME", tmp_path)
     surcharges = agent.surcharges_thread("c1")
     assert surcharges["mcp_servers"]["atlas"]["env"] == {"ATLAS_CONVERSATION_ID": "c1"}
     assert surcharges["mcp_servers"]["atlas"]["args"] == ["-m", "atlas.orchestrateur.mcp_atlas"]
+    assert surcharges["mcp_servers"]["verificateur"]["args"] == ["-m", "atlas.orchestrateur.mcp_verificateur"]
+    assert surcharges["mcp_servers"]["verificateur"]["env"]["ATLAS_CODEX_HOME"] == str(tmp_path)
     assert surcharges["features"] == {"hooks": False}
     assert surcharges["project_root_markers"] == []
-    assert "agents" not in surcharges  # aucun sous-agent déclaré pour l'instant
+    assert set(surcharges["agents"]) >= {"directeur_de_labo", "litterature", "experimentateur", "graphiste"}
 
 
 def test_codex_isole_de_la_machine():

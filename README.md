@@ -75,9 +75,16 @@ serveur MCP `atlas`, lancé par Codex : il lit le graphe (`lire_graphe`, `lire_n
 (`creer_noeud`, `ajouter_demonstration` ; nœuds tagués par la conversation, démonstrations « à vérifier »). Il est isolé de la machine : son propre
 `CODEX_HOME` (`espace/.codex`), aucune lecture de `~/.codex`, de hooks ni d'`AGENTS.md` du dépôt.
 
-- Consignes : `atlas/orchestrateur/consignes.py`
-- Sous-agents (rôles multi-agents de Codex) : `atlas/orchestrateur/sous_agents.py`
-- Étapes après chaque tour (textGrapher, vérificateur…) : `atlas/orchestrateur/pipeline.py`
+L'orchestrateur délègue à des sous-agents Codex dans le même thread : `directeur_de_labo` (qui lance lui-même
+`litterature` et `experimentateur`, et écrit `journal.md` et `rapport.md` dans `directeurs/NN-sujet/`) et
+`graphiste` (qui met un rapport en graphe). Il fait ensuite juger les démonstrations par l'outil `verifier` du
+serveur MCP `verificateur` : un modèle économique juge chaque démonstration, un modèle de recours rejuge les
+verdicts invalides ou peu sûrs, et le verdict (`validite`, `confiance`) est écrit sur la démonstration.
+
+- Prompts (un fichier par agent, relus à chaque tour) : `atlas/orchestrateur/prompts/`
+- Rôles, modèles et efforts par défaut : `atlas/orchestrateur/sous_agents.py`
+- Vérificateur : `atlas/orchestrateur/verificateur.py` et `mcp_verificateur.py`
+- Étapes après chaque tour (vide pour l'instant) : `atlas/orchestrateur/pipeline.py`
 - Réglages : variables `ATLAS_*` et `OPENAI_API_KEY` dans `.env.example`
 
 Connexion, dans le `CODEX_HOME` d'Atlas uniquement :

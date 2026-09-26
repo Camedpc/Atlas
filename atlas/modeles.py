@@ -55,6 +55,8 @@ class Demonstration(BaseModel):
     """Ids des nœuds utilisés comme prémisses."""
     demonstration: str
     validite: Validite
+    confiance: float | None = None
+    """Probabilité (0 à 1) que le verdict du vérificateur soit juste ; vide tant qu'elle n'est pas jugée."""
     auteur: str
     cree_le: datetime
     modifie_le: datetime

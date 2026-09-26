@@ -39,6 +39,10 @@ def _resume(type_: str, donnees: dict[str, Any]) -> str:
             return f"{donnees.get('server', '?')}.{donnees.get('tool', '?')}"
         case "webSearch":
             return f"Recherche web : {donnees.get('query', '')}".strip()
+        case "subAgentActivity":
+            return f"Sous-agent {donnees.get('agentPath', '?')} : {donnees.get('kind', '?')}"
+        case "collabAgentToolCall":
+            return f"Multi-agents : {donnees.get('tool', '?')}"
         case "fileChange":
             chemins = [c.get("path", "?") for c in donnees.get("changes", []) if isinstance(c, dict)]
             return "Fichiers : " + ", ".join(chemins) if chemins else type_

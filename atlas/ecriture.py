@@ -7,7 +7,7 @@ import re
 from typing import Any
 
 from .client import supabase
-from .modeles import Action
+from .modeles import Action, Validite
 
 MOTIF_ID = re.compile(r"^[a-z0-9_]+$")
 
@@ -99,3 +99,45 @@ def ajouter_demonstration(
         "ajout_demonstration", auteur=auteur, noeud_id=noeud_id, nom_demonstration=nom_demonstration, apres=ligne
     )
     return ligne
+
+
+def noter_demonstration(
+    *,
+    noeud_id: str,
+    nom_demonstration: str,
+    validite: Validite,
+    confiance: float,
+    justification: str,
+    auteur: str,
+) -> dict:
+    """Verdict du vérificateur ; la justification va dans le journal."""
+    demonstration = (
+        supabase()
+        .table("demonstrations")
+        .select("validite, confiance")
+        .eq("noeud_id", noeud_id)
+        .eq("nom_demonstration", nom_demonstration)
+        .execute()
+        .data
+    )
+    if not demonstration:
+        raise ErreurGraphe(f"Démonstration inexistante : {noeud_id} / {nom_demonstration}.")
+    apres = {"validite": validite, "confiance": confiance}
+    (
+        supabase()
+        .table("demonstrations")
+        .update(apres)
+        .eq("noeud_id", noeud_id)
+        .eq("nom_demonstration", nom_demonstration)
+        .execute()
+    )
+    _journaliser(
+        "verdict",
+        auteur=auteur,
+        noeud_id=noeud_id,
+        nom_demonstration=nom_demonstration,
+        avant=demonstration[0],
+        apres=apres,
+        raison=justification,
+    )
+    return apres

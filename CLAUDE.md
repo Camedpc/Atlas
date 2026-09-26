@@ -9,11 +9,12 @@ Un hook vérifie les types du front (`tsc --noEmit`) après chaque édition de `
 
 ## Vision
 
-Atlas est un harnais de recherche scientifique : un orchestrateur mène une recherche, l'agent textGrapher
-transforme le raisonnement en graphe (nœud = assertion, démonstration = liaison depuis ses prémisses
-`justifie_par`), puis le vérificateur note chaque liaison. L'UI cible : conversations à gauche, graphe
-sigma.js à droite. L'orchestrateur existe (`atlas/orchestrateur/`) ; textGrapher et vérificateur se brancheront
-dans `pipeline.py`, les sous-agents dans `sous_agents.py` — c'est Camille qui les définit, ne pas les inventer.
+Atlas est un harnais de recherche scientifique. Dans un seul thread Codex par conversation, l'orchestrateur confie
+des missions à des directeurs de labo (qui convoquent `litterature` et `experimentateur`, tiennent `journal.md` et
+rédigent `rapport.md` dans `directeurs/NN-sujet/`), fait transformer chaque rapport en graphe par le `graphiste`
+(nœud = assertion, démonstration = liaison depuis ses prémisses `justifie_par`), puis appelle l'outil `verifier`
+qui note chaque liaison. L'UI : conversations à gauche, graphe sigma.js à droite. Rôles dans `sous_agents.py`,
+prompts dans `atlas/orchestrateur/prompts/*.md` : c'est Camille qui les fait évoluer (prompt engineering).
 
 ## Modèle de graphe
 
@@ -73,6 +74,18 @@ serveurs MCP : toute variable nécessaire va dans `env_vars` (noms) ou `env` (ex
 Lancer le serveur avec `--reload-dir atlas --reload-dir api` en dev (sinon les fichiers écrits dans `espace/` le
 redémarrent). Sous Windows, `--reload` peut rester bloqué après une rafale de modifications en laissant l'ancien
 processus répondre : si un changement Python semble ignoré, tuer le port 8000 et relancer. Un vrai tour d'agent consomme le quota Codex : les tests remplacent `agent.tour` et Supabase.
+
+Sous-agents (multi-agents natif de Codex, testé sur 3 niveaux) : chaque rôle de `sous_agents.ROLES` devient
+`[agents.<nom>]` avec une couche de config générée dans `CODEX_HOME/roles/` (modèle, effort, prompt) ; modèles
+réglables par `ATLAS_MODELE_<ROLE>` / `ATLAS_EFFORT_<ROLE>`. Les rôles sont visibles de tous les agents : la
+hiérarchie tient aux prompts. Un sous-agent doit être lancé avec `fork_turns = "none"` : sinon il hérite de tout
+l'historique du parent, se perd, et Codex ignore le modèle de son rôle. Places simultanées :
+`ATLAS_MAX_SOUS_AGENTS` (+1 pour l'orchestrateur, défaut Codex 4 au total). Le flux du thread principal ne montre
+que « sous-agent démarré / terminé » ; le détail est dans les rollouts de `CODEX_HOME/sessions/`.
+Vérificateur : serveur MCP `mcp_verificateur.py` (délai `ATLAS_DELAI_VERIFICATION`), qui lance son propre Codex
+(threads éphémères, lecture seule, sortie structurée) : `ATLAS_MODELE_VERIFICATEUR` juge, et si « invalide » ou sous
+`ATLAS_SEUIL_CONFIANCE`, `ATLAS_MODELE_VERIFICATEUR_RECOURS` rejuge et fait foi ; verdict écrit par
+`ecriture.noter_demonstration` (validite, confiance ; justification au journal, action `verdict`).
 
 L'ancien backend agents (chercheur, vérificateur) reste lisible via `git show 1aa2d62:backend/app/agents/…`.
 

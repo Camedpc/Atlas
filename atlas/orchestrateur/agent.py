@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import os
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -19,8 +20,8 @@ from openai_codex.types import ReasoningEffort
 from .. import conversations
 from ..modeles import Conversation
 from . import config
-from .consignes import CONSIGNES
-from .sous_agents import SOUS_AGENTS
+from .consignes import consigne
+from .sous_agents import sous_agents
 from .traduction import traduire
 
 log = logging.getLogger(__name__)
@@ -66,14 +67,22 @@ def surcharges_thread(conversation_id: str) -> dict[str, Any]:
                 # Codex ne transmet pas tout l'environnement aux serveurs MCP : on nomme ce qu'il leur faut.
                 "env_vars": ["SUPABASE_URL", "SUPABASE_SECRET_KEY"],
                 "env": {"ATLAS_CONVERSATION_ID": conversation_id},
-            }
+            },
+            "verificateur": {
+                "command": sys.executable,
+                "args": ["-m", "atlas.orchestrateur.mcp_verificateur"],
+                "cwd": str(config.RACINE),
+                # Il lance son propre Codex : il lui faut Supabase, la connexion et les réglages du vérificateur.
+                "env_vars": [n for n in os.environ if n.startswith(("ATLAS_", "SUPABASE_")) or n == "OPENAI_API_KEY"],
+                "env": {"ATLAS_CODEX_HOME": str(config.CODEX_HOME), "ATLAS_ESPACE_TRAVAIL": str(config.ESPACE_TRAVAIL)},
+                "tool_timeout_sec": config.DELAI_VERIFICATION,
+            },
         },
     }
-    agents: dict[str, Any] = dict(SOUS_AGENTS)
+    agents: dict[str, Any] = sous_agents()
     if config.MAX_SOUS_AGENTS:
         agents["max_concurrent_threads_per_session"] = config.MAX_SOUS_AGENTS
-    if agents:
-        surcharges["agents"] = agents
+    surcharges["agents"] = agents
     return surcharges
 
 
@@ -84,7 +93,7 @@ def parametres_thread(dossier: Path, conversation_id: str) -> dict[str, Any]:
         "approval_mode": ApprovalMode.deny_all,
         "cwd": str(dossier),
         "model": config.MODELE,
-        "developer_instructions": CONSIGNES,
+        "developer_instructions": consigne("orchestrateur"),
         "config": surcharges_thread(conversation_id),
     }
 
