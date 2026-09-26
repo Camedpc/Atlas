@@ -13,6 +13,7 @@ import contextlib
 import json
 import logging
 import re
+import time
 import uuid
 from collections import deque
 from typing import Any
@@ -42,6 +43,8 @@ FIN_SESSION = re.compile(
 # exactement « À plus tard. », et c'est cette réponse d'Atlas qui ferme la session.
 REPONSE_DE_FIN = re.compile(r"^\W*à plus tard\W*$", re.IGNORECASE)
 NB_ECHANGES_CONTEXTE = 6
+# Au-delà de ce silence entre deux morceaux de transcription, c'est une nouvelle demande.
+PAUSE_NOUVELLE_DEMANDE_S = 4.0
 DELAI_MAJ_PROMPT_S = 0.3
 
 
@@ -70,6 +73,9 @@ class SessionVocale:
         self.contexte = Contexte()
         self.echanges: deque[dict[str, str]] = deque(maxlen=NB_ECHANGES_CONTEXTE)
         self.derniere_demande = ""
+        # Morceaux de transcription du tour en cours (Gradbot coupe une phrase hésitante en plusieurs envois).
+        self._morceaux: list[str] = []
+        self._dernier_morceau = 0.0
         self.outils = Outils(registre, utilisateur_id, self._contexte_courant)
         self.entree: gradbot.SessionInputHandle | None = None
         self.suivis: dict[int, asyncio.Task] = {}
@@ -265,7 +271,7 @@ class SessionVocale:
         if nom == "push_to_llm" and isinstance(donnees, dict):
             texte = (donnees.get("user_text") or "").strip()
             if texte and texte not in ("[start]", "..."):
-                self.derniere_demande = texte
+                self.derniere_demande = self._ajouter_morceau(texte)
                 self.echanges.append({"role": "utilisateur", "texte": texte})
                 self.journal.ecrire("utilisateur", texte=texte)
                 if phrase_de_fin(texte):
@@ -280,6 +286,16 @@ class SessionVocale:
             self.journal.ecrire("interruption")
         if temps is not None:
             self._mesurer(nom, temps)
+
+    def _ajouter_morceau(self, texte: str) -> str:
+        """Demande brute = les morceaux du tour en cours, bout à bout. Un nouveau tour commence après un
+        appel d'outil (la demande a été consommée) ou après PAUSE_NOUVELLE_DEMANDE_S de silence."""
+        maintenant = time.monotonic()
+        if maintenant - self._dernier_morceau > PAUSE_NOUVELLE_DEMANDE_S:
+            self._morceaux = []
+        self._dernier_morceau = maintenant
+        self._morceaux.append(texte)
+        return " ".join(self._morceaux)
 
     def _sur_texte_atlas(self, morceau: str, tour: int | None) -> None:
         """Assemble la réponse d'Atlas du tour en cours ; « À plus tard. » clôt la session."""
@@ -323,6 +339,8 @@ class SessionVocale:
         if not isinstance(args, dict):
             args = {}
         execution = await self.outils.executer(info.tool_name, args, self.derniere_demande)
+        if info.tool_name == "lancer_tache":
+            self._morceaux = []  # la demande est partie dans une tâche : la suite sera une autre demande
         metriques.enregistrer_outil(info.tool_name, execution.ok)
         self.journal.ecrire("outil", nom=info.tool_name, arguments=args, resultat=execution.resultat,
                             demande_brute=self.derniere_demande)

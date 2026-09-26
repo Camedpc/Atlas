@@ -1,6 +1,7 @@
 """Agent moyen 2 (B2) : tâche `navigateur` → LotNavigation → compte rendu → fin de tâche. Modèle, registre
 et relais remplacés (aucun réseau, aucun quota)."""
 
+import dataclasses
 import json
 
 import httpx
@@ -67,7 +68,7 @@ def planificateur(*plans):
     suite = list(plans)
 
     async def planifier(e: EntreePlan) -> Plan:
-        entrees.append(EntreePlan(e.extrait, e.demande_brute, e.ecran, list(e.echanges)))
+        entrees.append(dataclasses.replace(e, echanges=list(e.echanges)))
         return suite.pop(0)
 
     planifier.entrees = entrees  # type: ignore[attr-defined]
@@ -177,3 +178,12 @@ async def test_modele_qui_repond_sans_outil(monkeypatch):
     assert plan.intentions is None and appels == [2, 3]  # un second essai avec rappel de la consigne
     with pytest.raises(RuntimeError):
         await moyen2.planificateur_modele(None)(EntreePlan("x", "x", None))
+
+
+async def test_la_reformulation_d_atlas_accompagne_une_transcription_coupee():
+    planifier = planificateur(Plan(LIGNEE))
+    await mener(tache(demande_brute="monotone.", extrait="monotone.", reformulation="Focus sur le résultat de la limite monotone"),
+                Relais(), planifier)
+    e = planifier.entrees[0]
+    assert e.reformulation == "Focus sur le résultat de la limite monotone"
+    assert "Ce qu'Atlas a compris : « Focus sur le résultat de la limite monotone »" in messages_plan(e)[1]["content"]

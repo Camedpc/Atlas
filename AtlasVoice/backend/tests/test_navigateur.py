@@ -242,3 +242,22 @@ async def test_lecture_de_l_appel_d_outil_en_flux(monkeypatch):
 
     monkeypatch.setattr(navigateur, "_flux", flux)
     assert await navigateur.appel_modele(ModeleLLM("openai", "m"))([]) == ("commander", {"commandes": []})
+
+
+async def test_point_de_vue_sans_designation_jamais_introuvable():
+    """Le modèle liste parfois « 2d » ou « dessus » dans ses résolutions, sans candidat : ce n'est pas une désignation."""
+    s = Serveurs()
+    a = agent(s, modele(("commander", {
+        "resolutions": [{"texte": "2d", "candidats": [], "choisi": None, "raison": "vue"}],
+        "commandes": [{"op": "mode", "mode": "3d"}, {"op": "vue", "nom": "dessus"}]})))
+    cr = await a.traiter(lot({"intention": "point_de_vue", "mode": "3d", "vue": "dessus"}))
+    assert cr.ok and [c["op"] for c in s.lots[0]["commandes"]] == ["mode", "vue"]
+    # Une vraie désignation sans candidat reste introuvable.
+    s2 = Serveurs()
+    a2 = agent(s2, modele(("commander", {
+        "resolutions": [{"texte": "la conjecture de Riemann", "candidats": [], "choisi": None, "raison": "absente"}],
+        "commandes": [{"op": "cadrer", "cibles": "tout"}]})))
+    cr = await a2.traiter(lot({"intention": "montrer", "quoi": {"texte": "La conjecture de Riemann !"}}))
+    assert cr.erreur.code == "introuvable" and not s2.lots
+    await a.fermer()
+    await a2.fermer()

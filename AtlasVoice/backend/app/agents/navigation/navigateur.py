@@ -312,9 +312,29 @@ def question(candidats: list[str], noms: dict[str, str]) -> str:
     return f"Lequel veux-tu : {', '.join(cites[:-1])} ou {cites[-1]} ?"
 
 
-def verifier_resolutions(resolutions: list[dict[str, Any]], ids: set[str], noms: dict[str, str]) -> None:
+def _normaliser(texte: str) -> str:
+    return " ".join(re.sub(r"[^\w]+", " ", texte.lower()).split())
+
+
+def designations(lot: LotNavigation) -> set[str]:
+    """Textes des désignations du lot (quoi, conversation d'un filtre), normalisés."""
+    textes = []
+    for i in lot.intentions:
+        if isinstance(i, IntentionDesignation):
+            textes.append(i.quoi.texte)
+        elif isinstance(i, IntentionFiltrer) and i.criteres.conversation is not None:
+            textes.append(i.criteres.conversation.texte)
+    return {_normaliser(t) for t in textes}
+
+
+def verifier_resolutions(resolutions: list[dict[str, Any]], ids: set[str], noms: dict[str, str],
+                         designees: set[str] | None = None) -> None:
     """Règles appliquées par le code, pas laissées au modèle : plusieurs candidats sans choix sûr → question ;
-    aucun candidat → introuvable ; un id hors du graphe → second essai. (Les conversations ne sont pas des nœuds.)"""
+    aucun candidat → introuvable ; un id hors du graphe → second essai. (Les conversations ne sont pas des nœuds.)
+    `designees` : seules les résolutions de vraies désignations du lot comptent ; le modèle en ajoute parfois
+    pour « 2d » ou « dessus », qui ne désignent rien."""
+    if designees is not None:
+        resolutions = [r for r in resolutions if _normaliser(str(r.get("texte") or "")) in designees]
     for r in resolutions:
         candidats = [c for c in (r.get("candidats") or []) if isinstance(c, str)]
         choisi = r.get("choisi")
@@ -427,7 +447,7 @@ class AgentNavigateur:
                             {"candidats": candidats} if candidats else None)
             if nom == "commander" and isinstance(args.get("commandes"), list):
                 try:
-                    verifier_resolutions(args.get("resolutions") or [], ids, noms)
+                    verifier_resolutions(args.get("resolutions") or [], ids, noms, designations(lot))
                     if not args["commandes"]:
                         raise ValueError("aucune commande")
                     return construire_lot(args["commandes"], lot, etat, pile, ids)

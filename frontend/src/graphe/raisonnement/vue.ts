@@ -622,7 +622,7 @@ export class VueRaisonnement {
   }
 
   /** Cadre des points (tous si null). `extrusion` : cadrer pour l'état final d'une transition. */
-  cadrer(points: Iterable<number> | null = null, duree = this.reglages.valeurs.dureeTransition, extrusion = this.extrusion): void {
+  cadrer(points: Iterable<number> | null = null, duree = this.reglages.valeurs.dureeTransition, extrusion = this.mode === '3d' ? 1 : 0): void {
     const pos = new Float32Array(this.nP * 3)
     const ec = extrusion
     for (let p = 0; p < this.nP; p++) {

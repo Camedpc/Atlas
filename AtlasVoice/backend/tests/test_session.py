@@ -137,3 +137,21 @@ def test_fin_par_la_reponse_d_atlas(registre):
     for morceau in ("À", "plus", "tard."):
         s._sur_texte_atlas(morceau, 7)
     assert demandes == [7]
+
+
+async def test_morceaux_de_transcription_d_une_meme_demande(registre, monkeypatch):
+    """Gradbot coupe une phrase hésitante : la demande brute les réunit, jusqu'à un appel d'outil ou un silence."""
+    import app.voix.session as module
+
+    s = SessionVocale(None, registre, "u1")  # type: ignore[arg-type]
+    horloge = [100.0]
+    monkeypatch.setattr(module.time, "monotonic", lambda: horloge[0])
+    pousser = lambda texte: s._sur_evenement("push_to_llm", {"user_text": texte}, None)  # noqa: E731
+    pousser("je veux que tu te focus sur le... sur le résultat de la limite")
+    horloge[0] += 1.5
+    pousser("monotone.")
+    assert s.derniere_demande == "je veux que tu te focus sur le... sur le résultat de la limite monotone."
+    # Après un long silence, c'est une nouvelle demande.
+    horloge[0] += module.PAUSE_NOUVELLE_DEMANDE_S + 1
+    pousser("passe en 3D")
+    assert s.derniere_demande == "passe en 3D"
