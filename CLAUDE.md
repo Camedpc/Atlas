@@ -43,10 +43,12 @@ Isolation totale de la machine (produit destiné à une VM) : `CODEX_HOME` dédi
 `project_root_markers = []` ; ne jamais retomber sur `~/.codex`. Connexion : compte ChatGPT de Camille en dev
 (`python -m atlas.orchestrateur.connexion`), `OPENAI_API_KEY` en production — la clé, si présente, est prioritaire.
 Pas d'outils Python en process avec Codex : les outils Atlas passent par le serveur MCP stdio
-`atlas/orchestrateur/mcp_atlas.py`, déclaré dans `surcharges_thread()` avec `features.hooks = false` (les hooks
-de la machine ne doivent pas tourner pendant une recherche). Le paquet `mcp` est en 2.x : `MCPServer`, plus `FastMCP`.
+`atlas/orchestrateur/mcp_atlas.py` (lecture + écriture via `atlas/ecriture.py`, qui journalise chaque écriture),
+déclaré dans `surcharges_thread()` avec `features.hooks = false`. Codex ne transmet pas tout l'environnement aux
+serveurs MCP : toute variable nécessaire va dans `env_vars` (noms) ou `env` (ex. `ATLAS_CONVERSATION_ID`). Le paquet `mcp` est en 2.x : `MCPServer`, plus `FastMCP`.
 Lancer le serveur avec `--reload-dir atlas --reload-dir api` en dev (sinon les fichiers écrits dans `espace/` le
-redémarrent). Un vrai tour d'agent consomme le quota Codex : les tests remplacent `agent.tour` et Supabase.
+redémarrent). Sous Windows, `--reload` peut rester bloqué après une rafale de modifications en laissant l'ancien
+processus répondre : si un changement Python semble ignoré, tuer le port 8000 et relancer. Un vrai tour d'agent consomme le quota Codex : les tests remplacent `agent.tour` et Supabase.
 
 L'ancien backend agents (chercheur, vérificateur) reste lisible via `git show 1aa2d62:backend/app/agents/…`.
 

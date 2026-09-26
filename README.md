@@ -71,7 +71,8 @@ Vercel, configuré par `vercel.json` : build du front dans `frontend/dist`, et `
 L'orchestrateur est Codex piloté par son [SDK Python](https://github.com/openai/codex/tree/main/sdk/python)
 (`openai-codex`, qui installe aussi le binaire Codex) : accès complet sans demande d'approbation, recherche web
 en direct, un dossier `espace/<conversation>/` et un thread Codex par conversation. Il lit le graphe via le
-serveur MCP `atlas` (`lire_graphe`, `lire_noeud`), lancé par Codex. Il est isolé de la machine : son propre
+serveur MCP `atlas`, lancé par Codex : il lit le graphe (`lire_graphe`, `lire_noeud`) et l'écrit lui-même
+(`creer_noeud`, `ajouter_demonstration` ; nœuds tagués par la conversation, démonstrations « à vérifier »). Il est isolé de la machine : son propre
 `CODEX_HOME` (`espace/.codex`), aucune lecture de `~/.codex`, de hooks ni d'`AGENTS.md` du dépôt.
 
 - Consignes : `atlas/orchestrateur/consignes.py`

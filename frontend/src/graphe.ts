@@ -30,8 +30,8 @@ const SOMBRE = matchMedia('(prefers-color-scheme: dark)').matches
 const COULEUR_ESTOMPEE = SOMBRE ? '#353942' : '#e3e5e9'
 const COULEUR_ETIQUETTE = SOMBRE ? '#e6e8ec' : '#1d2129'
 const TAILLE_NOEUD = 9
-const ECART_X = 1
-const ECART_Y = 1.4
+const ECART_X = 3
+const ECART_Y = 2.5
 
 /** Disposition en couches : les prémisses en haut, chaque nœud une couche sous sa prémisse la plus profonde. */
 function disposer(noeuds: Noeud[]): Map<string, { x: number; y: number }> {
@@ -55,7 +55,7 @@ function disposer(noeuds: Noeud[]): Map<string, { x: number; y: number }> {
   }
   const positions = new Map<string, { x: number; y: number }>()
   for (const [p, ids] of couches) {
-    ids.forEach((id, i) => positions.set(id, { x: (i - (ids.length - 1) / 2) * ECART_X * 3, y: -p * ECART_Y }))
+    ids.forEach((id, i) => positions.set(id, { x: (i - (ids.length - 1) / 2) * ECART_X, y: -p * ECART_Y }))
   }
   return positions
 }
@@ -64,7 +64,8 @@ export class VueGraphe {
   private graphe = new Graph({ type: 'directed', multi: true })
   private sigma: Sigma
   private selection: string | null = null
-  private premierAffichage = true
+  // Ids affichés au dernier dessin : s'ils changent (filtre, conversation, nouveaux nœuds), on recadre.
+  private affiches = ''
   private surSelection: (noeud: Noeud | null) => void
 
   constructor(conteneur: HTMLElement, surSelection: (noeud: Noeud | null) => void) {
@@ -112,11 +113,12 @@ export class VueGraphe {
       }
     }
     if (this.selection && !gardes.has(this.selection)) this.selectionner(null)
-    if (this.premierAffichage) {
-      this.sigma.getCamera().animatedReset()
-      this.premierAffichage = false
-    }
     this.sigma.refresh()
+    const affiches = [...gardes].sort().join(' ')
+    if (affiches !== this.affiches) {
+      this.affiches = affiches
+      this.sigma.getCamera().animatedReset()
+    }
     return noeuds.length
   }
 

@@ -49,7 +49,8 @@ def test_traduire_ignore_raisonnement_et_message_vide():
 
 
 def test_surcharges_declarent_le_serveur_mcp_et_coupent_les_hooks():
-    surcharges = agent.surcharges_thread()
+    surcharges = agent.surcharges_thread("c1")
+    assert surcharges["mcp_servers"]["atlas"]["env"] == {"ATLAS_CONVERSATION_ID": "c1"}
     assert surcharges["mcp_servers"]["atlas"]["args"] == ["-m", "atlas.orchestrateur.mcp_atlas"]
     assert surcharges["features"] == {"hooks": False}
     assert surcharges["project_root_markers"] == []
@@ -214,3 +215,21 @@ def test_sans_compte_ni_cle_erreur_explicite(monkeypatch):
         raise AssertionError("aucune erreur levée")
     except agent.ConnexionManquante as e:
         assert "atlas.orchestrateur.connexion" in str(e)
+
+
+def test_verifications_d_ecriture():
+    from atlas import ecriture
+
+    ecriture.verifier_id("lemme_borne_2")
+    for mauvais in ["Lemme", "lemme-borne", "lemme borne", ""]:
+        try:
+            ecriture.verifier_id(mauvais)
+            raise AssertionError(f"id accepté : {mauvais!r}")
+        except ecriture.ErreurGraphe:
+            pass
+    assert ecriture.normaliser_premisses("thm", ["a", "b", "a"]) == ["a", "b"]
+    try:
+        ecriture.normaliser_premisses("thm", ["a", "thm"])
+        raise AssertionError("un nœud a été accepté comme sa propre prémisse")
+    except ecriture.ErreurGraphe:
+        pass

@@ -51,7 +51,7 @@ def config_codex() -> CodexConfig:
     return CodexConfig(codex_bin=config.CODEX_BIN, env={"CODEX_HOME": str(config.CODEX_HOME)})
 
 
-def surcharges_thread() -> dict[str, Any]:
+def surcharges_thread(conversation_id: str) -> dict[str, Any]:
     """Réglages Codex d'Atlas, appliqués à chaque thread."""
     surcharges: dict[str, Any] = {
         "web_search": "live",
@@ -63,6 +63,9 @@ def surcharges_thread() -> dict[str, Any]:
                 "command": sys.executable,
                 "args": ["-m", "atlas.orchestrateur.mcp_atlas"],
                 "cwd": str(config.RACINE),
+                # Codex ne transmet pas tout l'environnement aux serveurs MCP : on nomme ce qu'il leur faut.
+                "env_vars": ["SUPABASE_URL", "SUPABASE_SECRET_KEY"],
+                "env": {"ATLAS_CONVERSATION_ID": conversation_id},
             }
         },
     }
@@ -71,7 +74,7 @@ def surcharges_thread() -> dict[str, Any]:
     return surcharges
 
 
-def parametres_thread(dossier: Path) -> dict[str, Any]:
+def parametres_thread(dossier: Path, conversation_id: str) -> dict[str, Any]:
     return {
         # Même liberté que Codex en local : aucune restriction de fichiers, et rien à faire approuver.
         "sandbox": Sandbox.full_access,
@@ -79,7 +82,7 @@ def parametres_thread(dossier: Path) -> dict[str, Any]:
         "cwd": str(dossier),
         "model": config.MODELE,
         "developer_instructions": CONSIGNES,
-        "config": surcharges_thread(),
+        "config": surcharges_thread(conversation_id),
     }
 
 
@@ -160,7 +163,7 @@ async def _ouvrir_thread(
     codex: AsyncCodex, conversation: Conversation, execution_id: str, texte: str, dossier: Path
 ) -> tuple[AsyncThread, str]:
     """Reprend le thread de la conversation, ou en ouvre un nouveau (avec l'historique si la reprise échoue)."""
-    parametres = parametres_thread(dossier)
+    parametres = parametres_thread(dossier, conversation.id)
     if conversation.session_agent:
         try:
             return await codex.thread_resume(conversation.session_agent, **parametres), texte
