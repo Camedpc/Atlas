@@ -81,6 +81,12 @@ L'orchestrateur délègue à des sous-agents Codex dans le même thread : `direc
 serveur MCP `verificateur` : un modèle économique juge chaque démonstration, un modèle de recours rejuge les
 verdicts invalides ou peu sûrs, et le verdict (`validite`, `confiance`) est écrit sur la démonstration.
 
+Les agents sont confinés dans le dossier de leur conversation (`atlas/orchestrateur/bunker.py`) :
+`espace/utilisateurs/<utilisateur>/<projet>/sessions/<conversation>/`, avec `conv/` (copie de la conversation),
+`docs_session/`, `scripts/` et `.tmp/`. Ils lisent leur projet, écrivent seulement dans leur session et dans le
+Python partagé (`espace/partage/`), et n'ont pas accès au reste de la machine (sous Linux ; sous Windows, seule
+l'écriture est confinée).
+
 - Prompts (un fichier par agent, relus à chaque tour) : `atlas/orchestrateur/prompts/`
 - Rôles, modèles et efforts par défaut : `atlas/orchestrateur/sous_agents.py`
 - Vérificateur : `atlas/orchestrateur/verificateur.py` et `mcp_verificateur.py`

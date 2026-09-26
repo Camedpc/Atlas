@@ -1,9 +1,10 @@
 # Serveur longue durée d'Atlas (lecture du graphe + orchestrateur Codex). Voir deploiement/README.md.
 FROM python:3.13-slim
 
-# Outils que l'orchestrateur utilise dans ses commandes (git, recherche, téléchargements).
+# Outils que l'orchestrateur utilise dans ses commandes (git, recherche, téléchargements), et bubblewrap, qui sert
+# au sandbox de Codex sous Linux (le bunker : voir atlas/orchestrateur/bunker.py).
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends git curl ca-certificates ripgrep \
+    && apt-get install -y --no-install-recommends git curl ca-certificates ripgrep bubblewrap \
     && rm -rf /var/lib/apt/lists/*
 
 # L'agent a un accès complet… au conteneur seulement, et sans être root.
@@ -13,6 +14,8 @@ RUN useradd --create-home --uid 1000 atlas \
 WORKDIR /app
 COPY requirements.txt requirements-agents.txt ./
 RUN pip install --no-cache-dir -r requirements-agents.txt
+# Paquets scientifiques courants, visibles depuis le Python partagé des agents (espace/partage/python).
+RUN pip install --no-cache-dir numpy scipy sympy pandas matplotlib networkx
 
 COPY atlas ./atlas
 COPY api ./api

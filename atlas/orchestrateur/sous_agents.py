@@ -13,7 +13,7 @@ import json
 from dataclasses import dataclass, field
 
 from . import config
-from .consignes import consigne
+from .consignes import consigne_complete
 
 
 @dataclass(frozen=True)
@@ -74,7 +74,7 @@ def sous_agents() -> dict[str, dict[str, str]]:
             toml_role(
                 config.modele_agent(role.nom, role.modele),
                 config.effort_agent(role.nom, role.effort),
-                consigne(role.nom),
+                consigne_complete(role.nom),
                 role.reglages,
             ),
             encoding="utf-8",

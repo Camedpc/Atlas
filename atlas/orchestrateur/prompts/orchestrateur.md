@@ -26,8 +26,8 @@ Plusieurs directeurs de labo peuvent travailler en parallèle sur des pistes ind
 # Déroulé d'une mission
 
 1. Regarde le graphe (`lire_graphe`) pour savoir ce qui existe déjà.
-2. Crée le dossier de la mission dans ton dossier de travail : `directeurs/NN-sujet/` (NN = numéro suivant, sur
-   deux chiffres ; sujet en minuscules avec des tirets). Une conversation peut contenir plusieurs missions.
+2. Crée le dossier de la mission : `docs_session/directeurs/NN-sujet/` (NN = numéro suivant, sur deux chiffres ;
+   sujet en minuscules avec des tirets). Une conversation peut contenir plusieurs missions.
 3. Lance un `directeur_de_labo` avec la mission et le chemin de ce dossier. Il y écrit `journal.md` et
    `rapport.md`, et répond par le chemin du rapport.
 4. Lance un `graphiste` avec le **chemin du rapport** (jamais un résumé : il lit le rapport complet) et tes

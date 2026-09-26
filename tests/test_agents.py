@@ -4,11 +4,12 @@ from datetime import datetime
 
 import pytest
 import tomllib
+from openai_codex import Sandbox
 
 from atlas import ecriture, lecture
 from atlas.modeles import Demonstration, LigneNoeud
-from atlas.orchestrateur import agent, config, sous_agents, verificateur
-from atlas.orchestrateur.consignes import DOSSIER_PROMPTS, consigne
+from atlas.orchestrateur import agent, bunker, config, sous_agents, verificateur
+from atlas.orchestrateur.consignes import DOSSIER_PROMPTS, consigne_complete
 from atlas.orchestrateur.verificateur import Verdict
 
 MAINTENANT = datetime(2026, 9, 26)
@@ -59,7 +60,7 @@ def test_sous_agents_ecrit_les_couches_et_suit_l_environnement(monkeypatch, tmp_
     graphiste = tomllib.loads((tmp_path / "roles" / "graphiste.toml").read_text(encoding="utf-8"))
     assert agents["graphiste"]["config_file"] == str(tmp_path / "roles" / "graphiste.toml")
     assert graphiste["model"] == "gpt-6-luna"
-    assert graphiste["developer_instructions"] == consigne("graphiste")
+    assert graphiste["developer_instructions"] == consigne_complete("graphiste")
     assert (
         tomllib.loads((tmp_path / "roles" / "directeur_de_labo.toml").read_text(encoding="utf-8"))["model"]
         == "gpt-6-astra"
@@ -141,3 +142,90 @@ def test_verifier_rejuge_les_cas_douteux_et_isole_les_erreurs(monkeypatch):
     assert ("douteux", "gpt-6-sol") in appels and ("sur", "gpt-6-sol") not in appels
     assert sorted(n["noeud_id"] for n in notes) == ["douteux", "sur"]
     assert all(n["auteur"] == "verificateur" for n in notes)
+
+
+# ── Bunker ───────────────────────────────────────────────────────────────────
+
+
+def _espace(monkeypatch, tmp_path):
+    monkeypatch.setattr(config, "ESPACE_TRAVAIL", tmp_path)
+    monkeypatch.setattr(config, "CODEX_HOME", tmp_path / ".codex")
+    monkeypatch.setattr(config, "BUNKER", True)
+
+
+def test_profil_du_bunker(monkeypatch, tmp_path):
+    _espace(monkeypatch, tmp_path)
+    session = bunker.dossier_session("c1")
+    assert session == tmp_path / "utilisateurs" / "camille" / "defaut" / "sessions" / "c1"
+    profil = bunker.permissions_session(session, windows=False)
+    assert profil["default_permissions"] == "bunker"
+    fichiers = profil["permissions"]["bunker"]["filesystem"]
+    assert fichiers == {
+        ":minimal": "read",
+        str(tmp_path / "utilisateurs" / "camille" / "defaut"): "read",
+        str(session): "write",
+        str(tmp_path / "partage"): "write",
+        str(tmp_path / ".codex"): "deny",
+    }
+    assert ":root" not in fichiers  # rien d'autre n'est lisible
+    assert profil["permissions"]["bunker"]["network"] == {"enabled": True}
+
+
+def test_environnement_shell_sans_secrets_et_avec_python_partage(monkeypatch, tmp_path):
+    _espace(monkeypatch, tmp_path)
+    env = bunker.environnement_shell(bunker.dossier_session("c1"))
+    assert env["inherit"] == "core"
+    assert env["set"]["PATH"].startswith(str(bunker.binaires_python()))
+    assert env["set"]["TMPDIR"] == str(bunker.dossier_session("c1") / ".tmp")
+
+
+def test_surcharges_en_bunker_sans_mode_de_sandbox(monkeypatch, tmp_path):
+    _espace(monkeypatch, tmp_path)
+    parametres = agent.parametres_thread(tmp_path, "c1")
+    assert "sandbox" not in parametres  # un profil de permissions ne se combine pas avec sandbox_mode
+    assert parametres["config"]["default_permissions"] == "bunker"
+    assert "# Ton environnement" in parametres["developer_instructions"]
+    directeur = tomllib.loads((tmp_path / ".codex" / "roles" / "directeur_de_labo.toml").read_text(encoding="utf-8"))
+    assert "# Ton environnement" in directeur["developer_instructions"]
+
+
+def test_sans_bunker_acces_complet(monkeypatch, tmp_path):
+    _espace(monkeypatch, tmp_path)
+    monkeypatch.setattr(config, "BUNKER", False)
+    parametres = agent.parametres_thread(tmp_path, "c1")
+    assert parametres["sandbox"] == Sandbox.full_access
+    assert "default_permissions" not in parametres["config"]
+
+
+def test_preparer_session_cree_l_arborescence_et_reprend_l_ancien_dossier(monkeypatch, tmp_path):
+    _espace(monkeypatch, tmp_path)
+    (tmp_path / "partage" / "python").mkdir(parents=True)  # évite de créer un vrai venv
+    (tmp_path / "c1").mkdir()
+    (tmp_path / "c1" / "notes.md").write_text("ancien")
+    session = bunker.preparer_session("c1")
+    assert (session / "notes.md").read_text() == "ancien" and not (tmp_path / "c1").exists()
+    for nom in bunker.SOUS_DOSSIERS_SESSION:
+        assert (session / nom).is_dir()
+    for nom in ("doc_projet", "scripts_projet"):
+        assert (bunker.dossier_projet() / nom).is_dir()
+
+
+def test_conversation_markdown():
+    from atlas.modeles import Message
+    from atlas.orchestrateur.pipeline import conversation_markdown
+
+    def message(role, contenu):
+        return Message(
+            id=1, conversation_id="c1", execution_id=None, role=role, contenu=contenu, donnees=None, cree_le=MAINTENANT
+        )
+
+    texte = conversation_markdown(
+        [
+            message("utilisateur", "Question ?"),
+            message("outil", "atlas.lire_graphe\nx"),
+            message("assistant", "Réponse."),
+        ]
+    )
+    assert "## Utilisateur — 2026-09-26 00:00\n\nQuestion ?" in texte
+    assert "> outil (2026-09-26 00:00) : atlas.lire_graphe\n" in texte
+    assert "## Orchestrateur" in texte and "Réponse." in texte

@@ -19,8 +19,8 @@ from openai_codex.types import ReasoningEffort
 
 from .. import conversations
 from ..modeles import Conversation
-from . import config
-from .consignes import consigne
+from . import bunker, config
+from .consignes import consigne_complete
 from .sous_agents import sous_agents
 from .traduction import traduire
 
@@ -83,19 +83,27 @@ def surcharges_thread(conversation_id: str) -> dict[str, Any]:
     if config.MAX_SOUS_AGENTS:
         agents["max_concurrent_threads_per_session"] = config.MAX_SOUS_AGENTS
     surcharges["agents"] = agents
+    if config.BUNKER:
+        # Hérité par les sous-agents : toute l'équipe travaille dans le bunker de la session.
+        session = bunker.dossier_session(conversation_id)
+        surcharges |= bunker.permissions_session(session)
+        surcharges["shell_environment_policy"] = bunker.environnement_shell(session)
     return surcharges
 
 
 def parametres_thread(dossier: Path, conversation_id: str) -> dict[str, Any]:
-    return {
-        # Même liberté que Codex en local : aucune restriction de fichiers, et rien à faire approuver.
-        "sandbox": Sandbox.full_access,
+    parametres: dict[str, Any] = {
+        # Rien à faire approuver : une commande refusée par le sandbox n'est jamais relancée hors du sandbox.
         "approval_mode": ApprovalMode.deny_all,
         "cwd": str(dossier),
         "model": config.MODELE,
-        "developer_instructions": consigne("orchestrateur"),
+        "developer_instructions": consigne_complete("orchestrateur"),
         "config": surcharges_thread(conversation_id),
     }
+    if not config.BUNKER:
+        # Le profil de permissions du bunker ne se combine pas avec un mode de sandbox : l'un ou l'autre.
+        parametres["sandbox"] = Sandbox.full_access
+    return parametres
 
 
 async def tour(
@@ -108,8 +116,7 @@ async def tour(
 
     `sur_tour` reçoit le tour dès qu'il est lancé, pour pouvoir l'interrompre ; il peut lever `Arret`.
     """
-    dossier = config.ESPACE_TRAVAIL / conversation.id
-    dossier.mkdir(parents=True, exist_ok=True)
+    dossier = await asyncio.to_thread(bunker.preparer_session, conversation.id)
 
     async with AsyncCodex(config=config_codex()) as codex:
         await _connecter(codex)

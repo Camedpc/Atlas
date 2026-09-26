@@ -26,6 +26,12 @@ ESPACE_TRAVAIL = Path(os.environ.get("ATLAS_ESPACE_TRAVAIL") or RACINE / "espace
 # Clé OpenAI : seule connexion de l'orchestrateur (enregistrée dans CODEX_HOME au premier tour).
 OPENAI_API_KEY = _optionnel("OPENAI_API_KEY")
 
+# Bunker (voir bunker.py) : utilisateur et projet des conversations — un seul de chaque pour l'instant.
+UTILISATEUR = os.environ.get("ATLAS_UTILISATEUR") or "camille"
+PROJET = os.environ.get("ATLAS_PROJET") or "defaut"
+# 1 (défaut) = agents confinés dans leur session ; 0 = accès complet à la machine, sans sandbox.
+BUNKER = os.environ.get("ATLAS_BUNKER", "1") != "0"
+
 # Dossier Codex propre à Atlas (connexion, threads, mémoire) : jamais le ~/.codex de la machine.
 CODEX_HOME = Path(os.environ.get("ATLAS_CODEX_HOME") or ESPACE_TRAVAIL / ".codex").resolve()
 
