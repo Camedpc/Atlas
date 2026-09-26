@@ -1,17 +1,23 @@
-"""Bunker : l'arborescence des agents et le profil de permissions Codex qui les y confine.
+"""Bunker : l'arborescence des agents, leur environnement de commandes et le sandbox Codex de l'écriture.
 
     espace/
-      .codex/                               CODEX_HOME (connexion, threads) : interdit aux agents
+      .codex/                               CODEX_HOME (connexion, threads)
       partage/                              commun à toutes les sessions, en écriture
         python/                             environnement Python : `pip install` sert à tout le monde
         pip/                                cache pip
-      utilisateurs/<utilisateur>/<projet>/  lisible par les sessions du projet
-        doc_projet/  scripts_projet/        ressources du projet (lecture seule pour les agents)
-        sessions/<conversation>/            dossier de travail : seul endroit où les agents écrivent
+      utilisateurs/<utilisateur>/<projet>/
+        doc_projet/  scripts_projet/        ressources du projet (les agents ne font que les lire)
+        sessions/<conversation>/            dossier de travail de la session
           conv/  docs_session/  scripts/  .tmp/
 
-Le reste de la machine est illisible, sauf les chemins système dont les outils ont besoin (`:minimal`). Le sandbox
-s'applique à toutes les commandes des agents et à leurs descendants ; les serveurs MCP, lancés par Codex, y échappent.
+Toujours actifs : l'arborescence, le Python partagé, les commandes sans les secrets du serveur, et la consigne de
+ne rien consulter hors de la session et du projet (`prompts/environnement.md`). La lecture n'est pas restreinte
+techniquement : c'est un choix, la consigne suffit.
+
+Avec ATLAS_BUNKER=1, le sandbox de Codex confine en plus l'écriture à la session et au partage, pour toutes les
+commandes des agents et leurs descendants (les serveurs MCP, lancés par Codex, y échappent). Il marche sous Windows,
+mais pas sur la VM : sous Linux, tout sandbox Codex passe par bubblewrap, qui a besoin de user namespaces que Docker
+et le durcissement d'Ubuntu (kernel.apparmor_restrict_unprivileged_userns) refusent. La VM tourne donc à 0.
 """
 
 import os
@@ -46,52 +52,16 @@ def binaires_python() -> Path:
 # ── Profils et environnement (fonctions pures) ───────────────────────────────
 
 
-def _plateforme(windows: bool) -> dict[str, Any]:
-    # Sans sandbox Windows configuré, Codex rejette toute commande (« blocked by policy »).
-    return {"windows": {"sandbox": "unelevated"}} if windows else {}
-
-
 def permissions_session(session: Path, windows: bool = os.name == "nt") -> dict[str, Any]:
-    """Écriture dans la session et le partage, lecture du projet et du système, rien d'autre ; réseau ouvert.
-
-    Sous Windows (dev local), le sandbox de Codex ne sait pas interdire la lecture d'une partie du disque : il refuse
-    alors de tourner. On n'y confine que l'écriture ; le vrai bunker est celui de la VM (Linux).
-    """
-    if windows:
-        fichiers = {":root": "read", str(session): "write", str(dossier_partage()): "write"}
-    else:
-        fichiers = {
-            ":minimal": "read",
-            str(dossier_projet()): "read",
-            str(session): "write",
-            str(dossier_partage()): "write",
-            str(config.CODEX_HOME): "deny",
-        }
-    return _plateforme(windows) | {
+    """Sandbox de l'écriture : lecture partout, écriture dans la session et le partage ; réseau ouvert."""
+    plateforme = {"windows": {"sandbox": "unelevated"}} if windows else {}  # sinon « blocked by policy »
+    return plateforme | {
         "default_permissions": "bunker",
         "permissions": {
             "bunker": {
-                "description": "Session Atlas : écrit dans sa session, lit son projet.",
-                "filesystem": fichiers,
+                "description": "Session Atlas : écrit dans sa session et dans le partage.",
+                "filesystem": {":root": "read", str(session): "write", str(dossier_partage()): "write"},
                 "network": {"enabled": True},
-            }
-        },
-    }
-
-
-def permissions_lecture_seule(dossier: Path, windows: bool = os.name == "nt") -> dict[str, Any]:
-    """Pour le vérificateur : lit son dossier et le système, n'écrit rien, pas de réseau (sous Windows : lit tout)."""
-    if windows:
-        fichiers = {":root": "read"}
-    else:
-        fichiers = {":minimal": "read", str(dossier): "read", str(config.CODEX_HOME): "deny"}
-    return _plateforme(windows) | {
-        "default_permissions": "verification",
-        "permissions": {
-            "verification": {
-                "description": "Vérification : aucun accès utile.",
-                "filesystem": fichiers,
-                "network": {"enabled": False},
             }
         },
     }

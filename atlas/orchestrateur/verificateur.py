@@ -15,7 +15,7 @@ from openai_codex.types import ReasoningEffort
 
 from .. import ecriture, lecture
 from ..modeles import Demonstration, LigneNoeud
-from . import agent, bunker, config
+from . import agent, config
 from .consignes import consigne
 
 AUTEUR = "verificateur"
@@ -82,19 +82,15 @@ def a_verifier(demonstrations: list[Demonstration], noeud_ids: list[str]) -> lis
 async def juger(codex: AsyncCodex, texte: str, modele: str, effort: str) -> Verdict:
     dossier = config.ESPACE_TRAVAIL / ".verificateur"
     dossier.mkdir(parents=True, exist_ok=True)
-    reglages: dict[str, Any] = {"web_search": "disabled", "project_root_markers": [], "features": {"hooks": False}}
-    confinement: dict[str, Any] = {"sandbox": Sandbox.read_only}
-    if config.BUNKER:
-        reglages |= bunker.permissions_lecture_seule(dossier)
-        confinement = {}
     thread = await codex.thread_start(
         model=modele,
+        # Il n'a besoin d'aucune commande. Sur la VM, où le sandbox Linux ne peut pas démarrer, elles échouent toutes.
+        sandbox=Sandbox.read_only,
         approval_mode=ApprovalMode.deny_all,
         cwd=str(dossier),
         developer_instructions=consigne("verificateur"),
         ephemeral=True,
-        config=reglages,
-        **confinement,
+        config={"web_search": "disabled", "project_root_markers": [], "features": {"hooks": False}},
     )
     resultat = await thread.run(texte, effort=ReasoningEffort(effort), output_schema=SCHEMA_VERDICT)
     if resultat.status.value != "completed":

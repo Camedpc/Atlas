@@ -82,14 +82,16 @@ hiérarchie tient aux prompts. Un sous-agent doit être lancé avec `fork_turns 
 l'historique du parent, se perd, et Codex ignore le modèle de son rôle. Places simultanées :
 `ATLAS_MAX_SOUS_AGENTS` (+1 pour l'orchestrateur, défaut Codex 4 au total). Le flux du thread principal ne montre
 que « sous-agent démarré / terminé » ; le détail est dans les rollouts de `CODEX_HOME/sessions/`.
-Bunker (`bunker.py`, désactivable par `ATLAS_BUNKER=0`) : chaque conversation travaille dans
-`espace/utilisateurs/<utilisateur>/<projet>/sessions/<id>/` (`conv/`, `docs_session/`, `scripts/`, `.tmp/`), via un
-profil de permissions Codex (`default_permissions` + `[permissions.bunker]`, hérité par les sous-agents) : écriture
-dans la session et `espace/partage/` (Python partagé : `pip install` sert à toutes les sessions), lecture du projet
-et de `:minimal`, `CODEX_HOME` interdit, réseau ouvert. Un profil ne se combine pas avec `sandbox_mode` : ne pas
-passer `sandbox=` au thread. Commandes lancées avec `shell_environment_policy.inherit = "core"` (pas les secrets du
-serveur). Sous Windows, Codex refuse les interdictions de lecture partielles : on n'y confine que l'écriture, avec
-`windows.sandbox = "unelevated"` (sans lui, toute commande est « blocked by policy »). Sous Linux : bubblewrap.
+Bunker (`bunker.py`) : chaque conversation travaille dans `espace/utilisateurs/<utilisateur>/<projet>/sessions/<id>/`
+(`conv/`, `docs_session/`, `scripts/`, `.tmp/`) ; Python partagé dans `espace/partage/` (`pip install` sert à toutes
+les sessions) ; commandes lancées avec `shell_environment_policy.inherit = "core"` (pas les secrets du serveur). Le
+confinement est une consigne (`prompts/environnement.md`, ajouté à tous les agents de la session) : Camille a choisi
+de ne pas restreindre la lecture techniquement. `ATLAS_BUNKER=1` ajoute un profil de permissions Codex
+(`default_permissions` + `[permissions.bunker]` : lecture partout, écriture dans la session et le partage), qui ne se
+combine pas avec `sandbox_mode` (ne pas passer `sandbox=` au thread) et demande `windows.sandbox = "unelevated"` sous
+Windows (sinon « blocked by policy »). **La VM tourne à `ATLAS_BUNKER=0`** : sous Linux, tout sandbox Codex (profil,
+`workspace_write`, même `use_legacy_landlock`) exige bubblewrap, donc des user namespaces que Docker et
+`kernel.apparmor_restrict_unprivileged_userns=1` d'Ubuntu refusent ; Camille a refusé d'assouplir le noyau.
 Vérificateur : serveur MCP `mcp_verificateur.py` (délai `ATLAS_DELAI_VERIFICATION`), qui lance son propre Codex
 (threads éphémères, lecture seule, sortie structurée) : `ATLAS_MODELE_VERIFICATEUR` juge, et si « invalide » ou sous
 `ATLAS_SEUIL_CONFIANCE`, `ATLAS_MODELE_VERIFICATEUR_RECOURS` rejuge et fait foi ; verdict écrit par

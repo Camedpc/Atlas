@@ -159,16 +159,14 @@ def test_profil_du_bunker(monkeypatch, tmp_path):
     assert session == tmp_path / "utilisateurs" / "camille" / "defaut" / "sessions" / "c1"
     profil = bunker.permissions_session(session, windows=False)
     assert profil["default_permissions"] == "bunker"
-    fichiers = profil["permissions"]["bunker"]["filesystem"]
-    assert fichiers == {
-        ":minimal": "read",
-        str(tmp_path / "utilisateurs" / "camille" / "defaut"): "read",
+    assert "windows" not in profil
+    assert profil["permissions"]["bunker"]["filesystem"] == {
+        ":root": "read",  # la lecture n'est pas restreinte : c'est la consigne qui confine
         str(session): "write",
         str(tmp_path / "partage"): "write",
-        str(tmp_path / ".codex"): "deny",
     }
-    assert ":root" not in fichiers  # rien d'autre n'est lisible
     assert profil["permissions"]["bunker"]["network"] == {"enabled": True}
+    assert bunker.permissions_session(session, windows=True)["windows"] == {"sandbox": "unelevated"}
 
 
 def test_environnement_shell_sans_secrets_et_avec_python_partage(monkeypatch, tmp_path):
@@ -195,6 +193,9 @@ def test_sans_bunker_acces_complet(monkeypatch, tmp_path):
     parametres = agent.parametres_thread(tmp_path, "c1")
     assert parametres["sandbox"] == Sandbox.full_access
     assert "default_permissions" not in parametres["config"]
+    # Sans sandbox, l'environnement des commandes et la consigne de confinement restent.
+    assert parametres["config"]["shell_environment_policy"]["inherit"] == "core"
+    assert "# Confinement" in parametres["developer_instructions"]
 
 
 def test_preparer_session_cree_l_arborescence_et_reprend_l_ancien_dossier(monkeypatch, tmp_path):

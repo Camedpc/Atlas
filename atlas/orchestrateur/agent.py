@@ -83,11 +83,11 @@ def surcharges_thread(conversation_id: str) -> dict[str, Any]:
     if config.MAX_SOUS_AGENTS:
         agents["max_concurrent_threads_per_session"] = config.MAX_SOUS_AGENTS
     surcharges["agents"] = agents
+    # Hérités par les sous-agents : toute l'équipe travaille dans le bunker de la session.
+    session = bunker.dossier_session(conversation_id)
+    surcharges["shell_environment_policy"] = bunker.environnement_shell(session)
     if config.BUNKER:
-        # Hérité par les sous-agents : toute l'équipe travaille dans le bunker de la session.
-        session = bunker.dossier_session(conversation_id)
         surcharges |= bunker.permissions_session(session)
-        surcharges["shell_environment_policy"] = bunker.environnement_shell(session)
     return surcharges
 
 

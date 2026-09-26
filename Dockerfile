@@ -1,10 +1,9 @@
 # Serveur longue durée d'Atlas (lecture du graphe + orchestrateur Codex). Voir deploiement/README.md.
 FROM python:3.13-slim
 
-# Outils que l'orchestrateur utilise dans ses commandes (git, recherche, téléchargements), et bubblewrap, qui sert
-# au sandbox de Codex sous Linux (le bunker : voir atlas/orchestrateur/bunker.py).
+# Outils que l'orchestrateur utilise dans ses commandes (git, recherche, téléchargements).
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends git curl ca-certificates ripgrep bubblewrap \
+    && apt-get install -y --no-install-recommends git curl ca-certificates ripgrep \
     && rm -rf /var/lib/apt/lists/*
 
 # L'agent a un accès complet… au conteneur seulement, et sans être root.
