@@ -102,3 +102,17 @@ ECRAN=$(curl -s -H "X-Agents-Cle: $CLE" localhost:8001/api/affichage/utilisateur
 curl -s -H "X-Agents-Cle: $CLE" -H 'Content-Type: application/json' localhost:8001/api/affichage/commandes \
   -d "{\"version\":1,\"lot_id\":\"$(uuidgen)\",\"ecran\":\"$ECRAN\",\"origine\":\"test\",\"commandes\":[{\"op\":\"mode\",\"mode\":\"3d\"}]}"
 ```
+
+### Agent navigateur (`backend/app/agents/navigation/`)
+
+Processus distinct : `python -m app.agents.navigation.navigateur` (depuis `AtlasVoice/backend`). Il écoute
+`/intentions/flux`, lit l'état de l'écran actif de l'utilisateur, le graphe (`ATLAS_API_URL`, relu seulement
+quand `version_donnees` change) et, si besoin, les conversations (`ATLAS_JETON_ACCES` si le serveur d'Atlas
+en exige un).
+
+- `resolution.py` : désignation → id de nœud ou de conversation, **déterministe** (nom, id, énoncé, indice
+  de type, déictiques `selection` / `survol` / `precedent`, « cette conversation »). Deux candidats proches :
+  `ambigu`, avec la question (« Lequel veux-tu : « A » ou « B » ? ») et `details.candidats`. Pas de modèle.
+- `traduction.py` : la table fixe intention → commandes (section P3 du cahier des charges) et la pile des
+  états (20 par écran) pour `revenir`.
+- Écran actif = le plus récent parmi les écrans connectés au relais.

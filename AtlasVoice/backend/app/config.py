@@ -91,6 +91,9 @@ SUPABASE_JWT_SECRET = _env("SUPABASE_JWT_SECRET")
 AGENTS_API_KEY = _env("AGENTS_API_KEY")
 # Relais d'affichage : délai maximal d'un compte rendu (écran ou agent navigateur).
 AFFICHAGE_DELAI_S = float(_env("ATLAS_AFFICHAGE_DELAI_S", "3"))
+# Agent navigateur : API de lecture d'Atlas (graphe, conversations) et son jeton d'accès éventuel.
+ATLAS_API_URL = _env("ATLAS_API_URL", "http://127.0.0.1:8000")
+ATLAS_JETON_ACCES = _env("ATLAS_JETON_ACCES")
 CORS_ORIGINS = [o.strip() for o in (_env("CORS_ORIGINS", "http://localhost:5173,http://localhost:5174") or "").split(",") if o.strip()]
 
 # ── Observabilité ──────────────────────────────────────────────

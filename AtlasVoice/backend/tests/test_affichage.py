@@ -182,6 +182,27 @@ def test_ecran_par_defaut_et_droits():
     assert e.value.statut_http == 422
 
 
+async def test_ecran_connecte_prefere_et_refus_transmis_a_l_agent_moyen():
+    r = Relais()
+    r.declarer("u1", "ecran_vivant")
+    async with EcranFactice(r, "ecran_vivant"):
+        # Un onglet fermé plus récent (état envoyé, plus de flux) ne devient pas l'écran par défaut.
+        r.declarer("u1", "ecran_ferme")
+        r.enregistrer_etat("ecran_ferme", "u1", etat("ecran_ferme"))
+        assert r.ecran_actif("u1").id == "ecran_vivant"
+    assert r.ecran_actif("u1").id == "ecran_ferme"  # plus aucun écran connecté : le plus récent
+    # Le navigateur vise un écran déconnecté : le refus du relais répond tout de suite à l'agent moyen 2.
+    navigateur = r.flux_navigateur()
+    recu = asyncio.ensure_future(anext(navigateur))
+    await asyncio.sleep(0)
+    attente = asyncio.create_task(r.transmettre_intentions(lot_navigation(), delai_s=5))
+    lot_nav = await recu
+    await r.commander(lot_commandes("ecran_ferme", lot_id=lot_nav.lot_id), delai_s=5)
+    cr = await asyncio.wait_for(attente, 0.5)
+    assert cr.erreur.code == "delai" and cr.erreur.message == "L'écran n'est pas connecté au relais."
+    await navigateur.aclose()
+
+
 def test_resume_pour_atlas():
     visibles = [{"noeud": f"n{i}", "libelle": f"Nœud {i}", "x": 0, "y": 0} for i in range(20)]
     s = resume(etat("ecran_a", visibles=visibles))

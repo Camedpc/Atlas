@@ -12,6 +12,8 @@ async function ouvrir(page: Page) {
   const repondre = (body: string) => ({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body })
   await page.route('**/api/graphe', (r) => r.fulfill(repondre(GRAPHE)))
   await page.route('**/api/conversations', (r) => r.fulfill(repondre('[]')))
+  // Jamais de relais d'affichage réel (VITE_AFFICHAGE_URL) : l'écran de test ne doit pas s'y déclarer.
+  await page.route('**/api/affichage/**', (r) => r.abort())
   await page.goto('/')
   await page.waitForFunction(() => {
     const a = (window as unknown as { atlasAffichage?: { etat(): { version_donnees: string } } }).atlasAffichage

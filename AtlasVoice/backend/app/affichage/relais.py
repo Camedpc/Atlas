@@ -1,8 +1,8 @@
 """Relais d'affichage : transporte P2 (intentions), P3 (commandes) et P4 (états d'écran) entre les agents
 et les écrans du graphe. État en mémoire : un écran n'a pas à survivre à un redémarrage (il se redéclare).
 
-- Un écran appartient à un utilisateur ; son dernier écran actif (déclaré ou ayant envoyé un état) est
-  son écran par défaut.
+- Un écran appartient à un utilisateur ; son écran par défaut est le plus récemment actif (déclaré, état
+  envoyé) parmi ceux connectés au flux, sinon parmi tous : un onglet fermé ne capte pas les commandes.
 - Un lot n'est livré à un écran que tant que son émetteur l'attend : après le délai, il est abandonné et
   ne sera jamais exécuté plus tard.
 - L'agent navigateur réutilise le `lot_id` du LotNavigation pour le LotCommandes qui en résulte : le compte
@@ -61,7 +61,6 @@ class Ecran:
 class Relais:
     def __init__(self) -> None:
         self.ecrans: dict[str, Ecran] = {}
-        self.dernier_ecran: dict[str, str] = {}
         # Lots en attente d'un compte rendu (commandes et intentions), par lot_id.
         self.attentes: dict[str, asyncio.Future[CompteRendu]] = {}
         self.navigateurs: set[asyncio.Queue[LotNavigation]] = set()
@@ -96,10 +95,14 @@ class Relais:
         e.etat = etat
         self._activer(e)
 
+    def ecran_actif(self, utilisateur_id: str) -> Ecran | None:
+        """Écran par défaut : connecté d'abord, puis le plus récemment actif (id pour départager)."""
+        siens = [e for e in self.ecrans.values() if e.utilisateur_id == utilisateur_id]
+        return max(siens, key=lambda e: (bool(e.connexions), e.actif_le, e.id), default=None)
+
     def etat_utilisateur(self, utilisateur_id: str) -> EtatAffichage | None:
         """Dernier état de l'écran actif de l'utilisateur (None sans écran ou sans état)."""
-        ecran = self.dernier_ecran.get(utilisateur_id)
-        e = self.ecrans.get(ecran) if ecran else None
+        e = self.ecran_actif(utilisateur_id)
         return e.etat if e else None
 
     def resume_utilisateur(self, utilisateur_id: str) -> EtatResume | None:
@@ -108,15 +111,12 @@ class Relais:
 
     def _activer(self, e: Ecran) -> None:
         e.actif_le = time.monotonic()
-        self.dernier_ecran[e.utilisateur_id] = e.id
 
     def _oublier_inactifs(self) -> None:
         limite = time.monotonic() - OUBLI_ECRAN_S
         for id_, e in list(self.ecrans.items()):
             if not e.connexions and e.actif_le < limite:
                 del self.ecrans[id_]
-                if self.dernier_ecran.get(e.utilisateur_id) == id_:
-                    del self.dernier_ecran[e.utilisateur_id]
 
     # ── P3 : commandes vers un écran ──────────────────────────────
 
@@ -125,9 +125,9 @@ class Relais:
         try:
             e = self.ecran(lot.ecran)
         except ErreurRelais as err:
-            return compte_rendu_erreur(lot.lot_id, err.erreur.code, err.erreur.message)
+            return self._refuser(compte_rendu_erreur(lot.lot_id, err.erreur.code, err.erreur.message))
         if not e.connexions:
-            return compte_rendu_erreur(lot.lot_id, "delai", "L'écran n'est pas connecté au relais.", e.etat)
+            return self._refuser(compte_rendu_erreur(lot.lot_id, "delai", "L'écran n'est pas connecté au relais.", e.etat))
         attente = self._attendre(lot.lot_id)
         for file in e.connexions:
             file.put_nowait(lot)
@@ -163,8 +163,7 @@ class Relais:
         attente = self._attendre(lot.lot_id)
         for file in self.navigateurs:
             file.put_nowait(lot)
-        ecran = self.dernier_ecran.get(lot.utilisateur_id)
-        return await self._resultat(lot.lot_id, attente, delai_s, self.ecrans.get(ecran) if ecran else None)
+        return await self._resultat(lot.lot_id, attente, delai_s, self.ecran_actif(lot.utilisateur_id))
 
     def repondre_intentions(self, cr: CompteRendu) -> None:
         """Réponse directe de l'agent navigateur (échec avant toute commande : ambiguïté, introuvable…)."""
@@ -192,6 +191,12 @@ class Relais:
         f: asyncio.Future[CompteRendu] = asyncio.get_running_loop().create_future()
         self.attentes[lot_id] = f
         return f
+
+    def _refuser(self, cr: CompteRendu) -> CompteRendu:
+        """Lot refusé par le relais lui-même : son compte rendu répond aussi à qui attend ce lot_id
+        (l'agent moyen 2, quand l'agent navigateur réutilise le lot_id de ses intentions)."""
+        self._resoudre(cr)
+        return cr
 
     def _resoudre(self, cr: CompteRendu) -> bool:
         f = self.attentes.get(cr.lot_id)
