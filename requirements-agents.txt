@@ -1,0 +1,7 @@
+# Serveur longue durée (orchestrateur). Vercel n'installe que requirements.txt.
+-r requirements.txt
+# SDK Python officiel de Codex ; installe aussi le binaire Codex correspondant (openai-codex-cli-bin).
+openai-codex>=0.157.1
+# Serveur MCP des outils Atlas (atlas/orchestrateur/mcp_atlas.py).
+mcp>=2.2.0
+uvicorn[standard]>=0.30

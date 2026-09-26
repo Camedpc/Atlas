@@ -10,7 +10,10 @@
     {
       "name": "api",
       "runtimeExecutable": ".venv/Scripts/python.exe",
-      "runtimeArgs": ["-m", "uvicorn", "api.index:app", "--port", "8000", "--reload"],
+      "runtimeArgs": [
+        "-m", "uvicorn", "atlas.serveur:app", "--port", "8000",
+        "--reload", "--reload-dir", "atlas", "--reload-dir", "api"
+      ],
       "port": 8000
     }
   ]
