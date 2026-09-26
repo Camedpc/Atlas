@@ -1,0 +1,14 @@
+{
+  "id": "r22-inferences",
+  "titre": "R22 · Énoncés et inférences",
+  "resume": "Graphe biparti : chaque démonstration est une barre d'inférence (à la Gentzen) posée devant sa conclusion, qui porte validité, confiance et intervalle ; prémisses principales tracées, outils et contexte en étiquettes latérales, hypothèses et choix dans une bande avec leur portée, couloirs par sous-problème.",
+  "idees": [
+    "L'inférence est un objet : barre dont l'épaisseur suit la confiance, glyphe ✓ ? ✕, valeur chiffrée, tirets si l'intervalle est large",
+    "Deux dépendances, deux tracés : prémisses principales et auxiliaires en traits, technique et contexte en étiquettes « tech. / ctx. » sous la barre",
+    "Canaux orthogonaux : contour = statut, remplissage = validation, forme = famille (déductif, définition, observation, activité PROV, résultat, décision)",
+    "Codes stables et citables (H3, M2, Lem 12…) ; renvois « par Prop 2 » au lieu des longues flèches",
+    "Séries d'expériences repliées en activités « × n » avec sparkline log-log",
+    "Filtre des inférences à vérifier ou invalides, portée des hypothèses, chemin le plus faible (produit ou minimum)"
+  ],
+  "ordre": 22
+}

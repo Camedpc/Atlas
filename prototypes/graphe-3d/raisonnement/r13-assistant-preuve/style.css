@@ -1,0 +1,437 @@
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: #fcfcfb;
+}
+#app {
+  position: fixed;
+  inset: 0;
+}
+.retour {
+  position: fixed;
+  top: 18px;
+  left: 56px;
+  font: 12px system-ui, sans-serif;
+  color: #5d6679;
+  text-decoration: none;
+  z-index: 5;
+}
+.retour:hover {
+  color: #1d3f7a;
+}
+body:has(.rsn-vue.panneau-ouvert) .retour {
+  display: none;
+}
+body:has(.rsn-vue[data-theme='sombre']) {
+  background: #111316;
+}
+
+/* Palette de la vision : fond papier neutre, encre presque noire, couleurs réservées aux états. */
+.rsn-vue {
+  --r13-mono: 'JetBrains Mono', 'Cascadia Mono', 'SF Mono', Consolas, ui-monospace, monospace;
+  --fond: #fcfcfb;
+  --surface: #ffffff;
+  --surface-2: #f3f4f5;
+  --texte: #16181d;
+  --texte-doux: #5f6570;
+  --accent: #1d3f7a;
+  --arete: #7b818c;
+  --ancetre: #3a74c4;
+  --descendant: #7a4a12;
+  --r13-verifie: #1d7a4c;
+  --r13-a-verifier: #a86400;
+  --r13-en-cours: #2458b3;
+  --r13-echec: #c02a2a;
+  --r13-admis: #6b7280;
+  --r13-variable: #6a3fb5;
+  --r13-impasse: #9aa1ae;
+}
+.rsn-vue[data-theme='sombre'] {
+  --fond: #111316;
+  --surface: #181b20;
+  --surface-2: #20242a;
+  --texte: #e8e9ec;
+  --texte-doux: #9ba1ab;
+  --accent: #8fb0ea;
+  --arete: #8a909b;
+  --ancetre: #8fb0ea;
+  --descendant: #e0a766;
+  --r13-verifie: #4cc28a;
+  --r13-a-verifier: #e0a23a;
+  --r13-en-cours: #7aa4ef;
+  --r13-echec: #f0716d;
+  --r13-admis: #9ba1ab;
+  --r13-variable: #b294f0;
+  --r13-impasse: #6b7385;
+}
+
+.rsn-vue code,
+.r13-id,
+.r13-formule {
+  font-family: var(--r13-mono);
+}
+
+/* Couleurs d'état (texte). */
+.etat-verifie { color: var(--r13-verifie); }
+.etat-a_verifier { color: var(--r13-a-verifier); }
+.etat-en_cours { color: var(--r13-en-cours); }
+.etat-echec { color: var(--r13-echec); }
+.etat-admis { color: var(--r13-admis); }
+
+/* ─── Progression globale ───────────────────────────────────────────────── */
+
+.r13-progression {
+  position: absolute;
+  top: 44px;
+  left: 12px;
+  width: 290px;
+  padding: 7px 10px 8px;
+  background: var(--surface);
+  border: 1px solid var(--bord);
+  border-radius: 4px;
+  font: 11.5px var(--r13-mono);
+  color: var(--texte);
+  font-variant-numeric: tabular-nums;
+  transition: left 0.25s ease;
+}
+.rsn-vue.panneau-ouvert .r13-progression {
+  left: 352px;
+}
+.r13-progression-ligne {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 8px;
+  align-items: baseline;
+}
+.r13-progression-ligne b {
+  font-weight: 700;
+}
+.r13-progression-ligne > span:nth-child(2) {
+  margin-left: -8px;
+}
+.r13-barre {
+  display: flex;
+  gap: 1px;
+  height: 4px;
+  margin-top: 6px;
+  background: var(--surface-2);
+}
+.r13-seg {
+  display: block;
+  min-width: 2px;
+}
+.r13-seg.etat-verifie { background: var(--r13-verifie); }
+.r13-seg.etat-en_cours { background: var(--r13-en-cours); }
+.r13-seg.etat-a_verifier { background: var(--r13-a-verifier); }
+.r13-seg.etat-echec { background: var(--r13-echec); }
+.r13-seg.etat-admis {
+  background: repeating-linear-gradient(90deg, var(--r13-admis) 0 2px, transparent 2px 4px);
+}
+.r13-doux {
+  color: var(--texte-doux);
+}
+
+/* ─── Inspecteur : contexte de but ──────────────────────────────────────── */
+
+.r13-inspecteur {
+  position: absolute;
+  top: 110px;
+  right: 12px;
+  width: 360px;
+  max-height: calc(100% - 172px);
+  overflow: auto;
+  background: var(--surface);
+  border: 1px solid var(--bord);
+  border-radius: 4px;
+  box-shadow: 0 1px 2px rgba(20, 25, 40, 0.06);
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--texte);
+}
+.r13-inspecteur[hidden] {
+  display: none;
+}
+.r13-inspecteur header {
+  padding: 10px 12px 8px;
+  border-bottom: 1px solid var(--bord);
+}
+.r13-entete-ligne {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.r13-id-principal {
+  font-weight: 700;
+  font-size: 12.5px;
+}
+.r13-entete-ligne .r13-etat {
+  font: 600 11px var(--r13-mono);
+}
+.r13-fermer {
+  margin-left: auto;
+  border: 0;
+  background: transparent;
+  color: var(--texte-doux);
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+}
+.r13-fermer:hover {
+  color: var(--texte);
+}
+.r13-titre {
+  margin: 4px 0 2px;
+  font-weight: 600;
+  font-size: 13.5px;
+}
+.r13-inspecteur .r13-doux {
+  font-size: 11.5px;
+}
+.r13-abandon {
+  margin-top: 4px;
+  font: 11px var(--r13-mono);
+  color: var(--texte-doux);
+}
+.r13-inspecteur h4 {
+  margin: 0;
+  padding: 9px 12px 4px;
+  font: 600 10.5px var(--r13-mono);
+  color: var(--texte-doux);
+  text-transform: lowercase;
+}
+.r13-inspecteur section {
+  padding: 0 12px 10px;
+  border-top: 1px solid var(--bord);
+}
+.r13-inspecteur section h4 {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+/* Contexte de but, façon Infoview : hypothèses, taquet ⊢, conclusion. */
+.r13-but {
+  margin: 0 12px 10px;
+  padding: 8px 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--bord);
+  border-radius: 3px;
+  font-size: 12px;
+}
+.r13-ligne {
+  padding: 1px 0;
+}
+.r13-ligne + .r13-ligne {
+  margin-top: 2px;
+}
+.r13-nom-hyp {
+  font: 600 12px var(--r13-mono);
+}
+.r13-deux-points {
+  font-family: var(--r13-mono);
+  color: var(--texte-doux);
+}
+.r13-mot {
+  font: 600 12px var(--r13-mono);
+  color: var(--r13-variable);
+}
+.r13-texte {
+  color: var(--texte);
+}
+.r13-sous {
+  padding-left: 2.6em;
+  color: var(--texte-doux);
+  font-size: 11.5px;
+}
+.r13-role {
+  margin-left: 6px;
+  font: 10.5px var(--r13-mono);
+  color: var(--texte-doux);
+}
+.r13-ligne.role-contexte .r13-lien,
+.r13-ligne.role-technique .r13-lien {
+  color: var(--texte-doux);
+}
+.r13-vide {
+  color: var(--texte-doux);
+  font: 11.5px var(--r13-mono);
+}
+.r13-thesee {
+  display: flex;
+  gap: 8px;
+  margin-top: 7px;
+  padding-top: 6px;
+  border-top: 1px solid var(--texte-doux);
+}
+.r13-taquet {
+  font: 700 13px var(--r13-mono);
+}
+.r13-formule {
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+.r13-id {
+  font-size: 11.5px;
+}
+.r13-lien {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--accent);
+  cursor: pointer;
+  text-align: left;
+}
+.r13-lien:hover {
+  text-decoration: underline;
+}
+.r13-etat {
+  font: 600 11px var(--r13-mono);
+}
+.r13-kv code {
+  font-size: 11.5px;
+}
+.r13-validite.v-valide { color: var(--r13-verifie); }
+.r13-validite.v-a_verifier { color: var(--r13-a-verifier); }
+.r13-validite.v-invalide { color: var(--r13-echec); }
+.r13-texte-preuve {
+  margin: 6px 0 0;
+  color: var(--texte-doux);
+  font-size: 12px;
+}
+.r13-etapes {
+  margin: 0;
+  padding-left: 22px;
+  font-size: 12px;
+}
+.r13-etapes li {
+  margin-bottom: 3px;
+}
+.r13-etapes .r13-sous {
+  padding-left: 0;
+}
+.r13-question {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.r13-branches {
+  list-style: none;
+  margin: 0 0 6px;
+  padding: 0;
+}
+.r13-branches li {
+  padding: 2px 0;
+}
+.r13-branches .r13-marque {
+  font: 700 12px var(--r13-mono);
+}
+.r13-branches .retenue .r13-marque { color: var(--r13-verifie); }
+.r13-branches .ecartee {
+  color: var(--texte-doux);
+}
+.r13-usages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+}
+.r13-inspecteur .rsn-bouton {
+  margin-top: 6px;
+}
+
+/* ─── Fiche de survol ───────────────────────────────────────────────────── */
+
+.r13-fiche-entete {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 4px;
+  font: 600 11.5px var(--r13-mono);
+}
+.r13-fiche-bandeau {
+  margin: -2px 0 6px;
+  padding: 3px 0 4px;
+  border-bottom: 1px solid var(--bord);
+  color: var(--texte-doux);
+  font: 11px var(--r13-mono);
+}
+
+/* ─── Panneau ☰ ─────────────────────────────────────────────────────────── */
+
+.r13-panneau {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12px;
+}
+.r13-niveaux {
+  display: flex;
+  gap: 4px;
+}
+.r13-niveaux .rsn-bouton {
+  margin: 0;
+  flex: 1;
+}
+.r13-niveaux .rsn-bouton.actif {
+  background: var(--texte);
+  border-color: var(--texte);
+  color: var(--surface);
+}
+.r13-compte-visible {
+  line-height: 1.55;
+}
+.r13-etats-visibles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  font: 11.5px var(--r13-mono);
+}
+.r13-compte {
+  font-family: var(--r13-mono);
+}
+.r13-liste-variables {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.r13-variable {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  cursor: pointer;
+}
+.r13-variable code {
+  font-weight: 700;
+  color: var(--r13-variable);
+}
+.r13-legende {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  color: var(--texte-doux);
+  line-height: 1.45;
+}
+.r13-legende b {
+  color: var(--texte);
+  font-weight: 600;
+}
+.r13-legende-etats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3px 10px;
+}
+.r13-legende-etat {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.r13-echantillon {
+  width: 20px;
+  height: 11px;
+  flex: none;
+  background: var(--surface);
+  border: 1.5px solid currentColor;
+}
+.r13-echantillon.etat-en_cours { border-style: dashed; }
+.r13-echantillon.etat-admis { border-style: dotted; }
+.r13-echantillon.etat-echec { border-width: 2px; }

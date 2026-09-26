@@ -1,0 +1,13 @@
+{
+  "id": "r12-console",
+  "titre": "R12 · Console d'instrument",
+  "resume": "Le squelette déductif de R1 rendu comme un logiciel d'acquisition ou un outil de conception de circuits : blocs à champs repérés (LEM-03), valeurs en chasse fixe, confiance chiffrée avec barre d'erreur, grille et règle de profondeur, inspecteur propriété-valeur à droite, barre d'état en bas.",
+  "idees": [
+    "Même lecture gauche → droite que R1 (colonnes, étapes repliées, renvois), langage visuel d'instrument",
+    "Bloc = en-tête (repère, statut VAL/INC/RÉF, validation IA/H) + énoncé + pied (0.82 [.74,.90], barre d'erreur, ←prémisses →dépendants, profondeur)",
+    "Renvois en étiquettes de réseau « ◁ LEM-03 », contexte en cellules H D O A L",
+    "Inspecteur propriété-valeur (sélection, sinon survol) ; barre d'état : nœuds, arêtes, profondeur max, confiance moyenne des résultats",
+    "Couleurs fonctionnelles désaturées, angles vifs, grille d'alignement, aucune ombre"
+  ],
+  "ordre": 12
+}

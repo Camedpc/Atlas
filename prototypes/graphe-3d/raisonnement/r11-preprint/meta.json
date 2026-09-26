@@ -1,0 +1,13 @@
+{
+  "id": "r11-preprint",
+  "titre": "R11 · Preprint",
+  "resume": "Le squelette déductif de R1 tel qu'il paraîtrait en figure dans un article : énoncés numérotés (Hypothèse 1, Lemme 3, Théorème 5, (6)), police à empattements, filets fins à angles vifs, couleur quasi absente, statut et validation en symboles, confiance écrite en chiffres, renvois comme des références d'équation, légende « Fig. 1 — … ».",
+  "idees": [
+    "Un seul compteur dans l'ordre de lecture, comme lemmes et théorèmes d'un article ; hypothèses de travail en série (M1), (M2)",
+    "STIX Two Text : en-têtes en petites capitales, corps en italique pour ce qu'on démontre ou suppose (amsthm)",
+    "✓ ? ✗ pour le statut, † * ‡ pour la validation, 0,82 [0,74 ; 0,89] et une barre d'erreur miniature pour la confiance",
+    "Renvois « Lem. 3 », « (6) » et contexte étiqueté H1, D2, L3, [4] sous chaque énoncé",
+    "Filets de tableau, en-têtes de colonnes en italique, légende de figure calculée d'après ce qui est affiché"
+  ],
+  "ordre": 11
+}

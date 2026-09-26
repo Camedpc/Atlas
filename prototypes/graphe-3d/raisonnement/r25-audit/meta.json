@@ -1,0 +1,14 @@
+{
+  "id": "r25-audit",
+  "titre": "R25 · Audit des hypothèses",
+  "resume": "Tableau de bord d'expert : de quoi dépend chaque résultat majeur, avec quelle confiance, et que se passe-t-il si l'on retire une hypothèse, un choix de modélisation ou une décision. Matrice résultats × conditions, forest plot déclarée / propagée, contrefactuel démonstration par démonstration, argument de confiance avec questions critiques.",
+  "idees": [
+    "Matrice résultats × conditions (H, M, Déc) : ● directe, ○ transitive, chemin de dépendance au survol",
+    "Forest plot sur échelle commune : intervalle déclaré contre intervalle propagé, règle min / produit / Fréchet réglable",
+    "Maillon le plus faible de la chaîne principale, écart déclarée − propagée, tri et filtre",
+    "Contrefactuel : retirer ou remplacer une condition, un nœud tombe si toutes ses démonstrations tombent",
+    "Argument de confiance : inférences par confiance croissante, aiguillage juge / recours, questions critiques dérivées",
+    "Liste-clé numérotée, évidence empirique (soutiens, contradictions actives / résolues), export CSV"
+  ],
+  "ordre": 25
+}

@@ -1,0 +1,155 @@
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: #ffffff;
+}
+#app {
+  position: fixed;
+  inset: 0;
+}
+.retour {
+  position: fixed;
+  top: 18px;
+  left: 56px;
+  font: 12px system-ui, sans-serif;
+  color: #5b606a;
+  text-decoration: none;
+  z-index: 5;
+}
+.retour:hover {
+  color: #15171c;
+  text-decoration: underline;
+}
+body:has(.rsn-vue.panneau-ouvert) .retour {
+  display: none;
+}
+body:has(.rsn-vue[data-theme='sombre']) {
+  background: #121316;
+}
+
+/* Papier et encre : la couleur est quasi absente. Lignée : ascendance en encre, descendance en
+   bleu d'imprimerie ; seul ce qui est réfuté porte une couleur franche. */
+.rsn-vue {
+  --serif: 'STIX Two Text', 'STIX Two Math', 'Times New Roman', Times, serif;
+  --fond: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f4f4f2;
+  --texte: #15171c;
+  --texte-doux: #5b606a;
+  --accent: #1f3a78;
+  --arete: #3a3e47;
+  --arete-complete: #b9bdc5;
+  --ancetre: #15171c;
+  --descendant: #1f3a78;
+  --r11-encre: #15171c;
+  --r11-filet: #8c929c;
+  --r11-impasse: #8d929b;
+  --r11-refute: #9f1d1d;
+}
+.rsn-vue[data-theme='sombre'] {
+  --fond: #121316;
+  --surface: #121316;
+  --surface-2: #1b1d21;
+  --texte: #e6e4df;
+  --texte-doux: #a3a6ad;
+  --accent: #9db4e8;
+  --arete: #c9c7c1;
+  --ancetre: #e6e4df;
+  --descendant: #9db4e8;
+  --r11-encre: #e6e4df;
+  --r11-filet: #7b808a;
+  --r11-impasse: #6f737c;
+  --r11-refute: #e07a7a;
+}
+
+/* Fiche de survol : énoncé en romain de publication, sans ombre portée marquée. */
+.rsn-vue .rsn-fiche {
+  border-radius: 2px;
+  border-color: #c9ccd2;
+  box-shadow: 0 1px 3px rgba(20, 22, 28, 0.08);
+}
+.rsn-vue .rsn-fiche-titre,
+.rsn-vue .rsn-fiche-enonce {
+  font-family: var(--serif);
+}
+.rsn-vue .rsn-fiche-titre {
+  font-size: 15px;
+  font-weight: 600;
+}
+.rsn-vue .rsn-fiche-enonce {
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+.r11-fiche-ref {
+  margin: 0 0 6px;
+  font-family: var(--serif);
+  font-size: 13px;
+}
+.r11-fiche-note {
+  margin: -2px 0 8px;
+  padding: 0 0 5px;
+  border-bottom: 0.5px solid #c9ccd2;
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 12.5px;
+  color: var(--texte-doux);
+}
+.r11-sc {
+  font-variant: small-caps;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.r11-panneau {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12px;
+}
+.r11-niveaux {
+  display: flex;
+  gap: 4px;
+}
+.r11-niveaux .rsn-bouton {
+  margin: 0;
+  flex: 1;
+  border-radius: 2px;
+}
+.r11-niveaux .rsn-bouton.actif {
+  background: var(--texte);
+  border-color: var(--texte);
+  color: var(--fond);
+}
+.r11-compte {
+  line-height: 1.55;
+}
+.r11-liste-choix {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.r11-choix {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  cursor: pointer;
+  font-family: var(--serif);
+  font-size: 13px;
+}
+.r11-ref {
+  font-weight: 700;
+  flex: none;
+}
+.r11-legende {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--texte-doux);
+  font-family: var(--serif);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.r11-legende b {
+  color: var(--texte);
+}

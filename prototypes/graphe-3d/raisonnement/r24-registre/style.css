@@ -1,0 +1,934 @@
+/* R24 · Registre de la démarche — thème clair, sobre ; hiérarchie par la typographie et l'espacement. */
+
+:root {
+  --fond: #fbfbfa;
+  --fond-2: #f3f4f5;
+  --encre: #1d2127;
+  --encre-2: #3d434c;
+  --doux: #6b727d;
+  --pale: #9aa1ab;
+  --filet: #dfe2e6;
+  --filet-2: #eceef1;
+  --valide: #2f6b45;
+  --ocre: #a8741a;
+  --brique: #a4442f;
+  --abandon: #8a9099;
+  --police: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --serif: Georgia, 'Times New Roman', serif;
+  --mono: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--fond);
+  color: var(--encre);
+  font: 13px/1.45 var(--police);
+}
+#app {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 420px;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100vh;
+}
+.chargement {
+  padding: 24px;
+  color: var(--doux);
+}
+
+/* ─── En-tête ─────────────────────────────────────────────────────────────── */
+
+.tete {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px 28px;
+  padding: 10px 20px 10px;
+  border-bottom: 1px solid var(--filet);
+  background: var(--fond);
+}
+.titres {
+  min-width: 260px;
+}
+.retour {
+  font-size: 11px;
+  color: var(--doux);
+  text-decoration: none;
+}
+.retour:hover {
+  color: var(--encre);
+  text-decoration: underline;
+}
+h1 {
+  margin: 2px 0 0;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.sous-titre {
+  margin: 1px 0 0;
+  color: var(--doux);
+  font-size: 12px;
+}
+.commandes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 22px;
+  align-items: center;
+}
+.groupe {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.groupe-lib {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--doux);
+}
+.segmente {
+  display: inline-flex;
+  border: 1px solid var(--filet);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.seg {
+  font: 12px var(--police);
+  padding: 3px 10px;
+  border: 0;
+  background: #fff;
+  color: var(--encre-2);
+  cursor: pointer;
+}
+.seg + .seg {
+  border-left: 1px solid var(--filet);
+}
+.seg.actif {
+  background: var(--encre);
+  color: #fff;
+}
+.curseur-temps {
+  width: 170px;
+  accent-color: var(--encre-2);
+}
+.sortie {
+  font: 11.5px var(--mono);
+  color: var(--encre-2);
+  min-width: 96px;
+}
+.case {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--encre-2);
+  cursor: pointer;
+}
+.case input {
+  margin: 0;
+  accent-color: var(--encre-2);
+}
+.bouton {
+  font: 12px var(--police);
+  padding: 4px 10px;
+  border: 1px solid var(--filet);
+  border-radius: 4px;
+  background: #fff;
+  color: var(--encre);
+  cursor: pointer;
+}
+.bouton:hover:not(:disabled) {
+  border-color: var(--pale);
+}
+.bouton:disabled {
+  color: var(--pale);
+  cursor: default;
+}
+.bouton.actif {
+  background: var(--encre);
+  border-color: var(--encre);
+  color: #fff;
+}
+.petit-bouton {
+  padding: 2px 8px;
+  font-size: 11.5px;
+}
+.resume-etat {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  font-size: 12px;
+  color: var(--doux);
+  margin-left: auto;
+}
+.resume-etat b {
+  color: var(--encre);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.alerte,
+.resume-etat .alerte b {
+  color: var(--brique);
+}
+
+/* ─── Corps ───────────────────────────────────────────────────────────────── */
+
+.corps {
+  overflow: auto;
+  min-width: 0;
+}
+.frise-conteneur {
+  min-width: 960px;
+  border-bottom: 1px solid var(--filet);
+  background: #fff;
+}
+.frise {
+  display: block;
+  user-select: none;
+}
+.registre-conteneur {
+  padding: 6px 20px 32px;
+  min-width: 960px;
+}
+.reg-tete {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin: 18px 0 6px;
+}
+.reg-tete h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+.reg-filtre {
+  font-size: 11.5px;
+  color: var(--doux);
+}
+
+/* ─── Frise (SVG) ─────────────────────────────────────────────────────────── */
+
+.frise text {
+  font-family: var(--police);
+  fill: var(--encre);
+}
+.separateur {
+  stroke: var(--filet-2);
+  stroke-width: 1;
+}
+.gout-nom {
+  font-size: 12px;
+  font-weight: 600;
+}
+.gout-abandon {
+  fill: var(--doux) !important;
+  font-style: italic;
+}
+.gout-resume {
+  font-size: 10px;
+  fill: var(--doux) !important;
+}
+.gout-compte {
+  font: 10px var(--mono) !important;
+  fill: var(--pale) !important;
+}
+.axe-base {
+  stroke: var(--pale);
+  stroke-width: 1;
+}
+.axe-semaine {
+  stroke: var(--encre-2);
+  stroke-width: 1;
+}
+.axe-jour {
+  stroke: var(--pale);
+  stroke-width: 1;
+}
+.axe-lib {
+  font-size: 10.5px;
+  fill: var(--encre-2) !important;
+  text-anchor: middle;
+}
+.axe-titre {
+  font-size: 10.5px;
+  fill: var(--doux) !important;
+  letter-spacing: 0.04em;
+}
+.rupture {
+  stroke: var(--doux);
+  stroke-width: 1;
+  fill: none;
+}
+.rupture-trou {
+  fill: #fff;
+}
+.rupture-lib {
+  font: 9.5px var(--mono) !important;
+  fill: var(--doux) !important;
+  text-anchor: middle;
+}
+.zone-axe {
+  fill: transparent;
+  cursor: col-resize;
+}
+.fenetre {
+  fill: var(--encre);
+  fill-opacity: 0.04;
+  stroke: var(--pale);
+  stroke-dasharray: 3 3;
+  stroke-width: 1;
+}
+.rail {
+  stroke: var(--encre-2);
+  stroke-width: 2;
+}
+.rail-abandon {
+  stroke: var(--abandon);
+  stroke-dasharray: 6 4;
+}
+.butee {
+  stroke: var(--abandon);
+  stroke-width: 2;
+}
+.butee-lib {
+  font-size: 10px;
+  font-style: italic;
+  fill: var(--doux) !important;
+}
+.campagne-duree {
+  fill: var(--encre-2);
+  fill-opacity: 0.18;
+}
+.tiret {
+  stroke: var(--pale);
+  stroke-width: 1;
+}
+.tiret.en-avant {
+  stroke: var(--encre);
+}
+.cible-tiret {
+  fill: transparent;
+  cursor: pointer;
+}
+.vraie-date {
+  stroke: var(--encre-2);
+  stroke-width: 1;
+  fill: none;
+}
+.contrainte-filet {
+  stroke: var(--pale);
+  stroke-width: 1;
+  stroke-dasharray: 1 3;
+}
+.contrainte-lib {
+  font: 600 9.5px var(--mono) !important;
+  fill: var(--doux) !important;
+}
+.corresp {
+  fill: none;
+  stroke: var(--pale);
+  stroke-width: 1;
+  stroke-opacity: 0.6;
+}
+.corresp-retour {
+  stroke-dasharray: 3 3;
+}
+.corresp.en-avant {
+  stroke: var(--encre-2);
+  stroke-opacity: 1;
+}
+.arc-trait {
+  fill: none;
+  stroke-width: 1.3;
+}
+.arc-barre {
+  stroke-width: 1.5;
+}
+.arc-lib {
+  font-size: 10px;
+  font-style: italic;
+  text-anchor: middle;
+}
+.arc-contredit .arc-trait {
+  stroke: var(--brique);
+  stroke-dasharray: 5 3;
+}
+.arc-contredit .arc-barre {
+  stroke: var(--brique);
+}
+.arc-contredit .arc-lib {
+  fill: var(--brique) !important;
+}
+.arc-resout .arc-trait,
+.arc-resout .arc-barre {
+  stroke: var(--encre);
+}
+.arc-abandonne .arc-trait {
+  stroke: var(--abandon);
+  stroke-dasharray: 5 3;
+}
+.arc-abandonne .arc-barre {
+  stroke: var(--abandon);
+}
+.arc-abandonne .arc-lib {
+  fill: var(--doux) !important;
+}
+
+/* Glyphes : contour = statut, forme = genre. */
+.gl .f-creux {
+  fill: #fff;
+  stroke: var(--encre);
+  stroke-width: 1.5;
+}
+.gl .f-plein {
+  fill: var(--encre);
+  stroke: var(--encre);
+  stroke-width: 1.5;
+}
+.gl .f-arriere {
+  stroke-width: 1;
+}
+.gl.st-incertain .f-creux,
+.gl.st-incertain .f-plein {
+  stroke: var(--ocre);
+}
+.gl.st-incertain .f-plein {
+  fill: var(--ocre);
+}
+.gl.st-refute .f-creux,
+.gl.st-refute .f-plein {
+  stroke: var(--brique);
+}
+.gl.gl-ouvert .f-creux {
+  stroke-dasharray: 2.4 1.6;
+}
+.gl.gl-abandon .f-creux,
+.gl.gl-abandon .f-plein {
+  stroke: var(--abandon);
+  stroke-dasharray: 2.4 1.6;
+}
+.barre-refute {
+  stroke: var(--brique);
+  stroke-width: 1.5;
+}
+.jalon,
+.banniere {
+  cursor: pointer;
+}
+.cible {
+  fill: transparent;
+}
+.cadre-selection {
+  fill: none;
+  stroke: var(--encre);
+  stroke-width: 1;
+}
+.jalon.focus .gl .f-creux,
+.jalon.focus .gl .f-plein {
+  stroke-width: 2.4;
+}
+.lib {
+  font-size: 11px;
+  paint-order: stroke;
+  stroke: #fff;
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
+.lib-fort {
+  font-weight: 600;
+}
+.lib-id {
+  font: 600 10px var(--mono);
+  fill: var(--encre-2);
+}
+.question {
+  font-size: 11px;
+  font-style: italic;
+  fill: var(--encre-2) !important;
+  paint-order: stroke;
+  stroke: #fff;
+  stroke-width: 3px;
+}
+.branche {
+  fill: none;
+  stroke: var(--pale);
+  stroke-width: 1;
+}
+.branche-croix {
+  font-size: 9px;
+  fill: var(--doux) !important;
+}
+.branche-lib {
+  font-size: 10px;
+  fill: var(--doux) !important;
+  paint-order: stroke;
+  stroke: #fff;
+  stroke-width: 3px;
+}
+.ic-echelle {
+  stroke: var(--filet);
+  stroke-width: 1;
+}
+.ic-plage {
+  stroke: var(--encre-2);
+  stroke-width: 2;
+}
+.ic-point {
+  stroke: var(--encre);
+  stroke-width: 1.2;
+}
+.ic-grad {
+  stroke: var(--pale);
+  stroke-width: 1;
+}
+.ic-grad-lib {
+  font: 9.5px var(--mono);
+  fill: var(--doux);
+  text-anchor: middle;
+}
+.banniere-hampe {
+  stroke: var(--pale);
+  stroke-width: 1;
+}
+.banniere-lib {
+  font-size: 11px;
+  fill: var(--encre-2) !important;
+}
+.banniere.focus .banniere-lib {
+  fill: var(--encre) !important;
+  font-weight: 600;
+}
+.banniere.focus .banniere-hampe {
+  stroke: var(--encre);
+}
+.attenue {
+  opacity: 0.2;
+}
+.voile {
+  fill: #fff;
+  fill-opacity: 0.78;
+  pointer-events: none;
+}
+.curseur {
+  stroke: var(--encre);
+  stroke-width: 1;
+  pointer-events: none;
+}
+.curseur-lib {
+  font: 10.5px var(--mono) !important;
+  pointer-events: none;
+}
+
+/* ─── Panneau ─────────────────────────────────────────────────────────────── */
+
+.panneau {
+  border-left: 1px solid var(--filet);
+  overflow: auto;
+  padding: 14px 18px 32px;
+  background: var(--fond);
+}
+.retour-liste {
+  font: 11.5px var(--police);
+  border: 0;
+  background: none;
+  color: var(--doux);
+  padding: 0;
+  margin-bottom: 10px;
+  cursor: pointer;
+}
+.retour-liste:hover {
+  color: var(--encre);
+  text-decoration: underline;
+}
+.p-entete {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 11.5px;
+  color: var(--doux);
+}
+.p-type {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 10.5px;
+}
+.p-date {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+.id {
+  font: 600 11px var(--mono);
+  color: var(--encre);
+}
+.p-question {
+  margin: 8px 0 0;
+  font-style: italic;
+  color: var(--encre-2);
+}
+.p-titre {
+  margin: 4px 0 8px;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.p-enonce {
+  margin: 0 0 10px;
+  font: 14px/1.5 var(--serif);
+}
+.p-texte {
+  margin: 0 0 8px;
+}
+.p-note {
+  margin: 6px 0 0;
+  font-size: 11.5px;
+  color: var(--doux);
+}
+.p-note.alerte {
+  color: var(--brique);
+}
+.p-section {
+  margin-top: 18px;
+}
+.p-section h3 {
+  margin: 0 0 6px;
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--doux);
+}
+.p-chiffre,
+.p-liste {
+  margin: 0 0 6px;
+}
+.p-refs {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+.meta {
+  display: grid;
+  grid-template-columns: 112px 1fr;
+  gap: 3px 10px;
+  margin: 8px 0 0;
+  font-size: 12px;
+}
+.meta dt {
+  color: var(--doux);
+}
+.meta dd {
+  margin: 0;
+}
+.statut {
+  font-weight: 600;
+}
+.st-valide {
+  color: var(--valide);
+}
+.st-incertain {
+  color: var(--ocre);
+}
+.st-refute {
+  color: var(--brique);
+}
+.etiquette {
+  display: inline-block;
+  font-size: 9.5px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--doux);
+}
+.ref {
+  font: inherit;
+  text-align: left;
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--encre);
+  cursor: pointer;
+}
+.ref:hover {
+  text-decoration: underline;
+}
+.ref-mineur {
+  color: var(--encre-2);
+}
+.mono {
+  font-family: var(--mono);
+  font-size: 11.5px;
+}
+.petit {
+  font-size: 11.5px;
+  color: var(--encre-2);
+}
+.droite {
+  text-align: right;
+}
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.ic-ligne {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.ic-large {
+  display: block;
+}
+.demo {
+  padding: 6px 0;
+  border-top: 1px solid var(--filet-2);
+}
+.demo-tete {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  align-items: baseline;
+}
+.demo-nom {
+  font-weight: 600;
+}
+.demo-auteur {
+  color: var(--doux);
+  font-size: 11.5px;
+  margin-left: auto;
+}
+.validite {
+  font-size: 11.5px;
+}
+.va-valide {
+  color: var(--valide);
+}
+.va-a_verifier {
+  color: var(--ocre);
+}
+.va-invalide {
+  color: var(--brique);
+}
+.demo-role {
+  display: grid;
+  grid-template-columns: 80px 1fr;
+  gap: 8px;
+  font-size: 12px;
+  margin-top: 2px;
+}
+.demo-role-nom {
+  color: var(--doux);
+}
+.legende {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+}
+.legende li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  padding: 1px 0;
+}
+.echantillon {
+  flex: none;
+}
+.cle-ligne {
+  margin-top: 10px;
+}
+.cle-titre {
+  font-weight: 600;
+  font-size: 12px;
+  margin-bottom: 2px;
+}
+
+/* ─── Tableaux ────────────────────────────────────────────────────────────── */
+
+.tab {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.tab th,
+.tab td {
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--filet-2);
+  text-align: left;
+  vertical-align: top;
+}
+.tab thead th {
+  font-weight: 600;
+  font-size: 11px;
+  color: var(--doux);
+  border-bottom: 1px solid var(--filet);
+}
+.tab-compacte th,
+.tab-compacte td,
+.tab-cle td {
+  padding: 2px 6px;
+}
+.tab-cle td:first-child {
+  width: 36px;
+}
+.cliquable {
+  cursor: pointer;
+}
+.cliquable:hover td {
+  background: var(--fond-2);
+}
+.ligne-selection td {
+  background: var(--fond-2);
+}
+.futur td {
+  color: var(--pale);
+}
+.vide {
+  color: var(--doux);
+  font-style: italic;
+}
+.registre {
+  background: #fff;
+  border: 1px solid var(--filet);
+}
+.question-cel {
+  font-style: italic;
+}
+.qoc th[scope='row'] {
+  font-weight: 500;
+  width: 34%;
+}
+.qoc .opt {
+  font-weight: 500;
+  color: var(--encre-2);
+  font-size: 11.5px;
+}
+.qoc .opt-retenue,
+.ach .opt-retenue {
+  color: var(--encre);
+  font-weight: 600;
+}
+.qoc .determinant th[scope='row'] {
+  font-weight: 600;
+}
+.cel {
+  text-align: center;
+  font-size: 13px;
+}
+.cel-favorable {
+  color: var(--valide);
+}
+.cel-defavorable {
+  color: var(--brique);
+}
+.cel-deduite {
+  opacity: 0.85;
+}
+.cel-vide {
+  color: var(--filet);
+}
+.cel sup {
+  font-size: 9px;
+  color: var(--doux);
+}
+.qoc tfoot th,
+.qoc tfoot td {
+  border-bottom: 0;
+}
+.qoc .raisons td {
+  font-size: 11px;
+  color: var(--doux);
+  text-align: left;
+}
+.marque {
+  font-family: var(--mono);
+}
+.marque-plus {
+  color: var(--valide);
+}
+.marque-moins {
+  color: var(--brique);
+}
+.marque-neutre {
+  color: var(--pale);
+}
+.non-diagnostique td {
+  color: var(--doux);
+}
+
+/* ─── Infobulle ───────────────────────────────────────────────────────────── */
+
+.infobulle {
+  position: fixed;
+  left: 0;
+  top: 0;
+  max-width: 360px;
+  padding: 8px 10px;
+  background: #fff;
+  border: 1px solid var(--filet);
+  border-radius: 4px;
+  font-size: 12px;
+  pointer-events: none;
+  z-index: 10;
+}
+.infobulle[hidden] {
+  display: none;
+}
+.ib-tete {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  color: var(--doux);
+  font-size: 11px;
+}
+.ib-type {
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 10px;
+}
+.ib-date {
+  margin-left: auto;
+}
+.ib-titre {
+  font-weight: 600;
+  margin-top: 2px;
+}
+.ib-question {
+  font-style: italic;
+  color: var(--encre-2);
+  margin-top: 2px;
+}
+.ib-enonce {
+  font: 12.5px/1.45 var(--serif);
+  margin-top: 3px;
+}
+.ib-pied {
+  margin-top: 5px;
+  font-size: 11px;
+  color: var(--doux);
+}
+
+/* ─── Écrans étroits : panneau sous la frise ─────────────────────────────── */
+
+@media (max-width: 1100px) {
+  #app {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto auto;
+    height: auto;
+  }
+  .corps {
+    overflow-x: auto;
+  }
+  .panneau {
+    border-left: 0;
+    border-top: 1px solid var(--filet);
+  }
+  .resume-etat {
+    margin-left: 0;
+  }
+}

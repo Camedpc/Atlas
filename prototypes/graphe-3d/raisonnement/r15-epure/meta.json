@@ -1,0 +1,13 @@
+{
+  "id": "r15-epure",
+  "titre": "R15 · Épure",
+  "resume": "Le squelette déductif de R1 composé comme une page d'Edward Tufte : plus de cartes, des énoncés posés sur la page et reliés par des filets fins, la confiance en micro-graphique, le statut en un caractère, le contexte en notes de marge numérotées, les décisions en bifurcations du trait.",
+  "idees": [
+    "Aucune boîte : hiérarchie par la graisse, le corps et l'espacement (résultats majeurs en gras)",
+    "Confiance en barre d'erreur de 40 px à côté de chaque énoncé, statut ✓ ? ✕ dans la gouttière",
+    "Contexte en notes de marge numérotées (appels en exposant), renvois « (k) » comme des équations",
+    "Décisions : le trait bifurque, la branche abandonnée reste en gris léger, barrée",
+    "Une seule couleur d'accent pour la sélection ; choix de modélisation en sigles C1, C2…"
+  ],
+  "ordre": 15
+}

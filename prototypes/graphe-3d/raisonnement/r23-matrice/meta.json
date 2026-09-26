@@ -1,0 +1,14 @@
+{
+  "id": "r23-matrice",
+  "titre": "R23 · Matrice de dépendance",
+  "resume": "Tout le graphe de justification en matrice de structure de dépendance (DSM) séquencée : lignes = conclusions, colonnes = prémisses, blocs diagonaux = sous-problèmes, marques au-dessus de la diagonale = rétroactions de la démarche. Dense, sans croisements, à l'échelle de centaines de nœuds.",
+  "idees": [
+    "Cellule = prémisse typée par rôle (■ principale, ▪ auxiliaire, · technique, ○ contexte), grise hors démonstration principale, liseré ocre / brique si la démonstration citante est à vérifier / invalide",
+    "Diagonale = statut ✓ ? ✕ et mini-barre de confiance ; identifiants citables stables (Lem 4, H2, Déc 3)",
+    "Ordre canonique : blocs par sous-problème, tri topologique à priorité (hypothèses, choix, décisions en tête) ; rétroactions teintées (bloc ultérieur ou prémisse plus récente) et liens contredit / résout",
+    "Bascule transitive : colonnes H · M · Déc remplies de leur portée calculée (hachures), chemin le plus court au survol",
+    "Zoom sémantique : pixels façon ETP sous 6 px, glyphes puis identifiants au-dessus ; en-têtes figés",
+    "Tri topologique / date / confiance, blocs repliables en lignes agrégées, options rejetées des décisions en sous-lignes vides, brosse = sous-matrice"
+  ],
+  "ordre": 23
+}

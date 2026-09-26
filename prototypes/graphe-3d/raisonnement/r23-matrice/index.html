@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>R23 · Matrice de dépendance — graphe de raisonnement</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <div class="r23">
+      <header class="r23-barre">
+        <a class="r23-retour" href="../../index.html" title="Retour au catalogue">← catalogue</a>
+        <div class="r23-titre">
+          <span class="r23-nom">R23 · Matrice de dépendance</span>
+          <span class="r23-sous" id="sous-titre"></span>
+        </div>
+        <div class="r23-commandes" id="commandes"></div>
+      </header>
+      <main class="r23-corps">
+        <div class="r23-zone" id="zone">
+          <canvas id="toile"></canvas>
+          <div class="r23-survol" id="survol" hidden></div>
+        </div>
+        <aside class="r23-panneau" id="panneau">
+          <div id="inspection"></div>
+          <div id="legende"></div>
+        </aside>
+      </main>
+      <footer class="r23-etat" id="etat"></footer>
+    </div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

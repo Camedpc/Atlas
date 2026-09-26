@@ -1,0 +1,13 @@
+{
+  "id": "r13-assistant-preuve",
+  "titre": "R13 · Assistant de preuve",
+  "resume": "Le squelette déductif de R1 dans le langage d'un blueprint Lean : chaque énoncé est un cadre compact à identifiant monospace (thm:conv), son état de vérification codé par la bordure et un symbole (✓ ? … ✗ sorry), les choix de modélisation deviennent des variables de section portées par les énoncés, les décisions des points de branchement annotés ; un clic ouvre le contexte de but h₁ : … ⊢ énoncé.",
+  "idees": [
+    "État de preuve par le trait : plein vert vérifié, ambre à vérifier, tirets en cours, pointillé admis/sorry, rouge épais échec ; aucun aplat",
+    "Identifiants de blueprint en monospace, énoncés en sans-empattement, double cadre pour les résultats principaux",
+    "Inspecteur au clic, façon Infoview : variables, hypothèses h₁ h₂ (liens), taquet ⊢ et conclusion, démonstration, preuve repliée have/show",
+    "Choix de modélisation = déclarations « variable cₖ » ; chaque énoncé porte [c₁ c₃], les variables actives en couleur",
+    "Progression globale : x vérifiés / y énoncés à prouver, barre segmentée par état"
+  ],
+  "ordre": 13
+}

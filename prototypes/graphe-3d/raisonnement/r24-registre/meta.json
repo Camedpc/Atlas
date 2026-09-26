@@ -1,0 +1,14 @@
+{
+  "id": "r24-registre",
+  "titre": "R24 · Registre de la démarche",
+  "resume": "La recherche lue comme une suite de décisions datées : une ligne par sous-problème sur un axe de temps, décisions en bifurcations avec leurs options écartées, campagnes d'expériences en stations, contradiction et résolution en arcs, et pour chaque décision un tableau options × critères, une matrice motifs × options et la portée.",
+  "idees": [
+    "Axe horizontal = temps (création des nœuds), échelle calendaire ou par activité (périodes vides repliées, graduations aux vraies dates)",
+    "Décision = losange ; la ligne continue sur l'option retenue, les options écartées partent en embranchements ✕ avec leur libellé",
+    "Campagnes détectées (même protocole ×n) : un carré et la barre de durée ; les nœuds mineurs restent visibles en tirets de densité",
+    "Panneau de décision : options × critères (QOC, critères dérivés des raisons), motifs × options (ACH, diagnosticité), portée chiffrée",
+    "Arcs contredit ⊣ / résout ⊢, piste abandonnée en tirets close par sa décision, filets des choix de modélisation vers les décisions contraintes",
+    "Rejouer : état de la démarche à une date (contradictions ouvertes) ; fenêtre temporelle au glisser qui filtre le registre"
+  ],
+  "ordre": 24
+}

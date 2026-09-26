@@ -1,0 +1,481 @@
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: #f7f8fa;
+}
+#app {
+  position: fixed;
+  inset: 0;
+}
+.retour {
+  position: fixed;
+  top: 16px;
+  left: 56px;
+  font: 11px 'JetBrains Mono', ui-monospace, Consolas, monospace;
+  color: #5b6372;
+  text-decoration: none;
+  z-index: 5;
+}
+.retour:hover {
+  color: #2f5b9a;
+}
+body:has(.rsn-vue.panneau-ouvert) .retour {
+  display: none;
+}
+body:has(.rsn-vue[data-theme='sombre']) {
+  background: #111418;
+}
+
+/* ─── Palette de la console : couleurs fonctionnelles, désaturées ─────────────
+   Spécificité renforcée (#app .rsn-vue) : la feuille des fondations est injectée après celle-ci. */
+#app .rsn-vue {
+  --police: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --r12-mono: 'JetBrains Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  --fond: #f7f8fa;
+  --surface: #ffffff;
+  --surface-2: #f1f3f6;
+  --bord: #d5dae2;
+  --ombre: none;
+  --texte: #1d232e;
+  --texte-doux: #5b6372;
+  --accent: #2f5b9a;
+  --arete: #6b7384;
+  --arete-complete: #b4bbc7;
+  --ancetre: #9a5b2e;
+  --descendant: #5a5a9c;
+  --contredit: #a4504f;
+  --statut-valide: #3f7d62;
+  --statut-incertain: #a8862f;
+  --statut-refute: #a4504f;
+  --validation-aucune: #a3aab6;
+  --validation-ia: #6c6396;
+  --validation-humain: #3e6a98;
+  --validation-ia-humain: #2c3444;
+  --couche-0: #6c6396;
+  --couche-1: #7a8494;
+  --couche-2: #9a6b3f;
+  --couche-3: #3e6a98;
+  --couche-4: #3f7f86;
+  --couche-5: #5f7a3c;
+  --couche-6: #2c3444;
+  --r12-choix-0: #8a5a78;
+  --r12-choix-1: #4f6f96;
+  --r12-choix-2: #5b7d5a;
+  --r12-choix-3: #9a6b3f;
+  --r12-choix-4: #6e6396;
+  --r12-choix-5: #3f7f86;
+  --r12-impasse: #9aa1ae;
+  --r12-grille: #e6e9ee;
+  --r12-entete: #f1f3f6;
+  --r12-entete-majeur: #2c3444;
+  --r12-texte-entete-majeur: #ffffff;
+  --r12-filet: #c5cbd5;
+}
+#app .rsn-vue[data-theme='sombre'] {
+  --fond: #111418;
+  --surface: #181c22;
+  --surface-2: #1f242b;
+  --bord: #2e343e;
+  --texte: #e3e6ec;
+  --texte-doux: #97a0b0;
+  --accent: #7d9fcf;
+  --arete: #8a93a4;
+  --arete-complete: #454c58;
+  --ancetre: #c98b5c;
+  --descendant: #9a98d0;
+  --statut-valide: #6aa98b;
+  --statut-incertain: #c9a652;
+  --statut-refute: #c77a78;
+  --validation-humain: #7d9fcf;
+  --validation-ia-humain: #c9d2e0;
+  --r12-choix-0: #c08aa8;
+  --r12-choix-1: #86a3c9;
+  --r12-choix-2: #8fb08c;
+  --r12-choix-3: #c9996c;
+  --r12-choix-4: #a39bc9;
+  --r12-choix-5: #72afb5;
+  --r12-impasse: #6d7482;
+  --r12-grille: #1d2127;
+  --r12-entete: #20252c;
+  --r12-entete-majeur: #c9d2e0;
+  --r12-texte-entete-majeur: #111418;
+  --r12-filet: #3a414c;
+}
+
+/* ─── Interface des fondations, resserrée : angles vifs, pas d'ombre ─────── */
+
+#app .rsn-vue {
+  font-size: 12px;
+}
+#app .rsn-barre {
+  left: calc(50% - 156px);
+  border-radius: 3px;
+  padding: 2px;
+  font: 11px var(--r12-mono);
+}
+#app .rsn-barre button {
+  border-radius: 2px;
+  padding: 4px 9px;
+}
+#app .rsn-panneau {
+  bottom: 26px;
+}
+#app .rsn-vue .atlas-gizmo {
+  right: calc(312px + 10px);
+  transition: right 0.2s ease;
+}
+#app .rsn-reglages {
+  right: calc(312px + 10px);
+  bottom: 36px;
+  transition: right 0.2s ease;
+}
+#app .rsn-vue.r12-sans-inspecteur .atlas-gizmo,
+#app .rsn-vue.r12-sans-inspecteur .rsn-reglages {
+  right: 10px;
+}
+#app .rsn-vue.r12-sans-inspecteur .rsn-barre {
+  left: 50%;
+}
+#app .rsn-vue .rsn-bouton {
+  border-radius: 2px;
+}
+
+/* Fiche de survol : une ligne de mesures. */
+#app .rsn-fiche {
+  width: auto;
+  max-width: 340px;
+  padding: 6px 8px;
+  border-radius: 2px;
+  box-shadow: none;
+  border-color: var(--r12-filet);
+}
+.r12-fiche-mesures {
+  font: 600 10px var(--r12-mono);
+  color: var(--texte);
+  white-space: nowrap;
+}
+.r12-fiche-nom {
+  margin-top: 3px;
+  font-size: 12px;
+}
+.r12-fiche-aide {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--bord);
+  font: 10px var(--r12-mono);
+  color: var(--texte-doux);
+}
+
+/* ─── Utilitaires ──────────────────────────────────────────────────────────── */
+
+.r12-mono {
+  font-family: var(--r12-mono);
+  font-variant-numeric: tabular-nums;
+}
+.r12-doux {
+  color: var(--texte-doux);
+}
+.r12-fort {
+  font-weight: 700;
+}
+.r12-carre {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  vertical-align: 0;
+}
+.r12-titre-section {
+  font: 600 10px var(--r12-mono);
+  letter-spacing: 0.04em;
+  color: var(--texte-doux);
+}
+
+/* ─── Inspecteur (droite) ─────────────────────────────────────────────────── */
+
+.r12-inspecteur {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 26px;
+  width: 312px;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border-left: 1px solid var(--bord);
+  z-index: 10;
+  transition: transform 0.2s ease;
+}
+.r12-sans-inspecteur .r12-inspecteur {
+  transform: translateX(100%);
+}
+.r12-inspecteur-entete {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 6px 0 12px;
+  border-bottom: 1px solid var(--bord);
+  background: var(--surface-2);
+}
+.r12-inspecteur-entete .r12-doux {
+  font-size: 10px;
+}
+.r12-fermer {
+  margin-left: auto;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  background: transparent;
+  color: var(--texte-doux);
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+}
+.r12-fermer:hover {
+  color: var(--texte);
+}
+.r12-bascule {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: none;
+  padding: 4px 9px;
+  border: 1px solid var(--bord);
+  border-radius: 2px;
+  background: var(--surface);
+  font: 11px var(--r12-mono) !important;
+  cursor: pointer;
+  z-index: 10;
+}
+.r12-sans-inspecteur .r12-bascule {
+  display: block;
+}
+#app .rsn-vue.r12-sans-inspecteur .atlas-gizmo {
+  top: 44px;
+}
+.r12-inspecteur-corps {
+  flex: 1;
+  overflow: auto;
+  padding: 10px 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.r12-inspecteur-nom {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.r12-inspecteur-enonce {
+  color: var(--texte-doux);
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+.r12-vide {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 6px;
+  line-height: 1.45;
+}
+.r12-note {
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+/* Tableau propriété-valeur. */
+.r12-proprietes {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11.5px;
+}
+.r12-proprietes th,
+.r12-proprietes td {
+  padding: 3px 0;
+  border-bottom: 1px solid var(--bord);
+  vertical-align: top;
+  text-align: left;
+}
+.r12-proprietes th {
+  width: 118px;
+  padding-right: 8px;
+  font: 500 10px var(--r12-mono);
+  color: var(--texte-doux);
+  white-space: nowrap;
+}
+.r12-proprietes td.r12-mono {
+  font-size: 11px;
+}
+.r12-barre svg {
+  display: block;
+}
+.r12-refs {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+.r12-ref {
+  padding: 0 4px;
+  border: 1px solid var(--r12-filet);
+  border-radius: 0;
+  background: var(--surface-2);
+  font: 500 10px var(--r12-mono) !important;
+  color: var(--accent) !important;
+  cursor: pointer;
+}
+.r12-ref:hover {
+  border-color: var(--accent);
+}
+
+/* Grille de données (démonstrations, membres, alternatives). */
+.r12-grille {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+.r12-grille th,
+.r12-grille td {
+  padding: 3px 4px;
+  border: 1px solid var(--bord);
+  text-align: left;
+  vertical-align: top;
+}
+.r12-grille th {
+  background: var(--surface-2);
+  font: 500 10px var(--r12-mono);
+  color: var(--texte-doux);
+}
+.r12-grille td.r12-mono {
+  font-size: 10px;
+  white-space: nowrap;
+}
+.r12-grille .num {
+  text-align: right;
+  font-family: var(--r12-mono);
+  font-variant-numeric: tabular-nums;
+}
+.r12-rejetee td {
+  color: var(--texte-doux);
+}
+
+/* ─── Barre d'état (bas) ──────────────────────────────────────────────────── */
+
+.r12-etat {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 26px;
+  display: flex;
+  align-items: stretch;
+  background: var(--surface-2);
+  border-top: 1px solid var(--bord);
+  font: 10.5px var(--r12-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--texte);
+  white-space: nowrap;
+  overflow: hidden;
+  z-index: 12;
+}
+.r12-etat > span {
+  display: flex;
+  align-items: center;
+}
+.r12-etat-mesures {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+.r12-etat-niveaux {
+  gap: 2px;
+  padding: 0 8px;
+  border-right: 1px solid var(--bord);
+}
+.r12-etat-niveaux .r12-cle {
+  margin-right: 4px;
+}
+.r12-seg {
+  padding: 1px 6px;
+  border: 1px solid var(--bord);
+  border-radius: 0;
+  background: var(--surface);
+  font: 10.5px var(--r12-mono) !important;
+  cursor: pointer;
+}
+.r12-seg.actif {
+  background: var(--texte);
+  border-color: var(--texte);
+  color: var(--surface) !important;
+}
+.r12-champ {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 100%;
+  padding: 0 9px;
+  border-right: 1px solid var(--bord);
+}
+.r12-cle {
+  color: var(--texte-doux);
+  font-size: 9.5px;
+}
+.r12-val .r12-carre {
+  margin-left: 2px;
+}
+.r12-etat-curseur .r12-champ:last-child {
+  border-right: 0;
+}
+.r12-etat-curseur {
+  border-left: 1px solid var(--bord);
+}
+
+/* ─── Panneau ☰ ───────────────────────────────────────────────────────────── */
+
+.r12-panneau {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12px;
+}
+.r12-liste-choix {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.r12-choix {
+  display: grid;
+  grid-template-columns: auto auto auto 1fr auto;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.r12-choix .r12-mono {
+  font-size: 10.5px;
+}
+.r12-choix-nom {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.r12-puce {
+  width: 9px;
+  height: 9px;
+  border: 1.5px solid;
+}
+.r12-legende {
+  border-collapse: collapse;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--texte-doux);
+}
+.r12-legende td {
+  padding: 3px 6px 3px 0;
+  border-bottom: 1px solid var(--bord);
+  vertical-align: top;
+}
+.r12-legende td.r12-mono {
+  color: var(--texte);
+  white-space: nowrap;
+  font-size: 10px;
+}

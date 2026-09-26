@@ -1,0 +1,162 @@
+/* R15 · Épure : une page de livre plutôt qu'une interface. Papier crème, encre, filets gris, une
+   seule couleur d'accent (sélection). Sélecteurs préfixés par body : la feuille partagée de la vue
+   est injectée après celle-ci et doit être surchargée. */
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: #fffff8;
+}
+#app {
+  position: fixed;
+  inset: 0;
+}
+.retour {
+  position: fixed;
+  top: 18px;
+  left: 56px;
+  font: italic 13px 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
+  color: #6b6b6b;
+  text-decoration: none;
+  z-index: 5;
+}
+.retour:hover {
+  color: #a3312a;
+}
+body:has(.rsn-vue.panneau-ouvert) .retour {
+  display: none;
+}
+body:has(.rsn-vue[data-theme='sombre']) {
+  background: #151513;
+}
+
+body .rsn-vue {
+  --r15-serif: 'Palatino Linotype', Palatino, 'Book Antiqua', 'URW Palladio L', Georgia, serif;
+  --r15-encre: #111111;
+  --r15-encre-douce: #6b6b6b;
+  --r15-filet: #8e8e8e;
+  --r15-pale: #bcbcbc;
+  --r15-accent: #a3312a;
+  --fond: #fffff8;
+  --surface: #fffffb;
+  --surface-2: #f6f5ee;
+  --bord: #e4e2d8;
+  --ombre: 0 1px 3px rgba(40, 35, 20, 0.08);
+  --texte: #111111;
+  --texte-doux: #6b6b6b;
+  /* Une seule couleur d'accent : sélection, lignée (ancêtres et descendants), survol. */
+  --accent: #a3312a;
+  --ancetre: #a3312a;
+  --descendant: #a3312a;
+  --arete: #8e8e8e;
+  --arete-complete: #cfcdc4;
+}
+body .rsn-vue[data-theme='sombre'] {
+  --r15-encre: #ecebe4;
+  --r15-encre-douce: #a09f98;
+  --r15-filet: #8a8984;
+  --r15-pale: #5c5b56;
+  --r15-accent: #e8816f;
+  --fond: #151513;
+  --surface: #1c1c1a;
+  --surface-2: #242421;
+  --bord: #34332f;
+  --texte: #ecebe4;
+  --texte-doux: #a09f98;
+  --accent: #e8816f;
+  --ancetre: #e8816f;
+  --descendant: #e8816f;
+  --arete: #8a8984;
+  --arete-complete: #45443f;
+}
+
+/* Fiche : titre en romain de livre, ni ombre portée marquée ni coins très arrondis. */
+body .rsn-vue .rsn-fiche {
+  border-radius: 3px;
+}
+body .rsn-vue .rsn-fiche-titre,
+body .rsn-vue .rsn-fiche-enonce {
+  font-family: var(--r15-serif);
+  font-weight: 400;
+}
+body .rsn-vue .rsn-fiche-titre {
+  font-size: 15px;
+}
+.r15-fiche-bandeau {
+  margin: -2px 0 8px;
+  color: var(--accent);
+  font: italic 12.5px var(--r15-serif);
+}
+
+/* Panneau ☰ : typographie de livre, pas de boutons pleins. */
+.r15-panneau {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12px;
+}
+.r15-titre {
+  margin-top: 4px;
+  font: italic 13px var(--r15-serif);
+  color: var(--texte-doux);
+}
+.r15-niveaux {
+  display: flex;
+  gap: 14px;
+}
+.r15-niveau {
+  padding: 0 0 1px;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  background: none;
+  color: var(--texte-doux);
+  font: 13px var(--r15-serif);
+  cursor: pointer;
+  text-align: left;
+}
+.r15-niveau:hover {
+  color: var(--texte);
+}
+.r15-niveau.actif {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+.r15-compte {
+  line-height: 1.55;
+}
+.r15-liste-choix {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.r15-choix {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  cursor: pointer;
+}
+.r15-choix input {
+  accent-color: var(--accent);
+}
+.r15-sigle {
+  font: 600 11.5px var(--r15-serif);
+  color: var(--texte-doux);
+  min-width: 20px;
+}
+.r15-legende {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 10px;
+  margin: 0;
+  color: var(--texte-doux);
+  line-height: 1.45;
+}
+.r15-legende dt {
+  font-family: var(--r15-serif);
+  color: var(--texte);
+  white-space: nowrap;
+}
+.r15-legende dd {
+  margin: 0;
+}

@@ -1,0 +1,14 @@
+{
+  "id": "r14-schema-technique",
+  "titre": "R14 · Schéma technique",
+  "resume": "Le squelette déductif de R1 dessiné comme un schéma d'ingénieur : blocs à angles vifs avec repères (B, D, H) et ports, liaisons orthogonales au trait fin avec jonctions en point plein, règle des rangs logiques, cadre et cartouche de plan, hypothèses de modélisation écrites en spécifications « Hyp. : … », statut par code de trait (continu, tireté, barré). Noir, gris, un seul bleu.",
+  "idees": [
+    "Statut par le trait, pas par la couleur : continu = validé, tireté = à vérifier, barré = réfuté",
+    "Blocs repérés B1… D1… H1…, ports d'entrée répartis (un par liaison), sortie en carré plein, jonctions en point plein",
+    "Feuille de plan : trame, cadre double, repères de lignes A B C, règle graduée des rangs logiques, cartouche (titre, révision, éléments, échelle, date)",
+    "Choix de modélisation en blocs de spécification « Hyp. : … » ; les blocs dépendants portent « ⊢ H1 » au survol ou à l'épingle",
+    "Renvois en connecteurs pentagonaux (repère du bloc cité), alternatives rejetées en sorties non connectées « × NC »",
+    "Même dérivation que R1 : squelette / + auxiliaires / tout, sous-systèmes dépliables au double-clic"
+  ],
+  "ordre": 14
+}

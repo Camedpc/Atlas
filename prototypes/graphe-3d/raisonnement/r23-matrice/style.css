@@ -1,0 +1,433 @@
+/* R23 · Matrice de dépendance — thème clair, sobre ; hiérarchie par la typographie et les filets. */
+
+:root {
+  --fond: #ffffff;
+  --page: #f6f7f9;
+  --encre: #1b2029;
+  --texte: #343b48;
+  --doux: #687080;
+  --pale: #9ba2ae;
+  --filet: #dde1e7;
+  --bande: #eef1f5;
+  --valide: #2f6b4f;
+  --incertain: #a8741a;
+  --refute: #a3402d;
+  --retro: #3d5a9e;
+  --police: Inter, 'Segoe UI', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--fond);
+  color: var(--texte);
+  font: 13px/1.45 var(--police);
+}
+
+.r23 {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+}
+
+/* ── Barre ── */
+.r23-barre {
+  display: flex;
+  align-items: flex-end;
+  gap: 20px;
+  padding: 10px 16px 9px;
+  border-bottom: 1px solid var(--filet);
+  background: var(--fond);
+  flex-wrap: wrap;
+}
+.r23-retour {
+  color: var(--doux);
+  text-decoration: none;
+  font-size: 12px;
+  padding-bottom: 3px;
+}
+.r23-retour:hover {
+  color: var(--encre);
+}
+.r23-titre {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  margin-right: auto;
+}
+.r23-nom {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--encre);
+}
+.r23-sous {
+  font-size: 12px;
+  color: var(--doux);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 44ch;
+}
+.r23-commandes {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+.r23-groupe {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.r23-groupe-titre {
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--doux);
+}
+.r23-segments {
+  display: flex;
+}
+.r23-seg {
+  font: 12px var(--police);
+  color: var(--texte);
+  background: var(--fond);
+  border: 1px solid var(--filet);
+  padding: 3px 9px;
+  margin-left: -1px;
+  cursor: pointer;
+}
+.r23-segments .r23-seg:first-child {
+  margin-left: 0;
+  border-radius: 3px 0 0 3px;
+}
+.r23-segments .r23-seg:last-child {
+  border-radius: 0 3px 3px 0;
+}
+.r23-segments .r23-seg:only-child {
+  border-radius: 3px;
+}
+.r23-seg:hover {
+  background: var(--page);
+}
+.r23-seg.actif {
+  background: var(--encre);
+  border-color: var(--encre);
+  color: #fff;
+  position: relative;
+}
+
+/* ── Corps ── */
+.r23-corps {
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  min-height: 0;
+}
+.r23-zone {
+  position: relative;
+  overflow: hidden;
+  min-width: 0;
+}
+.r23-zone canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  touch-action: none;
+}
+.r23-panneau {
+  border-left: 1px solid var(--filet);
+  overflow-y: auto;
+  padding: 14px 18px 24px;
+  background: var(--fond);
+}
+
+/* ── Barre d'état ── */
+.r23-etat {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  padding: 4px 16px;
+  border-top: 1px solid var(--filet);
+  font-size: 11.5px;
+  color: var(--doux);
+  background: var(--page);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.r23-etat .r23-pos {
+  color: var(--texte);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.r23-etat .r23-aide {
+  margin-left: auto;
+}
+
+/* ── Fiches (panneau et survol) ── */
+.r23-survol {
+  position: absolute;
+  z-index: 3;
+  max-width: 400px;
+  padding: 9px 11px;
+  background: var(--fond);
+  border: 1px solid #c9ced6;
+  border-radius: 3px;
+  font-size: 12px;
+  pointer-events: none;
+}
+.r23-entete {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+}
+.r23-id,
+.r23-mono {
+  font-family: var(--mono);
+  font-size: 0.95em;
+}
+.r23-id {
+  color: var(--encre);
+  font-weight: 600;
+}
+.r23-type {
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--doux);
+}
+.r23-titre-fiche {
+  color: var(--encre);
+  font-weight: 600;
+  margin: 3px 0 2px;
+}
+.r23-panneau h2 {
+  font-size: 15px;
+  line-height: 1.35;
+  font-weight: 600;
+  color: var(--encre);
+  margin: 4px 0 6px;
+}
+.r23-panneau h3 {
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--doux);
+  margin: 0 0 6px;
+}
+.r23-panneau section {
+  border-top: 1px solid var(--filet);
+  margin-top: 14px;
+  padding-top: 10px;
+}
+.r23-enonce {
+  color: var(--texte);
+  margin: 2px 0 8px;
+}
+.r23-question {
+  font-style: italic;
+  margin: 0 0 6px;
+}
+.r23-grille-kv {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.r23-kv {
+  display: grid;
+  grid-template-columns: 104px 1fr;
+  gap: 8px;
+  align-items: baseline;
+}
+.r23-cle {
+  color: var(--doux);
+  font-size: 12px;
+}
+.r23-val {
+  min-width: 0;
+}
+.r23-petit {
+  font-size: 11.5px;
+}
+.r23-doux {
+  color: var(--doux);
+}
+.r23-retro {
+  color: var(--retro);
+}
+.r23-refute {
+  color: var(--refute);
+}
+.r23-statut.s-valide,
+.r23-validite.v-valide {
+  color: var(--valide);
+}
+.r23-statut.s-incertain,
+.r23-validite.v-a_verifier {
+  color: var(--incertain);
+}
+.r23-statut.s-refute,
+.r23-validite.v-invalide {
+  color: var(--refute);
+}
+.r23-intervalle {
+  vertical-align: -2px;
+}
+.r23-intervalle .axe {
+  stroke: #c4c9d1;
+  stroke-width: 1;
+}
+.r23-intervalle .plage {
+  stroke: var(--doux);
+  stroke-width: 3;
+}
+.r23-intervalle .estimation {
+  stroke: var(--encre);
+  stroke-width: 1.5;
+}
+
+.r23-demo {
+  padding: 6px 0 8px;
+  border-bottom: 1px solid var(--bande);
+}
+.r23-demo:last-child {
+  border-bottom: 0;
+}
+.r23-demo.exclue {
+  opacity: 0.55;
+}
+.r23-demo-titre {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+.r23-demo-titre b {
+  font-weight: 600;
+  color: var(--encre);
+}
+.r23-etiquette {
+  font-size: 10.5px;
+  color: var(--doux);
+  border: 1px solid var(--filet);
+  border-radius: 2px;
+  padding: 0 4px;
+}
+.r23-par {
+  margin: 3px 0;
+  line-height: 1.7;
+}
+.r23-role {
+  display: inline-block;
+  min-width: 44px;
+  font-size: 11px;
+  color: var(--doux);
+  margin-right: 4px;
+}
+.r23-ref {
+  font: 11.5px var(--mono);
+  color: var(--encre);
+  background: none;
+  border: 0;
+  border-bottom: 1px solid #c4c9d1;
+  padding: 0 1px;
+  cursor: pointer;
+}
+.r23-ref:hover {
+  border-bottom-color: var(--encre);
+  background: var(--bande);
+}
+.r23-lien {
+  font: 12px var(--police);
+  color: var(--doux);
+  background: none;
+  border: 0;
+  padding: 0;
+  margin-bottom: 10px;
+  cursor: pointer;
+}
+.r23-lien:hover {
+  color: var(--encre);
+}
+
+.r23-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  margin: 4px 0 8px;
+}
+.r23-table th {
+  text-align: left;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--doux);
+  border-bottom: 1px solid var(--filet);
+  padding: 3px 6px 3px 0;
+}
+.r23-table td {
+  padding: 4px 6px 4px 0;
+  border-bottom: 1px solid var(--bande);
+  vertical-align: top;
+}
+.r23-table tr.retenue td:first-child {
+  font-weight: 600;
+  color: var(--encre);
+}
+.r23-table tr.rejetee td {
+  color: var(--pale);
+}
+
+.r23-boutons {
+  display: flex;
+  gap: 6px;
+  margin-top: 14px;
+}
+.r23-bouton {
+  font: 12px var(--police);
+  color: var(--texte);
+  background: var(--fond);
+  border: 1px solid var(--filet);
+  border-radius: 3px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+.r23-bouton:hover {
+  background: var(--page);
+}
+
+/* ── Légende ── */
+.r23-legende .r23-leg {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+  margin: 3px 0;
+}
+.r23-glyphe {
+  display: inline-flex;
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+
+@media (max-width: 900px) {
+  .r23-corps {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr 40%;
+  }
+  .r23-panneau {
+    border-left: 0;
+    border-top: 1px solid var(--filet);
+  }
+  .r23-etat .r23-aide {
+    display: none;
+  }
+}

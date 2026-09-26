@@ -1,0 +1,14 @@
+{
+  "id": "r21-preuve-structuree",
+  "titre": "R21 · Preuve structurée",
+  "resume": "Le raisonnement écrit comme une preuve hiérarchique numérotée à la Lamport : « Supposons » (H, M, D, A, T, L), puis chaque résultat et sa preuve ⟨1⟩ ⟨2⟩ … avec ligne PAR citant les prémisses par numéro et par rôle, filets de portée des choix de modélisation, marge de vérification alignée et mini-carte synchronisée.",
+  "idees": [
+    "Numérotation stable et citable : ⟨2⟩3 dans l'entrée, « Th 2 ⟨2⟩3 » ailleurs ; un énoncé partagé est développé une fois, cité ensuite",
+    "Ligne PAR groupée par rôle : par · aux. · tech. · ctx., renvois cliquables avec aperçu",
+    "Filets de portée des choix M1…M6 dans la marge gauche (Fitch), survol / épinglage",
+    "Marge droite : validité de la démonstration, validation, intervalle de confiance sur échelle commune, nombre de démonstrations",
+    "Décisions encadrées à l'endroit où elles conditionnent une étape, séries de mesures en tableaux, contradictions et contrôles en ligne",
+    "Curseur de profondeur, replis, démonstrations alternatives, provenance, mini-carte arbre + renvois"
+  ],
+  "ordre": 21
+}

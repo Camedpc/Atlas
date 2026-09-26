@@ -1,0 +1,361 @@
+/* R22 · Énoncés et inférences — thème clair, sobre : filets 1 px, pas d'ombre, pas d'effet. */
+
+:root {
+  --r22-fond: #ffffff;
+  --r22-surface: #fafafb;
+  --r22-filet: #dfe2e7;
+  --r22-encre: #1d2129;
+  --r22-doux: #555c6b;
+  --r22-gris: #8a909c;
+  --r22-selection: #1f3f73;
+  --r22-sans: Inter, 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --r22-serif: 'Cambria', 'Cambria Math', Georgia, 'Times New Roman', serif;
+  --r22-mono: 'Cascadia Mono', Consolas, 'SF Mono', monospace;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--r22-fond);
+  color: var(--r22-encre);
+  font-family: var(--r22-sans);
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+}
+
+#app {
+  position: fixed;
+  inset: 0;
+}
+
+.r22 {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* Barre du haut */
+.r22-barre {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 20px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--r22-filet);
+  background: var(--r22-fond);
+}
+.r22-titre {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  min-width: 0;
+}
+.r22-titre h1 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.r22-sous-titre {
+  color: var(--r22-gris);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 420px;
+}
+.r22-retour {
+  color: var(--r22-doux);
+  text-decoration: none;
+  font-size: 12px;
+}
+.r22-retour:hover {
+  color: var(--r22-selection);
+}
+.r22-commandes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  font-size: 12px;
+  color: var(--r22-doux);
+}
+.r22-segment {
+  display: inline-flex;
+  border: 1px solid var(--r22-filet);
+}
+.r22-segment button {
+  font: inherit;
+  border: 0;
+  background: var(--r22-fond);
+  color: var(--r22-doux);
+  padding: 3px 9px;
+  cursor: pointer;
+}
+.r22-segment button + button {
+  border-left: 1px solid var(--r22-filet);
+}
+.r22-segment button.actif {
+  background: #eceef1;
+  color: var(--r22-encre);
+  font-weight: 600;
+}
+.r22-case {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.r22-case input {
+  margin: 0;
+  accent-color: var(--r22-encre);
+}
+.r22-liste {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+.r22-liste select {
+  font: inherit;
+  color: var(--r22-encre);
+  border: 1px solid var(--r22-filet);
+  background: var(--r22-fond);
+  padding: 2px 4px;
+}
+.r22-bouton {
+  font: inherit;
+  font-size: 12px;
+  border: 1px solid var(--r22-filet);
+  background: var(--r22-fond);
+  color: var(--r22-encre);
+  padding: 3px 9px;
+  cursor: pointer;
+}
+.r22-bouton:hover:not(:disabled) {
+  border-color: var(--r22-gris);
+}
+.r22-bouton.actif {
+  background: #eceef1;
+  border-color: var(--r22-gris);
+  font-weight: 600;
+}
+.r22-bouton:disabled {
+  color: var(--r22-gris);
+  cursor: default;
+}
+
+/* Corps : toile + panneau */
+.r22-corps {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+.r22-toile {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+.r22-canvas {
+  display: block;
+  touch-action: none;
+}
+.r22-carte {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  border: 1px solid var(--r22-filet);
+  background: var(--r22-fond);
+  cursor: crosshair;
+}
+.r22-panneau {
+  flex: none;
+  width: 360px;
+  overflow-y: auto;
+  border-left: 1px solid var(--r22-filet);
+  background: var(--r22-fond);
+}
+.r22-panneau section {
+  padding: 12px 16px 14px;
+  border-bottom: 1px solid var(--r22-filet);
+}
+.r22-panneau h2 {
+  margin: 0 0 8px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--r22-doux);
+}
+.r22-chiffres {
+  line-height: 1.55;
+  font-size: 12px;
+}
+.r22-chiffres b {
+  font-variant-numeric: tabular-nums;
+}
+.r22-aide {
+  margin: 0;
+  color: var(--r22-doux);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.r22-effacer {
+  margin-top: 10px;
+}
+
+/* Fiche (survol et sélection) */
+.r22-fiche {
+  position: absolute;
+  z-index: 3;
+  width: 340px;
+  max-height: 70vh;
+  overflow: hidden;
+  padding: 10px 12px;
+  background: var(--r22-fond);
+  border: 1px solid #c9cdd4;
+  pointer-events: none;
+}
+.r22-fiche[hidden] {
+  display: none;
+}
+.r22-f {
+  font-size: 12px;
+  line-height: 1.45;
+}
+.r22-f-tete {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--r22-doux);
+}
+.r22-pc {
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.r22-mono {
+  font-family: var(--r22-mono);
+  font-size: 11px;
+}
+.r22-f-titre {
+  margin: 3px 0 4px;
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.r22-f-enonce {
+  margin: 0 0 8px;
+  font-family: var(--r22-serif);
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+.r22-f-sous {
+  margin: 10px 0 4px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--r22-doux);
+}
+.r22-meta {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  gap: 8px;
+  padding: 1px 0;
+}
+.r22-meta-l {
+  color: var(--r22-gris);
+}
+.r22-glyphe {
+  font-weight: 600;
+}
+.r22-petit {
+  font-size: 11px;
+  color: var(--r22-doux);
+}
+.r22-gris,
+.r22-gris td {
+  color: var(--r22-gris);
+}
+.r22-ic {
+  vertical-align: middle;
+}
+.r22-t {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11.5px;
+}
+.r22-t th {
+  text-align: left;
+  font-weight: 500;
+  color: var(--r22-gris);
+  border-bottom: 1px solid var(--r22-filet);
+  padding: 2px 4px 2px 0;
+}
+.r22-t td {
+  padding: 2px 6px 2px 0;
+  border-bottom: 1px solid #eef0f3;
+  vertical-align: top;
+}
+.r22-t tr.r22-pire td {
+  text-decoration: underline;
+  text-decoration-color: #3d3a8c;
+  text-underline-offset: 3px;
+}
+.r22-roles {
+  display: grid;
+  gap: 3px;
+}
+.r22-role {
+  display: grid;
+  grid-template-columns: 76px 1fr;
+  gap: 6px;
+}
+.r22-codes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 5px;
+}
+.r22-code {
+  font-family: var(--r22-mono);
+  font-size: 11px;
+  padding: 0 4px;
+  border: 1px solid var(--r22-filet);
+  background: var(--r22-fond);
+  color: var(--r22-encre);
+  cursor: pointer;
+}
+.r22-code:hover {
+  border-color: var(--r22-selection);
+  color: var(--r22-selection);
+}
+.r22-chemin {
+  margin-top: 6px;
+}
+
+/* Légende */
+.r22-legende {
+  display: grid;
+  gap: 5px;
+}
+.r22-leg {
+  display: grid;
+  grid-template-columns: 36px 1fr;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--r22-doux);
+  line-height: 1.35;
+}
+
+@media (max-width: 900px) {
+  .r22-panneau {
+    display: none;
+  }
+}
