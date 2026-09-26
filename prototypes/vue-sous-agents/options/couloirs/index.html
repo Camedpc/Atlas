@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Couloirs temporels · Atlas</title>
+  <link rel="stylesheet" href="../../commun/commun.css">
+  <style>
+    .toile { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
+
+    /* Commandes flottantes : suivi du direct et vue d'ensemble */
+    .commandes { position: absolute; top: 40px; right: 18px; display: flex; gap: 6px; z-index: 5; }
+    .commandes button {
+      display: inline-flex; align-items: center; gap: 7px;
+      font: 500 12px var(--police); color: var(--texte-2);
+      background: color-mix(in srgb, var(--fond-2) 82%, transparent);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--trait); border-radius: 999px;
+      padding: 6px 12px; cursor: pointer;
+      transition: color .25s, background .25s, border-color .25s, box-shadow .35s;
+    }
+    .commandes button:hover { color: var(--texte); border-color: var(--trait-fort); }
+    .commandes .direct i { width: 7px; height: 7px; border-radius: 50%; background: var(--texte-3); transition: background .25s; }
+    .commandes .direct.en-direct { color: var(--texte); }
+    .commandes .direct.en-direct i { background: var(--echec); box-shadow: 0 0 8px var(--echec); animation: respire 1.6s ease-in-out infinite; }
+    .commandes .direct.hors-direct { color: var(--fond); background: var(--accent); border-color: var(--accent); box-shadow: 0 0 22px rgba(240, 164, 75, .35); }
+    .commandes .direct.hors-direct i { background: var(--fond); }
+
+    /* Légende discrète */
+    .legende-couloirs {
+      position: absolute; left: 18px; bottom: 106px; z-index: 4;
+      display: flex; flex-direction: column; gap: 5px;
+      padding: 8px 11px; border-radius: 10px;
+      background: color-mix(in srgb, var(--fond) 78%, transparent);
+      backdrop-filter: blur(6px);
+      border: 1px solid color-mix(in srgb, var(--trait) 70%, transparent);
+      font-size: 11px; color: var(--texte-3);
+      opacity: .72; transition: opacity .3s;
+    }
+    .legende-couloirs:hover { opacity: 1; }
+    .legende-couloirs > div { display: flex; flex-wrap: wrap; gap: 4px 11px; }
+    .legende-couloirs span { display: inline-flex; align-items: center; gap: 5px; }
+    .legende-couloirs .lg-roles i { width: 7px; height: 7px; border-radius: 2px; }
+    .legende-couloirs .lg-aide { font-size: 10.5px; color: var(--texte-3); opacity: .8; }
+    .legende-couloirs b { display: inline-block; width: 16px; height: 8px; border-radius: 2px; }
+    .m-plein { background: #9d8cf2; }
+    .m-vif { background: #b9a9ff; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .6); }
+    .m-trait { background: linear-gradient(to top, #9d8cf2 0 1.5px, rgba(157, 140, 242, .1) 1.5px); }
+    .m-hachure { background: repeating-linear-gradient(135deg, rgba(163, 163, 158, .55) 0 1.5px, rgba(109, 110, 108, .15) 1.5px 4px); }
+    .legende-couloirs b.m-losange { width: 7px; height: 7px; border-radius: 1px; background: var(--accent); transform: rotate(45deg); margin: 0 3px; }
+    .legende-couloirs b.m-croix { width: auto; height: auto; color: var(--echec); font-weight: 700; font-size: 11px; }
+
+    /* Infobulle */
+    .infobulle {
+      position: absolute; z-index: 20; pointer-events: none;
+      max-width: 320px; padding: 10px 12px; border-radius: 10px;
+      background: rgba(21, 23, 28, .95); border: 1px solid var(--trait-fort);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, .45);
+      font-size: 12px; line-height: 1.45; color: var(--texte-2);
+    }
+    .infobulle[hidden] { display: none; }
+    .ib-tete { display: flex; align-items: center; gap: 6px; color: var(--texte-3); font-size: 11px; }
+    .ib-tete i { width: 7px; height: 7px; border-radius: 50%; }
+    .ib-tete span { margin-left: auto; font-family: var(--mono); font-size: 10px; }
+    .ib-titre { color: var(--texte); font-weight: 600; margin: 3px 0 5px; }
+    .ib-etat { font: 500 11px var(--mono); color: var(--texte-2); }
+    .ib-etat.reflechit, .ib-etat.outil { color: var(--ok); }
+    .ib-etat.echec { color: var(--echec); }
+    .ib-activite { color: var(--texte); margin-top: 4px; }
+    .ib-seg { margin-top: 7px; padding-top: 7px; border-top: 1px solid var(--trait); color: var(--texte-2); }
+    .ib-seg time { font: 10.5px var(--mono); color: var(--texte-3); }
+
+    /* Panneau inspecteur */
+    .panneau {
+      --role: var(--accent);
+      position: absolute; top: 0; right: 0; bottom: 0; width: 380px; z-index: 10;
+      display: flex; flex-direction: column;
+      background: linear-gradient(180deg, color-mix(in srgb, var(--role) 7%, var(--fond-2)) 0, var(--fond-2) 180px);
+      border-left: 1px solid var(--trait);
+      box-shadow: -18px 0 40px rgba(0, 0, 0, .35);
+      padding: 16px 18px 0;
+      transform: translateX(104%);
+      transition: transform .42s cubic-bezier(.2, .8, .2, 1);
+    }
+    .panneau.ouvert { transform: translateX(0); }
+    .p-tete { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--texte-2); }
+    .p-role { display: inline-flex; align-items: center; gap: 7px; font-weight: 600; color: var(--role); }
+    .p-role i { width: 9px; height: 9px; border-radius: 3px; box-shadow: 0 0 10px var(--role); }
+    .p-modele { font: 11px var(--mono); color: var(--texte-3); }
+    .p-fermer { margin-left: auto; background: none; border: 0; color: var(--texte-3); font-size: 20px; line-height: 1; cursor: pointer; padding: 0 2px; }
+    .p-fermer:hover { color: var(--texte); }
+    .p-titre { font-size: 17px; font-weight: 600; letter-spacing: -.01em; line-height: 1.3; margin: 10px 0 10px; }
+    .p-badge { display: inline-flex; align-items: center; gap: 7px; font: 500 11.5px var(--mono); padding: 4px 9px; border-radius: 999px; background: var(--fond-3); color: var(--texte-2); }
+    .p-badge i { width: 7px; height: 7px; border-radius: 50%; background: var(--texte-3); }
+    .p-badge code { color: var(--texte); }
+    .p-badge.reflechit, .p-badge.outil { color: var(--texte); background: color-mix(in srgb, var(--role) 18%, var(--fond-3)); }
+    .p-badge.reflechit i, .p-badge.outil i { background: var(--role); box-shadow: 0 0 8px var(--role); animation: respire 1.2s ease-in-out infinite; }
+    .p-badge.attend i { background: transparent; border: 1.5px solid var(--role); }
+    .p-badge.en_file i { background: repeating-linear-gradient(135deg, var(--texte-2) 0 1px, transparent 1px 3px); }
+    .p-badge.termine { color: var(--ok); } .p-badge.termine i { background: var(--ok); }
+    .p-badge.echec { color: var(--echec); background: rgba(239, 91, 91, .12); } .p-badge.echec i { background: var(--echec); }
+    .p-activite { margin: 10px 0 12px; color: var(--texte); font-size: 13px; line-height: 1.45; min-height: 38px; }
+    .p-frise { display: block; width: 100%; height: 14px; }
+    .p-chiffres { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; margin: 12px 0 0; background: var(--trait); border: 1px solid var(--trait); border-radius: 10px; overflow: hidden; }
+    .p-chiffres div { background: var(--fond-2); padding: 8px 10px; }
+    .p-chiffres dt { font-size: 10.5px; color: var(--texte-3); }
+    .p-chiffres dd { margin: 2px 0 0; font: 500 13px var(--mono); color: var(--texte); }
+    .p-resultat { margin-top: 12px; padding: 9px 11px; border-radius: 9px; background: rgba(143, 209, 106, .08); border: 1px solid rgba(143, 209, 106, .22); }
+    .p-resultat[hidden] { display: none; }
+    .p-resultat span { font-size: 10.5px; color: var(--texte-3); }
+    .p-resultat p { margin: 2px 0 0; color: var(--ok); font-weight: 500; }
+    .p-resultat.echec { background: rgba(239, 91, 91, .08); border-color: rgba(239, 91, 91, .3); }
+    .p-resultat.echec p { color: var(--echec); }
+    .p-liens { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+    .p-groupe > span { display: block; font-size: 10.5px; color: var(--texte-3); margin-bottom: 4px; }
+    .p-puces { display: flex; flex-wrap: wrap; gap: 4px; }
+    .puce {
+      display: inline-flex; align-items: center; gap: 6px; max-width: 100%;
+      font: 11.5px var(--police); color: var(--texte-2);
+      background: var(--fond-3); border: 1px solid var(--trait); border-radius: 7px;
+      padding: 3px 8px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .puce:hover { color: var(--texte); border-color: var(--trait-fort); }
+    .puce i { width: 7px; height: 7px; border-radius: 2px; flex: none; }
+    .puce.reflechit, .puce.outil { color: var(--texte); border-color: color-mix(in srgb, var(--ok) 45%, var(--trait)); }
+    .puce.echec { border-color: rgba(239, 91, 91, .5); color: var(--echec); }
+    .puce.termine { opacity: .7; }
+    .p-journal-titre { margin: 16px 0 6px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--texte-3); display: flex; }
+    .p-journal-titre small { margin-left: auto; font-weight: 400; text-transform: none; letter-spacing: 0; font-family: var(--mono); }
+    .p-journal {
+      flex: 1; min-height: 0; overflow-y: auto; list-style: none; margin: 0 -18px; padding: 0 18px 16px;
+      mask-image: linear-gradient(to bottom, transparent 0, #000 12px, #000 calc(100% - 16px), transparent);
+      scrollbar-width: thin; scrollbar-color: var(--trait-fort) transparent;
+    }
+    .p-journal li {
+      display: grid; grid-template-columns: 44px 14px 1fr; gap: 6px; align-items: baseline;
+      padding: 5px 0 5px 8px; border-left: 2px solid var(--c, var(--trait));
+      font-size: 12px; line-height: 1.4; color: var(--texte-2);
+      animation: entree-journal .45s cubic-bezier(.2, .8, .2, 1);
+    }
+    .p-journal time { font: 10.5px var(--mono); color: var(--texte-3); }
+    .p-journal .g { color: var(--c); font-size: 11px; text-align: center; }
+    .p-journal code { font: 10px var(--mono); color: var(--c); background: var(--fond-3); padding: 0 4px; border-radius: 4px; margin-right: 4px; }
+    .p-journal li.echec .t { color: var(--echec); }
+    .p-journal li.termine .t { color: var(--texte); }
+    @keyframes entree-journal { from { opacity: 0; transform: translateX(8px); } to { opacity: 1; transform: none; } }
+  </style>
+</head>
+<body>
+  <main class="scene">
+    <canvas class="toile"></canvas>
+    <div class="commandes">
+      <button class="direct en-direct" data-c="direct" title="Suivre le direct (F)"><i></i><span>En direct</span></button>
+      <button data-c="tout" title="Voir tout le run">Tout le run</button>
+    </div>
+    <div class="legende-couloirs"></div>
+    <div class="infobulle" hidden></div>
+    <aside class="panneau" aria-hidden="true">
+      <header class="p-tete">
+        <span class="p-role"></span>
+        <span class="p-modele"></span>
+        <button class="p-fermer" title="Fermer (Échap)">×</button>
+      </header>
+      <h2 class="p-titre"></h2>
+      <div><span class="p-badge"></span></div>
+      <p class="p-activite"></p>
+      <canvas class="p-frise"></canvas>
+      <dl class="p-chiffres">
+        <div><dt>Durée</dt><dd data-p="duree"></dd></div>
+        <div><dt>En file</dt><dd data-p="file"></dd></div>
+        <div><dt>Tokens</dt><dd data-p="tokens"></dd></div>
+        <div><dt>Outils</dt><dd data-p="outils"></dd></div>
+      </dl>
+      <div class="p-resultat" hidden><span>Résultat</span><p></p></div>
+      <div class="p-liens"></div>
+      <h3 class="p-journal-titre">Journal <small></small></h3>
+      <ol class="p-journal"></ol>
+    </aside>
+  </main>
+  <script type="module" src="./vue.js"></script>
+</body>
+</html>

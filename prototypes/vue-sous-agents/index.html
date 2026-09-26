@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vue des sous-agents</title>
+  <link rel="stylesheet" href="./commun/commun.css">
+  <style>
+    html, body { height: auto; }
+    .page { max-width: 1320px; margin: 0 auto; padding: 48px 24px 80px; }
+    h1 { font-size: 30px; letter-spacing: -0.02em; margin: 0 0 8px; }
+    .chapeau { color: var(--texte-2); max-width: 780px; line-height: 1.55; margin: 0 0 12px; }
+    .chapeau code { font-family: var(--mono); font-size: 12.5px; color: var(--texte); }
+    .grille { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 20px; margin-top: 32px; }
+    .carte {
+      display: flex; flex-direction: column;
+      background: var(--fond-2); border: 1px solid var(--trait); border-radius: 14px; overflow: hidden;
+      text-decoration: none; transition: border-color .2s, transform .2s;
+    }
+    .carte:hover { border-color: var(--trait-fort); transform: translateY(-2px); }
+    .apercu { position: relative; aspect-ratio: 16 / 10; overflow: hidden; background: var(--fond); border-bottom: 1px solid var(--trait); }
+    .apercu iframe {
+      position: absolute; top: 0; left: 0; width: 1440px; height: 900px; border: 0;
+      transform-origin: 0 0; pointer-events: none;
+    }
+    .texte { padding: 16px 18px 18px; }
+    .texte h2 { font-size: 16px; margin: 0 0 4px; display: flex; gap: 8px; align-items: baseline; }
+    .texte h2 .num { font: 500 12px var(--mono); color: var(--texte-3); }
+    .texte p { margin: 6px 0 0; color: var(--texte-2); line-height: 1.5; font-size: 13px; }
+    .texte .pour { color: var(--texte-3); font-size: 12px; margin-top: 10px; }
+    .texte .pour b { color: var(--texte-2); font-weight: 500; }
+    section.notes { margin-top: 56px; display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
+    section.notes h3 { font-size: 14px; text-transform: uppercase; letter-spacing: .08em; color: var(--texte-3); margin: 0 0 10px; }
+    section.notes ul { margin: 0; padding-left: 18px; color: var(--texte-2); line-height: 1.6; font-size: 13px; }
+    section.notes a { color: var(--texte); }
+    @media (max-width: 760px) { section.notes { grid-template-columns: 1fr; } .grille { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <h1>Vue des sous-agents</h1>
+    <p class="chapeau">
+      Six manières de voir, en direct, tous les sous-agents d’une recherche Atlas : qui a lancé qui, qui travaille
+      en ce moment, qui attend une place, qui a échoué. Toutes les options tournent sur la même simulation
+      (<code>commun/simulation.js</code>) : orchestrateur → directeurs de labo → littérature et expérimentateurs,
+      puis graphistes et vérificateur avec recours, six places simultanées. Aucun vrai agent n’est lancé.
+    </p>
+    <p class="chapeau">
+      Dans chaque option : <code>espace</code> pause, <code>R</code> nouvelle graine, <code>→</code> +30 s, et les
+      paramètres d’URL <code>?graine=7&amp;vitesse=3&amp;places=6&amp;t=90</code>.
+    </p>
+
+    <div class="grille" id="grille"></div>
+
+    <section class="notes">
+      <div>
+        <h3>Ce que disent les outils existants</h3>
+        <ul>
+          <li>Les outils de traçage d’agents (Langfuse, Braintrust, LangSmith, Agent Prism) convergent vers deux
+            vues : l’arbre de spans repliable et la frise temporelle. Tout le monde ne fait que du post-mortem ;
+            presque rien n’est pensé pour le direct.</li>
+          <li>Le flame chart (DevTools) garde le temps, là où le flame graph l’agrège : c’est l’option 2.</li>
+          <li>Le sunburst est déjà utilisé pour les traces distribuées : l’angle = la part d’effort. Option 4.</li>
+          <li>Ce qui manque partout : voir la <b>file d’attente</b> (places limitées), les agents qui
+            <b>attendent</b> leurs enfants sans rien faire, et le moment où un résultat <b>remonte</b> au parent.</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Sources</h3>
+        <ul>
+          <li><a href="https://evilmartians.com/chronicles/debug-ai-fast-agent-prism-open-source-library-visualize-agent-traces">Agent Prism, Evil Martians</a></li>
+          <li><a href="https://www.braintrust.dev/articles/best-llm-tracing-tools-2026">Outils de traçage LLM multi-agents, Braintrust</a></li>
+          <li><a href="https://langfuse.com/blog/2024-07-ai-agent-observability-with-langfuse">Observabilité des agents, Langfuse</a></li>
+          <li><a href="https://www.polarsignals.com/blog/posts/2025/05/28/flamecharts-the-time-aware-sibling-of-flame-graphs">Flame charts, Polar Signals</a></li>
+          <li><a href="https://cacm.acm.org/practice/the-flame-graph/">The Flame Graph, CACM</a></li>
+          <li><a href="https://github.com/Anay704/trace">trace : timeline et DAG de décisions</a></li>
+        </ul>
+      </div>
+    </section>
+  </div>
+
+  <script type="module">
+    const OPTIONS = [
+      { nom: 'arbre', titre: 'Arbre vivant', texte: 'Arbre rangé de gauche à droite, cartes qui affichent l’activité en direct, flux animés vers les agents qui travaillent. Les branches terminées se replient en grappes.', pour: 'Lire la <b>structure</b> : qui a lancé qui, où en est chaque branche.' },
+      { nom: 'couloirs', titre: 'Couloirs temporels', texte: 'Flame chart vivant : le temps défile vers la droite, chaque agent est une barre sous son parent, découpée en réflexion, outils, attente et file.', pour: 'Comprendre le <b>temps</b> : parallélisme réel, goulots, attentes de place.' },
+      { nom: 'orbites', titre: 'Constellation', texte: 'L’orchestrateur au centre, les sous-agents en orbites imbriquées. Comètes au lancement, particules quand un résultat remonte, halos qui pulsent avec la consommation.', pour: 'Sentir <b>l’activité</b> d’un coup d’œil, écran d’ambiance ou démo.' },
+      { nom: 'soleil', titre: 'Soleil', texte: 'Sunburst vivant : un anneau par profondeur, l’angle d’un agent suit ses tokens. Clic pour zoomer dans un sous-arbre, activités en cours autour du cercle.', pour: 'Voir où part <b>l’effort</b> (tokens) et zoomer dans une mission.' },
+      { nom: 'salle', titre: 'Salle de contrôle', texte: 'Panneaux imbriqués façon tmux : chaque agent est un mini-terminal qui déroule son journal. La place suit l’activité ; les terminés deviennent des jetons.', pour: 'Suivre le <b>contenu</b> : ce que chaque agent est en train d’écrire.' },
+      { nom: 'rails', titre: 'Rails', texte: 'Plan de métro façon git log --graph : chaque agent est un rail qui bifurque de son parent et s’y rabat à la fin, avec le fil des événements aligné sur le temps.', pour: 'Relier <b>événements et hiérarchie</b> : le récit du tour, rejouable.' },
+    ]
+    const grille = document.getElementById('grille')
+    for (const [i, o] of OPTIONS.entries()) {
+      const a = document.createElement('a')
+      a.className = 'carte'
+      a.href = `./options/${o.nom}/index.html`
+      a.innerHTML = `
+        <div class="apercu"><iframe loading="lazy" tabindex="-1" src="./options/${o.nom}/index.html?graine=7&vitesse=3&t=70" title="${o.titre}"></iframe></div>
+        <div class="texte">
+          <h2><span class="num">0${i + 1}</span>${o.titre}</h2>
+          <p>${o.texte}</p>
+          <p class="pour">${o.pour}</p>
+        </div>`
+      grille.append(a)
+    }
+    const ajuster = () => document.querySelectorAll('.apercu').forEach((el) => {
+      el.querySelector('iframe').style.transform = `scale(${el.clientWidth / 1440})`
+    })
+    new ResizeObserver(ajuster).observe(grille)
+  </script>
+</body>
+</html>

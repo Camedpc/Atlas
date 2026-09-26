@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Constellation</title>
+  <link rel="stylesheet" href="../../commun/commun.css">
+  <style>
+    .scene { background: radial-gradient(ellipse at 50% 50%, #12141a 0%, #0b0c0f 70%, #08090b 100%); }
+    .scene canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; }
+    .scene canvas.survol { cursor: pointer; }
+    .scene canvas.glisse { cursor: grabbing; }
+
+    .question {
+      position: absolute; top: 16px; left: 18px; max-width: 460px; pointer-events: none;
+      font-size: 12.5px; line-height: 1.45; color: var(--texte-2);
+    }
+    .question small {
+      display: block; font: 500 10px var(--mono); letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--texte-3); margin-bottom: 4px;
+    }
+
+    .legende-orbites {
+      position: absolute; left: 18px; bottom: 16px; display: grid; gap: 7px;
+      font-size: 11px; color: var(--texte-3); pointer-events: none;
+      opacity: 0.85;
+    }
+    .legende-orbites .ligne { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+    .legende-orbites .ligne > span { display: inline-flex; align-items: center; gap: 6px; }
+    .glyphe { width: 9px; height: 9px; border-radius: 50%; display: inline-block; flex: none; }
+    .glyphe.actif { background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 22%, transparent), 0 0 10px var(--ok); }
+    .glyphe.attend { background: #1d2027; border: 1.3px solid var(--texte-2); }
+    .glyphe.file { border: 1.3px dashed var(--texte-2); width: 8px; height: 8px; }
+    .glyphe.fini { background: #55575d; }
+    .glyphe.echec { background: #6e2224; border: 1.3px solid var(--echec); }
+    .glyphe.role { width: 7px; height: 7px; }
+    .legende-orbites .aide { font: 10.5px var(--mono); color: var(--texte-3); opacity: 0.8; }
+
+    .inspecteur {
+      position: absolute; top: 12px; right: 12px; bottom: 12px; width: 368px;
+      display: flex; flex-direction: column; gap: 12px; padding: 18px 18px 14px;
+      background: color-mix(in srgb, var(--fond-2) 90%, transparent);
+      backdrop-filter: blur(14px);
+      border: 1px solid var(--trait); border-radius: 14px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+      transform: translateX(calc(100% + 24px)); opacity: 0;
+      transition: transform 0.38s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.3s ease;
+      z-index: 10;
+    }
+    .inspecteur.ouvert { transform: none; opacity: 1; }
+    .inspecteur .fermer {
+      position: absolute; top: 10px; right: 10px; width: 26px; height: 26px; border: 0; border-radius: 7px;
+      background: transparent; color: var(--texte-3); font-size: 16px; cursor: pointer;
+    }
+    .inspecteur .fermer:hover { background: var(--fond-3); color: var(--texte); }
+    .insp-tete { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--texte-2); }
+    .insp-tete .rond { width: 10px; height: 10px; border-radius: 50%; }
+    .insp-tete .role { font-weight: 600; letter-spacing: 0.02em; }
+    .insp-tete .modele { font: 11px var(--mono); color: var(--texte-3); margin-left: auto; margin-right: 28px; }
+    .insp-titre { margin: 0; font-size: 16px; font-weight: 600; line-height: 1.35; letter-spacing: -0.01em; }
+    .insp-etat { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .pilule {
+      display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px 3px 7px; border-radius: 999px;
+      font: 500 11.5px var(--police); background: var(--fond-3); border: 1px solid var(--trait-fort);
+    }
+    .pilule i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+    .pilule.vivant { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, transparent); }
+    .pilule.vivant i { animation: respire 1.4s ease-in-out infinite; }
+    .pilule.echec { color: var(--echec); border-color: color-mix(in srgb, var(--echec) 45%, transparent); }
+    .pilule.termine, .pilule.attend, .pilule.en_file { color: var(--texte-2); }
+    .insp-activite { margin: 0; font-size: 12.5px; color: var(--texte-2); line-height: 1.45; }
+    .insp-grille { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 0; }
+    .insp-grille div { background: var(--fond-3); border: 1px solid var(--trait); border-radius: 9px; padding: 7px 9px; }
+    .insp-grille dt { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--texte-3); }
+    .insp-grille dd { margin: 3px 0 0; font: 500 14px var(--mono); color: var(--texte); }
+    .insp-bloc { font-size: 12px; color: var(--texte-2); }
+    .insp-bloc b { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--texte-3); font-weight: 500; margin-bottom: 5px; }
+    .insp-resultat { font-size: 13px; color: var(--texte); }
+    .insp-liens { display: flex; flex-wrap: wrap; gap: 5px; }
+    .insp-liens button {
+      display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--trait); background: var(--fond-3);
+      color: var(--texte-2); border-radius: 7px; padding: 3px 7px; font: 11px var(--police); cursor: pointer;
+    }
+    .insp-liens button:hover { color: var(--texte); border-color: var(--trait-fort); }
+    .insp-liens button i { width: 6px; height: 6px; border-radius: 50%; }
+    .insp-liens button.fini { opacity: 0.55; }
+    .insp-liens button.echec { border-color: color-mix(in srgb, var(--echec) 45%, transparent); }
+    .insp-journal-titre { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--texte-3); margin: 2px 0 -4px; }
+    .insp-journal {
+      list-style: none; margin: 0; padding: 0 4px 0 0; flex: 1; min-height: 80px; overflow-y: auto;
+      font-size: 11.5px; line-height: 1.4; border-top: 1px solid var(--trait);
+      mask-image: linear-gradient(to bottom, transparent 0, #000 14px);
+    }
+    .insp-journal li { display: grid; grid-template-columns: 50px 9px 1fr; gap: 6px; padding: 5px 0; border-bottom: 1px solid color-mix(in srgb, var(--trait) 55%, transparent); animation: arrivee 0.35s ease-out; }
+    .insp-journal time { font: 10.5px var(--mono); color: var(--texte-3); padding-top: 1px; }
+    .insp-journal .point { width: 6px; height: 6px; border-radius: 50%; margin-top: 5px; background: var(--texte-3); }
+    .insp-journal .reflechit .point { background: var(--ok); }
+    .insp-journal .outil .point { background: transparent; border: 1.3px solid var(--ok); width: 5px; height: 5px; }
+    .insp-journal .attend .point { background: transparent; border: 1.3px solid var(--texte-2); width: 5px; height: 5px; }
+    .insp-journal .echec .point { background: var(--echec); }
+    .insp-journal .echec span:last-child { color: var(--echec); }
+    .insp-journal .termine span:last-child { color: var(--texte); }
+    .insp-journal span:last-child { color: var(--texte-2); }
+    @keyframes arrivee { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+  </style>
+</head>
+<body>
+  <main class="scene">
+    <canvas></canvas>
+    <div class="question"></div>
+    <div class="legende-orbites"></div>
+    <aside class="inspecteur" aria-hidden="true"></aside>
+  </main>
+  <script type="module" src="./vue.js"></script>
+</body>
+</html>
