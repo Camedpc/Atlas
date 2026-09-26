@@ -71,6 +71,8 @@ export class VueGraphe {
     this.surSelection = surSelection
     this.sigma = new Sigma(this.graphe, conteneur, {
       defaultEdgeType: 'arrow',
+      // Le conteneur est masqué quand l'agent graph est affiché : sigma se redimensionne au retour.
+      allowInvalidContainer: true,
       labelColor: { color: COULEUR_ETIQUETTE },
       stagePadding: 90,
       labelRenderedSizeThreshold: 0,
@@ -128,6 +130,8 @@ export class VueGraphe {
   }
 
   recentrer() {
+    this.sigma.resize()
+    this.sigma.refresh()
     this.sigma.getCamera().animatedReset()
   }
 }

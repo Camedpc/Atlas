@@ -3,7 +3,8 @@
 // Gauche → droite : l'événement « Question de Camille » déclenche l'orchestrateur ; chaque lancement de
 // sous-agent part d'une broche d'exécution « Lance → … » vers la broche d'entrée de l'enfant, et la broche
 // « contexte » alimente la broche « mission » des enfants. Tout est recalculé depuis `etat` à chaque image ;
-// seules les positions glissent. Cliquer un nœud le sélectionne : la saisie lui écrit.
+// seules les positions glissent. Cliquer un nœud le sélectionne : le fil montre sa conversation et la saisie
+// lui écrit (pas de panneau de détails : la conversation à gauche suffit).
 import './agentgraph.css'
 import { select } from 'd3-selection'
 import { zoom as d3zoom, zoomIdentity, type ZoomBehavior } from 'd3-zoom'
@@ -36,7 +37,6 @@ const X0 = L_EVT + ECART_X
 const ECART_Y = 18
 const COMMENT = { haut: 42, bas: 14, cote: 18 }
 const K_LISIBLE = 0.55 // en dessous, on ne cadre plus tout : on suit les agents au travail
-const PANNEAU = 340
 const PERIODE = 2.6 // secondes pour qu'une impulsion parcoure un fil
 const DELAI_REPLI = 5 // secondes entre la fin d'un sous-graphe et sa réduction
 
@@ -105,14 +105,11 @@ export class AgentGraph {
   private gImpulsions: SVGGElement
   private boutonRecadrer: HTMLElement
   private vide: HTMLElement
-  private panneau: HTMLElement
-  private P: Record<string, HTMLElement>
   private rendus = new Map<string, any>()
   private fils = new Map<string, any>()
   private impulsions = new Map<string, SVGCircleElement>()
   private commentaires = new Map<string, any>()
   private deplies = new Set<string>()
-  private panneauOuvert = false
   private auto = true
   private premierCadrage = true
   private vue = { x: 0, y: 0, k: 1 }
@@ -121,8 +118,6 @@ export class AgentGraph {
   private actif = false
   private image = 0
   private avant = 0
-  private journalRendu = 0
-  private derniereMaj = 0
   private readonly surEcrire: () => void
 
   constructor(scene: HTMLElement, surEcrire: () => void) {
@@ -136,33 +131,6 @@ export class AgentGraph {
         <div class="noeuds"></div>
       </div>
       <p class="bp-vide">Aucun agent pour l’instant : pose une question à l’orchestrateur.</p>
-      <aside class="details">
-        <div class="d-onglet"><span>Détails</span><button class="d-fermer" title="Fermer (Échap)">×</button></div>
-        <div class="d-tete"><span class="d-ico"></span><div><div class="d-role"></div><h2 class="d-titre"></h2></div></div>
-        <div class="d-ecrire"><span>La saisie écrit à cet agent.</span><button type="button" class="d-bouton-ecrire">Écrire →</button></div>
-        <div class="d-defil">
-          <details open>
-            <summary>Détails</summary>
-            <dl class="props">
-              <div><dt>Modèle</dt><dd class="mono" data-p="modele"></dd></div>
-              <div><dt>État</dt><dd data-p="etat"></dd></div>
-              <div><dt>Activité</dt><dd data-p="activite"></dd></div>
-              <div><dt>Surnom</dt><dd data-p="surnom"></dd></div>
-              <div><dt>Chemin</dt><dd class="mono" data-p="chemin"></dd></div>
-              <div><dt>Durée</dt><dd class="mono" data-p="duree"></dd></div>
-              <div><dt>Tokens</dt><dd class="mono" data-p="tokens"></dd></div>
-              <div><dt>Appels d’outils</dt><dd class="mono" data-p="outils"></dd></div>
-              <div><dt>Lancé par</dt><dd data-p="parent"></dd></div>
-              <div><dt>Sous-agents</dt><dd data-p="enfants"></dd></div>
-              <div><dt>Résultat</dt><dd data-p="resultat"></dd></div>
-            </dl>
-          </details>
-          <details open>
-            <summary>Journal <small data-p="nbJournal"></small></summary>
-            <ol class="journal"></ol>
-          </details>
-        </div>
-      </aside>
       <div class="legende-bp">
         <span><span class="pin exec">${SVG_EXEC}</span>exécution</span>
         <span><i class="l-exec"></i>lancement</span>
@@ -181,10 +149,6 @@ export class AgentGraph {
     this.gImpulsions = scene.querySelector('.g-impulsions')!
     this.boutonRecadrer = scene.querySelector('.recadrer')!
     this.vide = scene.querySelector('.bp-vide')!
-    this.panneau = scene.querySelector('.details')!
-    this.P = Object.fromEntries(
-      [...this.panneau.querySelectorAll<HTMLElement>('[data-p]')].map((el) => [el.dataset.p!, el]),
-    )
 
     new ResizeObserver(() => {
       this.taille = { l: scene.clientWidth, h: scene.clientHeight }
@@ -195,7 +159,7 @@ export class AgentGraph {
       .clickDistance(5)
       .filter(
         (e: any) =>
-          !e.target.closest('.details, .legende-bp, .recadrer') && (!e.ctrlKey || e.type === 'wheel') && !e.button,
+          !e.target.closest('.legende-bp, .recadrer') && (!e.ctrlKey || e.type === 'wheel') && !e.button,
       )
       .on('zoom', (e: any) => {
         this.vue = { x: e.transform.x, y: e.transform.y, k: e.transform.k }
@@ -209,18 +173,7 @@ export class AgentGraph {
 
     this.boutonRecadrer.addEventListener('click', () => this.recadrer())
     scene.addEventListener('dblclick', (e) => {
-      if (!(e.target as HTMLElement).closest('.noeud, .details, .legende-bp')) this.recadrer()
-    })
-    scene.addEventListener('click', (e) => {
-      if (!(e.target as HTMLElement).closest('.noeud, .details, .legende-bp, .recadrer')) this.fermer()
-    })
-    scene.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') this.fermer()
-    })
-    this.panneau.querySelector('.d-fermer')!.addEventListener('click', () => this.fermer())
-    this.panneau.querySelector('.d-bouton-ecrire')!.addEventListener('click', () => this.surEcrire())
-    this.P.parent.addEventListener('click', () => {
-      if (this.P.parent.dataset.id) this.ouvrir(this.P.parent.dataset.id)
+      if (!(e.target as HTMLElement).closest('.noeud, .legende-bp')) this.recadrer()
     })
     this.coucheNoeuds.addEventListener('click', (e) => {
       const el = (e.target as HTMLElement).closest<HTMLElement>('.noeud')
@@ -231,15 +184,10 @@ export class AgentGraph {
         else this.deplies.delete(el.dataset.id)
         return
       }
-      this.ouvrir(el.dataset.id)
+      etat.selectionner(el.dataset.id)
+      this.surEcrire()
     })
 
-    // Un autre panneau (l'arbre, le fil) change la sélection : le détail suit.
-    etat.surSelection(() => {
-      this.journalRendu = 0
-      this.panneau.querySelector('.journal')!.innerHTML = ''
-      if (this.panneauOuvert) this.majPanneau(true)
-    })
     this.appliquerVue()
   }
 
@@ -271,7 +219,6 @@ export class AgentGraph {
     this.impulsions.clear()
     this.commentaires.clear()
     this.deplies.clear()
-    this.fermer()
     this.recadrer()
     this.premierCadrage = true
   }
@@ -292,7 +239,7 @@ export class AgentGraph {
     this.boutonRecadrer.classList.remove('visible')
   }
 
-  // Garde tout le graphe visible (hors panneau), tant que l'utilisateur n'a pas pris la main.
+  // Garde tout le graphe visible, tant que l'utilisateur n'a pas pris la main.
   private cadrer(dt: number) {
     if (!this.auto || !this.taille.l) return
     let x0 = Infinity
@@ -312,7 +259,7 @@ export class AgentGraph {
       x1 = Math.max(x1, c.boite.x + c.boite.l)
     }
     if (!Number.isFinite(x0)) return
-    const m = { g: 32, d: 32 + (this.panneauOuvert ? PANNEAU : 0), h: 28, b: 64 }
+    const m = { g: 32, d: 32, h: 28, b: 64 }
     const lu = Math.max(120, this.taille.l - m.g - m.d)
     const hu = Math.max(120, this.taille.h - m.h - m.b)
     let k = Math.min(1, lu / (x1 - x0), hu / (y1 - y0))
@@ -520,7 +467,7 @@ export class AgentGraph {
   private majNoeud(r: any, n: NoeudDispo) {
     const a = n.agent
     this.rangee(r, n)
-    const choisi = etat.selection === a.chemin && (this.panneauOuvert || a.chemin !== RACINE)
+    const choisi = etat.selection === a.chemin && a.chemin !== RACINE
     basculerClasse(r, `noeud e-${a.etat}${estVivant(a) ? ' vivant' : ''}${choisi ? ' choisi' : ''}`)
     r.el.style.setProperty('--c', couleurRole(a.role))
     texte(r.ico, iconeRole(a.role))
@@ -734,81 +681,6 @@ export class AgentGraph {
     }
   }
 
-  // ─── Panneau Détails ───
-
-  private ouvrir(chemin: string) {
-    this.panneauOuvert = true
-    this.panneau.classList.add('ouvert')
-    this.scene.classList.add('panneau')
-    etat.selectionner(chemin)
-    this.majPanneau(true)
-  }
-
-  private fermer() {
-    if (!this.panneauOuvert) return
-    this.panneauOuvert = false
-    this.panneau.classList.remove('ouvert')
-    this.scene.classList.remove('panneau')
-  }
-
-  private majPanneau(force = false) {
-    if (!this.panneauOuvert) return
-    const a = etat.get(etat.selection)
-    if (!a) return
-    const t = performance.now()
-    if (!force && t - this.derniereMaj < 150) return
-    this.derniereMaj = t
-    const P = this.P
-    this.panneau.style.setProperty('--c', a.etat === 'echec' ? 'var(--echec)' : couleurRole(a.role))
-    texte(this.panneau.querySelector('.d-ico'), iconeRole(a.role))
-    texte(this.panneau.querySelector('.d-role'), a.chemin === RACINE ? 'Orchestrateur' : libelleRole(a.role))
-    texte(this.panneau.querySelector('.d-titre'), a.chemin === RACINE ? etat.question || 'Question de Camille' : mission(a))
-    texte(P.modele, a.modele ?? '—')
-    texte(P.etat, a.etat === 'actif' && a.outil ? `Outil · ${a.outil}` : LIBELLES_ETAT[a.etat])
-    texte(P.activite, a.activite || '—')
-    texte(P.surnom, a.surnom ?? '—')
-    texte(P.chemin, a.chemin)
-    texte(P.duree, formatDuree((a.fin ?? maintenant()) - a.debut))
-    texte(P.tokens, formatTokens(a.tokens))
-    texte(P.outils, String(a.nb_outils))
-    const parent = etat.get(a.parent)
-    texte(P.parent, parent ? (parent.chemin === RACINE ? 'Orchestrateur' : `${libelleRole(parent.role)} · ${mission(parent)}`) : 'Camille (événement)')
-    P.parent.dataset.id = parent ? parent.chemin : ''
-    P.parent.classList.toggle('lien', !!parent)
-    const enfants = etat.enfants(a)
-    texte(
-      P.enfants,
-      enfants.length
-        ? `${enfants.length} lancés · ${enfants.filter(estFini).length} finis · ${enfants.filter(estVivant).length} actifs`
-        : 'aucun',
-    )
-    texte(P.resultat, a.resultat ?? '—')
-    P.resultat.classList.toggle('echec', a.etat === 'echec')
-
-    // Journal : les messages de l'agent, chargés par le fil de conversation.
-    const messages = etat.messages
-    texte(P.nbJournal, `${messages.length} entrées`)
-    const journal = this.panneau.querySelector('.journal')!
-    if (this.journalRendu > messages.length) {
-      this.journalRendu = 0
-      journal.innerHTML = ''
-    }
-    if (this.journalRendu < messages.length) {
-      const defil = this.panneau.querySelector('.d-defil')!
-      const enBas = defil.scrollHeight - defil.scrollTop - defil.clientHeight < 40
-      for (; this.journalRendu < messages.length; this.journalRendu++) {
-        const m = messages[this.journalRendu]
-        const li = document.createElement('li')
-        li.dataset.t = m.role
-        li.innerHTML = '<time></time><span></span>'
-        li.querySelector('time')!.textContent = new Date(m.cree_le).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
-        li.querySelector('span')!.textContent = m.contenu.length > 280 ? `${m.contenu.slice(0, 279)}…` : m.contenu
-        journal.append(li)
-      }
-      if (enBas && !force) defil.scrollTop = defil.scrollHeight
-    }
-  }
-
   // ─── Boucle de rendu ───
 
   private tic(dt: number) {
@@ -876,6 +748,5 @@ export class AgentGraph {
     this.majCommentaires(noeuds)
     this.majFils(noeuds, performance.now() / 1000)
     this.cadrer(dt)
-    this.majPanneau()
   }
 }

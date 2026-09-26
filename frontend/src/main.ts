@@ -5,6 +5,7 @@ import { AgentGraph } from './agentgraph'
 import { api, type Graphe, type Noeud } from './api'
 import { PanneauConversation } from './conversations'
 import { COULEURS_STATUT, LIBELLES_STATUT, VueGraphe } from './graphe'
+import { installerPoignees } from './redimension'
 import { echapper, rendre } from './rendu'
 
 const INTERVALLE_GRAPHE_MS = 4000
@@ -135,6 +136,8 @@ const conversation = new PanneauConversation(
   },
   () => montrer('agents'),
 )
+
+installerPoignees((replie) => conversation.replierSessions(replie))
 
 let vueInitiale: Vue = 'raisonnement'
 try {

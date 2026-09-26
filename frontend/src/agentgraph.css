@@ -150,66 +150,6 @@
   display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden;
 }
 
-/* ─── Panneau Détails ─── */
-.bp .details {
-  position: absolute; top: 0; right: 0; bottom: 0; width: 340px; z-index: 10;
-  display: flex; flex-direction: column; cursor: default; user-select: text;
-  background: #fff; border-left: 1px solid var(--trait-fort);
-  box-shadow: -8px 0 24px -18px rgba(0, 0, 0, 0.35);
-  transform: translateX(calc(100% + 12px)); transition: transform 0.25s ease-out;
-}
-.bp .details.ouvert { transform: none; }
-.bp .d-onglet {
-  flex: none; height: 34px; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 12px;
-  font: 600 12px var(--police); color: var(--texte); background: #f4f4f2; border-bottom: 1px solid var(--trait);
-}
-.bp .d-onglet span { flex: 1; }
-.bp .d-fermer {
-  width: 24px; height: 24px; padding: 0; border: 0; border-radius: 4px; cursor: pointer;
-  background: transparent; color: var(--texte-2); font-size: 17px; line-height: 1;
-}
-.bp .d-fermer:hover { background: #e9e9e6; color: var(--texte); }
-.bp .d-tete { flex: none; display: flex; gap: 10px; padding: 12px; border-bottom: 1px solid var(--trait); }
-.bp .d-ico { flex: none; width: 30px; height: 30px; display: grid; place-items: center; border-radius: 5px; color: #fff; background: var(--c); font: 600 15px var(--police); }
-.bp .d-tete div { min-width: 0; }
-.bp .d-role { font: 500 11px var(--police); color: var(--texte-3); }
-.bp .d-titre { margin: 2px 0 0; font: 600 14px/1.35 var(--police); color: var(--texte); }
-.bp .d-ecrire {
-  flex: none; display: flex; align-items: center; gap: 8px; padding: 8px 12px;
-  font-size: 12px; color: var(--texte-2); background: #f5f8ff; border-bottom: 1px solid var(--trait);
-}
-.bp .d-ecrire span { flex: 1; }
-.bp .d-bouton-ecrire {
-  padding: 4px 10px; font: 500 12px var(--police); color: #fff; background: var(--choix);
-  border: 0; border-radius: 5px; cursor: pointer;
-}
-.bp .d-defil { flex: 1; min-height: 0; overflow-y: auto; }
-.bp .details details { border-bottom: 1px solid var(--trait); }
-.bp .details summary {
-  list-style: none; cursor: pointer; display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px;
-  font: 600 11.5px var(--police); color: var(--texte); background: #fafaf8; border-bottom: 1px solid var(--trait);
-}
-.bp .details summary::-webkit-details-marker { display: none; }
-.bp .details summary::before { content: '▸'; width: 10px; font-size: 10px; color: var(--texte-2); }
-.bp .details details[open] summary::before { content: '▾'; }
-.bp .details summary small { margin-left: auto; font: 10.5px var(--mono); color: var(--texte-3); font-weight: 400; }
-.bp .props { margin: 0; padding: 4px 0; }
-.bp .props div { display: grid; grid-template-columns: 104px 1fr; gap: 8px; padding: 4px 12px; font-size: 12px; }
-.bp .props dt { color: var(--texte-2); }
-.bp .props dd { margin: 0; min-width: 0; color: var(--texte); overflow-wrap: anywhere; }
-.bp .props dd.mono { font: 11.5px var(--mono); }
-.bp .props dd.lien { color: var(--choix); cursor: pointer; }
-.bp .props dd.lien:hover { text-decoration: underline; }
-.bp .props dd.echec { color: var(--echec); }
-.bp .journal { margin: 0; padding: 4px 0 8px; list-style: none; font: 11px/1.45 var(--mono); }
-.bp .journal li { display: grid; grid-template-columns: 42px 1fr; gap: 8px; padding: 3px 12px; }
-.bp .journal li:nth-child(odd) { background: #fafaf8; }
-.bp .journal time { color: var(--texte-3); }
-.bp .journal span { color: var(--texte-2); overflow-wrap: anywhere; }
-.bp .journal li[data-t='utilisateur'] span { color: var(--choix); }
-.bp .journal li[data-t='assistant'] span { color: var(--texte); }
-.bp .journal li[data-t='systeme'] span { color: var(--echec); }
-
 /* ─── Légende et recadrage ─── */
 .bp .legende-bp {
   position: absolute; left: 12px; bottom: 12px; z-index: 5; cursor: default;
@@ -230,7 +170,6 @@
 }
 .bp .recadrer.visible { display: block; }
 .bp .recadrer:hover { background: #f4f4f2; }
-.bp.panneau .recadrer { right: 352px; }
 
 @media (max-width: 1100px) {
   .bp .legende-bp .aide { display: none; }

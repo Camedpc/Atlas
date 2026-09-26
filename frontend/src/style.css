@@ -83,12 +83,50 @@ code {
 
 #app {
   display: grid;
-  grid-template-columns: var(--largeur-sessions) minmax(380px, 1fr) minmax(420px, 1.25fr);
+  grid-template-columns: var(--largeur-sessions) var(--colonne-conversation, minmax(380px, 1fr)) minmax(360px, 1.25fr);
   height: 100dvh;
 }
 
 body.sessions-repliees #app {
-  grid-template-columns: 0 minmax(380px, 1fr) minmax(420px, 1.25fr);
+  grid-template-columns: 0 var(--colonne-conversation, minmax(380px, 1fr)) minmax(360px, 1.25fr);
+}
+
+/* Poignées de redimensionnement, sur le bord gauche de la conversation et du panneau de droite. */
+.poignee {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -4px;
+  z-index: 30;
+  width: 8px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.poignee::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  width: 2px;
+  background: transparent;
+  transition: background-color 0.15s;
+}
+
+.poignee:hover::after,
+body.redimensionne .poignee::after {
+  background: var(--trait-fort);
+}
+
+body.redimensionne {
+  cursor: col-resize;
+  user-select: none;
+}
+
+body.redimensionne .sigma,
+body.redimensionne .scene-agents {
+  pointer-events: none;
 }
 
 /* ── Sessions (barre latérale) ───────────────────────────── */
@@ -195,6 +233,7 @@ body.sessions-repliees .panneau-sessions {
 /* ── Conversation ────────────────────────────────────────── */
 
 .panneau-conversation {
+  position: relative;
   grid-column: 2;
   grid-row: 1;
   display: flex;
@@ -695,6 +734,7 @@ body.sessions-repliees .deplier-sessions {
 /* ── Panneau de droite ───────────────────────────────────── */
 
 .panneau-droit {
+  position: relative;
   grid-column: 3;
   grid-row: 1;
   display: flex;
@@ -897,7 +937,11 @@ body.sessions-repliees .deplier-sessions {
 @media (max-width: 1200px) {
   #app,
   body.sessions-repliees #app {
-    grid-template-columns: 0 minmax(340px, 1fr) minmax(380px, 1.1fr);
+    grid-template-columns: 0 var(--colonne-conversation, minmax(340px, 1fr)) minmax(360px, 1.1fr);
+  }
+
+  .poignee-sessions {
+    display: none;
   }
 
   .panneau-sessions {
@@ -926,6 +970,10 @@ body.sessions-repliees .deplier-sessions {
   body.sessions-repliees #app {
     grid-template-columns: 1fr;
     grid-template-rows: 62dvh 38dvh;
+  }
+
+  .poignee {
+    display: none;
   }
 
   .panneau-conversation {

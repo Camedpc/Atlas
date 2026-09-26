@@ -172,11 +172,17 @@ export class PanneauConversation {
       else this.ouvrirVide()
     } catch (e) {
       if (e instanceof JetonRequis) return this.demanderJeton()
+      console.error(e)
       this.contenu.innerHTML = `<div class="msg systeme">Serveur de l’orchestrateur injoignable. En local : lancer
         <code>uvicorn atlas.serveur:app --port 8000</code> ; sinon renseigner <code>VITE_API_URL</code>.
         Le graphe reste consultable.</div>`
       this.saisie.disabled = this.envoyer.disabled = true
     }
+  }
+
+  /** Range ou ressort la barre des sessions (poignée de redimensionnement). */
+  replierSessions(replie: boolean) {
+    this.sessions.replier(replie)
   }
 
   /** Place le curseur dans la saisie (depuis l'agent graph : « Écrire → »). */
