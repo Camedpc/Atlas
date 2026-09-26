@@ -1,0 +1,150 @@
+{"id": "A01", "texte": "Hey Atlas, fais-moi un résumé de ce graphe.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "explorateur"}}
+{"id": "A02", "texte": "combien d'étapes il y a dans le graphe énergie", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "explorateur"}}
+{"id": "A03", "texte": "Est-ce qu'il reste des démonstrations à vérifier ?", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "explorateur"}}
+{"id": "A04", "texte": "Explique-moi le lien entre le lemme 2 et le théorème principal.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "explorateur"}}
+{"id": "A05", "texte": "résume moi la conversation sur la topologie", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "explorateur"}}
+{"id": "A06", "texte": "Quels énoncés dépendent du lemme de Zorn ?", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "explorateur"}}
+{"id": "A07", "texte": "Cherche où on utilise le théorème des valeurs intermédiaires.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "explorateur"}}
+{"id": "A08", "texte": "Qu'est-ce qui est encore ouvert dans ce graphe ?", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "explorateur"}}
+{"id": "A09", "texte": "Donne-moi la liste des axiomes.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "explorateur"}}
+{"id": "A10", "texte": "Est-ce que la démonstration du corollaire 3 est valide ?", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "explorateur"}}
+{"id": "A11", "texte": "Lis-moi l'énoncé du théorème 4.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "explorateur"}}
+{"id": "A12", "texte": "Qui a écrit la démonstration du lemme 5 ?", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "explorateur"}}
+{"id": "A13", "texte": "fait moi un résumer de la conversation d'hier", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "explorateur"}}
+{"id": "A14", "texte": "Quelles étapes sont invalides en ce moment ?", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "explorateur"}}
+{"id": "A15", "texte": "Trouve-moi les démonstrations qui utilisent la récurrence.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "explorateur"}}
+{"id": "A16", "texte": "C'est quoi la dernière chose qu'on a ajoutée au graphe ?", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "explorateur"}}
+{"id": "A17", "texte": "Compare les deux démonstrations du théorème de Rolle.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "explorateur"}}
+{"id": "A18", "texte": "Hey Atlas combien de conversations on a", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "explorateur"}}
+{"id": "A19", "texte": "Il y a combien de théorèmes établis dans le graphe dérivée ?", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "explorateur"}}
+{"id": "A20", "texte": "Est-ce que quelqu'un a répondu dans la conversation analyse ?", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "explorateur"}}
+{"id": "A21", "texte": "Rappelle-moi de quoi on parlait dans la dernière conversation.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "explorateur"}}
+{"id": "A22", "texte": "Quel est le chemin le plus court entre l'axiome 1 et le théorème final ?", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "explorateur"}}
+{"id": "A23", "texte": "Résume aussi le graphe de la dérivée.", "etat": "exploration_en_cours", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "explorateur"}}
+{"id": "A24", "texte": "Pendant qu'il cherche, dis-moi combien de lemmes il y a au total.", "etat": "exploration_en_cours", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "explorateur"}}
+{"id": "A25", "texte": "Explique-moi pourquoi le lemme 3 est marqué à vérifier.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "explorateur"}}
+{"id": "A26", "texte": "Est-ce que le théorème 2 dépend de l'axiome du choix ?", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "explorateur"}}
+{"id": "A27", "texte": "Liste les énoncés qui n'ont aucune démonstration.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "explorateur"}}
+{"id": "A28", "texte": "Qu'est-ce que dit la démonstration du lemme de Gronwall ?", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "explorateur"}}
+{"id": "A29", "texte": "résume le graph énergie en deux phrases", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "explorateur"}}
+{"id": "A30", "texte": "Montre-moi les étapes qui mènent au théorème principal.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "explorateur"}}
+{"id": "A31", "texte": "Cherche dans les conversations quand on a parlé de compacité.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "explorateur"}}
+{"id": "A32", "texte": "Combien de démonstrations ont été écrites par l'IA ?", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "explorateur"}}
+{"id": "A33", "texte": "Dis-moi ce qui a changé dans le graphe depuis ce matin.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "explorateur"}}
+{"id": "A34", "texte": "Quel est le résultat le plus utilisé du graphe ?", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "explorateur"}}
+{"id": "B01", "texte": "Ajoute une étape lemme 3 après le lemme 2.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "editeur_graphe"}}
+{"id": "B02", "texte": "Supprime le lien entre le théorème 4 et le corollaire 2.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "editeur_graphe"}}
+{"id": "B03", "texte": "Renomme le lemme 1 en lemme de continuité.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "editeur_graphe"}}
+{"id": "B04", "texte": "Relie le lemme 5 au théorème principal.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "editeur_graphe"}}
+{"id": "B05", "texte": "Modifie l'énoncé du corollaire 1 : f est dérivable sur l'intervalle ouvert.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "editeur_graphe"}}
+{"id": "B06", "texte": "Marque le lemme 2 comme admis.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "editeur_graphe"}}
+{"id": "B07", "texte": "Crée un nouveau nœud pour le théorème de Rolle.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "editeur_graphe"}}
+{"id": "B08", "texte": "Ajoute l'axiome du choix au graphe.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "editeur_graphe"}}
+{"id": "B09", "texte": "Enlève l'étape en double sur la continuité.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "editeur_graphe"}}
+{"id": "B10", "texte": "rajoute une démonstration par récurrence pour le lemme quatre", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "editeur_graphe"}}
+{"id": "B11", "texte": "Déplace le corollaire 3 pour qu'il dépende du théorème 2.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "editeur_graphe"}}
+{"id": "B12", "texte": "Supprime le nœud brouillon.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "editeur_graphe"}}
+{"id": "B13", "texte": "Change le nom du graphe en Énergie version 2.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "editeur_graphe"}}
+{"id": "B14", "texte": "Ajoute un lien du lemme 1 vers le lemme 3.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "editeur_graphe"}}
+{"id": "B15", "texte": "Corrige la faute dans l'énoncé du théorème 4, c'est continue et pas contenue.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "editeur_graphe"}}
+{"id": "B16", "texte": "Hey Atlas, ajoute une étape pour la conservation de l'énergie.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "editeur_graphe"}}
+{"id": "B17", "texte": "Mets le lemme 6 comme justification du théorème final.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "editeur_graphe"}}
+{"id": "B18", "texte": "Ajoute aussi une étape lemme 4.", "etat": "exploration_en_cours", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "editeur_graphe"}}
+{"id": "B19", "texte": "Remplace la démonstration du lemme 2 par celle de la conversation d'hier.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "editeur_graphe"}}
+{"id": "B20", "texte": "Fusionne les deux nœuds sur la dérivée.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "editeur_graphe"}}
+{"id": "B21", "texte": "Supprime toutes les étapes marquées invalides.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "editeur_graphe"}}
+{"id": "B22", "texte": "Ajoute l'hypothèse f continue à l'énoncé du lemme 3.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "editeur_graphe"}}
+{"id": "B23", "texte": "Retire le lien vers l'axiome 2.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "editeur_graphe"}}
+{"id": "B24", "texte": "Insère un lemme intermédiaire entre le lemme 2 et le théorème.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "editeur_graphe"}}
+{"id": "C01", "texte": "Crée une conversation sur la preuve du théorème 4.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "conversation"}}
+{"id": "C02", "texte": "Envoie un message dans la conversation analyse pour dire que le lemme 3 est prêt.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "conversation"}}
+{"id": "C03", "texte": "Demande dans la conversation topologie si quelqu'un a relu la démonstration.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "conversation"}}
+{"id": "C04", "texte": "Lance une nouvelle conversation pour vérifier le corollaire 2.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "conversation"}}
+{"id": "C05", "texte": "Poste dans la conversation d'équipe : réunion demain à dix heures.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "conversation"}}
+{"id": "C06", "texte": "Écris à l'équipe que le graphe énergie est terminé.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "conversation"}}
+{"id": "C07", "texte": "Ouvre une conversation avec l'agent sur la compacité.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "conversation"}}
+{"id": "C08", "texte": "Réponds dans la conversation analyse que je suis d'accord.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "conversation"}}
+{"id": "C09", "texte": "envoi un message a la conversation de topologie pour demander la référence", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "conversation"}}
+{"id": "C10", "texte": "Démarre une discussion sur la démonstration par l'absurde du lemme 5.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "conversation"}}
+{"id": "C11", "texte": "Pose la question dans la conversation : est-ce que l'hypothèse de continuité suffit ?", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "conversation"}}
+{"id": "C12", "texte": "Crée une conversation et demande-lui de vérifier le théorème principal.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "conversation"}}
+{"id": "C13", "texte": "Continue la conversation sur la dérivée en demandant un contre-exemple.", "etat": "vide", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "conversation"}}
+{"id": "C14", "texte": "Préviens la conversation analyse que j'ai ajouté le lemme 3.", "etat": "modif_appliquee", "piege": false, "attendu": {"outil": "lancer_tache", "type_agent": "conversation"}}
+{"id": "D01", "texte": "Où en est le résumé ?", "etat": "exploration_en_cours", "piege": false, "attendu": {"outil": "etat_taches", "tache_id": 12}}
+{"id": "D02", "texte": "Qu'est-ce qui tourne en ce moment ?", "etat": "deux_en_cours", "piege": false, "attendu": {"outil": "etat_taches"}}
+{"id": "D03", "texte": "Il en est où l'explorateur ?", "etat": "exploration_en_cours", "piege": false, "attendu": {"outil": "etat_taches"}}
+{"id": "D04", "texte": "Ça avance ?", "etat": "exploration_en_cours", "piege": false, "attendu": {"outil": "etat_taches"}}
+{"id": "D05", "texte": "Où en est celle sur la dérivée ?", "etat": "deux_en_cours", "piege": false, "attendu": {"outil": "etat_taches", "tache_id": 15}}
+{"id": "D06", "texte": "Hey Atlas, t'as des tâches en cours ?", "etat": "melange", "piege": false, "attendu": {"outil": "etat_taches"}}
+{"id": "D07", "texte": "C'est bientôt fini ?", "etat": "exploration_en_cours", "piege": false, "attendu": {"outil": "etat_taches"}}
+{"id": "D08", "texte": "Où en est la recherche sur la dérivée ?", "etat": "deux_en_cours", "piege": false, "attendu": {"outil": "etat_taches", "tache_id": 15}}
+{"id": "D09", "texte": "Combien de tâches sont en cours ?", "etat": "deux_en_cours", "piege": false, "attendu": {"outil": "etat_taches"}}
+{"id": "D10", "texte": "Où en sont mes tâches ?", "etat": "melange", "piege": false, "attendu": {"outil": "etat_taches"}}
+{"id": "D11", "texte": "Il fait quoi là, l'agent ?", "etat": "exploration_en_cours", "piege": false, "attendu": {"outil": "etat_taches"}}
+{"id": "D12", "texte": "Le résumé du graphe énergie, ça donne quoi ?", "etat": "exploration_en_cours", "piege": false, "attendu": {"outil": "etat_taches", "outils_acceptes": ["etat_taches", "lire_resultat"]}}
+{"id": "D13", "texte": "Pourquoi la recherche des démonstrations invalides a échoué ?", "etat": "echec", "piege": false, "attendu": {"outil": "etat_taches", "outils_acceptes": ["etat_taches", "lire_resultat"]}}
+{"id": "D14", "texte": "Est-ce qu'il y a quelque chose qui tourne ?", "etat": "vide", "piege": false, "attendu": {"outil": "etat_taches", "outils_acceptes": ["etat_taches", null]}}
+{"id": "E01", "texte": "Qu'est-ce qu'il a trouvé ?", "etat": "resultat_pret", "piege": false, "attendu": {"outil": "lire_resultat"}}
+{"id": "E02", "texte": "Redis-moi le résultat.", "etat": "resultat_pret", "piege": false, "attendu": {"outil": "lire_resultat"}}
+{"id": "E03", "texte": "Tu peux répéter le résumé ?", "etat": "resultat_pret", "piege": false, "attendu": {"outil": "lire_resultat"}}
+{"id": "E04", "texte": "C'était quoi déjà le résumé du graphe énergie ?", "etat": "resultat_pret", "piege": false, "attendu": {"outil": "lire_resultat"}}
+{"id": "E05", "texte": "Relis-moi ce qu'a dit l'explorateur.", "etat": "resultat_pret", "piege": false, "attendu": {"outil": "lire_resultat"}}
+{"id": "E06", "texte": "J'ai pas entendu, redis.", "etat": "resultat_pret", "piege": false, "attendu": {"outil": "lire_resultat"}}
+{"id": "E07", "texte": "Hey Atlas, le résultat du résumé ?", "etat": "resultat_pret", "piege": false, "attendu": {"outil": "lire_resultat"}}
+{"id": "E08", "texte": "Qu'est-ce que ça a donné l'ajout du lemme 3 ?", "etat": "modif_appliquee", "piege": false, "attendu": {"outil": "lire_resultat"}}
+{"id": "E09", "texte": "Répète la fin du résumé s'il te plaît.", "etat": "resultat_pret", "piege": false, "attendu": {"outil": "lire_resultat"}}
+{"id": "E10", "texte": "Alors, c'était quoi la réponse ?", "etat": "resultat_pret", "piege": false, "attendu": {"outil": "lire_resultat"}}
+{"id": "F01", "texte": "Énergie.", "etat": "question_graphe", "piege": false, "attendu": {"outil": "repondre_agent", "tache_id": 21}, "historique": [{"role": "atlas", "texte": "L'explorateur demande : quel graphe voulez-vous, Énergie ou Dérivée ?"}]}
+{"id": "F02", "texte": "Celui sur l'énergie.", "etat": "question_graphe", "piege": false, "attendu": {"outil": "repondre_agent", "tache_id": 21}, "historique": [{"role": "atlas", "texte": "L'explorateur demande : quel graphe voulez-vous, Énergie ou Dérivée ?"}]}
+{"id": "F03", "texte": "Le graphe dérivée.", "etat": "question_graphe", "piege": false, "attendu": {"outil": "repondre_agent", "tache_id": 21}, "historique": [{"role": "atlas", "texte": "L'explorateur demande : quel graphe voulez-vous, Énergie ou Dérivée ?"}]}
+{"id": "F04", "texte": "Dans analyse.", "etat": "question_conversation", "piege": false, "attendu": {"outil": "repondre_agent", "tache_id": 22}, "historique": [{"role": "atlas", "texte": "L'agent demande dans quelle conversation envoyer le message : Analyse ou Topologie ?"}]}
+{"id": "F05", "texte": "La conversation topologie.", "etat": "question_conversation", "piege": false, "attendu": {"outil": "repondre_agent", "tache_id": 22}, "historique": [{"role": "atlas", "texte": "L'agent demande dans quelle conversation envoyer le message : Analyse ou Topologie ?"}]}
+{"id": "F06", "texte": "Prends le premier.", "etat": "question_graphe", "piege": false, "attendu": {"outil": "repondre_agent", "tache_id": 21}, "historique": [{"role": "atlas", "texte": "L'explorateur demande : quel graphe voulez-vous, Énergie ou Dérivée ?"}]}
+{"id": "F07", "texte": "Envoie-le dans analyse.", "etat": "question_conversation", "piege": false, "attendu": {"outil": "repondre_agent", "tache_id": 22}, "historique": [{"role": "atlas", "texte": "L'agent demande dans quelle conversation envoyer le message : Analyse ou Topologie ?"}]}
+{"id": "F08", "texte": "Les deux, en fait.", "etat": "question_graphe", "piege": false, "attendu": {"outil": "repondre_agent", "tache_id": 21}, "historique": [{"role": "atlas", "texte": "L'explorateur demande : quel graphe voulez-vous, Énergie ou Dérivée ?"}]}
+{"id": "G01", "texte": "Vas-y.", "etat": "proposition", "piege": false, "attendu": {"outil": "confirmer", "decision": "oui"}, "historique": [{"role": "atlas", "texte": "J'ajoute l'étape lemme 3 après le lemme 2, reliée au théorème principal. Je valide ?"}]}
+{"id": "G02", "texte": "Oui, c'est bon.", "etat": "proposition", "piege": false, "attendu": {"outil": "confirmer", "decision": "oui"}, "historique": [{"role": "atlas", "texte": "J'ajoute l'étape lemme 3 après le lemme 2, reliée au théorème principal. Je valide ?"}]}
+{"id": "G03", "texte": "Non, pas ça.", "etat": "proposition", "piege": false, "attendu": {"outil": "confirmer", "decision": "non"}, "historique": [{"role": "atlas", "texte": "J'ajoute l'étape lemme 3 après le lemme 2, reliée au théorème principal. Je valide ?"}]}
+{"id": "G04", "texte": "Non, mets-le plutôt après le lemme 1.", "etat": "proposition", "piege": false, "attendu": {"outil": "confirmer", "decision": "non", "correction": true}, "historique": [{"role": "atlas", "texte": "J'ajoute l'étape lemme 3 après le lemme 2, reliée au théorème principal. Je valide ?"}]}
+{"id": "G05", "texte": "Ok valide.", "etat": "proposition", "piege": false, "attendu": {"outil": "confirmer", "decision": "oui"}, "historique": [{"role": "atlas", "texte": "J'ajoute l'étape lemme 3 après le lemme 2, reliée au théorème principal. Je valide ?"}]}
+{"id": "G06", "texte": "Attends, non, relie-le au corollaire plutôt.", "etat": "proposition", "piege": false, "attendu": {"outil": "confirmer", "decision": "non", "correction": true}, "historique": [{"role": "atlas", "texte": "J'ajoute l'étape lemme 3 après le lemme 2, reliée au théorème principal. Je valide ?"}]}
+{"id": "G07", "texte": "Parfait, fais-le.", "etat": "proposition", "piege": false, "attendu": {"outil": "confirmer", "decision": "oui"}, "historique": [{"role": "atlas", "texte": "J'ajoute l'étape lemme 3 après le lemme 2, reliée au théorème principal. Je valide ?"}]}
+{"id": "G08", "texte": "Valide l'ajout du lemme 3.", "etat": "deux_propositions", "piege": false, "attendu": {"outil": "confirmer", "decision": "oui", "tache_id": 31}, "historique": [{"role": "atlas", "texte": "Deux modifications attendent : l'ajout du lemme 3, et la suppression du lien vers le corollaire."}]}
+{"id": "G09", "texte": "Non, n'applique pas la suppression du lien.", "etat": "deux_propositions", "piege": false, "attendu": {"outil": "confirmer", "decision": "non", "tache_id": 33}, "historique": [{"role": "atlas", "texte": "Deux modifications attendent : l'ajout du lemme 3, et la suppression du lien vers le corollaire."}]}
+{"id": "G10", "texte": "Oui pour le lemme 3.", "etat": "melange", "piege": false, "attendu": {"outil": "confirmer", "decision": "oui", "tache_id": 31}}
+{"id": "H01", "texte": "Arrête le résumé.", "etat": "exploration_en_cours", "piege": false, "attendu": {"outil": "annuler", "mode": "arreter"}}
+{"id": "H02", "texte": "Laisse tomber.", "etat": "exploration_en_cours", "piege": false, "attendu": {"outil": "annuler", "mode": "arreter"}}
+{"id": "H03", "texte": "Annule ça.", "etat": "modif_appliquee", "piege": false, "attendu": {"outil": "annuler", "mode": "revenir"}}
+{"id": "H04", "texte": "Stoppe la recherche sur la dérivée.", "etat": "deux_en_cours", "piege": false, "attendu": {"outil": "annuler", "mode": "arreter", "tache_id": 15}}
+{"id": "H05", "texte": "Reviens en arrière sur l'ajout du lemme 3.", "etat": "modif_appliquee", "piege": false, "attendu": {"outil": "annuler", "mode": "revenir"}}
+{"id": "H06", "texte": "Finalement laisse tomber le résumé du graphe énergie.", "etat": "melange", "piege": false, "attendu": {"outil": "annuler", "mode": "arreter", "tache_id": 12}}
+{"id": "T01", "texte": "Arrête.", "etat": "deux_en_cours", "piege": true, "categorie": "ambiguïté", "attendu": {"outil": null}}
+{"id": "T02", "texte": "Laisse tomber celle-là.", "etat": "deux_en_cours", "piege": true, "categorie": "ambiguïté", "attendu": {"outil": null}}
+{"id": "T03", "texte": "Vas-y.", "etat": "deux_propositions", "piege": true, "categorie": "ambiguïté", "attendu": {"outil": null}, "historique": [{"role": "atlas", "texte": "Deux modifications attendent : l'ajout du lemme 3, et la suppression du lien vers le corollaire."}]}
+{"id": "T04", "texte": "Oui.", "etat": "deux_propositions", "piege": true, "categorie": "ambiguïté", "attendu": {"outil": null}, "historique": [{"role": "atlas", "texte": "Deux modifications attendent : l'ajout du lemme 3, et la suppression du lien vers le corollaire."}]}
+{"id": "T05", "texte": "Résume-le.", "etat": "vide", "piege": true, "categorie": "ambiguïté", "attendu": {"outil": "lancer_tache", "type_agent": "explorateur", "outils_acceptes": ["lancer_tache", null]}}
+{"id": "T06", "texte": "Quel temps fait-il à Paris ?", "etat": "vide", "piege": true, "categorie": "hors périmètre", "attendu": {"outil": null}}
+{"id": "T07", "texte": "Mets de la musique.", "etat": "vide", "piege": true, "categorie": "hors périmètre", "attendu": {"outil": null}}
+{"id": "T08", "texte": "Réserve-moi un train pour Lyon.", "etat": "vide", "piege": true, "categorie": "hors périmètre", "attendu": {"outil": null}}
+{"id": "T09", "texte": "Envoie un mail à Paul.", "etat": "vide", "piege": true, "categorie": "hors périmètre", "attendu": {"outil": null}}
+{"id": "T10", "texte": "Non, pas celle-là, l'autre.", "etat": "deux_en_cours", "piege": true, "categorie": "pas celle-là", "attendu": {"outil": "etat_taches", "tache_id": 15, "outils_acceptes": ["etat_taches", null]}, "historique": [{"role": "utilisateur", "texte": "Où en est la recherche ?"}, {"role": "atlas", "texte": "Le résumé du graphe Énergie lit les étapes du graphe."}]}
+{"id": "T11", "texte": "Non, pas celle-là, l'autre.", "etat": "deux_propositions", "piege": true, "categorie": "pas celle-là", "attendu": {"outil": null, "outils_acceptes": [null, "confirmer"], "tache_id": 33}, "historique": [{"role": "atlas", "texte": "Je valide l'ajout du lemme 3 ?"}]}
+{"id": "T12", "texte": "Merci Atlas.", "etat": "vide", "piege": true, "categorie": "bavardage", "attendu": {"outil": null}}
+{"id": "T13", "texte": "Bonjour !", "etat": "vide", "piege": true, "categorie": "bavardage", "attendu": {"outil": null}}
+{"id": "T14", "texte": "Tu t'appelles comment ?", "etat": "vide", "piege": true, "categorie": "bavardage", "attendu": {"outil": null}}
+{"id": "T15", "texte": "T'es rapide dis donc.", "etat": "exploration_en_cours", "piege": true, "categorie": "bavardage", "attendu": {"outil": null}, "historique": [{"role": "utilisateur", "texte": "Fais-moi un résumé du graphe Énergie."}, {"role": "atlas", "texte": "D'accord, je lance l'explorateur."}]}
+{"id": "T16", "texte": "Attends deux secondes.", "etat": "exploration_en_cours", "piege": true, "categorie": "bavardage", "attendu": {"outil": null}, "historique": [{"role": "utilisateur", "texte": "Fais-moi un résumé du graphe Énergie."}, {"role": "atlas", "texte": "D'accord, je lance l'explorateur."}]}
+{"id": "T17", "texte": "Hmm...", "etat": "vide", "piege": true, "categorie": "bavardage", "attendu": {"outil": null}}
+{"id": "T18", "texte": "Ça veut dire quoi un corollaire ?", "etat": "vide", "piege": true, "categorie": "bavardage", "attendu": {"outil": null, "outils_acceptes": [null, "lancer_tache"]}}
+{"id": "T19", "texte": "Tu peux répéter ?", "etat": "exploration_en_cours", "piege": true, "categorie": "bavardage", "attendu": {"outil": null, "outils_acceptes": [null, "etat_taches"]}, "historique": [{"role": "utilisateur", "texte": "Fais-moi un résumé du graphe Énergie."}, {"role": "atlas", "texte": "D'accord, je lance l'explorateur."}]}
+{"id": "T20", "texte": "Résume celui sur l'énergie.", "etat": "question_graphe", "piege": true, "categorie": "réponse à un agent", "attendu": {"outil": "repondre_agent", "tache_id": 21}, "historique": [{"role": "atlas", "texte": "L'explorateur demande : quel graphe voulez-vous, Énergie ou Dérivée ?"}]}
+{"id": "T21", "texte": "Envoie-le dans la conversation topologie.", "etat": "question_conversation", "piege": true, "categorie": "réponse à un agent", "attendu": {"outil": "repondre_agent", "tache_id": 22}, "historique": [{"role": "atlas", "texte": "L'agent demande dans quelle conversation envoyer le message : Analyse ou Topologie ?"}]}
+{"id": "T22", "texte": "Ajoute-le plutôt après le lemme 1.", "etat": "proposition", "piege": true, "categorie": "réponse à un agent", "attendu": {"outil": "confirmer", "decision": "non", "correction": true}, "historique": [{"role": "atlas", "texte": "J'ajoute l'étape lemme 3 après le lemme 2, reliée au théorème principal. Je valide ?"}]}
+{"id": "T23", "texte": "Vas-y.", "etat": "vide", "piege": true, "categorie": "rien en attente", "attendu": {"outil": null}}
+{"id": "T24", "texte": "Annule ça.", "etat": "vide", "piege": true, "categorie": "rien en attente", "attendu": {"outil": null, "outils_acceptes": [null, "annuler"]}}
+{"id": "T25", "texte": "Stop la tâche sur l'énergie.", "etat": "exploration_en_cours", "piege": true, "categorie": "faux mot de fin", "attendu": {"outil": "annuler", "mode": "arreter", "tache_id": 12}}
+{"id": "T26", "texte": "Merci, et le résumé il en est où ?", "etat": "exploration_en_cours", "piege": true, "categorie": "faux mot de fin", "attendu": {"outil": "etat_taches"}}
+{"id": "T27", "texte": "euh atlas est-ce que tu peux euh non rien", "etat": "vide", "piege": true, "categorie": "transcription", "attendu": {"outil": null}}
+{"id": "T28", "texte": "Qu'est-ce que tu as fait tout à l'heure ?", "etat": "modif_appliquee", "piege": true, "categorie": "ambiguïté", "attendu": {"outil": "lire_resultat", "outils_acceptes": ["lire_resultat", "etat_taches"]}}
+{"id": "T29", "texte": "Supprime tout.", "etat": "vide", "piege": true, "categorie": "ambiguïté", "attendu": {"outil": null, "outils_acceptes": [null, "lancer_tache"], "type_agent": "editeur_graphe"}}
+{"id": "T30", "texte": "Dis à l'explorateur de se dépêcher.", "etat": "exploration_en_cours", "piege": true, "categorie": "hors périmètre", "attendu": {"outil": null, "outils_acceptes": [null, "etat_taches"]}, "historique": [{"role": "utilisateur", "texte": "Fais-moi un résumé du graphe Énergie."}, {"role": "atlas", "texte": "D'accord, je lance l'explorateur."}]}

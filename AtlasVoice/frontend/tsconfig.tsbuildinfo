@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/api.ts","./src/main.tsx","./src/vite-env.d.ts","./src/audio/micro.ts","./src/audio/opus.ts","./src/composants/cartetache.tsx","./src/composants/tableaudebord.tsx","./src/voix/assistant.ts","./src/voix/decimateur.test.ts","./src/voix/motcle.ts"],"version":"5.9.3"}

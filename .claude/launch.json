@@ -15,6 +15,31 @@
         "--reload", "--reload-dir", "atlas", "--reload-dir", "api"
       ],
       "port": 8000
+    },
+    {
+      "name": "voix-back",
+      "runtimeExecutable": "AtlasVoice/backend/.venv/Scripts/python.exe",
+      "runtimeArgs": [
+        "-m",
+        "uvicorn",
+        "app.main:app",
+        "--app-dir",
+        "AtlasVoice/backend",
+        "--port",
+        "8001"
+      ],
+      "port": 8001
+    },
+    {
+      "name": "voix-front",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "AtlasVoice/frontend",
+        "run",
+        "dev"
+      ],
+      "port": 5174
     }
   ]
 }

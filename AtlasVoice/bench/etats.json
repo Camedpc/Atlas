@@ -1,0 +1,36 @@
+{
+  "vide": [],
+  "exploration_en_cours": [
+    {"tache_id": 12, "titre": "résumé du graphe Énergie", "type_agent": "explorateur", "statut": "en_cours", "avancement": "Lecture des étapes du graphe"}
+  ],
+  "deux_en_cours": [
+    {"tache_id": 12, "titre": "résumé du graphe Énergie", "type_agent": "explorateur", "statut": "en_cours", "avancement": "Lecture des étapes du graphe"},
+    {"tache_id": 15, "titre": "recherche sur la dérivée", "type_agent": "explorateur", "statut": "en_cours", "avancement": "Recherche dans les démonstrations"}
+  ],
+  "question_graphe": [
+    {"tache_id": 21, "titre": "résumé du graphe", "type_agent": "explorateur", "statut": "besoin_precision", "question": "Quel graphe voulez-vous : Énergie ou Dérivée ?"}
+  ],
+  "question_conversation": [
+    {"tache_id": 22, "titre": "message à l'équipe", "type_agent": "conversation", "statut": "besoin_precision", "question": "Dans quelle conversation dois-je envoyer le message : Analyse ou Topologie ?"}
+  ],
+  "proposition": [
+    {"tache_id": 31, "titre": "ajout du lemme 3", "type_agent": "editeur_graphe", "statut": "attend_confirmation", "modification_proposee": "J'ajoute l'étape lemme 3 après le lemme 2, reliée au théorème principal."}
+  ],
+  "deux_propositions": [
+    {"tache_id": 31, "titre": "ajout du lemme 3", "type_agent": "editeur_graphe", "statut": "attend_confirmation", "modification_proposee": "J'ajoute l'étape lemme 3 après le lemme 2."},
+    {"tache_id": 33, "titre": "suppression du lien vers le corollaire", "type_agent": "editeur_graphe", "statut": "attend_confirmation", "modification_proposee": "Je supprime le lien entre le théorème 4 et le corollaire 2."}
+  ],
+  "resultat_pret": [
+    {"tache_id": 12, "titre": "résumé du graphe Énergie", "type_agent": "explorateur", "statut": "terminee", "resultat_oral": "Le graphe Énergie compte douze étapes, dont trois encore à vérifier, et aboutit au théorème de conservation."}
+  ],
+  "modif_appliquee": [
+    {"tache_id": 31, "titre": "ajout du lemme 3", "type_agent": "editeur_graphe", "statut": "terminee", "resultat_oral": "L'étape lemme 3 est ajoutée après le lemme 2."}
+  ],
+  "melange": [
+    {"tache_id": 12, "titre": "résumé du graphe Énergie", "type_agent": "explorateur", "statut": "en_cours", "avancement": "Lecture des étapes du graphe"},
+    {"tache_id": 31, "titre": "ajout du lemme 3", "type_agent": "editeur_graphe", "statut": "attend_confirmation", "modification_proposee": "J'ajoute l'étape lemme 3 après le lemme 2."}
+  ],
+  "echec": [
+    {"tache_id": 40, "titre": "recherche des démonstrations invalides", "type_agent": "explorateur", "statut": "echouee", "erreur": "Aucune nouvelle de l'agent depuis plus de deux minutes."}
+  ]
+}

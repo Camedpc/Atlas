@@ -1,0 +1,46 @@
+[
+  {
+    "nom": "claude-haiku-4-5 (référence actuelle)",
+    "fournisseur": "anthropic",
+    "modele": "claude-haiku-4-5",
+    "cle_env": "ANTHROPIC_API_KEY",
+    "prix_par_million": {"entree": 1.0, "sortie": 5.0}
+  },
+  {
+    "nom": "gpt-4.1-mini",
+    "fournisseur": "openai",
+    "modele": "gpt-4.1-mini",
+    "base_url": "https://api.openai.com/v1",
+    "cle_env": "OPENAI_API_KEY",
+    "prix_par_million": {"entree": 0.4, "sortie": 1.6}
+  },
+  {
+    "nom": "gemini-flash",
+    "note": "Mettre le nom de la dernière version Flash ; vérifier que le raisonnement est coupé.",
+    "fournisseur": "openai",
+    "modele": "gemini-2.5-flash",
+    "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
+    "cle_env": "GEMINI_API_KEY",
+    "extra": {"reasoning_effort": "none"},
+    "prix_par_million": null
+  },
+  {
+    "nom": "mistral-small",
+    "note": "Hébergé en UE. Renseigner le prix du contrat.",
+    "fournisseur": "openai",
+    "modele": "mistral-small-latest",
+    "base_url": "https://api.mistral.ai/v1",
+    "cle_env": "MISTRAL_API_KEY",
+    "prix_par_million": null
+  },
+  {
+    "nom": "open-weight sur Groq",
+    "note": "Choisir le modèle open-weight à tester ; renseigner le prix.",
+    "fournisseur": "openai",
+    "modele": "openai/gpt-oss-20b",
+    "base_url": "https://api.groq.com/openai/v1",
+    "cle_env": "GROQ_API_KEY",
+    "extra": {"reasoning_effort": "low"},
+    "prix_par_million": null
+  }
+]
