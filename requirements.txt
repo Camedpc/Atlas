@@ -1,0 +1,3 @@
+fastapi>=0.115
+supabase>=2.10
+python-dotenv>=1.0

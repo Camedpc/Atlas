@@ -7,5 +7,6 @@ __pycache__/
 *.pyc
 .venv/
 .pytest_cache/
+.vercel/
 supabase/.temp/
 supabase/.branches/

@@ -1,11 +1,8 @@
-import path from 'node:path'
-import tailwindcss from '@tailwindcss/vite'
-import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 
+// En local, /api est servi par uvicorn (voir README) ; sur Vercel, par la fonction Python.
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
-  resolve: {
-    alias: { '@': path.resolve(import.meta.dirname, './src') },
+  server: {
+    proxy: { '/api': 'http://localhost:8000' },
   },
 })

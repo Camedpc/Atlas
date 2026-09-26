@@ -4,29 +4,13 @@
     {
       "name": "front",
       "runtimeExecutable": "npm",
-      "runtimeArgs": [
-        "--prefix",
-        "frontend",
-        "run",
-        "dev"
-      ],
+      "runtimeArgs": ["--prefix", "frontend", "run", "dev"],
       "port": 5173
     },
     {
-      "name": "back",
-      "runtimeExecutable": "backend/.venv/Scripts/python.exe",
-      "runtimeArgs": [
-        "-m",
-        "uvicorn",
-        "app.main:app",
-        "--app-dir",
-        "backend",
-        "--port",
-        "8000",
-        "--reload",
-        "--reload-dir",
-        "backend/app"
-      ],
+      "name": "api",
+      "runtimeExecutable": ".venv/Scripts/python.exe",
+      "runtimeArgs": ["-m", "uvicorn", "api.index:app", "--port", "8000", "--reload"],
       "port": 8000
     },
     {
