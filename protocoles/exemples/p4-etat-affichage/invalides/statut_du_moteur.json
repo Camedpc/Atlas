@@ -27,6 +27,7 @@
   "surlignes": [],
   "filtres": {
     "conversation": null,
+    "noeuds": [],
     "statuts": [
       "refute"
     ],

@@ -10,7 +10,7 @@ import type { EtatFiltres } from './protocole'
 export const OPACITE_ESTOMPEE = 0.12
 
 export function filtresActifs(f: EtatFiltres): boolean {
-  return f.conversation !== null || f.statuts.length > 0 || f.types.length > 0 || f.periode.debut !== null
+  return f.conversation !== null || f.noeuds.length > 0 || f.statuts.length > 0 || f.types.length > 0 || f.periode.debut !== null
     || f.periode.fin !== null || f.texte.trim() !== ''
 }
 
@@ -26,6 +26,7 @@ function borne(date: string, fin: boolean): number {
 
 export function noeudPasse(n: NoeudR, f: EtatFiltres): boolean {
   if (f.conversation !== null && n.conversation !== f.conversation) return false
+  if (f.noeuds.length && !f.noeuds.includes(n.id)) return false
   if (f.statuts.length && !f.statuts.includes(n.statut)) return false
   if (f.types.length && !f.types.includes(n.type)) return false
   if (f.periode.debut !== null || f.periode.fin !== null) {

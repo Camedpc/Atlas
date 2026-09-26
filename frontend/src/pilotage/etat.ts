@@ -32,7 +32,7 @@ export interface Application {
 }
 
 export function filtresVides(): EtatFiltres {
-  return { conversation: null, statuts: [], types: [], periode: { debut: null, fin: null }, texte: '', mode: 'masquer' }
+  return { conversation: null, noeuds: [], statuts: [], types: [], periode: { debut: null, fin: null }, texte: '', mode: 'masquer' }
 }
 
 export function construireIndex(noeuds: readonly { id: IdNoeud; conversation: string | null }[]): IndexDonnees {

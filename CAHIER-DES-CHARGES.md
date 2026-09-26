@@ -142,11 +142,12 @@ Règles propres aux tâches `navigateur` : pas de confirmation (rien n'est écri
 `resultat_oral` d'une phrase au plus (« C'est affiché. »), budget de bout en bout **< 1,5 s** entre la fin
 de phrase et le premier mouvement à l'écran. Ambiguïté (« lequel des deux lemmes ? ») → `besoin_precision`.
 
-### P2 — Commande haut niveau → commandes de navigation (agent moyen 2 → agent navigateur)
+### P2 — Texte brut → agent navigateur (agent moyen 2 → agent navigateur)
 
-L'agent moyen 2 **prend** la tâche `navigateur` dans le registre et produit une **intention de navigation**
-qui désigne les choses **par leur description**, sans rien résoudre. Il la transmet à l'agent navigateur
-par le relais (`POST /api/affichage/intentions`, voir B4) ; le lot est journalisé.
+L'agent moyen 2 **prend** la tâche `navigateur` dans le registre et se contente d'**extraire**, mot pour mot,
+le texte brut qui concerne l'affichage (journal vocal : demande brute, derniers tours ; la transcription peut
+être coupée en morceaux). Il n'interprète rien. Il transmet ce texte à l'agent navigateur par le relais
+(`POST /api/affichage/intentions`, voir B4) ; c'est le navigateur qui comprend la demande.
 
 ```ts
 interface LotNavigation {
@@ -155,43 +156,21 @@ interface LotNavigation {
   tache_id: number
   utilisateur_id: string
   emis_le?: string                   // horodatage ISO UTC, pour mesurer la latence
-  intentions: IntentionNavigation[]  // dans l'ordre d'exécution
-}
-type Designation = {
-  texte: string                                        // « le lemme de compacité », « le théorème principal »
-  genre?: 'noeud' | 'conversation'
-  type?: string                                        // indice : 'lemme', 'hypothese', 'decision'…
-  deictique?: 'selection' | 'survol' | 'precedent'     // « celui-là », « celui d'avant »
-}
-type IntentionNavigation =
-  | { intention: 'montrer'; quoi: Designation }                              // amener à l'écran et cadrer
-  | { intention: 'lignee'; quoi: Designation }                               // d'où ça vient, ce que ça permet
-  | { intention: 'portee'; quoi: Designation }                               // tout ce qui dépend d'un choix
-  | { intention: 'detailler'; quoi: Designation }                            // ouvrir la fiche
-  | { intention: 'niveau_de_detail'; niveau: 'essentiel' | 'normal' | 'complet' | 'plus' | 'moins' }
-  | { intention: 'liens_complets'; oui: boolean }                            // montrer aussi les prémisses de contexte
-  | { intention: 'point_de_vue'; mode: '2d' | '3d'; vue?: 'face' | 'cote' | 'dessus' | 'iso' }
-  | { intention: 'filtrer'; criteres: CriteresFiltre; action: 'masquer' | 'estomper' }
-  | { intention: 'effacer_filtres' | 'effacer_selection' | 'tout_voir' | 'revenir' }
-interface CriteresFiltre {
-  conversation?: Designation                       // « ce qu'on a fait dans la conversation sur l'énergie »
-  statuts?: ('etabli' | 'suspendu' | 'a_verifier' | 'invalide' | 'ouvert')[]
-  types?: string[]
-  periode?: { debut?: string; fin?: string }       // dates ISO déjà résolues (« le mois dernier »)
-  texte?: string
+  demande: string                    // le texte brut destiné à l'affichage, tel que l'utilisateur l'a dit ou écrit
+  demande_brute?: string             // la phrase entière, si elle contient plus (contexte, pronoms)
+  echanges?: { question: string; reponse: string }[]   // questions déjà posées pour cette demande et réponses
 }
 ```
 
-`revenir` = annuler la dernière navigation. Vocabulaire fermé : une intention hors liste est une erreur
-`invalide`, pas une improvisation. Si l'extrait ne demande rien d'affichable, l'agent moyen 2 termine la
-tâche en `echouee` avec une raison lisible (Atlas la dira).
+Au chat texte (champ de l'écran), tout le texte est destiné à l'affichage : il part tel quel. Une ambiguïté
+revient en question ; l'agent moyen 2 la pose via `besoin_precision` et renvoie le même texte avec l'échange.
 
 ### P3 — Commandes de navigation → commandes bas niveau (agent navigateur → écran)
 
-L'agent navigateur **résout** les désignations sur les vraies données (`GET /api/graphe`, recherche sur
-`nom` et `enonce`, `GET /api/conversations` pour les conversations) et sur l'état d'affichage (P4), puis
-produit des commandes exactes. Deux candidats plausibles : il renvoie une question à l'agent moyen 2, qui
-la pose via `besoin_precision` ; jamais de choix au hasard.
+L'agent navigateur **comprend** le texte brut avec un modèle, sur les vraies données (`GET /api/graphe`
+avec prémisses et conséquences, `GET /api/conversations`) et sur l'état d'affichage (P4), puis choisit ses
+outils : les commandes ci-dessous. Deux candidats plausibles : il renvoie une question à l'agent moyen 2,
+qui la pose via `besoin_precision` ; jamais de choix au hasard.
 
 ```ts
 interface LotCommandes {
@@ -230,6 +209,7 @@ type CommandeBas =
   | { op: 'recharger_donnees' }
 interface EtatFiltres {
   conversation: string | null          // UUID ; remplace le filtre « cette conversation » du front actuel
+  noeuds: string[]                     // liste explicite des nœuds à garder (vide = pas de filtre par liste)
   statuts: string[]; types: string[]   // vides = pas de filtre
   periode: { debut: string | null; fin: string | null }
   texte: string
@@ -237,22 +217,10 @@ interface EtatFiltres {
 }
 ```
 
-Correspondance intention → commandes (table fixe dans l'agent navigateur) :
-
-| Intention (P2) | Commandes (P3) |
-|---|---|
-| `montrer X` | `cadrer [X]` + `surligner [X]` ; si X est masqué par la stratégie courante : `liens_complets true` d'abord |
-| `lignee X` | `selectionner X` + `cadrer 'selection'` |
-| `portee X` | `portee X` + `cadrer 'selection'` |
-| `detailler X` | `fiche X` (+ `selectionner X`) |
-| `niveau_de_detail` | `essentiel` → `strategie 'defaut'` ; `normal` → `'roles_aux'` ; `complet` → `'complet'` ; `plus`/`moins` → cran suivant/précédent dans cet ordre |
-| `point_de_vue` | `mode` (+ `vue` : `cote` → vue de côté 3D du moteur, `face` → `face`…) |
-| `filtrer` | `filtres {…, mode}` |
-| `tout_voir` | `effacer_filtres` + `selectionner null` + `cadrer 'tout'` |
-| `revenir` | `restaurer` avec l'état précédent (pile de 20 états par écran, tenue par l'agent navigateur) |
-
-La correspondance exacte des niveaux et des vues est à valider sur l'écran (voir B6) ; elle vit dans un
-seul fichier de l'agent navigateur.
+Pas de table fixe : le navigateur choisit ses commandes. Le code garde ce qui doit être sûr (ids existants,
+lot validé, `restaurer` rempli depuis la pile de 20 états par écran). Côté
+navigateur seulement, `filtres.patch.autour: [{noeud, etendue: lignee | premisses | consequences | seul}]`
+est calculé sur le graphe et remplacé par la liste `noeuds` avant l'envoi à l'écran.
 
 ### P4 — Écran → état d'affichage (retour)
 
@@ -314,19 +282,20 @@ routage correct sur les énoncés de navigation.
 
 ### B2 — Agent moyen 2 (P1 → P2)
 Processus d'agent qui consomme les tâches `navigateur` via `ClientRegistre`
-(`backend/app/agents/contrat.py`), dans `AtlasVoice/backend/app/agents/navigation/moyen2.py`. Petit
-modèle rapide (configurable par variables d'env, comme `ATLAS_LLM_*`), sortie contrainte au schéma
-`LotNavigation` (outil unique ou sortie structurée). Il ne connaît ni les ids ni le moteur. Il termine la
-tâche avec le `resultat_oral` que lui renvoie le compte rendu (« C'est affiché. », ou l'erreur).
-Tests : jeu `extrait + EtatResume → LotNavigation` attendu ; modèle remplacé par une fonction factice
-dans les tests unitaires ; le jeu réel sert au bench.
+(`backend/app/agents/contrat.py`), dans `AtlasVoice/backend/app/agents/navigation/moyen2.py`. Il **extrait**
+le texte brut destiné à l'affichage : au chat texte, tout le texte ; à la voix, un petit modèle
+(`ATLAS_NAV_LLM_*`) le recopie mot pour mot depuis le journal, et le code vérifie que chaque mot vient bien
+du journal (sinon l'extrait d'Atlas, puis la demande brute). Il n'interprète rien, ne connaît ni les ids ni
+le moteur. Il termine la tâche avec le compte rendu (« C'est affiché. », l'erreur) ou pose la question.
+Tests : extraction (mot pour mot, repli), transmission, question ; modèle remplacé par une fonction factice.
 
 ### B3 — Agent navigateur (P2 → P3)
-`AtlasVoice/backend/app/agents/navigation/navigateur.py`, processus distinct de B2. Résolution **d'abord
-déterministe** (recherche normalisée sur `nom` / `enonce`, indice `type`, déictiques via `EtatAffichage`),
-modèle seulement en dernier recours pour départager ; sinon question. Traduction par la table de P3.
-Tient la pile d'états pour `revenir`. Tests : graphe de fixture + état de fixture + `LotNavigation` →
-`LotCommandes` attendu, sans réseau.
+`AtlasVoice/backend/app/agents/navigation/navigateur.py`, processus distinct de B2. Un modèle puissant
+(`ATLAS_NAVIGATEUR_LLM_*`, gpt-5.5 par défaut) reçoit le texte brut, tout l'écran, le graphe (nœuds avec
+prémisses et conséquences), les conversations et l'historique des demandes précédentes sur cet écran ; il
+comprend librement ce que l'utilisateur veut voir et répond par ses outils (commandes P3) ou par une question.
+Le code ne tient que le non négociable (ids, validité, `autour`, pile `revenir`) et redonne un essai au modèle
+si sa sortie n'est pas exécutable. Tests : modèle factice, graphe et état de fixture, sans réseau.
 
 ### B4 — Relais d'affichage (transport P2, P3, P4), dans AtlasVoice
 `AtlasVoice/backend/app/affichage/` + routeur monté dans `main.py`. État en mémoire (éphémère : l'état

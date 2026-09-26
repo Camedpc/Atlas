@@ -36,7 +36,7 @@ def compte_rendu(lot_id: str, e: EtatAffichage, ok: bool = True) -> CompteRendu:
 def lot_navigation(utilisateur: str = "u1") -> LotNavigation:
     return LotNavigation.model_validate({
         "version": 1, "lot_id": str(uuid.uuid4()), "tache_id": 7, "utilisateur_id": utilisateur,
-        "intentions": [{"intention": "lignee", "quoi": {"texte": "le lemme de compacité"}}],
+        "demande": "montre-moi la lignée du lemme de compacité",
     })
 
 

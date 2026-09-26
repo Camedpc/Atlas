@@ -103,30 +103,36 @@ curl -s -H "X-Agents-Cle: $CLE" -H 'Content-Type: application/json' localhost:80
   -d "{\"version\":1,\"lot_id\":\"$(uuidgen)\",\"ecran\":\"$ECRAN\",\"origine\":\"test\",\"commandes\":[{\"op\":\"mode\",\"mode\":\"3d\"}]}"
 ```
 
-### Agent navigateur (`backend/app/agents/navigation/navigateur.py`)
-
-Processus distinct : `python -m app.agents.navigation.navigateur` (depuis `AtlasVoice/backend`). Il écoute
-`/intentions/flux`, lit l'état de l'écran actif de l'utilisateur, le graphe (`ATLAS_API_URL`, relu seulement
-quand `version_donnees` change) et, si le lot en parle, les conversations (`ATLAS_JETON_ACCES` si besoin).
-
-- **Résolution par IA** (`ATLAS_NAVIGATEUR_LLM_*`, par défaut le modèle de l'agent moyen 2) : le modèle reçoit
-  les intentions, l'écran et un résumé des nœuds (id, nom, type, statut, début de l'énoncé), et répond par
-  un outil : `commander` (d'abord la résolution de chaque désignation — candidats, choix, raison — puis les
-  commandes P3) ou `refuser`. Température 0.
-- **Règles tenues par le code** : plusieurs candidats sans choix sûr → question `ambigu` avec les noms ;
-  aucun candidat → `introuvable` ; id hors du graphe ou commande invalide → second essai avec l'erreur ;
-  « revenir » : le modèle écrit `restaurer`, le code y met l'état de la pile (20 par écran).
-- Écran actif = le plus récent parmi les écrans connectés au relais.
-
-### Agent moyen 2 (`backend/app/agents/navigation/moyen2.py`)
+### Agent moyen 2 (`backend/app/agents/navigation/moyen2.py`) : extraction
 
 Processus distinct : `python -m app.agents.navigation.moyen2`. Il prend les tâches `navigateur` dès leur
-création (flux du registre) ; chacune avance seule.
+création (flux du registre) ; chacune avance seule. Il **n'interprète rien** : il extrait le texte brut
+destiné à l'affichage et le passe au navigateur (`LotNavigation.demande`).
 
-- Entrée : `extrait` (le segment de la phrase pour cette tâche, vérifié par le registre), `demande_brute`,
-  `contexte.affichage` (résumé de l'écran, rempli par le serveur depuis le relais).
-- Un petit modèle (`ATLAS_NAV_LLM_*`, par défaut celui d'Atlas) répond par un seul outil : `naviguer`
-  (intentions P2, vocabulaire fermé, validées avant envoi) ou `rien_a_afficher` (la tâche échoue avec la raison).
-- Compte rendu : `ok` → `terminer` avec « C'est affiché. » ; `ambigu` → `question` à l'utilisateur, puis
-  nouveau lot avec sa réponse (2 fois au plus) ; autre erreur → `echec` avec une phrase lisible.
-- Pas de confirmation ni de verrou : rien n'est écrit en base.
+- Chat texte (canal `texte`, champ de l'écran) : tout le texte part tel quel, sans modèle.
+- Voix : un petit modèle (`ATLAS_NAV_LLM_*`, par défaut celui d'Atlas) recopie mot pour mot, depuis le journal
+  (demande brute, derniers tours de l'utilisateur), le texte qui concerne l'affichage ; la transcription peut
+  être coupée en morceaux. Le code vérifie que chaque mot vient du journal, sinon garde l'extrait d'Atlas,
+  puis la demande brute.
+- Compte rendu : `ok` → `terminer` (« C'est affiché. ») ; `ambigu` → `question` à l'utilisateur, puis le même
+  texte repart avec l'échange (2 fois au plus) ; autre erreur → `echec` avec le message du navigateur.
+
+### Agent navigateur (`backend/app/agents/navigation/navigateur.py`) : compréhension
+
+Processus distinct : `python -m app.agents.navigation.navigateur`. Pour chaque demande, il donne au modèle
+(`ATLAS_NAVIGATEUR_LLM_*`, `openai:gpt-5.5` par défaut, température standard) :
+- le texte brut, la phrase entière et les questions déjà posées avec les réponses ;
+- **tout l'écran** : l'état d'affichage complet (caméra, niveau de détail, sélection, portée, surlignés, filtres,
+  fiche, nœuds visibles avec libellé et position, survol, conversation ouverte) ;
+- tout le graphe (`ATLAS_API_URL`, relu quand `version_donnees` change) : id, nom, type, statut, début de
+  l'énoncé, prémisses et conséquences directes ; et toujours la liste des conversations ;
+- **l'historique** des 12 demandes précédentes sur cet écran et ce qu'il en a fait (commandes ou refus), en
+  messages de conversation : l'utilisateur peut y faire référence.
+
+Le modèle est libre : il répond par `commander` (commandes P3, avec une explication pour le journal) ou
+`refuser` (question, introuvable, rien à annuler, hors affichage). Le code ne tient que le non négociable :
+commandes validées et ids existants, sinon second essai avec l'erreur ; `filtres.patch.autour
+[{noeud, etendue: lignee | premisses | consequences | seul}]` calculé sur le graphe ; « revenir » : le modèle
+écrit `restaurer`, le code y met l'état de la pile (20 par écran). Chaque demande est journalisée avec ses
+commandes ou son refus. Écran actif = le plus récent parmi les écrans connectés au relais. Délai d'une demande :
+`ATLAS_AFFICHAGE_DELAI_INTENTIONS_S` (60 s).

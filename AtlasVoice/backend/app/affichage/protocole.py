@@ -92,10 +92,15 @@ class Periode(Strict):
 ListeTextes = list[TexteNonVide]
 
 
+ListeNoeuds = Annotated[list[IdNoeud], Field(max_length=500)]
+
+
 class EtatFiltres(Strict):
-    _uniques = ("statuts", "types")
+    _uniques = ("noeuds", "statuts", "types")
 
     conversation: Uuid | None
+    # Liste explicite des nœuds à garder (vide : pas de filtre par liste).
+    noeuds: ListeNoeuds
     statuts: list[StatutNoeud]
     types: ListeTextes
     periode: Periode
@@ -107,9 +112,10 @@ class PatchFiltres(Strict):
     """Fusion superficielle dans EtatFiltres : chaque clé présente remplace la valeur courante."""
 
     _nullables = frozenset({"conversation"})
-    _uniques = ("statuts", "types")
+    _uniques = ("noeuds", "statuts", "types")
 
     conversation: Uuid | None = None
+    noeuds: ListeNoeuds | None = None
     statuts: list[StatutNoeud] | None = None
     types: ListeTextes | None = None
     periode: Periode | None = None
@@ -215,88 +221,25 @@ class TacheP1(BaseModel):
     contexte: ContexteP1
 
 
-# ─── P2 : intentions de navigation ───────────────────────────────────────────
+# ─── P2 : texte brut pour le navigateur ──────────────────────────────────────
 
 
-class Designation(Strict):
-    texte: TexteNonVide
-    genre: Literal["noeud", "conversation"] | None = None
-    type: TexteNonVide | None = None
-    deictique: Literal["selection", "survol", "precedent"] | None = None
-
-
-class PeriodeCriteres(Strict):
-    debut: Date | None = None
-    fin: Date | None = None
-
-    @model_validator(mode="after")
-    def _non_vide(self) -> Self:
-        if not self.model_fields_set:
-            raise ValueError("période vide")
-        return self
-
-
-class CriteresFiltre(Strict):
-    conversation: Designation | None = None
-    statuts: Annotated[list[StatutNoeud], Field(min_length=1)] | None = None
-    types: Annotated[ListeTextes, Field(min_length=1)] | None = None
-    periode: PeriodeCriteres | None = None
-    texte: TexteNonVide | None = None
-
-    _uniques = ("statuts", "types")
-
-    @model_validator(mode="after")
-    def _non_vide(self) -> Self:
-        if not self.model_fields_set:
-            raise ValueError("aucun critère")
-        return self
-
-
-class IntentionDesignation(Strict):
-    intention: Literal["montrer", "lignee", "portee", "detailler"]
-    quoi: Designation
-
-
-class IntentionNiveau(Strict):
-    intention: Literal["niveau_de_detail"]
-    niveau: Literal["essentiel", "normal", "complet", "plus", "moins"]
-
-
-class IntentionLiensComplets(Strict):
-    intention: Literal["liens_complets"]
-    oui: bool
-
-
-class IntentionPointDeVue(Strict):
-    intention: Literal["point_de_vue"]
-    mode: Mode
-    vue: Literal["face", "cote", "dessus", "iso"] | None = None
-
-
-class IntentionFiltrer(Strict):
-    intention: Literal["filtrer"]
-    criteres: CriteresFiltre
-    action: ModeFiltre
-
-
-class IntentionSimple(Strict):
-    intention: Literal["effacer_filtres", "effacer_selection", "tout_voir", "revenir"]
-
-
-IntentionNavigation = Annotated[
-    IntentionDesignation | IntentionNiveau | IntentionLiensComplets | IntentionPointDeVue | IntentionFiltrer
-    | IntentionSimple,
-    Field(discriminator="intention"),
-]
+class Echange(Strict):
+    question: TexteNonVide
+    reponse: TexteNonVide
 
 
 class LotNavigation(Strict):
+    """Le texte brut destiné au navigateur, extrait mot pour mot par l'agent moyen 2 ; le navigateur le comprend."""
+
     version: Literal[1]
     lot_id: Uuid
     tache_id: Annotated[int, Field(ge=1)]
     utilisateur_id: TexteNonVide
     emis_le: DateHeure | None = None
-    intentions: Annotated[list[IntentionNavigation], Field(min_length=1, max_length=20)]
+    demande: Annotated[str, StringConstraints(min_length=1, max_length=2000)]
+    demande_brute: TexteNonVide | None = None
+    echanges: Annotated[list[Echange], Field(max_length=5)] | None = None
 
 
 # ─── P3 : commandes bas niveau ───────────────────────────────────────────────

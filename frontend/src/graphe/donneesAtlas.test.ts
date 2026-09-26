@@ -90,6 +90,13 @@ describe('filtres', () => {
     expect(noeudPasse(lemme!, { ...filtresVides(), types: ['lemme'] })).toBe(true)
   })
 
+  it('garde seulement une liste explicite de nœuds', () => {
+    const f = { ...filtresVides(), noeuds: ['lemme_somme', 'conclusion'] }
+    expect([pair, lemme, conclusion].map((n) => noeudPasse(n!, f))).toEqual([false, true, true])
+    // Combinée aux autres critères : il faut passer les deux.
+    expect(noeudPasse(conclusion!, { ...f, statuts: ['etabli'] })).toBe(false)
+  })
+
   it('filtre par période, une date seule couvrant la journée', () => {
     const f = { ...filtresVides(), periode: { debut: '2026-09-25', fin: '2026-09-25' } }
     expect(noeudPasse(conclusion!, f)).toBe(true)

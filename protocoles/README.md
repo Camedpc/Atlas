@@ -7,7 +7,7 @@ Contrats entre les briques décrites dans `CAHIER-DES-CHARGES.md` (section 3). C
 |---|---|---|
 | `commun.schema.json` | — | Références (`RefNoeud`, `RefConversation`, `Cible`), `ErreurProtocole`, `EtatFiltres`, `ParametresLecture`… |
 | `p1-tache.schema.json` | P1 | Atlas vocal → registre : champs ajoutés à la tâche (`navigateur`, `extrait`, `contexte.affichage`) |
-| `p2-lot-navigation.schema.json` | P2 | Agent moyen 2 → agent navigateur (`LotNavigation`) |
+| `p2-lot-navigation.schema.json` | P2 | Agent moyen 2 → agent navigateur (`LotNavigation` : le texte brut destiné à l'affichage) |
 | `p3-lot-commandes.schema.json` | P3 | Agent navigateur, interface ou test → écran (`LotCommandes`) |
 | `p3-compte-rendu.schema.json` | P3 (retour) | Écran → émetteur du lot (`CompteRendu`) |
 | `p4-etat-affichage.schema.json` | P4 | Écran → relais (`EtatAffichage`, et `$defs/EtatResume` pour P1) |
@@ -44,5 +44,7 @@ Un changement incompatible incrémente `version`.
   quand l'écran n'a pas répondu (`delai`) ou n'existe pas (`introuvable`).
 - `LotCommandes.commandes` peut être vide : le compte rendu renvoie alors l'état courant.
 - `filtres` (P3) fusionne superficiellement : chaque clé présente remplace la valeur courante (`periode` entière).
-- Bornes : 20 intentions par `LotNavigation`, 50 commandes par `LotCommandes`, `zoomer.facteur` dans ]0, 100],
+- P2 porte le **texte brut** (`demande`), pas d'intentions : c'est le navigateur qui comprend la demande.
+- Filtres : `noeuds` (liste explicite des nœuds à garder) s'ajoute aux autres critères.
+- Bornes : 2 000 caractères par `LotNavigation.demande`, 50 commandes par `LotCommandes`, `zoomer.facteur` dans ]0, 100],
   `orbiter` dans ±360° (azimut) et ±180° (élévation).

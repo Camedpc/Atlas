@@ -34,6 +34,8 @@ export interface Periode { debut: string | null; fin: string | null }
 
 export interface EtatFiltres {
   conversation: string | null
+  /** Liste explicite des nœuds à garder (vide : pas de filtre par liste). */
+  noeuds: IdNoeud[]
   statuts: StatutNoeud[]
   types: string[]
   periode: Periode
@@ -53,38 +55,18 @@ export interface ParametresLecture {
   meme_sous_probleme?: boolean
 }
 
-// ─── P2 : intentions de navigation ───────────────────────────────────────────
+// ─── P2 : texte brut pour le navigateur ──────────────────────────────────────
 
-export interface Designation {
-  texte: string
-  genre?: 'noeud' | 'conversation'
-  type?: string
-  deictique?: 'selection' | 'survol' | 'precedent'
-}
-
-export interface CriteresFiltre {
-  conversation?: Designation
-  statuts?: StatutNoeud[]
-  types?: string[]
-  periode?: { debut?: string; fin?: string }
-  texte?: string
-}
-
-export type IntentionNavigation =
-  | { intention: 'montrer' | 'lignee' | 'portee' | 'detailler'; quoi: Designation }
-  | { intention: 'niveau_de_detail'; niveau: 'essentiel' | 'normal' | 'complet' | 'plus' | 'moins' }
-  | { intention: 'liens_complets'; oui: boolean }
-  | { intention: 'point_de_vue'; mode: Mode; vue?: 'face' | 'cote' | 'dessus' | 'iso' }
-  | { intention: 'filtrer'; criteres: CriteresFiltre; action: ModeFiltre }
-  | { intention: 'effacer_filtres' | 'effacer_selection' | 'tout_voir' | 'revenir' }
-
+/** Le texte brut destiné au navigateur, extrait mot pour mot par l'agent moyen 2 ; le navigateur le comprend. */
 export interface LotNavigation {
   version: 1
   lot_id: string
   tache_id: number
   utilisateur_id: string
   emis_le?: string
-  intentions: IntentionNavigation[]
+  demande: string
+  demande_brute?: string
+  echanges?: { question: string; reponse: string }[]
 }
 
 // ─── P3 : commandes bas niveau ───────────────────────────────────────────────

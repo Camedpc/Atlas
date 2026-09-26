@@ -3,7 +3,7 @@
 from app.affichage.protocole import EtatResume
 from app.voix.prompt import instructions, ligne_ecran
 
-FILTRES = {"conversation": None, "statuts": [], "types": [], "periode": {"debut": None, "fin": None}, "texte": "",
+FILTRES = {"conversation": None, "noeuds": [], "statuts": [], "types": [], "periode": {"debut": None, "fin": None}, "texte": "",
            "mode": "masquer"}
 
 

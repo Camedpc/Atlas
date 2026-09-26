@@ -163,7 +163,8 @@ class Relais:
         attente = self._attendre(lot.lot_id)
         for file in self.navigateurs:
             file.put_nowait(lot)
-        return await self._resultat(lot.lot_id, attente, delai_s, self.ecran_actif(lot.utilisateur_id))
+        delai = config.AFFICHAGE_DELAI_INTENTIONS_S if delai_s is None else delai_s
+        return await self._resultat(lot.lot_id, attente, delai, self.ecran_actif(lot.utilisateur_id))
 
     def repondre_intentions(self, cr: CompteRendu) -> None:
         """Réponse directe de l'agent navigateur (échec avant toute commande : ambiguïté, introuvable…)."""

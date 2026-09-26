@@ -30,6 +30,7 @@
   ],
   "filtres": {
     "conversation": null,
+    "noeuds": [],
     "statuts": [],
     "types": [],
     "periode": {
