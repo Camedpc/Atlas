@@ -1,5 +1,5 @@
 line-length = 120
-extend-exclude = ["prototypes"]
+extend-exclude = ["prototypes", "AtlasVoice"]
 
 [lint]
 # Erreurs, imports, bugs probables, syntaxe moderne
