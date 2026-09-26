@@ -1,0 +1,2 @@
+Fichiers repris de Gradbot (https://github.com/gradium-ai/gradbot, gradbot_py/gradbot/js_audio),
+double licence MIT ou Apache-2.0. Décodeur/encodeur Opus issus d'opus-recorder (MIT).

@@ -1,0 +1,5 @@
+# Le reste (.env, .venv, node_modules, dist…) est couvert par le .gitignore racine d'Atlas.
+donnees/
+bench/audio/
+bench/resultats/
+bench/enonces_transcrits.jsonl
