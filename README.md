@@ -81,8 +81,9 @@ serveur MCP `atlas` (`lire_graphe`, `lire_noeud`), lancé par Codex. Il est isol
 
 Connexion, dans le `CODEX_HOME` d'Atlas uniquement :
 
-- en dev, ton compte ChatGPT : `.venv/Scripts/python -m atlas.orchestrateur.connexion` (URL + code à saisir
-  dans le navigateur ; `--statut` affiche le compte utilisé) ;
+- en dev, ton compte ChatGPT : `.venv/Scripts/python -m atlas.orchestrateur.connexion` (ouvre le navigateur ;
+  `--code` pour une connexion par code sur une VM, à activer dans ChatGPT → Paramètres → Sécurité ;
+  `--statut` affiche le compte utilisé) ;
 - en production, une clé API : renseigner `OPENAI_API_KEY` dans le `.env` suffit, elle est prioritaire.
 
 ### Passer sur une VM
