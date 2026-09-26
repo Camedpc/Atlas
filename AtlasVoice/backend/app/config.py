@@ -78,6 +78,8 @@ LLM_PRINCIPAL = _modele("ATLAS_LLM", "anthropic", "claude-haiku-4-5")
 LLM_SECOURS = _modele("ATLAS_LLM_SECOURS", None, None)
 # Agent moyen 2 (navigation : tâche → intentions) : petit modèle rapide, par défaut celui d'Atlas.
 LLM_NAVIGATION = _modele("ATLAS_NAV_LLM", None, None) or LLM_PRINCIPAL
+# Agent navigateur (intentions → commandes, résolution des désignations par le modèle) : par défaut le même.
+LLM_NAVIGATEUR = _modele("ATLAS_NAVIGATEUR_LLM", None, None) or LLM_NAVIGATION
 # Bascule sur le secours si le premier token dépasse ce délai.
 LLM_DELAI_BASCULE_S = float(_env("ATLAS_LLM_DELAI_BASCULE_S", "1.5"))
 LLM_MAX_TOKENS = int(_env("ATLAS_LLM_MAX_TOKENS", "400"))

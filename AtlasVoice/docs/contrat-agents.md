@@ -103,18 +103,19 @@ curl -s -H "X-Agents-Cle: $CLE" -H 'Content-Type: application/json' localhost:80
   -d "{\"version\":1,\"lot_id\":\"$(uuidgen)\",\"ecran\":\"$ECRAN\",\"origine\":\"test\",\"commandes\":[{\"op\":\"mode\",\"mode\":\"3d\"}]}"
 ```
 
-### Agent navigateur (`backend/app/agents/navigation/`)
+### Agent navigateur (`backend/app/agents/navigation/navigateur.py`)
 
 Processus distinct : `python -m app.agents.navigation.navigateur` (depuis `AtlasVoice/backend`). Il écoute
 `/intentions/flux`, lit l'état de l'écran actif de l'utilisateur, le graphe (`ATLAS_API_URL`, relu seulement
-quand `version_donnees` change) et, si besoin, les conversations (`ATLAS_JETON_ACCES` si le serveur d'Atlas
-en exige un).
+quand `version_donnees` change) et, si le lot en parle, les conversations (`ATLAS_JETON_ACCES` si besoin).
 
-- `resolution.py` : désignation → id de nœud ou de conversation, **déterministe** (nom, id, énoncé, indice
-  de type, déictiques `selection` / `survol` / `precedent`, « cette conversation »). Deux candidats proches :
-  `ambigu`, avec la question (« Lequel veux-tu : « A » ou « B » ? ») et `details.candidats`. Pas de modèle.
-- `traduction.py` : la table fixe intention → commandes (section P3 du cahier des charges) et la pile des
-  états (20 par écran) pour `revenir`.
+- **Résolution par IA** (`ATLAS_NAVIGATEUR_LLM_*`, par défaut le modèle de l'agent moyen 2) : le modèle reçoit
+  les intentions, l'écran et un résumé des nœuds (id, nom, type, statut, début de l'énoncé), et répond par
+  un outil : `commander` (d'abord la résolution de chaque désignation — candidats, choix, raison — puis les
+  commandes P3) ou `refuser`. Température 0.
+- **Règles tenues par le code** : plusieurs candidats sans choix sûr → question `ambigu` avec les noms ;
+  aucun candidat → `introuvable` ; id hors du graphe ou commande invalide → second essai avec l'erreur ;
+  « revenir » : le modèle écrit `restaurer`, le code y met l'état de la pile (20 par écran).
 - Écran actif = le plus récent parmi les écrans connectés au relais.
 
 ### Agent moyen 2 (`backend/app/agents/navigation/moyen2.py`)
