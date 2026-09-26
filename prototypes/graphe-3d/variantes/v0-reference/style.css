@@ -1,0 +1,42 @@
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: #fbfbfd;
+}
+#app {
+  position: fixed;
+  inset: 0;
+}
+.retour {
+  position: fixed;
+  top: 16px;
+  left: 56px;
+  font: 12px system-ui, sans-serif;
+  color: #5d6679;
+  text-decoration: none;
+  z-index: 5;
+}
+.retour:hover {
+  color: #3b5bdb;
+}
+body:has(.atlas-vue.panneau-ouvert) .retour {
+  display: none;
+}
+.v0-etat {
+  font-size: 12px;
+  color: var(--texte-doux);
+  line-height: 1.6;
+}
+.v0-etat b {
+  color: var(--texte);
+  font-weight: 600;
+}
+.v0-boutons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.v0-boutons .atlas-bouton {
+  margin-top: 0;
+}

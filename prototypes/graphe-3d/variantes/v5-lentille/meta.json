@@ -1,0 +1,15 @@
+{
+  "id": "v5-lentille",
+  "titre": "V5 · Lentille",
+  "resume": "Focus + contexte : le graphe reste agrégé partout, sauf sous la lentille qui suit le regard du chercheur. Les agrégats s'y ouvrent localement et rentrent quand on s'éloigne ; palette de commandes Ctrl + K pour naviguer au clavier.",
+  "idees": [
+    "Lentille sous la souris : ouverture locale sur 1 à 3 niveaux, délais et hystérésis anti-frétillement, épinglage par L",
+    "Déformation fisheye douce, trame de loupe déformée et réticule gradué sur le calque du dessus",
+    "Tablette : appui long, la lentille suit le doigt puis reste épinglée",
+    "Palette de commandes Ctrl + K : nœuds, catégories, vues, filtres, lignée, lentille",
+    "Fiche hiérarchisée : titre, 3 informations clés, détail repliable (Espace) ; histogrammes statuts et dates pour un agrégat",
+    "Confiance : bordure = statut, épaisseur = certitude, arc = intervalle, badge IA / H / IA+H",
+    "Panneau en surimpression avec fil d'Ariane de la catégorie courante"
+  ],
+  "ordre": 5
+}

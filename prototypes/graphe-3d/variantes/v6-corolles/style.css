@@ -1,0 +1,297 @@
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: #f8f8fa;
+}
+#app {
+  position: fixed;
+  inset: 0;
+}
+.retour {
+  position: fixed;
+  top: 19px;
+  left: 56px;
+  font: 12px system-ui, sans-serif;
+  color: #5d6679;
+  text-decoration: none;
+  z-index: 5;
+}
+.retour:hover {
+  color: #3b5bdb;
+}
+
+/* ─── Palette de la variante (clair prioritaire) ────────────────────────── */
+
+#app .atlas-vue {
+  --fond: #f8f8fa;
+  --surface: #ffffff;
+  --surface-2: #f2f3f7;
+  --bord: #e3e5ec;
+  --texte: #1a2030;
+  --texte-doux: #636b7e;
+  --statut-valide: #2f9a78;
+  --statut-incertain: #e0a21b;
+  --statut-refute: #d4506a;
+  --validation-aucune: #c7ccd6;
+  --validation-ia: #a08be8;
+  --validation-humain: #3f86d0;
+  --validation-ia-humain: #1d3b6e;
+  --arete: #8d96aa;
+  --grille-point: rgba(40, 50, 80, 0.09);
+  --ombre-carte: 0 1px 2px rgba(20, 25, 40, 0.05), 0 8px 24px rgba(20, 25, 40, 0.09);
+}
+#app .atlas-vue[data-theme='sombre'] {
+  --fond: #0f1218;
+  --surface: #171b23;
+  --surface-2: #1e232d;
+  --bord: #2b313d;
+  --texte: #e6e9f0;
+  --texte-doux: #9aa3b5;
+  --statut-valide: #3cc394;
+  --statut-incertain: #efb43a;
+  --statut-refute: #ee6a84;
+  --validation-aucune: #4a5262;
+  --validation-ia: #a996f0;
+  --validation-humain: #5aa2ea;
+  --validation-ia-humain: #c9dcff;
+  --grille-point: rgba(200, 210, 235, 0.07);
+  --ombre-carte: 0 1px 2px rgba(0, 0, 0, 0.35), 0 10px 28px rgba(0, 0, 0, 0.4);
+}
+
+/* Fond « papier millimétré » discret. */
+#app #app .atlas-vue-grille .atlas-scene {
+  background-image: radial-gradient(circle, var(--grille-point) 1px, transparent 1.3px);
+  background-size: 22px 22px;
+}
+
+/* ─── Panneau gauche : cartes flottantes empilées ───────────────────────── */
+
+#app .atlas-vue .atlas-bouton-menu.actif {
+  left: 10px;
+}
+#app .atlas-vue .atlas-panneau {
+  top: 54px;
+  bottom: 10px;
+  left: 10px;
+  width: 320px;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  transform: none;
+  pointer-events: none;
+  transition: none;
+}
+#app .atlas-vue .atlas-panneau-entete {
+  display: none;
+}
+#app .atlas-vue .atlas-panneau-contenu {
+  padding: 0 6px 12px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  scrollbar-width: thin;
+}
+#app .atlas-vue .atlas-panneau.ouvert .atlas-panneau-contenu {
+  pointer-events: auto;
+}
+#app .atlas-vue .atlas-panneau:not(.ouvert) .atlas-panneau-contenu {
+  pointer-events: none;
+}
+#app .atlas-vue .atlas-section {
+  flex: none;
+  background: var(--surface);
+  border: 1px solid var(--bord);
+  border-radius: 12px;
+  box-shadow: var(--ombre-carte);
+  overflow: hidden;
+  opacity: 0;
+  transform: translate(-18px, -6px) scale(0.97);
+  transform-origin: top left;
+  transition:
+    opacity 0.22s ease,
+    transform 0.28s cubic-bezier(0.2, 0.9, 0.3, 1.15);
+  transition-delay: calc((3 - var(--i, 0)) * 30ms);
+}
+#app .atlas-vue .atlas-panneau.ouvert .atlas-section {
+  opacity: 1;
+  transform: none;
+  transition-delay: calc(var(--i, 0) * 75ms);
+}
+#app .atlas-vue .atlas-section > summary {
+  padding: 10px 14px;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--texte-doux);
+}
+#app .atlas-vue .atlas-section[open] > summary {
+  color: var(--texte);
+}
+#app .atlas-vue .atlas-section-corps {
+  padding: 0 14px 14px;
+}
+#app .atlas-vue.panneau-ouvert .atlas-bas {
+  left: 342px;
+}
+
+/* Regroupement (segments). */
+.v6-regroupement {
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px dashed var(--bord);
+}
+.v6-segments {
+  display: flex;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--bord);
+}
+.v6-segments button {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  padding: 5px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--texte-doux);
+}
+.v6-segments button.actif {
+  background: var(--surface);
+  color: var(--texte);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(20, 25, 40, 0.12);
+}
+.v6-info {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--texte-doux);
+  line-height: 1.4;
+}
+
+/* Légende. */
+.v6-legende-haut {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+.v6-schema svg {
+  display: block;
+}
+.v6-legende-lecture {
+  font-size: 12px;
+  line-height: 1.65;
+  color: var(--texte-doux);
+}
+.v6-legende-lecture b {
+  color: var(--texte);
+  font-weight: 600;
+}
+.v6-legende-puces {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-size: 12px;
+}
+.v6-legende-puces span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.v6-puce {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+.v6-legende-texte {
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--texte-doux);
+}
+.v6-legende-grille .atlas-groupe-titre {
+  margin-top: 10px;
+}
+
+/* ─── Fiche d'agrégat ───────────────────────────────────────────────────── */
+
+.v6-fiche {
+  min-width: 260px;
+}
+.v6-periode {
+  color: var(--texte-doux);
+  font-weight: 400;
+}
+.v6-bloc {
+  margin-top: 8px;
+}
+.v6-bloc-titre {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--texte-doux);
+  margin-bottom: 3px;
+}
+.v6-ligne {
+  display: grid;
+  grid-template-columns: 10px 92px 1fr 30px;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 1.55;
+}
+.v6-ligne i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.v6-ligne-barre {
+  height: 5px;
+  border-radius: 3px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.v6-ligne-barre b {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+}
+.v6-ligne-n {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--texte-doux);
+}
+.v6-intervalle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.v6-intervalle-piste {
+  position: relative;
+  flex: 1;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--surface-2);
+}
+.v6-intervalle-piste b {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+.v6-intervalle-piste em {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--accent);
+}
+#app .atlas-panneau:not(.ouvert) .atlas-panneau-contenu {
+  overflow: hidden;
+}

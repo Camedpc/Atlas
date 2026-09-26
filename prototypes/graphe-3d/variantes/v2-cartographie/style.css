@@ -1,0 +1,514 @@
+/* V2 · Cartographie — palette « feuille de carte » (clair) et « carte de nuit » (sombre),
+   rail d'icônes, panneau en surimpression, mini-carte et fiche type info-bulle. */
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: #f6f5f0;
+}
+#app {
+  position: fixed;
+  inset: 0;
+}
+
+/* Les sélecteurs #app … l'emportent sur les variables du moteur (.atlas-vue). */
+#app .atlas-vue {
+  --fond: #f6f5f0;
+  --surface: #ffffff;
+  --surface-2: #f1f0ea;
+  --bord: #e0ded5;
+  --ombre: 0 1px 2px rgba(40, 36, 20, 0.06), 0 6px 18px rgba(40, 36, 20, 0.08);
+  --texte: #1e2430;
+  --texte-doux: #636a77;
+  --accent: #2c5cb0;
+  --bordure-noeud: #fbfaf6;
+  --arete: #858b98;
+  --domaine-0: #3d6fb6;
+  --domaine-1: #238a80;
+  --domaine-2: #8a58a6;
+  --domaine-3: #b0782a;
+  --domaine-4: #5b7d38;
+  --domaine-5: #ad4e5e;
+  --rail: #fbfaf7;
+}
+#app .atlas-vue[data-theme='sombre'] {
+  --fond: #0f141b;
+  --surface: #161c25;
+  --surface-2: #1d242f;
+  --bord: #2a323f;
+  --ombre: 0 1px 2px rgba(0, 0, 0, 0.35), 0 8px 22px rgba(0, 0, 0, 0.4);
+  --texte: #e3e7ee;
+  --texte-doux: #97a0b0;
+  --accent: #82a4ff;
+  --bordure-noeud: #0f141b;
+  --arete: #6c7587;
+  --domaine-0: #6e9ae6;
+  --domaine-1: #3bbdad;
+  --domaine-2: #b98ae0;
+  --domaine-3: #dfa550;
+  --domaine-4: #92bb6a;
+  --domaine-5: #e27b8a;
+  --rail: #131922;
+}
+body:has(.atlas-vue[data-theme='sombre']) {
+  background: #0f141b;
+}
+
+/* ─── Rail d'icônes ─────────────────────────────────────────────────────── */
+
+.v2-rail {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 60px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 10px 0 12px;
+  background: var(--rail);
+  border-right: 1px solid var(--bord);
+  z-index: 12;
+}
+.v2-rail-bouton {
+  position: relative;
+  width: 50px;
+  min-height: 44px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--texte-doux);
+  cursor: pointer;
+  text-decoration: none;
+  padding: 5px 0 4px;
+  transition: background 0.15s, color 0.15s;
+}
+.v2-rail-bouton:hover {
+  background: var(--surface-2);
+  color: var(--texte);
+}
+.v2-rail-bouton.actif {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+}
+.v2-rail-bouton.actif::before {
+  content: '';
+  position: absolute;
+  left: -5px;
+  top: 9px;
+  bottom: 9px;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+.v2-rail-bouton.pastille::after {
+  content: '';
+  position: absolute;
+  top: 6px;
+  right: 11px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px var(--rail);
+}
+.v2-rail-menu {
+  min-height: 38px;
+  color: var(--texte);
+}
+.v2-rail-libelle {
+  font-size: 9.5px;
+  letter-spacing: 0.02em;
+  line-height: 1.1;
+}
+.v2-rail-sep {
+  width: 28px;
+  height: 1px;
+  background: var(--bord);
+  margin: 4px 0 6px;
+}
+.v2-rail-espace {
+  flex: 1;
+}
+.v2-icone {
+  display: inline-flex;
+  line-height: 0;
+}
+
+/* ─── Panneau en surimpression ──────────────────────────────────────────── */
+
+#app .atlas-bouton-menu {
+  display: none;
+}
+#app .atlas-panneau {
+  left: 60px;
+  width: 330px;
+  top: 0;
+  bottom: 0;
+  transform: translateX(calc(-100% - 70px));
+  z-index: 11;
+  border-radius: 0 10px 10px 0;
+  box-shadow: 8px 0 28px rgba(20, 20, 10, 0.1);
+}
+#app .atlas-panneau.ouvert {
+  transform: none;
+}
+#app .atlas-vue.panneau-ouvert .atlas-bas,
+#app .atlas-bas {
+  left: 292px;
+}
+.atlas-panneau-entete {
+  position: relative;
+}
+.atlas-panneau-entete strong {
+  font-size: 12px !important;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+}
+.v2-panneau-fermer {
+  position: absolute;
+  right: 10px;
+  top: 12px;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--texte-doux);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+.v2-panneau-fermer:hover {
+  background: var(--surface-2);
+  color: var(--texte);
+}
+/* Un onglet = un sous-ensemble de sections. */
+.atlas-panneau[data-onglet='filtres'] .atlas-section:not([data-id='filtres']):not([data-id='categories']),
+.atlas-panneau[data-onglet='couches'] .atlas-section:not([data-id='couches']):not([data-id='legende-carte']):not([data-id='legende']),
+.atlas-panneau[data-onglet='recherche'] .atlas-section:not([data-id='recherche']),
+.atlas-panneau[data-onglet='selection'] .atlas-section:not([data-id='selection']) {
+  display: none;
+}
+
+/* Couches */
+.v2-couches .atlas-groupe-titre:first-child {
+  margin-top: 4px;
+}
+.v2-couche {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 0;
+  cursor: pointer;
+}
+.v2-interrupteur {
+  appearance: none;
+  width: 28px;
+  height: 16px;
+  border-radius: 999px;
+  background: var(--bord);
+  position: relative;
+  cursor: pointer;
+  margin: 0;
+  transition: background 0.15s;
+  flex: none;
+}
+.v2-interrupteur::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  transition: transform 0.15s;
+}
+.v2-interrupteur:checked {
+  background: var(--accent);
+}
+.v2-interrupteur:checked::after {
+  transform: translateX(12px);
+}
+.v2-segments {
+  display: flex;
+  border: 1px solid var(--bord);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.v2-segment {
+  flex: 1;
+  border: 0;
+  padding: 6px 4px;
+  background: var(--surface);
+  cursor: pointer;
+  font-size: 12px;
+}
+.v2-segment + .v2-segment {
+  border-left: 1px solid var(--bord);
+}
+.v2-segment.actif {
+  background: color-mix(in srgb, var(--accent) 13%, var(--surface));
+  color: var(--accent);
+  font-weight: 600;
+}
+.v2-aide {
+  font-size: 11.5px;
+  color: var(--texte-doux);
+  line-height: 1.45;
+  margin: 6px 0 0;
+}
+
+/* Légende */
+.v2-legende-ligne {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  margin: 3px 0;
+}
+.v2-legende-visuel {
+  width: 36px;
+  display: inline-flex;
+  justify-content: center;
+}
+.v2-legende-pictos {
+  display: inline-flex;
+  gap: 3px;
+}
+
+/* Recherche */
+.v2-recherche .atlas-lien {
+  font-size: 12px;
+  margin: 6px 0 2px;
+}
+.v2-resultat {
+  display: grid;
+  grid-template-columns: 14px 1fr;
+  column-gap: 6px;
+  align-items: center;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: none;
+  border-radius: 6px;
+  padding: 5px 6px;
+  cursor: pointer;
+}
+.v2-resultat:hover {
+  background: var(--surface-2);
+}
+.v2-resultat-nom {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.v2-resultat.lieu .v2-resultat-nom {
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.v2-resultat-chemin {
+  grid-column: 2;
+  font-size: 11px;
+  color: var(--texte-doux);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ─── Mini-carte ────────────────────────────────────────────────────────── */
+
+.v2-mini {
+  position: absolute;
+  left: 72px;
+  bottom: 12px;
+  background: var(--surface);
+  border: 1px solid var(--bord);
+  border-radius: 8px;
+  box-shadow: var(--ombre);
+  overflow: hidden;
+  z-index: 3;
+}
+.v2-mini-canvas {
+  display: block;
+  cursor: crosshair;
+  background: var(--fond);
+  touch-action: none;
+}
+.v2-mini-pied {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-top: 1px solid var(--bord);
+  font-size: 11px;
+  color: var(--texte-doux);
+}
+.v2-mini-niveau {
+  color: var(--texte);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.v2-mini-zoom {
+  font-variant-numeric: tabular-nums;
+}
+.v2-mini-auto {
+  margin-left: auto;
+  border: 1px solid var(--bord);
+  background: var(--surface-2);
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 10.5px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.v2-mini-auto.actif {
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+}
+.v2-gran-auto {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+  color: var(--texte-doux);
+  margin-top: 4px;
+  cursor: pointer;
+}
+.v2-gran-auto input {
+  accent-color: var(--accent);
+  margin: 0;
+}
+
+/* ─── Fiche de survol (info-bulle de carte) ─────────────────────────────── */
+
+#app .atlas-fiche {
+  padding: 0;
+  min-width: 210px;
+  max-width: 300px;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.v2-fiche {
+  padding: 8px 11px 9px 12px;
+  border-left: 3px solid var(--v2-lisere, var(--accent));
+  font-size: 12px;
+}
+.v2-fiche-chemin {
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--texte-doux);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 3px;
+}
+.v2-fiche-titre {
+  font-weight: 600;
+  font-size: 13px;
+  line-height: 1.3;
+}
+.v2-fiche-toponyme {
+  font-weight: 700;
+  font-size: 12.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  line-height: 1.35;
+}
+.v2-fiche-meta {
+  color: var(--texte-doux);
+  margin: 2px 0 6px;
+}
+.v2-fiche-meta strong {
+  color: var(--texte);
+}
+.v2-fiche-confiance {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+.v2-statut {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 7px 1px 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--c);
+  background: color-mix(in srgb, var(--c) 13%, transparent);
+}
+.v2-statut::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--c);
+}
+.v2-picto {
+  display: inline-flex;
+  gap: 1px;
+  align-items: center;
+}
+.v2-fiche-valid {
+  color: var(--texte-doux);
+  font-size: 11px;
+}
+.v2-fiche-pied {
+  margin-top: 5px;
+  font-size: 11px;
+  color: var(--texte-doux);
+}
+.v2-fiche-validations {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin: 6px 0 2px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.v2-fiche-validation {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.v2-fiche-moy {
+  color: var(--texte-doux);
+  margin-left: auto;
+}
+.v2-fiche-principaux {
+  margin: 6px 0 0;
+  padding-left: 16px;
+  color: var(--texte);
+  font-size: 11.5px;
+}
+.v2-fiche-principaux li {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.v2-fiche-aide {
+  margin-top: 6px;
+  font-size: 10.5px;
+  color: var(--texte-doux);
+}
