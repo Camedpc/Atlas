@@ -8,11 +8,12 @@ T0 = datetime(2026, 9, 25)
 
 def noeud(id: str, admis: bool = False, rang: int = 0) -> LigneNoeud:
     t = T0 + timedelta(seconds=rang)
-    return LigneNoeud(id=id, nom=id, enonce="", admis=admis, cree_le=t, modifie_le=t)
+    return LigneNoeud(projet_id="p1", id=id, nom=id, enonce="", admis=admis, cree_le=t, modifie_le=t)
 
 
 def demo(noeud_id: str, premisses: list[str], validite: str, nom: str = "d") -> Demonstration:
     return Demonstration(
+        projet_id="p1",
         noeud_id=noeud_id,
         nom_demonstration=nom,
         justifie_par=premisses,

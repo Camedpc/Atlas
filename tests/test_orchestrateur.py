@@ -50,8 +50,9 @@ def test_traduire_ignore_raisonnement_et_message_vide():
 
 def test_surcharges_declarent_le_serveur_mcp_et_coupent_les_hooks(monkeypatch, tmp_path):
     monkeypatch.setattr(agent.config, "CODEX_HOME", tmp_path)
-    surcharges = agent.surcharges_thread("c1")
-    assert surcharges["mcp_servers"]["atlas"]["env"] == {"ATLAS_CONVERSATION_ID": "c1"}
+    surcharges = agent.surcharges_thread("c1", "defaut", "p1")
+    assert surcharges["mcp_servers"]["atlas"]["env"] == {"ATLAS_CONVERSATION_ID": "c1", "ATLAS_PROJET_ID": "p1"}
+    assert surcharges["mcp_servers"]["verificateur"]["env"]["ATLAS_PROJET_ID"] == "p1"
     assert surcharges["mcp_servers"]["atlas"]["args"] == ["-m", "atlas.orchestrateur.mcp_atlas"]
     assert surcharges["mcp_servers"]["verificateur"]["args"] == ["-m", "atlas.orchestrateur.mcp_verificateur"]
     assert surcharges["mcp_servers"]["verificateur"]["env"]["ATLAS_CODEX_HOME"] == str(tmp_path)

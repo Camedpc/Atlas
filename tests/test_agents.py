@@ -17,12 +17,19 @@ MAINTENANT = datetime(2026, 9, 26)
 
 def _noeud(id: str) -> LigneNoeud:
     return LigneNoeud(
-        id=id, nom=id.upper(), enonce=f"Énoncé de {id}", admis=False, cree_le=MAINTENANT, modifie_le=MAINTENANT
+        projet_id="p1",
+        id=id,
+        nom=id.upper(),
+        enonce=f"Énoncé de {id}",
+        admis=False,
+        cree_le=MAINTENANT,
+        modifie_le=MAINTENANT,
     )
 
 
 def _demo(noeud_id: str, premisses: list[str], validite: str = "a_verifier") -> Demonstration:
     return Demonstration(
+        projet_id="p1",
         noeud_id=noeud_id,
         nom_demonstration="Directe",
         justifie_par=premisses,
@@ -111,9 +118,9 @@ class _FauxCodex:
 
 def test_verifier_rejuge_les_cas_douteux_et_isole_les_erreurs(monkeypatch):
     monkeypatch.setattr(
-        lecture, "lister_demonstrations", lambda: [_demo("sur", []), _demo("douteux", []), _demo("casse", [])]
+        lecture, "lister_demonstrations", lambda _projet: [_demo("sur", []), _demo("douteux", []), _demo("casse", [])]
     )
-    monkeypatch.setattr(lecture, "lister_noeuds", lambda: [_noeud("sur"), _noeud("douteux"), _noeud("casse")])
+    monkeypatch.setattr(lecture, "lister_noeuds", lambda _projet: [_noeud("sur"), _noeud("douteux"), _noeud("casse")])
     monkeypatch.setattr(verificateur, "AsyncCodex", _FauxCodex)
 
     async def connecter(_):
@@ -134,14 +141,14 @@ def test_verifier_rejuge_les_cas_douteux_et_isole_les_erreurs(monkeypatch):
     notes: list[dict] = []
     monkeypatch.setattr(ecriture, "noter_demonstration", lambda **champs: notes.append(champs))
 
-    resultats = {r["noeud_id"]: r for r in asyncio.run(verificateur.verifier([]))}
+    resultats = {r["noeud_id"]: r for r in asyncio.run(verificateur.verifier("p1", []))}
 
     assert resultats["sur"]["modele"] == "gpt-6-luna"
     assert resultats["douteux"]["modele"] == "gpt-6-sol"
     assert resultats["casse"]["erreur"] == "panne"
     assert ("douteux", "gpt-6-sol") in appels and ("sur", "gpt-6-sol") not in appels
     assert sorted(n["noeud_id"] for n in notes) == ["douteux", "sur"]
-    assert all(n["auteur"] == "verificateur" for n in notes)
+    assert all(n["auteur"] == "verificateur" and n["projet_id"] == "p1" for n in notes)
 
 
 # ── Bunker ───────────────────────────────────────────────────────────────────

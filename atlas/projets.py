@@ -42,6 +42,16 @@ def creer_projet(nom: str, description: str = "") -> Projet:
     return Projet.model_validate(supabase().table("projets").insert(ligne).execute().data[0])
 
 
+def id_ou_defaut(projet_id: str | None) -> str:
+    """Projet dont on lit ou écrit le graphe : celui donné, sinon le projet « defaut » (conversations sans projet)."""
+    if projet_id:
+        return projet_id
+    defaut = projet_par_defaut()
+    if defaut is None:
+        raise RuntimeError(f"Projet « {DOSSIER_PAR_DEFAUT} » absent de Supabase : appliquer les migrations.")
+    return defaut.id
+
+
 def dossier_de(projet_id: str | None) -> str:
     """Dossier du projet d'une conversation (celui par défaut si elle n'en a pas)."""
     projet = lire_projet(projet_id) if projet_id else None

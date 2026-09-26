@@ -1,4 +1,5 @@
-"""Écriture du graphe dans Supabase. Chaque écriture ajoute une entrée au journal (append-only).
+"""Écriture du graphe d'un espace de travail (projet) dans Supabase. Chaque écriture ajoute une entrée au journal
+(append-only). Un nœud n'existe que dans le graphe de son projet : ids et prémisses sont cherchés dans ce projet.
 
 Les refus métier lèvent `ErreurGraphe`, dont le message est renvoyé tel quel à l'agent pour qu'il se corrige.
 """
@@ -34,20 +35,22 @@ def normaliser_premisses(noeud_id: str, justifie_par: list[str]) -> list[str]:
 # ── Écritures ────────────────────────────────────────────────────────────────
 
 
-def _journaliser(action: Action, *, auteur: str, noeud_id: str, apres: Any, **champs: Any) -> None:
+def _journaliser(action: Action, *, projet_id: str, auteur: str, noeud_id: str, apres: Any, **champs: Any) -> None:
     supabase().table("journal").insert(
-        {"action": action, "auteur": auteur, "noeud_id": noeud_id, "apres": apres, **champs}
+        {"action": action, "projet_id": projet_id, "auteur": auteur, "noeud_id": noeud_id, "apres": apres, **champs}
     ).execute()
 
 
-def _existants(ids: list[str]) -> set[str]:
+def _existants(projet_id: str, ids: list[str]) -> set[str]:
     if not ids:
         return set()
-    return {r["id"] for r in supabase().table("noeuds").select("id").in_("id", ids).execute().data}
+    lignes = supabase().table("noeuds").select("id").eq("projet_id", projet_id).in_("id", ids).execute().data
+    return {r["id"] for r in lignes}
 
 
 def creer_noeud(
     *,
+    projet_id: str,
     id: str,
     nom: str,
     enonce: str,
@@ -57,20 +60,27 @@ def creer_noeud(
     raison: str | None = None,
 ) -> dict:
     verifier_id(id)
-    if _existants([id]):
+    if _existants(projet_id, [id]):
         raise ErreurGraphe(f"Le nœud {id} existe déjà : consulte-le avec lire_noeud et réutilise-le.")
-    ligne = {"id": id, "nom": nom, "enonce": enonce, "admis": admis, "conversation_id": conversation_id}
+    ligne = {
+        "projet_id": projet_id,
+        "id": id,
+        "nom": nom,
+        "enonce": enonce,
+        "admis": admis,
+        "conversation_id": conversation_id,
+    }
     supabase().table("noeuds").insert(ligne).execute()
-    _journaliser("creation_noeud", auteur=auteur, noeud_id=id, apres=ligne, raison=raison)
+    _journaliser("creation_noeud", projet_id=projet_id, auteur=auteur, noeud_id=id, apres=ligne, raison=raison)
     return ligne
 
 
 def ajouter_demonstration(
-    *, noeud_id: str, nom_demonstration: str, justifie_par: list[str], demonstration: str, auteur: str
+    *, projet_id: str, noeud_id: str, nom_demonstration: str, justifie_par: list[str], demonstration: str, auteur: str
 ) -> dict:
     """Toute démonstration écrite par un agent démarre « à vérifier »."""
     premisses = normaliser_premisses(noeud_id, justifie_par)
-    trouves = _existants([noeud_id, *premisses])
+    trouves = _existants(projet_id, [noeud_id, *premisses])
     if noeud_id not in trouves:
         raise ErreurGraphe(f"Nœud inexistant : {noeud_id}. Crée-le d'abord avec creer_noeud.")
     if manquants := [p for p in premisses if p not in trouves]:
@@ -79,6 +89,7 @@ def ajouter_demonstration(
         supabase()
         .table("demonstrations")
         .select("nom_demonstration")
+        .eq("projet_id", projet_id)
         .eq("noeud_id", noeud_id)
         .eq("nom_demonstration", nom_demonstration)
         .execute()
@@ -87,6 +98,7 @@ def ajouter_demonstration(
     if deja:
         raise ErreurGraphe(f"Le nœud {noeud_id} a déjà une démonstration nommée « {nom_demonstration} ».")
     ligne = {
+        "projet_id": projet_id,
         "noeud_id": noeud_id,
         "nom_demonstration": nom_demonstration,
         "justifie_par": premisses,
@@ -96,13 +108,19 @@ def ajouter_demonstration(
     }
     supabase().table("demonstrations").insert(ligne).execute()
     _journaliser(
-        "ajout_demonstration", auteur=auteur, noeud_id=noeud_id, nom_demonstration=nom_demonstration, apres=ligne
+        "ajout_demonstration",
+        projet_id=projet_id,
+        auteur=auteur,
+        noeud_id=noeud_id,
+        nom_demonstration=nom_demonstration,
+        apres=ligne,
     )
     return ligne
 
 
 def noter_demonstration(
     *,
+    projet_id: str,
     noeud_id: str,
     nom_demonstration: str,
     validite: Validite,
@@ -115,6 +133,7 @@ def noter_demonstration(
         supabase()
         .table("demonstrations")
         .select("validite, confiance")
+        .eq("projet_id", projet_id)
         .eq("noeud_id", noeud_id)
         .eq("nom_demonstration", nom_demonstration)
         .execute()
@@ -127,12 +146,14 @@ def noter_demonstration(
         supabase()
         .table("demonstrations")
         .update(apres)
+        .eq("projet_id", projet_id)
         .eq("noeud_id", noeud_id)
         .eq("nom_demonstration", nom_demonstration)
         .execute()
     )
     _journaliser(
         "verdict",
+        projet_id=projet_id,
         auteur=auteur,
         noeud_id=noeud_id,
         nom_demonstration=nom_demonstration,

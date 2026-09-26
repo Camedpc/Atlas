@@ -54,8 +54,10 @@ def config_codex() -> CodexConfig:
     return CodexConfig(codex_bin=config.CODEX_BIN, env={"CODEX_HOME": str(config.CODEX_HOME)})
 
 
-def surcharges_thread(conversation_id: str, projet: str | None = None) -> dict[str, Any]:
-    """Réglages Codex d'Atlas, appliqués à chaque thread."""
+def surcharges_thread(conversation_id: str, projet: str | None = None, projet_id: str | None = None) -> dict[str, Any]:
+    """Réglages Codex d'Atlas, appliqués à chaque thread. `projet` est le dossier de l'espace dans le bunker,
+    `projet_id` l'espace dont les serveurs MCP lisent et écrivent le graphe."""
+    graphe = {"ATLAS_PROJET_ID": projet_id} if projet_id else {}
     surcharges: dict[str, Any] = {
         "web_search": "live",
         # Ne pas remonter jusqu'au dépôt Atlas (espace/ est dedans) chercher un .codex/ ou un AGENTS.md.
@@ -68,7 +70,7 @@ def surcharges_thread(conversation_id: str, projet: str | None = None) -> dict[s
                 "cwd": str(config.RACINE),
                 # Codex ne transmet pas tout l'environnement aux serveurs MCP : on nomme ce qu'il leur faut.
                 "env_vars": ["SUPABASE_URL", "SUPABASE_SECRET_KEY"],
-                "env": {"ATLAS_CONVERSATION_ID": conversation_id},
+                "env": {"ATLAS_CONVERSATION_ID": conversation_id, **graphe},
             },
             "verificateur": {
                 "command": sys.executable,
@@ -76,7 +78,11 @@ def surcharges_thread(conversation_id: str, projet: str | None = None) -> dict[s
                 "cwd": str(config.RACINE),
                 # Il lance son propre Codex : il lui faut Supabase, la connexion et les réglages du vérificateur.
                 "env_vars": [n for n in os.environ if n.startswith(("ATLAS_", "SUPABASE_")) or n == "OPENAI_API_KEY"],
-                "env": {"ATLAS_CODEX_HOME": str(config.CODEX_HOME), "ATLAS_ESPACE_TRAVAIL": str(config.ESPACE_TRAVAIL)},
+                "env": {
+                    "ATLAS_CODEX_HOME": str(config.CODEX_HOME),
+                    "ATLAS_ESPACE_TRAVAIL": str(config.ESPACE_TRAVAIL),
+                    **graphe,
+                },
                 "tool_timeout_sec": config.DELAI_VERIFICATION,
             },
         },
@@ -93,14 +99,16 @@ def surcharges_thread(conversation_id: str, projet: str | None = None) -> dict[s
     return surcharges
 
 
-def parametres_thread(dossier: Path, conversation_id: str, projet: str | None = None) -> dict[str, Any]:
+def parametres_thread(
+    dossier: Path, conversation_id: str, projet: str | None = None, projet_id: str | None = None
+) -> dict[str, Any]:
     parametres: dict[str, Any] = {
         # Rien à faire approuver : une commande refusée par le sandbox n'est jamais relancée hors du sandbox.
         "approval_mode": ApprovalMode.deny_all,
         "cwd": str(dossier),
         "model": config.MODELE,
         "developer_instructions": consigne_complete("orchestrateur"),
-        "config": surcharges_thread(conversation_id, projet),
+        "config": surcharges_thread(conversation_id, projet, projet_id),
     }
     if not config.BUNKER:
         # Le profil de permissions du bunker ne se combine pas avec un mode de sandbox : l'un ou l'autre.
@@ -126,12 +134,13 @@ async def tour(
     """
     suivi = suivi if suivi is not None else SuiviAgents()
     projet = await asyncio.to_thread(projets.dossier_de, conversation.projet_id)
+    projet_id = await asyncio.to_thread(projets.id_ou_defaut, conversation.projet_id)
     dossier = await asyncio.to_thread(bunker.preparer_session, conversation.id, projet)
 
     async with AsyncCodex(config=config_codex()) as codex:
         await _connecter(codex)
 
-        thread, texte = await _ouvrir_thread(codex, conversation, execution_id, texte, dossier, projet)
+        thread, texte = await _ouvrir_thread(codex, conversation, execution_id, texte, dossier, projet, projet_id)
         if thread.id != conversation.session_agent:
             await asyncio.to_thread(conversations.modifier_conversation, conversation.id, session_agent=thread.id)
             conversation.session_agent = thread.id
@@ -320,10 +329,16 @@ async def _connecter(codex: AsyncCodex) -> None:
 
 
 async def _ouvrir_thread(
-    codex: AsyncCodex, conversation: Conversation, execution_id: str, texte: str, dossier: Path, projet: str
+    codex: AsyncCodex,
+    conversation: Conversation,
+    execution_id: str,
+    texte: str,
+    dossier: Path,
+    projet: str,
+    projet_id: str,
 ) -> tuple[AsyncThread, str]:
     """Reprend le thread de la conversation, ou en ouvre un nouveau (avec l'historique si la reprise échoue)."""
-    parametres = parametres_thread(dossier, conversation.id, projet)
+    parametres = parametres_thread(dossier, conversation.id, projet, projet_id)
     if conversation.session_agent:
         try:
             return await codex.thread_resume(conversation.session_agent, **parametres), texte

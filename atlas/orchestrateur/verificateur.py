@@ -99,13 +99,13 @@ async def juger(codex: AsyncCodex, texte: str, modele: str, effort: str) -> Verd
     return lire_verdict(resultat.final_response, modele)
 
 
-async def verifier(noeud_ids: list[str]) -> list[dict[str, Any]]:
-    """Juge en parallèle les démonstrations « à vérifier » et écrit chaque verdict. Renvoie un résultat par
-    démonstration (ou son erreur, sans interrompre les autres)."""
-    demonstrations = a_verifier(await asyncio.to_thread(lecture.lister_demonstrations), noeud_ids)
+async def verifier(projet_id: str, noeud_ids: list[str]) -> list[dict[str, Any]]:
+    """Juge en parallèle les démonstrations « à vérifier » du graphe du projet et écrit chaque verdict. Renvoie un
+    résultat par démonstration (ou son erreur, sans interrompre les autres)."""
+    demonstrations = a_verifier(await asyncio.to_thread(lecture.lister_demonstrations, projet_id), noeud_ids)
     if not demonstrations:
         return []
-    noeuds = {n.id: n for n in await asyncio.to_thread(lecture.lister_noeuds)}
+    noeuds = {n.id: n for n in await asyncio.to_thread(lecture.lister_noeuds, projet_id)}
     economique = (config.modele_agent("verificateur", "gpt-6-luna"), config.effort_agent("verificateur", "high"))
     recours = (
         config.modele_agent("verificateur_recours", "gpt-6-sol"),
@@ -126,6 +126,7 @@ async def verifier(noeud_ids: list[str]) -> list[dict[str, Any]]:
                         verdict = await juger(codex, texte, *recours)
                     await asyncio.to_thread(
                         ecriture.noter_demonstration,
+                        projet_id=projet_id,
                         **cle,
                         validite=verdict.validite,
                         confiance=verdict.confiance,

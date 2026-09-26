@@ -20,10 +20,13 @@ Harness de hackathon : des agents IA transforment leurs raisonnements scientifiq
 | Route | Renvoie |
 |---|---|
 | `GET /api/health` | État de la connexion Supabase |
-| `GET /api/graphe` | Tous les nœuds (avec statut et démonstrations) et toutes les arêtes |
-| `GET /api/noeuds/{id}` | Un nœud, ses prémisses et les nœuds qui l'utilisent |
-| `GET /api/journal?noeud_id=&limite=&avant_id=` | Historique, le plus récent d'abord |
+| `GET /api/graphe?projet_id=` | Tous les nœuds (avec statut et démonstrations) et toutes les arêtes du graphe d'un espace |
+| `GET /api/noeuds/{id}?projet_id=` | Un nœud, ses prémisses et les nœuds qui l'utilisent |
+| `GET /api/journal?projet_id=&noeud_id=&limite=&avant_id=` | Historique, le plus récent d'abord |
 | `GET /api/docs` | Documentation interactive |
+
+Chaque espace de travail (projet) a son propre graphe : `projet_id` le choisit, et son absence désigne le
+projet « defaut ».
 
 Servies seulement par `atlas.serveur` (pas sur Vercel) :
 

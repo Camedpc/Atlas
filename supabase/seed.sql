@@ -1,7 +1,8 @@
 -- Petit graphe de démo : « une suite croissante et majorée converge ».
--- Couvre les statuts : établi (admis), à vérifier, invalide, suspendu.
+-- Couvre les statuts : établi (admis), à vérifier, invalide, suspendu. Il va dans le projet « defaut ».
 
-insert into public.noeuds (id, nom, enonce, admis) values
+insert into public.noeuds (projet_id, id, nom, enonce, admis)
+select (select id from public.projets where dossier = 'defaut'), v.* from (values
   ('def_suite_croissante',
    'Suite croissante',
    'Une suite réelle $(u_n)_{n \in \mathbb{N}}$ est **croissante** si $u_n \le u_{n+1}$ pour tout $n$.',
@@ -22,9 +23,11 @@ insert into public.noeuds (id, nom, enonce, admis) values
    'Théorème de la limite monotone',
    'Toute suite réelle croissante et majorée converge, vers $\sup_n u_n$.',
    false)
-on conflict (id) do nothing;
+) as v (id, nom, enonce, admis)
+on conflict (projet_id, id) do nothing;
 
-insert into public.demonstrations (noeud_id, nom_demonstration, justifie_par, demonstration, validite, auteur) values
+insert into public.demonstrations (projet_id, noeud_id, nom_demonstration, justifie_par, demonstration, validite, auteur)
+select (select id from public.projets where dossier = 'defaut'), v.* from (values
   ('lemme_approx_sup',
    'Par caractérisation de la borne supérieure',
    array['axiome_borne_sup'],
@@ -43,10 +46,11 @@ insert into public.demonstrations (noeud_id, nom_demonstration, justifie_par, de
    E'Soit $\\ell = \\sup_n u_n$ et $\\varepsilon > 0$. D''après le lemme, il existe $N$ avec $u_N > \\ell - \\varepsilon$.\n\nPour $n \\ge N$, par croissance, $\\ell - \\varepsilon < u_N \\le u_n \\le \\ell$, donc $|u_n - \\ell| \\le \\varepsilon$ : la suite converge vers $\\ell$.',
    'valide',
    'ia')
-on conflict (noeud_id, nom_demonstration) do nothing;
+) as v (noeud_id, nom_demonstration, justifie_par, demonstration, validite, auteur)
+on conflict (projet_id, noeud_id, nom_demonstration) do nothing;
 
 -- Historique initial
-insert into public.journal (action, noeud_id, apres, raison, auteur)
-select 'creation_noeud', n.id, to_jsonb(n), 'seed', 'seed'
+insert into public.journal (action, projet_id, noeud_id, apres, raison, auteur)
+select 'creation_noeud', n.projet_id, n.id, to_jsonb(n), 'seed', 'seed'
 from public.noeuds n
-where not exists (select 1 from public.journal j where j.noeud_id = n.id);
+where not exists (select 1 from public.journal j where j.projet_id = n.projet_id and j.noeud_id = n.id);

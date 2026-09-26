@@ -29,8 +29,10 @@ Action = Literal[
 
 
 class LigneNoeud(BaseModel):
-    """Table `noeuds`."""
+    """Table `noeuds` (clé : projet_id + id)."""
 
+    projet_id: str
+    """Espace de travail dont le graphe contient le nœud : chaque espace a son propre graphe."""
     id: str
     nom: str
     enonce: str
@@ -41,14 +43,15 @@ class LigneNoeud(BaseModel):
     enfants: list[str] = []
     """Nœuds dont une démonstration cite celui-ci (maintenu par trigger)."""
     conversation_id: str | None = None
-    """Conversation qui a créé le nœud ; le graphe reste global."""
+    """Conversation qui a créé le nœud (le graphe est celui de l'espace, partagé par ses conversations)."""
     cree_le: datetime
     modifie_le: datetime
 
 
 class Demonstration(BaseModel):
-    """Table `demonstrations` (clé : noeud_id + nom_demonstration)."""
+    """Table `demonstrations` (clé : projet_id + noeud_id + nom_demonstration)."""
 
+    projet_id: str
     noeud_id: str
     nom_demonstration: str
     justifie_par: list[str]
@@ -68,6 +71,7 @@ class EntreeJournal(BaseModel):
     id: int
     cree_le: datetime
     action: Action
+    projet_id: str
     noeud_id: str | None
     nom_demonstration: str | None
     avant: Any

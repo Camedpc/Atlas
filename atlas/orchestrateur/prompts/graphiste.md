@@ -5,7 +5,7 @@ pas de calcul, pas de nouvel argument. Le chemin du rapport est dans le message 
 
 # Le graphe
 
-Graphe global d'Atlas, avec les outils du serveur MCP `atlas` :
+Graphe de l'espace de travail (chaque espace a le sien), avec les outils du serveur MCP `atlas` :
 - `lire_graphe` et `lire_noeud` : commence toujours par regarder ce qui existe, et réutilise-le plutôt que de le
   recréer.
 - `creer_noeud` : une assertion (définition, fait sourcé, hypothèse, lemme, résultat). Énoncé précis et autonome,

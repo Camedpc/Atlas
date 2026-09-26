@@ -27,7 +27,12 @@ prompts dans `atlas/orchestrateur/prompts/*.md` : c'est Camille qui les fait év
 - Espaces de travail : table `projets` (nom, description, `dossier` dans le bunker) ; `conversations.projet_id`
   (null = le projet « defaut », dossier historique du bunker). Le front arrive sur la page du dernier espace ouvert.
 - `noeuds.parents` / `noeuds.enfants` (parents = prémisses) sont maintenus par trigger depuis `demonstrations` :
-  ne jamais les écrire. Le graphe est global ; `noeuds.conversation_id` dit seulement qui a créé le nœud.
+  ne jamais les écrire. `noeuds.conversation_id` dit seulement qui a créé le nœud.
+- Un graphe par espace : `noeuds`, `demonstrations` et `journal` portent `projet_id` (non nul, « defaut » pour
+  l'historique) ; clés `(projet_id, id)` et `(projet_id, noeud_id, nom_demonstration)`, un id n'est unique que dans
+  son espace, et les triggers (prémisses, parents / enfants) ne regardent que l'espace. Toute lecture ou écriture
+  (`lecture.py`, `ecriture.py`) prend le `projet_id` ; les serveurs MCP le reçoivent par `ATLAS_PROJET_ID`, les
+  routes par `?projet_id=` (absent = « defaut », `projets.id_ou_defaut`).
 
 ## Architecture en production
 

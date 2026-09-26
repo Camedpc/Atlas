@@ -1,7 +1,8 @@
-"""Lecture du graphe dans Supabase.
+"""Lecture du graphe d'un espace de travail (projet) dans Supabase.
 
-Le statut d'un nœud dépend de tout le graphe (il se propage par les prémisses) :
-toute lecture qui renvoie un statut charge donc le graphe entier, en un seul instantané.
+Chaque espace a son propre graphe : toute lecture prend le `projet_id` de l'espace. Le statut d'un nœud dépend de
+tout le graphe (il se propage par les prémisses) : toute lecture qui renvoie un statut charge donc le graphe entier,
+en un seul instantané.
 """
 
 from collections.abc import Callable
@@ -26,14 +27,16 @@ def _toutes_les_lignes(requete: Callable[[], SyncSelectRequestBuilder]) -> list[
             return lignes
 
 
-def lister_noeuds() -> list[LigneNoeud]:
-    lignes = _toutes_les_lignes(lambda: supabase().table("noeuds").select("*").order("id"))
+def lister_noeuds(projet_id: str) -> list[LigneNoeud]:
+    lignes = _toutes_les_lignes(
+        lambda: supabase().table("noeuds").select("*").eq("projet_id", projet_id).order("id")
+    )
     return [LigneNoeud.model_validate(l) for l in lignes]
 
 
-def lister_demonstrations(noeud_id: str | None = None) -> list[Demonstration]:
+def lister_demonstrations(projet_id: str, noeud_id: str | None = None) -> list[Demonstration]:
     def requete() -> SyncSelectRequestBuilder:
-        q = supabase().table("demonstrations").select("*")
+        q = supabase().table("demonstrations").select("*").eq("projet_id", projet_id)
         if noeud_id is not None:
             q = q.eq("noeud_id", noeud_id)
         return q.order("noeud_id").order("nom_demonstration")
@@ -41,19 +44,19 @@ def lister_demonstrations(noeud_id: str | None = None) -> list[Demonstration]:
     return [Demonstration.model_validate(l) for l in _toutes_les_lignes(requete)]
 
 
-def charger_graphe() -> Graphe:
-    return graphe.assembler(lister_noeuds(), lister_demonstrations())
+def charger_graphe(projet_id: str) -> Graphe:
+    return graphe.assembler(lister_noeuds(projet_id), lister_demonstrations(projet_id))
 
 
-def lire_noeud(noeud_id: str) -> DetailNoeud | None:
-    return graphe.detailler(charger_graphe(), noeud_id)
+def lire_noeud(projet_id: str, noeud_id: str) -> DetailNoeud | None:
+    return graphe.detailler(charger_graphe(projet_id), noeud_id)
 
 
 def lire_journal(
-    *, noeud_id: str | None = None, limite: int = 50, avant_id: int | None = None
+    projet_id: str, *, noeud_id: str | None = None, limite: int = 50, avant_id: int | None = None
 ) -> list[EntreeJournal]:
     """Entrées les plus récentes d'abord. Pour la page suivante, passer `avant_id` = id de la dernière reçue."""
-    q = supabase().table("journal").select("*")
+    q = supabase().table("journal").select("*").eq("projet_id", projet_id)
     if noeud_id is not None:
         q = q.eq("noeud_id", noeud_id)
     if avant_id is not None:

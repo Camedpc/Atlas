@@ -1,6 +1,7 @@
 // Appels au serveur Atlas. Types calqués sur atlas/modeles.py.
 //
-// Le graphe est servi partout (Vercel ou atlas.serveur) ; les conversations seulement par atlas.serveur
+// Le graphe (un par espace de travail) est servi partout (Vercel ou atlas.serveur) ; les conversations seulement
+// par atlas.serveur
 // (en local via le proxy Vite, ou sur la VM via VITE_API_URL).
 
 const BASE = import.meta.env.VITE_API_URL ?? ''
@@ -34,6 +35,7 @@ export type Statut = 'etabli' | 'suspendu' | 'a_verifier' | 'invalide' | 'ouvert
 export type Validite = 'a_verifier' | 'valide' | 'invalide'
 
 export interface Demonstration {
+  projet_id: string
   noeud_id: string
   nom_demonstration: string
   justifie_par: string[]
@@ -43,6 +45,7 @@ export interface Demonstration {
 }
 
 export interface Noeud {
+  projet_id: string
   id: string
   nom: string
   enonce: string
@@ -172,7 +175,9 @@ async function appel<T>(chemin: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  graphe: () => appel<Graphe>('/api/graphe'),
+  // Sans espace : le graphe du projet « defaut ».
+  graphe: (projetId: string | null) =>
+    appel<Graphe>(`/api/graphe${projetId ? `?projet_id=${encodeURIComponent(projetId)}` : ''}`),
   projets: () => appel<ListeProjets>('/api/projets'),
   creerProjet: (nom: string) =>
     appel<Projet>('/api/projets', { method: 'POST', body: JSON.stringify({ nom }) }),

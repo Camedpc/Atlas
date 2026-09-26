@@ -1,7 +1,8 @@
 """Serveur MCP (stdio) des outils Atlas, lancé par Codex : python -m atlas.orchestrateur.mcp_atlas
 
-Lecture et écriture du graphe. Les nœuds créés sont tagués par la conversation (ATLAS_CONVERSATION_ID, transmis
-par l'orchestrateur) ; toute démonstration écrite démarre « à vérifier ».
+Lecture et écriture du graphe de l'espace de travail de la conversation (ATLAS_PROJET_ID, transmis par
+l'orchestrateur, comme ATLAS_CONVERSATION_ID qui tague les nœuds créés) ; toute démonstration écrite démarre
+« à vérifier ».
 """
 
 import json
@@ -14,14 +15,21 @@ from .. import ecriture, lecture
 LONGUEUR_MAX_ENONCE = 300
 AUTEUR = "orchestrateur"
 
-serveur = MCPServer("atlas", instructions="Lecture et écriture du graphe global de raisonnements d'Atlas.")
+serveur = MCPServer("atlas", instructions="Lecture et écriture du graphe de raisonnements de l'espace de travail.")
+
+
+def _projet() -> str:
+    projet_id = os.environ.get("ATLAS_PROJET_ID")
+    if not projet_id:
+        raise ecriture.ErreurGraphe("ATLAS_PROJET_ID absent : le serveur MCP atlas ne sait pas quel graphe lire.")
+    return projet_id
 
 
 @serveur.tool()
 def lire_graphe() -> str:
-    """Vue compacte du graphe global d'Atlas : pour chaque nœud, id, nom, énoncé (tronqué), statut effectif
+    """Vue compacte du graphe de l'espace de travail : pour chaque nœud, id, nom, énoncé (tronqué), statut effectif
     (etabli | suspendu | a_verifier | invalide | ouvert), admis, parents (prémisses) et enfants."""
-    graphe = lecture.charger_graphe()
+    graphe = lecture.charger_graphe(_projet())
     return json.dumps(
         [
             {
@@ -43,7 +51,7 @@ def lire_graphe() -> str:
 def lire_noeud(id: str) -> str:
     """Détail d'un nœud : énoncé complet, statut, démonstrations (texte, prémisses, validité), prémisses et
     nœuds qui l'utilisent."""
-    detail = lecture.lire_noeud(id)
+    detail = lecture.lire_noeud(_projet(), id)
     if detail is None:
         raise ecriture.ErreurGraphe(f"Nœud inexistant : {id}")
     return detail.model_dump_json()
@@ -62,6 +70,7 @@ def creer_noeud(id: str, nom: str, enonce: str, admis: bool = False, raison_admi
     if admis and not raison_admis.strip():
         raise ecriture.ErreurGraphe("Un nœud admis doit avoir une raison_admis (définition, axiome, source…).")
     ligne = ecriture.creer_noeud(
+        projet_id=_projet(),
         id=id,
         nom=nom,
         enonce=enonce,
@@ -83,6 +92,7 @@ def ajouter_demonstration(noeud_id: str, nom_demonstration: str, justifie_par: l
     - demonstration : argument complet, Markdown + LaTeX ; tout résultat utilisé doit figurer dans justifie_par
     """
     ecriture.ajouter_demonstration(
+        projet_id=_projet(),
         noeud_id=noeud_id,
         nom_demonstration=nom_demonstration,
         justifie_par=justifie_par,

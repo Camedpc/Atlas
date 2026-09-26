@@ -52,6 +52,8 @@ const compteur = document.querySelector<HTMLElement>('.compteur')!
 
 let graphe: Graphe = { noeuds: [], aretes: [] }
 let conversationId: string | null = null
+// Espace ouvert : chaque espace a son graphe.
+let projetId: string | null = null
 let dernierChargement = 0
 
 const vueGraphe = new VueGraphe(document.querySelector<HTMLElement>('.sigma')!, afficherDetail)
@@ -91,8 +93,11 @@ function redessiner() {
 
 async function chargerGraphe() {
   dernierChargement = Date.now()
+  const projet = projetId
   try {
-    graphe = await api.graphe()
+    const lu = await api.graphe(projet)
+    if (projet !== projetId) return // l'espace a changé pendant la lecture
+    graphe = lu
     redessiner()
   } catch (e) {
     compteur.textContent = `Graphe indisponible : ${e instanceof Error ? e.message : String(e)}`
@@ -146,7 +151,15 @@ const conversation = new PanneauConversation(
     if (Date.now() - dernierChargement > INTERVALLE_GRAPHE_MS) void chargerGraphe()
   },
   () => montrer('agents'),
-  (projet, conversations) => documents.definirProjet(projet, conversations),
+  (projet, conversations) => {
+    documents.definirProjet(projet, conversations)
+    if ((projet?.id ?? null) === projetId) return
+    projetId = projet?.id ?? null
+    vueGraphe.selectionner(null)
+    graphe = { noeuds: [], aretes: [] }
+    redessiner()
+    void chargerGraphe()
+  },
 )
 
 installerPoignees((replie) => conversation.replierSessions(replie))
@@ -160,5 +173,7 @@ try {
 }
 montrer(vueInitiale)
 
-void chargerGraphe()
-void conversation.charger()
+// Le graphe suit l'espace ouvert ; sans espace (serveur de l'orchestrateur injoignable), celui du projet « defaut ».
+void conversation.charger().then(() => {
+  if (!projetId) void chargerGraphe()
+})
