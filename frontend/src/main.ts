@@ -96,6 +96,8 @@ function reference(id: string): string {
 function afficherDetail(n: Noeud | null) {
   ficheId = n?.id ?? null
   detail.hidden = !n
+  // Les cadrages du pilotage évitent la fiche, posée par-dessus la droite du graphe.
+  vueGraphe.margeDroite = n ? detail.offsetWidth + 12 : 0
   if (!n) return
   const lien = (id: string, role?: RolePremisse) =>
     `<button type="button" class="lien" data-id="${echapper(id)}" title="${echapper(id)}">${echapper(reference(id))}</button>`

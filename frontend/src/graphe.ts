@@ -9,6 +9,7 @@
 
 import './graphe.css'
 import { api, RefusVue, type Graphe, type Noeud, type OperationVue, type Vue } from './api'
+import { animer, type Animation } from './graphe-animation'
 import { instantane, operationsVers, type Entree, type Instantane } from './graphe-annuler'
 import { Contenu } from './graphe-contenu'
 import { dansCadre, dessiner, niveauDe, oublierMesures, PALETTE, positionsRenvois, referenceDe, rgba, type Camera, type EtatDessin } from './graphe-dessin'
@@ -129,6 +130,10 @@ export class VueGraphe {
   private surlignes: Set<string> | null = null
   /** Disposition du pilotage : positions provisoires (cases) sur cet écran, sans toucher à la vue enregistrée. */
   private disposition: Map<string, Surcharge> | null = null
+  private animCamera: Animation | null = null
+  private animDisposition: Animation | null = null
+  /** Largeur (px) couverte à droite par la fiche : les cadrages et le centre de l'écran l'évitent. */
+  margeDroite = 0
   private projetId: string | null = null
   private lectureSeule: string | null = null
   private cam: Camera = { x: 40, y: 40, z: 1 }
@@ -385,47 +390,111 @@ export class VueGraphe {
     this.demander()
   }
 
-  /** Centre de l'écran (coordonnées du monde) et zoom. */
+  /** Centre de la partie visible de l'écran (coordonnées du monde, fiche exclue) et zoom. */
   get camera(): { x: number; y: number; z: number } {
-    const { x, y } = this.versMonde(this.largeur / 2, this.hauteur / 2)
+    const { x, y } = this.versMonde(this.largeurUtile / 2, this.hauteur / 2)
     return { x, y, z: this.cam.z }
   }
 
-  placerCamera(x: number, y: number, z: number): void {
-    this.fixerZoom(z)
-    this.centrerSur(x, y)
+  /** Les mouvements du pilotage sont animés ; chaque promesse se résout à la fin du mouvement. */
+  placerCamera(x: number, y: number, z: number): Promise<void> {
+    return this.animerCamera(x, y, z)
   }
 
-  zoomerDe(facteur: number): void {
-    this.zoomVers(this.cam.z * facteur, this.largeur / 2, this.hauteur / 2)
+  zoomerDe(facteur: number): Promise<void> {
+    const c = this.camera
+    return this.animerCamera(c.x, c.y, this.borneZoom(this.cam.z * facteur))
   }
 
   /** Cadre des nœuds (ceux d'un cadre réduit : le cadre) ; false si aucun n'est dans la vue. Des figures seules
    * sont cadrées au-delà de 1:1, jusqu'à remplir l'écran : une figure n'occupe qu'une case. */
-  cadrerNoeuds(ids: readonly string[]): boolean {
+  async cadrerNoeuds(ids: readonly string[]): Promise<boolean> {
     let r: Rect | null = null
     for (const id of ids) {
       const x = this.rectRepresentant(this.modele.representant.get(id) ?? id)
       if (x) r = r ? union(r, x) : x
     }
+    if (!r) return false
     const figures = ids.length > 0 && ids.every((id) => id.startsWith(PREFIXE_FIGURE))
-    if (r) this.cadrer(r, figures ? ZOOMS[ZOOMS.length - 1]![0] : 1)
-    return r !== null
+    await this.animerCadrage(r, figures ? ZOOMS[ZOOMS.length - 1]![0] : 1)
+    return true
+  }
+
+  cadrerGraphe(): Promise<void> {
+    return this.animerCadrage(this.modele.bornes)
   }
 
   /** Disposition du pilotage : positions provisoires (clé : id de nœud ou « fig:<id> ») ; null : vue enregistrée.
-   * Le cadre de chaque élément ne change pas, ni la numérotation, ni le graphe. */
-  definirDisposition(positions: ReadonlyMap<string, { colonne: number; ligne: number }> | null): void {
-    if (!positions?.size) this.disposition = null
-    else {
-      const groupes = new Map(this.vue.placements.map((p) => [p.noeud_id, p.groupe_id]))
-      this.disposition = new Map([...positions].map(([id, p]) => [id, { ...p, groupe: groupes.get(id) ?? null }]))
+   * Le cadre de chaque élément ne change pas, ni la numérotation, ni le graphe. Les éléments glissent de leur case
+   * actuelle à la nouvelle. */
+  definirDisposition(positions: ReadonlyMap<string, { colonne: number; ligne: number }> | null): Promise<void> {
+    this.animDisposition?.fin()
+    const groupes = new Map(this.vue.placements.map((p) => [p.noeud_id, p.groupe_id]))
+    const avec = (id: string, p: { colonne: number; ligne: number }): Surcharge => ({ ...p, groupe: groupes.get(id) ?? null })
+    const finale = positions?.size ? new Map([...positions].map(([id, p]) => [id, avec(id, p)])) : null
+    // Départ : où chaque élément concerné est à l'écran ; arrivée : sa nouvelle case, ou sa case enregistrée.
+    const concernes = new Set([...(this.disposition?.keys() ?? []), ...(positions?.keys() ?? [])])
+    const enregistree = construireModele(this.graphe, this.vue)
+    const trajets = [...concernes].flatMap((id) => {
+      const a = this.base.blocs.get(id), b = positions?.get(id) ?? enregistree.blocs.get(id)
+      return a && b ? [{ id, c0: a.colonne, l0: a.ligne, c1: b.colonne, l1: b.ligne }] : []
+    })
+    const appliquer = (d: Map<string, Surcharge> | null) => {
+      this.disposition = d
+      this.reconstruire()
     }
-    this.reconstruire()
+    return this.animer((u) => appliquer(new Map(trajets.map((t) => [t.id, avec(t.id, {
+      colonne: t.c0 + (t.c1 - t.c0) * u, ligne: t.l0 + (t.l1 - t.l0) * u,
+    })]))), () => appliquer(finale), (a) => (this.animDisposition = a))
   }
 
-  cadrerGraphe(): void {
-    this.cadrerTout()
+  // ─── Animations du pilotage ────────────────────────────────────────────────
+
+  /** Anime `pas(u)` de u = 0 à 1 (graphe-animation.ts), puis `final`. Immédiat si la vue n'est pas affichée. */
+  private animer(pas: (u: number) => void, final: () => void, garder: (a: Animation | null) => void): Promise<void> {
+    if (document.hidden || !this.largeur) {
+      final()
+      return Promise.resolve()
+    }
+    const a = animer(pas, final)
+    garder(a)
+    return a.promesse.then(() => {
+      if (this.animCamera === a) this.animCamera = null
+      if (this.animDisposition === a) this.animDisposition = null
+    })
+  }
+
+  /** Caméra vers le centre (cx, cy) au zoom z : zoom interpolé en échelle logarithmique, centre en ligne droite. */
+  private animerCamera(cx: number, cy: number, z: number): Promise<void> {
+    this.animCamera?.fin()
+    const depart = this.camera
+    const placer = (x: number, y: number, zz: number) => {
+      this.fixerZoom(zz)
+      this.centrerSur(x, y)
+    }
+    return this.animer(
+      (u) => placer(depart.x + (cx - depart.x) * u, depart.y + (cy - depart.y) * u, depart.z * (z / depart.z) ** u),
+      () => placer(cx, cy, z),
+      (a) => (this.animCamera = a),
+    )
+  }
+
+  private animerCadrage(r: Rect, zoomMax = 1): Promise<void> {
+    if (!this.largeur) return Promise.resolve()
+    return this.animerCamera((r.x0 + r.x1) / 2, (r.y0 + r.y1) / 2, this.zoomPour(r, zoomMax))
+  }
+
+  /** L'utilisateur reprend la main (souris, clavier, doigts) : les mouvements du pilotage s'arrêtent là. */
+  private reprendreLaMain(): void {
+    this.animCamera?.arreter()
+  }
+
+  private get largeurUtile(): number {
+    return Math.max(80, this.largeur - this.margeDroite)
+  }
+
+  private borneZoom(z: number): number {
+    return Math.max(ZOOMS[0]![0], Math.min(ZOOMS[ZOOMS.length - 1]![0], z))
   }
 
   /** Nœuds (hors figures) dont le centre est à l'écran, les plus proches du centre d'abord. */
@@ -434,8 +503,8 @@ export class VueGraphe {
     for (const b of this.modele.blocs.values()) {
       if (b.cache || b.figure || !b.noeud) continue
       const x = (b.x + b.w / 2) * this.cam.z + this.cam.x, y = (b.y + b.h / 2) * this.cam.z + this.cam.y
-      if (x < 0 || y < 0 || x > this.largeur || y > this.hauteur) continue
-      r.push({ id: b.id, nom: b.noeud.nom, x, y, d: Math.hypot(x - this.largeur / 2, y - this.hauteur / 2) })
+      if (x < 0 || y < 0 || x > this.largeurUtile || y > this.hauteur) continue
+      r.push({ id: b.id, nom: b.noeud.nom, x, y, d: Math.hypot(x - this.largeurUtile / 2, y - this.hauteur / 2) })
     }
     r.sort((a, b) => a.d - b.d || a.id.localeCompare(b.id))
     return r.slice(0, max).map(({ id, nom, x, y }) => ({ id, nom, x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 }))
@@ -473,18 +542,22 @@ export class VueGraphe {
 
   private cadrer(r: Rect, zoomMax = 1): void {
     if (!this.largeur) return
-    const w = Math.max(1, r.x1 - r.x0), h = Math.max(1, r.y1 - r.y0)
-    const z = Math.min((this.largeur - 80) / w, (this.hauteur - 80) / h)
-    // Comme UE : le plus grand palier qui fait tout tenir, sans dépasser 1:1 (au-delà seulement pour une figure seule).
-    let i = 0
-    for (let k = 0; k < ZOOMS.length; k++) if (ZOOMS[k]![0] <= z && ZOOMS[k]![0] <= zoomMax) i = k
-    this.iZoom = i
-    this.cam.z = ZOOMS[i]![0]
+    this.fixerZoom(this.zoomPour(r, zoomMax))
     this.centrerSur((r.x0 + r.x1) / 2, (r.y0 + r.y1) / 2)
   }
 
+  /** Comme UE : le plus grand palier qui fait tout tenir, sans dépasser 1:1 (au-delà seulement pour une figure seule). */
+  private zoomPour(r: Rect, zoomMax = 1): number {
+    const w = Math.max(1, r.x1 - r.x0), h = Math.max(1, r.y1 - r.y0)
+    const z = Math.min((this.largeurUtile - 80) / w, (this.hauteur - 80) / h)
+    let i = 0
+    for (let k = 0; k < ZOOMS.length; k++) if (ZOOMS[k]![0] <= z && ZOOMS[k]![0] <= zoomMax) i = k
+    return ZOOMS[i]![0]
+  }
+
+  /** Centre (x, y) au milieu de la partie visible de l'écran (la fiche, à droite, en est exclue). */
   private centrerSur(x: number, y: number): void {
-    this.cam.x = this.largeur / 2 - x * this.cam.z
+    this.cam.x = this.largeurUtile / 2 - x * this.cam.z
     this.cam.y = this.hauteur / 2 - y * this.cam.z
     this.demander()
   }
@@ -624,6 +697,7 @@ export class VueGraphe {
   // ─── Souris ────────────────────────────────────────────────────────────────
 
   private appui(e: PointerEvent): void {
+    this.reprendreLaMain()
     if (e.target === this.saisie || this.menu.contains(e.target as Node) || this.aide.contains(e.target as Node)) return
     this.fermerMenu()
     this.scene.focus({ preventScroll: true })
@@ -930,6 +1004,7 @@ export class VueGraphe {
 
   private roulette(e: WheelEvent): void {
     e.preventDefault()
+    this.reprendreLaMain()
     const { sx, sy } = this.pointeur(e)
     // Pincement sur un pavé tactile (le navigateur l'envoie en Ctrl + molette, à petits pas) : zoom continu.
     if (e.ctrlKey && e.deltaMode === 0 && Math.abs(e.deltaY) < 50) {

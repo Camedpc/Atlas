@@ -49,6 +49,9 @@ log = logging.getLogger(__name__)
 ATTENTE_MAX_STT = 10 * 48000
 """Micro gardé pendant qu'une session STT se rouvre (10 s en PCM 24 kHz 16 bits), rejoué dans la nouvelle."""
 
+ECHO_TRAINE_S = 2.0
+"""Après la fin de la lecture, durée pendant laquelle ce que capte le micro peut encore être la voix de l'agent."""
+
 PREFIXE_CONFIE = "[Transmis par Atlas voix, pendant un appel avec Camille]"
 
 
@@ -370,6 +373,12 @@ class Session:
                 return True
         return self.lecture["gen"] == self.gen and not self.lecture["fini"]
 
+    def vient_de_parler(self) -> bool:
+        """La voix parle, ou vient de se taire : son écho peut encore revenir dans le micro (haut-parleurs)."""
+        if self.agent_parle():
+            return True
+        return self.lecture["gen"] == self.gen and time.monotonic() - float(self.lecture["t"]) < ECHO_TRAINE_S
+
     def joue_estime(self) -> float:
         if self.lecture["gen"] != self.gen:
             return 0.0
@@ -417,7 +426,8 @@ class Session:
         texte = texte.strip()
         if not texte:
             return
-        if source == "voix" and not self.casque and self.agent_parle() and est_echo(texte, self.dit_recemment):
+        # Écho de sa propre voix (haut-parleurs sans casque) : ignoré, casque ou pas, pour qu'elle ne se réponde pas.
+        if source == "voix" and self.vient_de_parler() and est_echo(texte, self.dit_recemment):
             await self.envoyer({"type": "info", "message": f"Écho ignoré : « {texte} »"})
             return
         await self.envoyer({"type": "utilisateur", "texte": texte, "source": source})

@@ -172,7 +172,7 @@ export class AdaptateurVue implements Ecran {
     const deplacements = e.deplacements ?? []
     if (!egaux(this.deplacements, deplacements)) {
       this.deplacements = structuredClone(deplacements)
-      this.vue.definirDisposition(new Map(deplacements.map((d) => [cleDeplacement(d), { colonne: d.colonne, ligne: d.ligne }])))
+      await this.vue.definirDisposition(new Map(deplacements.map((d) => [cleDeplacement(d), { colonne: d.colonne, ligne: d.ligne }])))
     }
     if (this.app.fiche() !== (e.fiche?.noeud ?? null)) this.app.definirFiche(e.fiche?.noeud ?? null)
     if (this.app.panneauOuvert() !== e.panneau_ouvert) this.app.definirPanneau(e.panneau_ouvert)
@@ -184,19 +184,19 @@ export class AdaptateurVue implements Ecran {
         if ('tout' in effet) {
           // Avec des filtres, « tout » est ce qui les passe.
           const f = this.filtres
-          if (!filtresActifs(f) || !this.vue.cadrerNoeuds(this.vue.noeuds.filter((n) => noeudPasse(n, f)).map((n) => n.id))) {
-            this.vue.cadrerGraphe()
+          if (!filtresActifs(f) || !(await this.vue.cadrerNoeuds(this.vue.noeuds.filter((n) => noeudPasse(n, f)).map((n) => n.id)))) {
+            await this.vue.cadrerGraphe()
           }
         } else if ('selection' in effet) {
           const s = this.vue.noeudSelectionne
-          if (s) this.vue.cadrerNoeuds([s])
-        } else this.vue.cadrerNoeuds(effet.noeuds)
+          if (s) await this.vue.cadrerNoeuds([s])
+        } else await this.vue.cadrerNoeuds(effet.noeuds)
         break
       case 'zoomer':
-        this.vue.zoomerDe(effet.facteur)
+        await this.vue.zoomerDe(effet.facteur)
         break
       case 'camera':
-        this.vue.placerCamera(effet.camera.cible[0], effet.camera.cible[1], 1 / effet.camera.distance)
+        await this.vue.placerCamera(effet.camera.cible[0], effet.camera.cible[1], 1 / effet.camera.distance)
         break
       case 'recharger':
         await this.app.recharger()

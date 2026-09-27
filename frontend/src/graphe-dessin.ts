@@ -37,6 +37,18 @@ export const CORPS = 12.5
 /** Taille minimale des titres à l'écran (px) : de loin, ils restent lisibles au lieu de disparaître. */
 export const TITRE_MIN = 10
 
+/** Titres des cadres (px à l'écran) : jamais plus petits, de loin comme de près ; de très loin, ils grossissent
+ * jusqu'à TITRE_CADRE_MAX au milieu du cadre. */
+export const TITRE_CADRE_MIN = 14
+export const TITRE_CADRE_MAX = 40
+
+/** Têtes abrégées des blocs, quand « Proposition 21 » ne tient pas (on garde toujours le numéro). */
+const ABREGES: Record<string, string> = {
+  Proposition: 'Prop. ', Théorème: 'Th. ', Lemme: 'L. ', Définition: 'Déf. ', Hypothèse: 'H. ', Axiome: 'Ax. ',
+  Décision: 'Déc. ', Assertion: 'Ass. ', Expérience: 'Exp. ', Calcul: 'Calc. ', Observation: 'Obs. ',
+  Résultat: 'Rés. ', Conjecture: 'Conj. ', 'Fait admis': 'F. ', Énoncé: 'É. ',
+}
+
 /** Corps des titres à l'écran (px) et grossissement par rapport au texte à l'échelle (≥ 1). */
 function corpsTitre(z: number): { fs: number; g: number } {
   const fs = Math.max(CORPS * z, TITRE_MIN)
@@ -199,6 +211,7 @@ export function dessiner(ctx: CanvasRenderingContext2D, e: EtatDessin, contenu: 
   // La ligature « ff » de CMU Serif n'a pas de glyphe accessible au canevas : sans ligatures.
   ctx.textRendering = 'optimizeSpeed'
   contenu.debutImage()
+  etiquettesPosees = []
 
   // 1. Cadres (parents d'abord).
   for (const c of m.cadresOrdonnes) if (c.rect && coupe(c.rect, vue)) dessinerCadre(ctx, e, c, X, Y)
@@ -265,6 +278,8 @@ export function dessiner(ctx: CanvasRenderingContext2D, e: EtatDessin, contenu: 
       if (!pose) dessinerTitreFonction(ctx, c, X, Y, z)
     }
   }
+  // 4. De très loin, les noms des cadres par-dessus tout : c'est ce qu'on lit d'abord.
+  if (niveau === 'point') dessinerTitresDeLoin(ctx, e, vue, X, Y)
   contenu.finImage()
 }
 
@@ -304,7 +319,12 @@ function dessinerCadre(ctx: CanvasRenderingContext2D, e: EtatDessin, c: Cadre, X
   ctx.strokeRect(Math.round(x0) + 0.5, Math.round(y0) + 0.5, Math.round(w) - 1, Math.round(h) - 1)
   ctx.setLineDash([])
   const taille = (imbrique ? 10.5 : 12) * z
-  if (taille < 6.5) return
+  // Trop petit pour la barre du cadre : étiquette lisible au-dessus (titres) ou grand titre au milieu (points,
+  // dessiné par-dessus les blocs : dessinerTitresDeLoin).
+  if (taille < TITRE_CADRE_MIN - 3) {
+    if (niveauDe(z) !== 'point') dessinerEtiquetteCadre(ctx, c, x0, y0, w, imbrique ? TITRE_CADRE_MIN - 2 : TITRE_CADRE_MIN)
+    return
+  }
   ctx.textBaseline = 'middle'
   const ym = y0 + hTitre / 2 + 0.5
   const compte = `${c.numero} · ${c.enonces} énoncé${c.enonces > 1 ? 's' : ''}`
@@ -322,6 +342,102 @@ function dessinerCadre(ctx: CanvasRenderingContext2D, e: EtatDessin, c: Cadre, X
     ctx.fillStyle = PALETTE.gris
     ctx.fillText(compte, x1 - 7 * z, ym)
   }
+}
+
+function titreCadre(c: Cadre): string {
+  return c.genre === 'piste_abandonnee' && !/abandon/i.test(c.nom) ? `Piste abandonnée · ${c.nom}` : c.nom
+}
+
+/** Étiquettes des cadres déjà posées dans l'image courante : une étiquette qui en chevaucherait une autre se
+ * déplace, rétrécit ou renonce (comme les noms sur une carte). Vidé au début de chaque image. */
+let etiquettesPosees: Rect[] = []
+
+function libre(r: Rect): boolean {
+  return !etiquettesPosees.some((o) => !(r.x1 < o.x0 || r.x0 > o.x1 || r.y1 < o.y0 || r.y0 > o.y1))
+}
+
+/** Étiquette du cadre juste au-dessus de lui (ou, si la place est prise, dans sa barre), lisible, sur un fond clair. */
+function dessinerEtiquetteCadre(ctx: CanvasRenderingContext2D, c: Cadre, x0: number, y0: number, w: number, fs: number): void {
+  ctx.save()
+  ctx.font = `700 ${fs}px ${SERIF}`
+  ctx.textBaseline = 'alphabetic'
+  ctx.textAlign = 'left'
+  const texte = tronquer(ctx, `${c.numero} ${titreCadre(c)}`, Math.max(w, fs * 18))
+  const l = ctx.measureText(texte).width
+  for (const y of [y0 - fs * 0.35, y0 + fs * 1.05]) {
+    const r = { x0: x0 - 3, y0: y - fs * 1.05, x1: x0 + l + 3, y1: y + fs * 0.3 }
+    if (!libre(r)) continue
+    etiquettesPosees.push(r)
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.88)'
+    ctx.fillRect(r.x0, r.y0, r.x1 - r.x0, r.y1 - r.y0)
+    ctx.fillStyle = c.teinte
+    ctx.fillText(texte, x0, y)
+    break
+  }
+  ctx.restore()
+}
+
+/** Découpe `texte` en lignes d'au plus `largeur` px avec la police courante du contexte. */
+function couper(ctx: CanvasRenderingContext2D, texte: string, largeur: number): string[] {
+  const res: string[] = []
+  let ligne = ''
+  for (const mot of texte.split(/\s+/).filter(Boolean)) {
+    const essai = ligne ? `${ligne} ${mot}` : mot
+    if (!ligne || ctx.measureText(essai).width <= largeur) ligne = essai
+    else {
+      res.push(ligne)
+      ligne = mot
+    }
+  }
+  if (ligne) res.push(ligne)
+  return res
+}
+
+/** De très loin (niveau « points ») : le nom des cadres en grand, centré sur le cadre et pouvant en déborder. Les
+ * plus grands cadres d'abord ; un nom qui chevaucherait un autre rétrécit, puis renonce. */
+function dessinerTitresDeLoin(ctx: CanvasRenderingContext2D, e: EtatDessin, vue: Rect, X: (x: number) => number, Y: (y: number) => number): void {
+  const cadres = e.modele.cadresOrdonnes
+    .filter((c) => c.rect && !c.cache && coupe(c.rect, vue))
+    .map((c) => ({ c, x0: X(c.rect!.x0), y0: Y(c.rect!.y0), w: X(c.rect!.x1) - X(c.rect!.x0), h: Y(c.rect!.y1) - Y(c.rect!.y0) }))
+    .sort((a, b) => a.c.profondeur - b.c.profondeur || b.w * b.h - a.w * a.h)
+  ctx.save()
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.lineJoin = 'round'
+  for (const { c, x0, y0, w, h } of cadres) {
+    const cx = x0 + w / 2, cy = y0 + h / 2
+    const largeur = Math.max(w - 12, TITRE_CADRE_MAX * 5)
+    const plafond = c.profondeur > 0 ? TITRE_CADRE_MIN + 4 : TITRE_CADRE_MAX
+    for (let fs = Math.max(TITRE_CADRE_MIN, Math.min(plafond, h * 0.3)); fs >= TITRE_CADRE_MIN - 2; fs -= 2) {
+      ctx.font = `700 ${fs}px ${SERIF}`
+      const lignes = couper(ctx, titreCadre(c), largeur).slice(0, 2)
+      lignes[lignes.length - 1] = tronquer(ctx, lignes[lignes.length - 1]!, largeur)
+      const numero = fs * 0.55
+      const hauteur = lignes.length * fs * 1.15 + numero * 1.3
+      const l = Math.max(...lignes.map((x) => ctx.measureText(x).width))
+      const r = { x0: cx - l / 2 - 4, y0: cy - hauteur / 2, x1: cx + l / 2 + 4, y1: cy + hauteur / 2 }
+      if (!libre(r)) continue
+      etiquettesPosees.push(r)
+      let y = r.y0 + numero * 0.65
+      ctx.font = `italic 400 ${numero}px ${SERIF}`
+      ctx.lineWidth = numero * 0.3
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)'
+      ctx.strokeText(c.numero, cx, y)
+      ctx.fillStyle = PALETTE.gris
+      ctx.fillText(c.numero, cx, y)
+      y += numero * 0.65 + fs * 0.575
+      ctx.font = `700 ${fs}px ${SERIF}`
+      ctx.lineWidth = fs * 0.28
+      ctx.fillStyle = c.teinte
+      for (const x of lignes) {
+        ctx.strokeText(x, cx, y)
+        ctx.fillText(x, cx, y)
+        y += fs * 1.15
+      }
+      break
+    }
+  }
+  ctx.restore()
 }
 
 function dessinerLiens(ctx: CanvasRenderingContext2D, e: EtatDessin, vue: Rect, niveau: Niveau, X: (x: number) => number, Y: (y: number) => number): void {
@@ -433,7 +549,9 @@ function dessinerTitre(ctx: CanvasRenderingContext2D, b: Bloc, X: (x: number) =>
   const larg = (b.w - 14) / g
   const interligne = CORPS * 1.2 * g
   const max = Math.max(1, Math.floor((b.h - 10) / interligne))
-  const tete = `${b.libelle} ${b.numero}`
+  ctx.font = `700 ${fs}px ${SERIF}`
+  const tete = ctx.measureText(`${b.libelle} ${b.numero}`).width <= (b.w - 10) * z
+    ? `${b.libelle} ${b.numero}` : `${ABREGES[b.libelle] ?? ''}${b.numero}`
   const suite = max > 1 ? lignes(texteBrut(b.noeud.nom), larg, max - 1) : []
   ctx.save()
   ctx.beginPath()
