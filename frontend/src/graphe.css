@@ -48,6 +48,10 @@
   touch-action: none;
 }
 
+.gr-scene.gr-espace {
+  cursor: grab;
+}
+
 .gr-scene.gr-deplace {
   cursor: grabbing;
 }

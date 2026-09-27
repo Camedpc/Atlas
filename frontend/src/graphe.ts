@@ -1,6 +1,7 @@
-// Vue « Graphe de raisonnement » : rendu R41 (graphe-dessin.ts) des positions de /api/vue, édité à la souris comme
-// l'éditeur Blueprint d'Unreal Engine 5. Toute modification passe par POST /api/projets/{id}/vue (tout ou rien) ;
-// un refus (422) ramène la vue à son état et affiche le message du serveur.
+// Vue « Graphe de raisonnement » : rendu R41 (graphe-dessin.ts) des positions de /api/vue, édité à la souris, au clavier
+// ou au doigt avec des commandes courantes (fond glissé comme une carte, molette et pincement pour zoomer). Toute
+// modification passe par POST /api/projets/{id}/vue (tout ou rien) ; un refus (422) ramène la vue à son état et affiche
+// le message du serveur.
 //
 // Règle de dépôt d'un nœud glissé : il prend la case (colonne, ligne) sous lui, magnétisée sur la grille, et le cadre
 // sous le point de dépôt (le plus profond, hors cadres réduits) ; déposé hors de tout cadre, il garde son cadre
@@ -15,7 +16,8 @@ import { ImagesFigures, ouvrirFenetre } from './graphe-figures'
 import { CADRE, CLE_FONCTION, construireModele, dansRect, GRILLE, PREFIXE_FIGURE, rectBloc, TEINTES, union, type Bloc, type Modele, type Rect, type Surcharge } from './graphe-modele'
 import { echapper } from './rendu'
 
-/** Paliers de zoom de l'éditeur Blueprint d'UE5 (−12 à +7, au-delà de 1:1 avec Ctrl), plus trois paliers lointains. */
+/** Paliers de zoom de l'éditeur Blueprint d'UE5 (−12 à +7), plus trois paliers lointains ; le pincement
+ * zoome en continu entre les extrêmes. */
 const ZOOMS: [number, string][] = [
   [0.04, '−15'], [0.06, '−14'], [0.08, '−13'],
   [0.1, '−12'], [0.125, '−11'], [0.15, '−10'], [0.175, '−9'], [0.2, '−8'], [0.225, '−7'], [0.25, '−6'],
@@ -27,29 +29,45 @@ const INDEX_1_1 = ZOOMS.findIndex(([z]) => z === 1)
 const SEUIL_GLISSER = 4
 /** Délai qui distingue un clic sur une barre de titre (réduire) d'un double-clic (renommer). */
 const DELAI_DOUBLE_CLIC = 260
+/** Au doigt : seuil de glisser plus large (le doigt tremble), appui long et double toucher. */
+const SEUIL_GLISSER_DOIGT = 10
+const DELAI_APPUI_LONG = 450
+const DELAI_DOUBLE_TOUCHER = 350
 
 export const AIDE_COMMANDES: [string, string][] = [
-  ['Clic droit + glisser (ou molette enfoncée)', 'Déplacer la vue'],
-  ['Molette', 'Zoom sur le curseur, par paliers (jusqu’à 1:1)'],
-  ['Ctrl + molette', 'Zoom au-delà de 1:1 (jusqu’à +7)'],
-  ['Clic droit', 'Menu contextuel (nœud, cadre ou fond)'],
+  ['Glisser sur le fond', 'Déplacer la vue (aussi : Espace + glisser, clic droit ou molette enfoncée + glisser)'],
+  ['Molette', 'Zoom sur le curseur, par paliers'],
+  ['Pincer (pavé tactile ou écran)', 'Zoom continu'],
+  ['+ / −', 'Zoomer / dézoomer au centre'],
+  ['Flèches', 'Déplacer la vue (Maj : plus loin)'],
+  ['0 ou Origine (Home)', 'Cadrer tout le graphe'],
+  ['F', 'Cadrer la sélection'],
   ['Clic', 'Sélectionner un nœud ; sur le fond : tout désélectionner'],
   ['Ctrl + clic', 'Ajouter ou retirer de la sélection'],
   ['Maj + clic', 'Ajouter à la sélection'],
-  ['Glisser sur le fond', 'Sélection rectangulaire (Ctrl ou Maj : ajouter)'],
+  ['Maj ou Ctrl + glisser sur le fond', 'Sélection rectangulaire (ajoute à la sélection)'],
+  ['Ctrl + A', 'Tout sélectionner'],
   ['Glisser un nœud', 'Déplacer la sélection, case par case ; déposée dans un cadre, elle y entre'],
   ['Glisser une barre de titre', 'Déplacer le cadre et tout son contenu'],
   ['Clic sur une barre de titre, ou ▾', 'Réduire le cadre en nœud-fonction, ou le déployer'],
   ['Double-clic sur une barre de titre', 'Renommer le cadre'],
-  ['Double-clic sur un nœud', 'Ouvrir sa fiche'],
-  ['Double-clic sur une figure', 'L’ouvrir en grand (Échap ou clic hors pour fermer)'],
+  ['Double-clic sur un nœud, ou Entrée', 'Ouvrir sa fiche'],
+  ['Double-clic sur une figure, ou Entrée', 'L’ouvrir en grand (Échap ou clic hors pour fermer)'],
+  ['Clic droit', 'Menu contextuel (nœud, cadre ou fond)'],
   ['F2', 'Renommer le nœud ou la figure sélectionnés'],
   ['C', 'Créer un cadre autour de la sélection'],
-  ['Origine (Home)', 'Cadrer tout le graphe'],
-  ['F', 'Cadrer la sélection'],
   ['Échap', 'Désélectionner'],
   ['Ctrl + Z / Ctrl + Y', 'Annuler / rétablir les changements de vue de la session'],
   ['Suppr', 'Sans effet : la vue ne supprime aucun nœud'],
+]
+
+/** Gestes sur écran tactile (tablette), affichés sous les commandes. */
+export const AIDE_TACTILE: [string, string][] = [
+  ['Glisser un doigt', 'Déplacer la vue'],
+  ['Pincer à deux doigts', 'Zoomer (et déplacer)'],
+  ['Toucher', 'Sélectionner ; sur le fond : désélectionner'],
+  ['Toucher deux fois', 'Ouvrir la fiche, la figure, ou renommer un cadre'],
+  ['Appui long', 'Saisir le nœud ou le cadre pour le glisser ; relâché sans bouger : menu contextuel'],
 ]
 
 type Cible =
@@ -67,9 +85,11 @@ interface Origine {
 }
 
 type Geste =
-  | { genre: 'vue'; x0: number; y0: number; camX: number; camY: number; bouge: boolean; bouton: number }
-  | { genre: 'noeuds'; x0: number; y0: number; origines: Map<string, Origine>; dc: number; dl: number; bouge: boolean; seul: string | null }
-  | { genre: 'cadre'; x0: number; y0: number; cadre: string; origines: Map<string, Origine>; dc: number; dl: number; bouge: boolean; titre: boolean }
+  // `cible` : au doigt, ce qui était sous le doigt (un toucher sans bouger y agit comme un clic).
+  | { genre: 'vue'; x0: number; y0: number; camX: number; camY: number; bouge: boolean; bouton: number; cible?: Cible }
+  // `saisi` : saisi au doigt par un appui long (relâché sans bouger : menu contextuel).
+  | { genre: 'noeuds'; x0: number; y0: number; origines: Map<string, Origine>; dc: number; dl: number; bouge: boolean; seul: string | null; saisi?: boolean }
+  | { genre: 'cadre'; x0: number; y0: number; cadre: string; origines: Map<string, Origine>; dc: number; dl: number; bouge: boolean; titre: boolean; saisi?: boolean }
   | { genre: 'rectangle'; x0: number; y0: number; ajout: boolean; avant: Set<string>; bouge: boolean }
   | { genre: 'renvoi'; x0: number; y0: number; id: string; bouge: boolean }
   | { genre: 'repli'; x0: number; y0: number; cadre: string; bouge: boolean }
@@ -114,6 +134,14 @@ export class VueGraphe {
   private enCours = false
   private minuterieTitre = 0
   private molette = 0
+  /** Doigts posés sur la scène (position écran), pincement en cours, appui long, dernier toucher. */
+  private doigts = new Map<number, { sx: number; sy: number }>()
+  private pince: { d0: number; z0: number; mx: number; my: number } | null = null
+  private minuterieAppuiLong = 0
+  private dernierToucher = { t: 0, sx: 0, sy: 0 }
+  private dernierDoigt = 0
+  /** Espace maintenue : glisser déplace la vue, même sur un nœud. */
+  private espace = false
   private menu: HTMLElement
   private saisie: HTMLInputElement
   private aide: HTMLElement
@@ -150,8 +178,9 @@ export class VueGraphe {
     this.saisie.hidden = true
     this.aide = element(scene, 'div', 'gr-aide')
     this.aide.hidden = true
-    this.aide.innerHTML = `<h3>Commandes (comme l’éditeur Blueprint d’Unreal Engine 5)</h3><table>${AIDE_COMMANDES
+    const table = (lignes: [string, string][]) => `<table>${lignes
       .map(([t, d]) => `<tr><th>${echapper(t)}</th><td>${echapper(d)}</td></tr>`).join('')}</table>`
+    this.aide.innerHTML = `<h3>Commandes</h3>${table(AIDE_COMMANDES)}<h3>Sur tablette</h3>${table(AIDE_TACTILE)}`
       + '<p>Un nœud déposé hors de tout cadre garde son cadre d’origine ; pour l’en sortir : clic droit → « Sortir du cadre ». '
       + 'Seules les prémisses principales et auxiliaires sont des flèches ; les autres sont des renvois « cf. ».</p>'
     this.avisEl = element(scene, 'div', 'gr-avis')
@@ -168,11 +197,22 @@ export class VueGraphe {
     scene.addEventListener('pointerdown', (e) => this.appui(e))
     scene.addEventListener('pointermove', (e) => this.mouvement(e))
     scene.addEventListener('pointerup', (e) => this.relache(e))
-    scene.addEventListener('pointercancel', () => this.annulerGeste())
+    scene.addEventListener('pointercancel', (e) => {
+      this.doigts.delete(e.pointerId)
+      this.pince = null
+      clearTimeout(this.minuterieAppuiLong)
+      this.annulerGeste()
+    })
     scene.addEventListener('dblclick', (e) => this.doubleClic(e))
     scene.addEventListener('wheel', (e) => this.roulette(e), { passive: false })
     scene.addEventListener('contextmenu', (e) => e.preventDefault())
+    // Safari (iPad) : empêche le zoom de la page entière au pincement sur le graphe.
+    scene.addEventListener('gesturestart', (e) => e.preventDefault())
     scene.addEventListener('keydown', (e) => this.touche(e))
+    scene.addEventListener('keyup', (e) => {
+      if (e.key === ' ') this.relacherEspace()
+    })
+    scene.addEventListener('blur', () => this.relacherEspace())
     scene.addEventListener('pointerleave', () => {
       if (!this.geste && (this.survol || this.titreSurvole || this.renvoiSurvole)) {
         this.survol = this.titreSurvole = this.renvoiSurvole = null
@@ -348,18 +388,32 @@ export class VueGraphe {
     return { sx: e.clientX - r.left, sy: e.clientY - r.top }
   }
 
-  private zoomer(sens: 1 | -1, sx: number, sy: number, ctrl: boolean): void {
-    const max = ctrl ? ZOOMS.length - 1 : INDEX_1_1
-    let i = this.iZoom + sens
-    if (sens > 0 && i > max) return
-    i = Math.max(0, Math.min(ZOOMS.length - 1, i))
-    if (i === this.iZoom) return
+  /** Palier suivant (molette, + / −) ; après un zoom continu, le premier palier au-delà du zoom courant. */
+  private zoomer(sens: 1 | -1, sx: number, sy: number): void {
+    const z = this.cam.z
+    const i = sens > 0 ? ZOOMS.findIndex(([p]) => p > z * 1.001) : ZOOMS.findLastIndex(([p]) => p < z * 0.999)
+    if (i < 0) return
+    this.zoomVers(ZOOMS[i]![0], sx, sy)
+  }
+
+  /** Zoom continu (pincement) ou sur un palier, en gardant fixe le point (sx, sy) de l'écran. */
+  private zoomVers(z: number, sx: number, sy: number): void {
     const m = this.versMonde(sx, sy)
-    this.iZoom = i
-    this.cam.z = ZOOMS[i]![0]
+    this.fixerZoom(z)
     this.cam.x = sx - m.x * this.cam.z
     this.cam.y = sy - m.y * this.cam.z
     this.demander()
+  }
+
+  /** Règle le zoom (borné aux paliers extrêmes) ; le palier affiché est le plus proche. */
+  private fixerZoom(z: number): void {
+    z = Math.max(ZOOMS[0]![0], Math.min(ZOOMS[ZOOMS.length - 1]![0], z))
+    this.cam.z = z
+    let meilleur = 0
+    ZOOMS.forEach(([p], k) => {
+      if (Math.abs(Math.log(p / z)) < Math.abs(Math.log(ZOOMS[meilleur]![0] / z))) meilleur = k
+    })
+    this.iZoom = meilleur
   }
 
   // ─── Dessin ────────────────────────────────────────────────────────────────
@@ -439,25 +493,30 @@ export class VueGraphe {
     this.fermerMenu()
     this.scene.focus({ preventScroll: true })
     const { sx, sy } = this.pointeur(e)
-    if (e.button === 1 || e.button === 2) {
+    if (e.pointerType === 'touch') return this.appuiDoigt(e, sx, sy)
+    if (e.button === 1 || e.button === 2 || (e.button === 0 && this.espace)) {
       e.preventDefault()
       this.geste = { genre: 'vue', x0: sx, y0: sy, camX: this.cam.x, camY: this.cam.y, bouge: false, bouton: e.button }
       this.capturer(e.pointerId)
       return
     }
     if (e.button !== 0) return
-    const c = this.cibleEn(sx, sy)
-    const ajout = e.ctrlKey || e.metaKey || e.shiftKey
+    this.commencer(this.cibleEn(sx, sy), sx, sy, { ctrl: e.ctrlKey || e.metaKey, maj: e.shiftKey })
+    this.capturer(e.pointerId)
+  }
+
+  /** Geste du bouton principal sur une cible : clic souris, ou toucher / appui long au doigt. */
+  private commencer(c: Cible, sx: number, sy: number, mod: { ctrl: boolean; maj: boolean }): void {
     if (c.genre === 'renvoi') this.geste = { genre: 'renvoi', x0: sx, y0: sy, id: c.id, bouge: false }
     else if (c.genre === 'titre' && c.glyphe) this.geste = { genre: 'repli', x0: sx, y0: sy, cadre: c.cadre, bouge: false }
     else if (c.genre === 'titre' || c.genre === 'fonction') {
       this.geste = { genre: 'cadre', x0: sx, y0: sy, cadre: c.cadre, origines: this.originesCadre(c.cadre), dc: 0, dl: 0, bouge: false, titre: c.genre === 'titre' }
     } else if (c.genre === 'bloc') {
       let seul: string | null = null
-      if (e.ctrlKey || e.metaKey) {
+      if (mod.ctrl) {
         if (this.selection.has(c.id)) this.selection.delete(c.id)
         else this.selection.add(c.id)
-      } else if (e.shiftKey) this.selection.add(c.id)
+      } else if (mod.maj) this.selection.add(c.id)
       else if (!this.selection.has(c.id)) {
         this.selection.clear()
         this.selection.add(c.id)
@@ -471,17 +530,96 @@ export class VueGraphe {
       }
       this.geste = { genre: 'noeuds', x0: sx, y0: sy, origines, dc: 0, dl: 0, bouge: false, seul }
       this.demander()
+    } else if (mod.ctrl || mod.maj) {
+      this.geste = { genre: 'rectangle', x0: sx, y0: sy, ajout: true, avant: new Set(this.selection), bouge: false }
     } else {
-      this.geste = { genre: 'rectangle', x0: sx, y0: sy, ajout, avant: new Set(this.selection), bouge: false }
+      // Glisser le fond déplace la vue (comme une carte) ; un clic sans bouger désélectionne.
+      this.geste = { genre: 'vue', x0: sx, y0: sy, camX: this.cam.x, camY: this.cam.y, bouge: false, bouton: 0 }
     }
+  }
+
+  // ─── Doigts (tablette) ─────────────────────────────────────────────────────
+
+  /**
+   * Un doigt déplace la vue (même posé sur un nœud) ; un toucher agit comme un clic ; un appui long saisit le nœud ou
+   * le cadre (à glisser ensuite) ou, ailleurs, ouvre le menu ; deux doigts pincent (zoom continu) et déplacent.
+   */
+  private appuiDoigt(e: PointerEvent, sx: number, sy: number): void {
+    this.dernierDoigt = Date.now()
+    this.doigts.set(e.pointerId, { sx, sy })
     this.capturer(e.pointerId)
+    clearTimeout(this.minuterieAppuiLong)
+    if (this.doigts.size === 2) {
+      // Le deuxième doigt remplace le geste en cours par un pincement (un glisser de nœud est abandonné).
+      const g = this.geste
+      this.geste = null
+      this.rectangle.hidden = true
+      this.scene.classList.remove('gr-deplace')
+      if (g && g.genre !== 'vue') this.finirGlisser()
+      const [a, b] = [...this.doigts.values()] as [{ sx: number; sy: number }, { sx: number; sy: number }]
+      const m = this.versMonde((a.sx + b.sx) / 2, (a.sy + b.sy) / 2)
+      this.pince = { d0: Math.max(1, Math.hypot(a.sx - b.sx, a.sy - b.sy)), z0: this.cam.z, mx: m.x, my: m.y }
+      return
+    }
+    if (this.doigts.size > 2) return
+    const c = this.cibleEn(sx, sy)
+    const g: Geste = { genre: 'vue', x0: sx, y0: sy, camX: this.cam.x, camY: this.cam.y, bouge: false, bouton: 0, cible: c }
+    this.geste = g
+    this.minuterieAppuiLong = window.setTimeout(() => {
+      if (this.geste !== g || g.bouge) return
+      if (c.genre === 'bloc' || c.genre === 'titre' || c.genre === 'fonction') {
+        this.commencer(c.genre === 'titre' ? { ...c, glyphe: false } : c, sx, sy, { ctrl: false, maj: false })
+        const n = this.geste as Geste | null
+        if (n && (n.genre === 'noeuds' || n.genre === 'cadre')) n.saisi = true
+        navigator.vibrate?.(15)
+        this.demander()
+      } else {
+        this.geste = null
+        this.ouvrirMenu(c, sx, sy)
+      }
+    }, DELAI_APPUI_LONG)
+  }
+
+  private pincer(): void {
+    const p = this.pince
+    const [a, b] = [...this.doigts.values()]
+    if (!p || !a || !b) return
+    const d = Math.max(1, Math.hypot(a.sx - b.sx, a.sy - b.sy))
+    this.fixerZoom(p.z0 * d / p.d0)
+    this.cam.x = (a.sx + b.sx) / 2 - p.mx * this.cam.z
+    this.cam.y = (a.sy + b.sy) / 2 - p.my * this.cam.z
+    this.demander()
+  }
+
+  /** Toucher sans bouger : un clic, ou un double-clic s'il suit de près un autre toucher au même endroit. */
+  private toucher(c: Cible, sx: number, sy: number): void {
+    const d = this.dernierToucher
+    const double = Date.now() - d.t < DELAI_DOUBLE_TOUCHER && Math.hypot(sx - d.sx, sy - d.sy) < 30
+    this.dernierToucher = { t: double ? 0 : Date.now(), sx, sy }
+    if (double) return this.doubleClicEn(sx, sy)
+    if (c.genre === 'fond' || c.genre === 'cadre') {
+      this.selection.clear()
+      return
+    }
+    this.commencer(c, sx, sy, { ctrl: false, maj: false })
+    const g = this.geste
+    this.geste = null
+    if (g) this.terminer(g, sx, sy)
   }
 
   private mouvement(e: PointerEvent): void {
     const { sx, sy } = this.pointeur(e)
+    if (e.pointerType === 'touch') {
+      if (!this.doigts.has(e.pointerId)) return
+      this.doigts.set(e.pointerId, { sx, sy })
+      if (this.pince) return this.pincer()
+      if (this.doigts.size > 1) return
+    }
     const g = this.geste
     if (!g) return this.survoler(sx, sy)
-    if (!g.bouge && Math.hypot(sx - g.x0, sy - g.y0) < SEUIL_GLISSER) return
+    const seuil = e.pointerType === 'touch' ? SEUIL_GLISSER_DOIGT : SEUIL_GLISSER
+    if (!g.bouge && Math.hypot(sx - g.x0, sy - g.y0) < seuil) return
+    if (!g.bouge) clearTimeout(this.minuterieAppuiLong)
     g.bouge = true
     if (g.genre === 'vue') {
       this.scene.classList.add('gr-deplace')
@@ -520,16 +658,36 @@ export class VueGraphe {
   }
 
   private relache(e: PointerEvent): void {
+    if (e.pointerType === 'touch') {
+      this.dernierDoigt = Date.now()
+      this.doigts.delete(e.pointerId)
+      clearTimeout(this.minuterieAppuiLong)
+      if (this.pince) {
+        // Fin du pincement : le doigt restant continue de déplacer la vue.
+        this.pince = null
+        const reste = [...this.doigts.values()][0]
+        if (reste) this.geste = { genre: 'vue', x0: reste.sx, y0: reste.sy, camX: this.cam.x, camY: this.cam.y, bouge: true, bouton: 0 }
+        return
+      }
+      if (this.doigts.size) return
+    }
     const g = this.geste
     if (!g) return
     this.geste = null
     this.scene.classList.remove('gr-deplace')
     if (this.scene.hasPointerCapture(e.pointerId)) this.scene.releasePointerCapture(e.pointerId)
     const { sx, sy } = this.pointeur(e)
+    this.terminer(g, sx, sy)
+  }
+
+  private terminer(g: Geste, sx: number, sy: number): void {
     if (g.genre === 'vue') {
       if (!g.bouge && g.bouton === 2) this.ouvrirMenu(this.cibleEn(g.x0, g.y0), g.x0, g.y0)
+      else if (!g.bouge && g.cible) this.toucher(g.cible, sx, sy)
+      else if (!g.bouge && g.bouton === 0 && !this.espace) this.selection.clear()
     } else if (g.genre === 'noeuds') {
       if (g.bouge && g.origines.size) void this.deposer(g, sx, sy)
+      else if (!g.bouge && g.saisi) this.ouvrirMenu(this.cibleEn(g.x0, g.y0), g.x0, g.y0)
       else if (!g.bouge && g.seul) {
         this.selection.clear()
         this.selection.add(g.seul)
@@ -538,6 +696,7 @@ export class VueGraphe {
       if (g.bouge && (g.dc || g.dl)) {
         void this.executer([{ op: 'deplacer_groupe', id: g.cadre, colonnes: g.dc, lignes: g.dl }], 'Déplacer le cadre')
       } else if (g.bouge) this.finirGlisser()
+      else if (g.saisi) this.ouvrirMenu(this.cibleEn(g.x0, g.y0), g.x0, g.y0)
       else if (g.titre) {
         clearTimeout(this.minuterieTitre)
         this.minuterieTitre = window.setTimeout(() => void this.basculerRepli(g.cadre), DELAI_DOUBLE_CLIC)
@@ -594,8 +753,14 @@ export class VueGraphe {
 
   private doubleClic(e: MouseEvent): void {
     if (e.target === this.saisie || this.menu.contains(e.target as Node)) return
-    this.fermerMenu()
+    // Au doigt, le double toucher est déjà traité (`toucher`) : on ignore le dblclick que le navigateur en tire.
+    if (Date.now() - this.dernierDoigt < 800) return
     const { sx, sy } = this.pointeur(e)
+    this.doubleClicEn(sx, sy)
+  }
+
+  private doubleClicEn(sx: number, sy: number): void {
+    this.fermerMenu()
     const c = this.cibleEn(sx, sy)
     if (c.genre === 'titre') {
       clearTimeout(this.minuterieTitre)
@@ -630,12 +795,30 @@ export class VueGraphe {
 
   private roulette(e: WheelEvent): void {
     e.preventDefault()
+    const { sx, sy } = this.pointeur(e)
+    // Pincement sur un pavé tactile (le navigateur l'envoie en Ctrl + molette, à petits pas) : zoom continu.
+    if (e.ctrlKey && e.deltaMode === 0 && Math.abs(e.deltaY) < 50) {
+      this.zoomVers(this.cam.z * Math.exp(-e.deltaY * 0.01), sx, sy)
+      return
+    }
     this.molette += e.deltaY * (e.deltaMode === 1 ? 33 : e.deltaMode === 2 ? 400 : 1)
     if (Math.abs(this.molette) < 30) return
     const sens = this.molette < 0 ? 1 : -1
     this.molette = 0
-    const { sx, sy } = this.pointeur(e)
-    this.zoomer(sens, sx, sy, e.ctrlKey || e.metaKey)
+    this.zoomer(sens, sx, sy)
+  }
+
+  private relacherEspace(): void {
+    this.espace = false
+    this.scene.classList.remove('gr-espace')
+  }
+
+  /** Entrée : ouvre la fiche du nœud sélectionné, ou la figure en grand. */
+  private ouvrirSelection(): void {
+    const b = this.selection.size === 1 ? this.base.blocs.get([...this.selection][0]!) : undefined
+    if (!b) this.avis('Sélectionnez un seul nœud pour ouvrir sa fiche.')
+    else if (b.figure) this.ouvrirFigure(b.id)
+    else this.options.surOuvrir(b.noeud)
   }
 
   // ─── Clavier ───────────────────────────────────────────────────────────────
@@ -653,7 +836,22 @@ export class VueGraphe {
         this.selection.clear()
         this.options.surOuvrir(null)
       }
-    } else if (k === 'Home') this.cadrerTout()
+    } else if (k === ' ') {
+      this.espace = true
+      this.scene.classList.add('gr-espace')
+    } else if (k === 'Home' || (k === '0' && !e.altKey)) this.cadrerTout()
+    else if (k === '+' || k === '=') this.zoomer(1, this.largeur / 2, this.hauteur / 2)
+    else if (k === '-' || k === '_') this.zoomer(-1, this.largeur / 2, this.hauteur / 2)
+    else if (k.startsWith('Arrow') && !ctrl && !e.altKey) {
+      const pas = e.shiftKey ? 400 : 80
+      if (k === 'ArrowLeft') this.cam.x += pas
+      else if (k === 'ArrowRight') this.cam.x -= pas
+      else if (k === 'ArrowUp') this.cam.y += pas
+      else if (k === 'ArrowDown') this.cam.y -= pas
+    } else if (k === 'Enter') this.ouvrirSelection()
+    else if (ctrl && (k === 'a' || k === 'A')) {
+      for (const b of this.modele.blocs.values()) if (!b.cache) this.selection.add(b.id)
+    }
     else if ((k === 'f' || k === 'F') && !ctrl && !e.altKey) this.cadrerSelection()
     else if ((k === 'c' || k === 'C') && !ctrl && !e.altKey) void this.creerCadre()
     else if (k === 'F2') this.renommerNoeud()

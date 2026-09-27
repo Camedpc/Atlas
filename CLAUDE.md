@@ -158,7 +158,8 @@ L'ancien backend agents (chercheur, vérificateur) reste lisible via `git show 1
   principales et auxiliaires sont des flèches, technique et contexte = renvois « cf. »), `graphe-dessin.ts` (canevas,
   niveaux de détail z < 0,225 carrés / < 0,6 titres / contenu, culling), `graphe-contenu.ts` (HTML KaTeX des seuls
   blocs visibles : cache, pool recyclé, budget par image, mesures groupées), `graphe.ts` (caméra aux paliers de zoom
-  d'UE5, commandes souris / clavier d'UE5 listées dans `AIDE_COMMANDES` et l'aide « ? », opérations
+  d'UE5, zoom continu au pincement ; commandes courantes pour un non-initié : fond glissé comme une carte, Maj ou Ctrl +
+  glisser = rectangle, gestes tactiles, listées dans `AIDE_COMMANDES` / `AIDE_TACTILE` et l'aide « ? », opérations
   `POST /api/projets/{id}/vue` tout ou rien, annuler / rétablir par différence d'états dans `graphe-annuler.ts`),
   `formules.ts` (extraction des formules de R41, plus le LaTeX explicite `$…$`). Texte en CMU Serif (jsdelivr,
   `graphe.css`) : les fontes KaTeX n'ont pas les accents ; ligatures coupées (« ff » sort en carré). En dev,
