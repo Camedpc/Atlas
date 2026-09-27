@@ -10,7 +10,9 @@ import urllib.request
 
 from mcp.server.mcpserver import MCPServer
 
-serveur = MCPServer("voix", instructions="Confier du travail à l'orchestrateur d'Atlas et lancer de petites tâches.")
+serveur = MCPServer(
+    "voix", instructions="Confier du travail à l'orchestrateur, lancer de petites tâches, changer l'affichage."
+)
 
 
 def _appel(chemin: str, corps: dict | None = None) -> str:
@@ -72,6 +74,22 @@ def consigne_tache(id: int, message: str) -> str:
 def arreter_tache(id: int) -> str:
     """Arrête une petite tâche en cours."""
     return _appel(f"/taches/{id}/arreter", {})
+
+
+@serveur.tool()
+def afficher(demande: str, extrait: str = "", titre: str = "") -> str:
+    """Change ce que Camille voit à l'écran du graphe : montrer, cadrer, zoomer, sélectionner ou filtrer des nœuds,
+    enchaîner avec des pauses, revenir à l'affichage précédent. L'agent navigateur d'AtlasVoice s'en charge.
+    `demande` : ce que Camille veut voir, dans ses mots, avec tout l'enchaînement. `extrait` : les mots exacts de sa
+    phrase qui concernent l'affichage, s'il n'y en a qu'une partie. `titre` : quelques mots. Rend la main tout de
+    suite ; le résultat ou une question de l'agent arrive dans un message [Affichage]."""
+    return _appel("/affichage", {"demande": demande, "extrait": extrait, "titre": titre})
+
+
+@serveur.tool()
+def repondre_affichage(id: int, reponse: str) -> str:
+    """Transmet la réponse de Camille à la question posée par l'agent navigateur (message [Affichage — question])."""
+    return _appel(f"/affichage/{id}/reponse", {"reponse": reponse})
 
 
 if __name__ == "__main__":
