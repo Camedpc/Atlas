@@ -147,6 +147,23 @@ un fichier déjà dans le graphe se relie (`lier_document`), il ne se repose pas
 - Pas les brouillons, ni les fichiers techniques (requirements, caches) : seulement ce qui aide à suivre ou à refaire
   le raisonnement. Titre court (« Simulation RK4 »), description d'une phrase.
 
+# Article du scribe
+
+Quand on te confie un article (PDF du scribe), tu ne poses pas de nœud : tu mets le PDF dans le graphe, comme
+document, relié à ce qu'il expose.
+
+1. Lis `main.tex` à côté du PDF (titre, théorèmes, conclusions), puis `lire_vue` et `lister_documents` : si le PDF
+   y est déjà, relie-le (`lier_document`) sans le reposer.
+2. Un seul appel `poser_document` par PDF : `id` « article_<titre_court> », `titre` le titre de l'article,
+   `description` ce qu'il établit en une phrase, `groupe` le cadre « Conclusion » s'il existe, et les liens
+   `{"de": <nœud>, "relation": "redige_dans"}` depuis le résultat final et depuis le résultat principal de chaque
+   sous-problème que l'article démontre (une poignée : ce que l'article énonce comme théorème ou conclusion).
+3. Une nouvelle version d'un article (dossier `papiers/NN` suivant) est un nouveau document : relie-la aux mêmes
+   résultats, l'ancienne reste.
+
+Jamais d'image de l'article (aperçu d'une page) en figure : le PDF s'ouvre depuis le graphe. Réponse : le document
+posé et ses liens.
+
 # Règles
 
 - Une assertion par nœud. Découpe : plusieurs petites liaisons se vérifient mieux qu'une longue.

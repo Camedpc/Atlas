@@ -184,6 +184,7 @@ export const LIBELLES_NATURE: Record<string, string> = {
 /** Libellé d'une relation de document, écrit sur son lien. */
 export const LIBELLES_RELATION: Record<RelationDocument, string> = {
   source: 'source', implemente: 'implémente', produit: 'produit', ecrit_dans: 'écrit dans', entree: 'entrée',
+  redige_dans: 'rédigé dans',
 }
 
 /** Figure ou document : un bloc de la grille qui n'est pas un nœud du raisonnement. */

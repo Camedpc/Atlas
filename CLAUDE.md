@@ -56,7 +56,7 @@ prompts dans `atlas/orchestrateur/prompts/*.md` : c'est Camille qui les fait év
   (script, dossier de résultats, PDF, données) mis dans le graphe, pseudo-nœud `doc:<id>` d'une case, placé à droite
   des bouts de départ de ses liens entrants. Chemin relatif au dossier du projet ; aperçu (premières lignes,
   colonnes, pages, contenu du dossier) et présence calculés à l'écriture : le graphe se lit sans disque (Vercel).
-  Liens nommés (`source`, `implemente`, `produit`, `ecrit_dans`, `entree`) vers un nœud, `fig:<id>` ou `doc:<id>` :
+  Liens nommés (`source`, `implemente`, `produit`, `ecrit_dans`, `entree`, `redige_dans`) vers un nœud, `fig:<id>` ou `doc:<id>` :
   gris et étiquetés au front, jamais des prémisses (le vérificateur ne les voit pas). Déplacer un fichier passe par
   l'outil MCP `deplacer_document` (disque puis base, tout ou rien : chemins des documents, `figures.fichier` et
   `figures.source`) ; les agents rangent leurs livrables dans `doc_projet/<sujet>/` et `scripts_projet/<sujet>/`

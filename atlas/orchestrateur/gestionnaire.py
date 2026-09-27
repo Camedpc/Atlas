@@ -25,9 +25,9 @@ from typing import Any, Literal
 
 from openai_codex import AsyncTurnHandle
 
-from .. import conversations
+from .. import conversations, lecture, projets
 from ..modeles import Conversation, Execution, StatutExecution
-from . import agent, config, pipeline
+from . import agent, article, bunker, config, pipeline
 from .codex_vivant import CodexVivant, codex_vivant, empreinte_cle, pour_cle, tous
 from .consignes import interruption, relais
 from .suivi_agents import METHODES_SUIVIES, RACINE, SuiviAgents
@@ -49,7 +49,8 @@ class Reglages:
     modele: str | None = None
 
 
-Origine = Literal["texte", "voix"]
+Origine = Literal["texte", "voix", "atlas"]
+"""Qui lance un tour : Camille à l'écrit, la voix, ou Atlas lui-même (consigne automatique, voir `consigner`)."""
 
 
 class DejaEnCours(Exception):
@@ -192,14 +193,18 @@ class Gestionnaire:
         reglages: Reglages | None = None,
         origine: Origine = "texte",
         cle: str | None = None,
+        avis: str | None = None,
     ) -> Execution:
+        """Lance un tour. `avis` : ligne « système » montrée dans la conversation à la place de `texte` (consigne
+        d'Atlas, qui n'est pas un message de Camille)."""
         cid = conversation.id
         if cid in self._tours:
             raise DejaEnCours(cid)
         self._tours[cid] = None  # réservé avant tout await
         self._comptes[cid] = _compte(cle)
         vivant = self._vivants[cid] = pour_cle(cle)
-        self.derniers_lancements[cid] = (origine, time.time())
+        if origine != "atlas":
+            self.derniers_lancements[cid] = (origine, time.time())
         self._ecouter()
         try:
             suivi = self._suivis.get(cid)
@@ -208,9 +213,13 @@ class Gestionnaire:
             self._executions[cid] = execution
             self._suivis[cid] = suivi or SuiviAgents.depuis(precedente.agents if precedente else None)
             self._derniere[cid] = execution.id
-            await asyncio.to_thread(
-                conversations.ajouter_message, cid, "utilisateur", texte, execution_id=execution.id, agent=agent_cible
-            )
+            if avis is None:
+                await asyncio.to_thread(
+                    conversations.ajouter_message, cid, "utilisateur", texte, execution_id=execution.id,
+                    agent=agent_cible,
+                )
+            else:
+                await asyncio.to_thread(conversations.ajouter_message, cid, "systeme", avis, execution_id=execution.id)
             titre = titre_depuis(texte) if conversation.titre == conversations.TITRE_PAR_DEFAUT else conversation.titre
             # Réécrire le titre remonte aussi la conversation en tête de liste (modifie_le).
             await asyncio.to_thread(conversations.modifier_conversation, cid, titre=titre)
@@ -228,6 +237,51 @@ class Gestionnaire:
         self._execution_par_conv[cid] = tache
         tache.add_done_callback(self._taches.discard)
         return execution
+
+    async def consigner(self, conversation: Conversation, consigne: str, avis: str) -> None:
+        """Consigne d'Atlas lui-même à l'orchestrateur : injectée dans le tour en cours (quel que soit son compte),
+        sinon elle ouvre un tour sur le compte du serveur. La conversation n'en montre que `avis`."""
+        cid = conversation.id
+        limite = time.monotonic() + DELAI_DEMARRAGE_TOUR
+        while True:
+            if cid not in self._tours:
+                await self.lancer(conversation, consigne, origine="atlas", avis=avis)
+                return
+            tour, execution = self._tours[cid], self._executions.get(cid)
+            if tour is None or execution is None:
+                if time.monotonic() > limite:
+                    raise TourIndisponible(cid)
+                await asyncio.sleep(0.2)
+                continue
+            try:
+                await tour.steer(consigne)
+            except Exception:
+                log.info("Tour de %s déjà fini : la consigne lancera le suivant", cid, exc_info=True)
+                await self._attendre_fin(cid)
+                continue
+            await asyncio.to_thread(conversations.ajouter_message, cid, "systeme", avis, execution_id=execution.id)
+            return
+
+    async def _placer_article(self, cid: str, chemin_scribe: str, debut: float) -> None:
+        """Le scribe a rendu son travail : faire placer par un graphiste chaque PDF d'article qu'il a écrit depuis
+        `debut` et qui n'est pas encore dans le graphe (voir `article`)."""
+        try:
+            conversation = await asyncio.to_thread(conversations.lire_conversation, cid)
+            if conversation is None:
+                return
+            projet_id = await asyncio.to_thread(projets.id_ou_defaut, conversation.projet_id)
+            dossier = await asyncio.to_thread(projets.dossier_de, conversation.projet_id)
+            documents = await asyncio.to_thread(lecture.lister_documents, projet_id, colonnes="chemin")
+            pdfs = await asyncio.to_thread(
+                article.articles_ecrits, bunker.dossier_projet(dossier), debut, {d["chemin"] for d in documents}
+            )
+            if not pdfs:
+                log.info("Le scribe %s de %s n'a laissé aucun PDF d'article à placer", chemin_scribe, cid)
+                return
+            consigne = article.consigne_article(chemin_scribe, pdfs)
+            await self.consigner(conversation, consigne, article.avis_article(pdfs))
+        except Exception:
+            log.exception("Article du scribe %s de %s : placement non confié", chemin_scribe, cid)
 
     async def arreter(self, conversation_id: str, agent_cible: str | None = None) -> bool:
         """Arrête tout (l'orchestrateur et ses sous-agents), ou seulement le sous-agent `agent_cible`.
@@ -372,6 +426,10 @@ class Gestionnaire:
         evenements = suivi.recevoir(methode, params)
         for etape in evenements.etapes:
             self._publier(cid, {"type": "etape", **asdict(etape)})
+            if etape.genre == "termine" and etape.role == "scribe":
+                tache = asyncio.create_task(self._placer_article(cid, etape.chemin, suivi.agents[etape.chemin].debut))
+                self._taches.add(tache)
+                tache.add_done_callback(self._taches.discard)
         for nouveau in evenements.nouveaux:
             tache = asyncio.create_task(agent.enrichir(suivi, nouveau, self._vivants.get(cid, codex_vivant)))
             self._taches.add(tache)

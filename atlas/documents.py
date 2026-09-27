@@ -24,6 +24,7 @@ RELATIONS = {
     "produit": "produit",
     "ecrit_dans": "écrit dans",
     "entree": "entrée",
+    "redige_dans": "rédigé dans",
 }
 """Relations d'un lien de document, et leur libellé affiché sur le graphe."""
 RACINES_PROJET = ("doc_projet", "scripts_projet", "sessions")

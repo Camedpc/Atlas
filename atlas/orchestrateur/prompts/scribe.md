@@ -94,6 +94,9 @@ Dans le dossier de l'article : `main.tex`, `figures/`, et le PDF final nommé d'
 
 Si LaTeX est absent de la machine, ne l'installe pas : rends `main.tex` et ses figures, et dis-le dans ta réponse.
 
+Le PDF, à côté de son `main.tex`, est mis dans le graphe par Atlas dès que tu as fini (un graphiste le relie aux
+résultats qu'il expose) : ne crée ni figure ni image d'aperçu de l'article.
+
 # Réponse finale
 
 `Article prêt : <chemin du PDF>`, suivi de trois à cinq lignes : nombre de pages, ce que l'article établit, les

@@ -461,7 +461,7 @@ class LienDocument(BaseModel):
     """Un lien nommé du document : « vers » (du document vers un nœud, fig:<id> ou doc:<id>) ou « de » (vers le
     document)."""
 
-    relation: Literal["source", "implemente", "produit", "ecrit_dans", "entree"]
+    relation: Literal["source", "implemente", "produit", "ecrit_dans", "entree", "redige_dans"]
     vers: str | None = None
     de: str | None = None
 
@@ -485,7 +485,8 @@ def poser_document(
     - id : minuscules, chiffres et _ ; titre : court (« Simulation RK4 ») ; description : à quoi il sert.
     - liens : relations « source » (un article ou une donnée → le nœud qu'il fonde), « implemente » (nœud → le
       script qui le met en œuvre : {"de": noeud}), « produit » (script → figure, résultat ou fichier qu'il
-      produit), « ecrit_dans » (script → dossier de sorties), « entree » (données → le script qui les lit).
+      produit), « ecrit_dans » (script → dossier de sorties), « entree » (données → le script qui les lit),
+      « redige_dans » (résultat → l'article PDF du scribe qui l'expose : {"de": noeud}).
       Ex. pour un script : [{"de": "def_equations", "relation": "implemente"}, {"vers": "fig:trajectoire",
       "relation": "produit"}, {"vers": "doc:resultats", "relation": "ecrit_dans"}].
     - remplacer : vrai pour relire l'aperçu et changer titre ou description (les liens donnés s'ajoutent).
@@ -510,7 +511,7 @@ def poser_document(
 @serveur.tool()
 def lier_document(de: str, vers: str, relation: str, retirer: bool = False) -> str:
     """Ajoute (ou retire, retirer=true) un lien nommé entre un document (doc:<id>) et un nœud, une figure
-    (fig:<id>) ou un autre document. Relations : source, implemente, produit, ecrit_dans, entree (voir
+    (fig:<id>) ou un autre document. Relations : source, implemente, produit, ecrit_dans, entree, redige_dans (voir
     poser_document)."""
     ecriture.lier_document(projet_id=_projet(), de=de, vers=vers, relation=relation, auteur=AUTEUR, retirer=retirer)
     return json.dumps({"ok": True, "lien": [de, vers, relation], "retire": retirer}, ensure_ascii=False)
