@@ -579,8 +579,15 @@ export function dessinerImage(ctx: CanvasRenderingContext2D, f: FigureVue, g: Ge
   const s = Math.min(g.iw / lw, g.ih / lh)
   const w = lw * s, h = lh * s
   const x = g.ix + (g.iw - w) / 2, y = g.iy + (g.ih - h) / 2
-  if (img) ctx.drawImage(img, x, y, w, h)
-  else {
+  if (img) {
+    // Une image d'animation fermée ou « cassée » fait lever drawImage : sans ce garde, tout le reste du graphe sautait.
+    try {
+      ctx.drawImage(img, x, y, w, h)
+    } catch {
+      ctx.fillStyle = COULEURS_FIGURE.attente
+      ctx.fillRect(x, y, w, h)
+    }
+  } else {
     ctx.fillStyle = COULEURS_FIGURE.attente
     ctx.fillRect(x, y, w, h)
   }
@@ -614,6 +621,7 @@ export function dessinerIcone(ctx: CanvasRenderingContext2D, cx: number, cy: num
 
 /** GIF ou WebP animé, décodé une image à la fois (ImageDecoder) : seule l'image courante est gardée en mémoire. */
 interface Animation {
+  blob: Blob
   decodeur: ImageDecoder
   nombre: number
   indice: number
@@ -621,26 +629,54 @@ interface Animation {
   /** Instant (performance.now) où passer à l'image suivante. */
   echeance: number
   enCours: boolean
+  /** Sortie du cache : plus rien à décoder, et tout ce qui arrive encore est refermé. */
+  liberee: boolean
 }
 
-/** L'animation d'une image, ou null (image fixe, format non animable, navigateur sans ImageDecoder). */
-async function ouvrirAnimation(blob: Blob): Promise<Animation | null> {
-  if (typeof ImageDecoder === 'undefined' || !/^image\/(gif|webp)$/.test(blob.type)) return null
+/** Décodeur prêt à servir (données lues, piste choisie). */
+async function nouveauDecodeur(blob: Blob): Promise<ImageDecoder> {
   const decodeur = new ImageDecoder({ data: await blob.arrayBuffer(), type: blob.type })
   try {
     // Sans tracks.ready, selectedTrack peut être encore vide même une fois les données lues.
     await decodeur.tracks.ready
     await decodeur.completed
-    const piste = decodeur.tracks.selectedTrack
-    if (!piste?.animated || piste.frameCount < 2) {
-      decodeur.close()
-      return null
-    }
-    return { decodeur, nombre: piste.frameCount, indice: -1, courante: null, echeance: 0, enCours: false }
-  } catch {
+    return decodeur
+  } catch (e) {
+    decodeur.close()
+    throw e
+  }
+}
+
+/** L'animation d'une image, ou null (image fixe, format non animable, navigateur sans ImageDecoder). */
+async function ouvrirAnimation(blob: Blob): Promise<Animation | null> {
+  if (typeof ImageDecoder === 'undefined' || !/^image\/(gif|webp)$/.test(blob.type)) return null
+  const decodeur = await nouveauDecodeur(blob).catch(() => null)
+  if (!decodeur) return null
+  const piste = decodeur.tracks.selectedTrack
+  if (!piste?.animated || piste.frameCount < 2) {
     decodeur.close()
     return null
   }
+  return { blob, decodeur, nombre: piste.frameCount, indice: -1, courante: null, echeance: 0, enCours: false, liberee: false }
+}
+
+/** Décode l'image `indice` ; null si l'animation a été libérée entre-temps. Firefox : une fois l'animation bouclée, le
+ * même décodeur ne rend plus que des images « cassées » (drawImage lève) et reset() n'y change rien, d'où un décodeur
+ * neuf à chaque retour à la première image. */
+async function decoderImage(a: Animation, indice: number): Promise<VideoFrame | null> {
+  if (indice === 0 && a.indice >= 0) {
+    a.decodeur.close()
+    const decodeur = await nouveauDecodeur(a.blob)
+    if (a.liberee) {
+      decodeur.close()
+      return null
+    }
+    a.decodeur = decodeur
+  }
+  const { image } = await a.decodeur.decode({ frameIndex: indice })
+  if (!a.liberee) return image
+  image.close()
+  return null
 }
 
 /** Durée d'affichage d'une image d'animation en ms ; un délai nul ou minuscule vaut 100 ms, comme dans les navigateurs. */
@@ -716,9 +752,9 @@ export class ImagesFigures {
     if (a.enCours || performance.now() < a.echeance) return
     a.enCours = true
     const indice = (a.indice + 1) % a.nombre
-    void a.decodeur
-      .decode({ frameIndex: indice })
-      .then(({ image }) => {
+    void decoderImage(a, indice)
+      .then((image) => {
+        if (!image) return
         a.courante?.close()
         a.courante = image
         a.indice = indice
@@ -744,6 +780,7 @@ export class ImagesFigures {
 function liberer(e: { url: string | null; anim: Animation | null }): void {
   if (e.url) URL.revokeObjectURL(e.url)
   if (e.anim) {
+    e.anim.liberee = true
     e.anim.courante?.close()
     e.anim.decodeur.close()
     e.anim.echeance = Infinity
