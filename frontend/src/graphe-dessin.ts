@@ -143,7 +143,7 @@ function mesureur(): CanvasRenderingContext2D {
   return ctxMesure
 }
 
-function tronquer(ctx: CanvasRenderingContext2D, t: string, max: number): string {
+function tronquer(ctx: Pick<CanvasRenderingContext2D, 'measureText'>, t: string, max: number): string {
   if (ctx.measureText(t).width <= max) return t
   let x = t
   while (x.length > 1 && ctx.measureText(x + '…').width > max) x = x.slice(0, -1)
@@ -372,18 +372,29 @@ function dessinerCadre(ctx: CanvasRenderingContext2D, e: EtatDessin, c: Cadre, X
     if (niveauDe(z) !== 'point') dessinerEtiquetteCadre(ctx, c, x0, y0, w, imbrique ? TITRE_CADRE_MIN - 2 : TITRE_CADRE_MIN)
     return
   }
-  ctx.textBaseline = 'middle'
-  const ym = y0 + hTitre / 2 + 0.5
+  texteBarre(ctx, c, x0, x1, y0 + hTitre / 2 + 0.5, z, taille)
+}
+
+/** Nom et compte d'énoncés dans la barre du cadre. Quand la place manque, le compte s'efface d'abord, puis le nom
+ * rétrécit (jusqu'aux trois quarts), et il n'est tronqué qu'en dernier recours. */
+function texteBarre(ctx: CanvasRenderingContext2D, c: Cadre, x0: number, x1: number, ym: number, z: number, taille: number): void {
   const compte = `${c.numero} · ${c.enonces} énoncé${c.enonces > 1 ? 's' : ''}`
+  const titre = `▾ ${titreCadre(c)}`
+  const dispo = x1 - x0 - 14 * z
+  ctx.textBaseline = 'middle'
   ctx.font = `italic 400 ${taille * 0.85}px ${SERIF}`
-  const wCompte = ctx.measureText(compte).width
-  ctx.font = `700 ${taille}px ${SERIF}`
+  const wCompte = ctx.measureText(compte).width + 12 * z
+  let fs = taille
+  ctx.font = `700 ${fs}px ${SERIF}`
+  const avecCompte = ctx.measureText(titre).width <= dispo - wCompte
+  while (!avecCompte && fs > taille * 0.75 && ctx.measureText(titre).width > dispo) {
+    fs -= 0.5
+    ctx.font = `700 ${fs}px ${SERIF}`
+  }
   ctx.textAlign = 'left'
-  const titre = `▾ ${abandon && !/abandon/i.test(c.nom) ? `Piste abandonnée · ${c.nom}` : c.nom}`
-  const t = tronquer(ctx, titre, w - 14 * z - wCompte - 10 * z)
   ctx.fillStyle = c.teinte
-  ctx.fillText(t, x0 + 7 * z, ym)
-  if (ctx.measureText(t).width + wCompte + 30 * z < w) {
+  ctx.fillText(tronquer(ctx, titre, avecCompte ? dispo - wCompte : dispo), x0 + 7 * z, ym)
+  if (avecCompte) {
     ctx.font = `italic 400 ${taille * 0.85}px ${SERIF}`
     ctx.textAlign = 'right'
     ctx.fillStyle = PALETTE.gris
@@ -403,29 +414,36 @@ function libre(r: Rect): boolean {
   return !etiquettesPosees.some((o) => !(r.x1 < o.x0 || r.x0 > o.x1 || r.y1 < o.y0 || r.y0 > o.y1))
 }
 
-/** Étiquette du cadre juste au-dessus de lui (ou, si la place est prise, dans sa barre), lisible, sur un fond clair. */
+/** Étiquette du cadre juste au-dessus de lui (ou, si la place est prise, dans sa barre), lisible, sur un fond clair :
+ * sur deux lignes plutôt que tronquée. */
 function dessinerEtiquetteCadre(ctx: CanvasRenderingContext2D, c: Cadre, x0: number, y0: number, w: number, fs: number): void {
   ctx.save()
-  ctx.font = `700 ${fs}px ${SERIF}`
+  const police = (t: number) => `700 ${t}px ${SERIF}`
+  const { fs: t, lignes } = ajuster(ctx, `${c.numero} ${titreCadre(c)}`, Math.max(w, fs * 12), fs, fs - 2, 2, police)
+  ctx.font = police(t)
   ctx.textBaseline = 'alphabetic'
   ctx.textAlign = 'left'
-  const texte = tronquer(ctx, `${c.numero} ${titreCadre(c)}`, Math.max(w, fs * 18))
-  const l = ctx.measureText(texte).width
-  for (const y of [y0 - fs * 0.35, y0 + fs * 1.05]) {
-    const r = { x0: x0 - 3, y0: y - fs * 1.05, x1: x0 + l + 3, y1: y + fs * 0.3 }
+  const l = Math.max(...lignes.map((x) => ctx.measureText(x).width))
+  const haut = lignes.length * t * 1.15
+  for (const yb of [y0 - haut - t * 0.2, y0 + t * 0.2]) {
+    const r = { x0: x0 - 3, y0: yb, x1: x0 + l + 3, y1: yb + haut + t * 0.2 }
     if (!libre(r)) continue
     etiquettesPosees.push(r)
     ctx.fillStyle = 'rgba(255, 255, 255, 0.88)'
     ctx.fillRect(r.x0, r.y0, r.x1 - r.x0, r.y1 - r.y0)
     ctx.fillStyle = c.teinte
-    ctx.fillText(texte, x0, y)
+    let y = yb + t * 0.95
+    for (const x of lignes) {
+      ctx.fillText(x, x0, y)
+      y += t * 1.15
+    }
     break
   }
   ctx.restore()
 }
 
 /** Découpe `texte` en lignes d'au plus `largeur` px avec la police courante du contexte. */
-function couper(ctx: CanvasRenderingContext2D, texte: string, largeur: number): string[] {
+function couper(ctx: Pick<CanvasRenderingContext2D, 'measureText'>, texte: string, largeur: number): string[] {
   const res: string[] = []
   let ligne = ''
   for (const mot of texte.split(/\s+/).filter(Boolean)) {
@@ -440,48 +458,62 @@ function couper(ctx: CanvasRenderingContext2D, texte: string, largeur: number): 
   return res
 }
 
-/** De très loin (niveau « points ») : le nom des cadres en grand, centré sur le cadre et pouvant en déborder. Les
- * plus grands cadres d'abord ; un nom qui chevaucherait un autre rétrécit, puis renonce. */
+/** La plus grande taille, de `max` à `min` par demi-pixel, où `texte` tient en `nbLignes` lignes de `largeur` px
+ * sans couper de mot ; faute de mieux, à `min`, la dernière ligne est tronquée. */
+export function ajuster(ctx: Pick<CanvasRenderingContext2D, 'font' | 'measureText'>, texte: string, largeur: number,
+  max: number, min: number, nbLignes: number, police: (fs: number) => string): { fs: number; lignes: string[] } {
+  const mots = texte.split(/\s+/).filter(Boolean)
+  for (let fs = max; fs >= min; fs -= 0.5) {
+    ctx.font = police(fs)
+    if (mots.some((m) => ctx.measureText(m).width > largeur)) continue
+    const l = couper(ctx, texte, largeur)
+    if (l.length <= nbLignes) return { fs, lignes: l }
+  }
+  ctx.font = police(min)
+  const l = couper(ctx, texte, largeur).slice(0, nbLignes)
+  l[l.length - 1] = tronquer(ctx, l[l.length - 1]!, largeur)
+  return { fs: min, lignes: l.map((x) => tronquer(ctx, x, largeur)) }
+}
+
+/** De très loin (niveau « points ») : le nom des cadres en grand, centré sur le cadre, et qui y tient : retour à la
+ * ligne (trois lignes au plus), taille adaptée à la largeur du cadre, jamais de mot coupé ni de débordement. Les plus
+ * grands cadres d'abord ; un nom qui chevaucherait un autre renonce. */
 function dessinerTitresDeLoin(ctx: CanvasRenderingContext2D, e: EtatDessin, vue: Rect, X: (x: number) => number, Y: (y: number) => number): void {
   const cadres = e.modele.cadresOrdonnes
     .filter((c) => c.rect && !c.cache && coupe(c.rect, vue))
     .map((c) => ({ c, x0: X(c.rect!.x0), y0: Y(c.rect!.y0), w: X(c.rect!.x1) - X(c.rect!.x0), h: Y(c.rect!.y1) - Y(c.rect!.y0) }))
     .sort((a, b) => a.c.profondeur - b.c.profondeur || b.w * b.h - a.w * a.h)
+  const police = (t: number) => `700 ${t}px ${SERIF}`
   ctx.save()
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
   ctx.lineJoin = 'round'
   for (const { c, x0, y0, w, h } of cadres) {
     const cx = x0 + w / 2, cy = y0 + h / 2
-    const largeur = Math.max(w - 12, TITRE_CADRE_MAX * 5)
-    const plafond = c.profondeur > 0 ? TITRE_CADRE_MIN + 4 : TITRE_CADRE_MAX
-    for (let fs = Math.max(TITRE_CADRE_MIN, Math.min(plafond, h * 0.3)); fs >= TITRE_CADRE_MIN - 2; fs -= 2) {
-      ctx.font = `700 ${fs}px ${SERIF}`
-      const lignes = couper(ctx, titreCadre(c), largeur).slice(0, 2)
-      lignes[lignes.length - 1] = tronquer(ctx, lignes[lignes.length - 1]!, largeur)
-      const numero = fs * 0.55
-      const hauteur = lignes.length * fs * 1.15 + numero * 1.3
-      const l = Math.max(...lignes.map((x) => ctx.measureText(x).width))
-      const r = { x0: cx - l / 2 - 4, y0: cy - hauteur / 2, x1: cx + l / 2 + 4, y1: cy + hauteur / 2 }
-      if (!libre(r)) continue
-      etiquettesPosees.push(r)
-      let y = r.y0 + numero * 0.65
-      ctx.font = `italic 400 ${numero}px ${SERIF}`
-      ctx.lineWidth = numero * 0.3
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)'
-      ctx.strokeText(c.numero, cx, y)
-      ctx.fillStyle = PALETTE.gris
-      ctx.fillText(c.numero, cx, y)
-      y += numero * 0.65 + fs * 0.575
-      ctx.font = `700 ${fs}px ${SERIF}`
-      ctx.lineWidth = fs * 0.28
-      ctx.fillStyle = c.teinte
-      for (const x of lignes) {
-        ctx.strokeText(x, cx, y)
-        ctx.fillText(x, cx, y)
-        y += fs * 1.15
-      }
-      break
+    const plafond = Math.min(c.profondeur > 0 ? TITRE_CADRE_MIN + 4 : TITRE_CADRE_MAX, h * 0.28)
+    const { fs, lignes } = ajuster(ctx, titreCadre(c), Math.max(w - 10, 40), Math.max(plafond, 10), 9, 3, police)
+    const numero = Math.max(8, fs * 0.55)
+    const hauteur = lignes.length * fs * 1.15 + numero * 1.3
+    ctx.font = police(fs)
+    const l = Math.max(...lignes.map((x) => ctx.measureText(x).width))
+    const r = { x0: cx - l / 2 - 4, y0: cy - hauteur / 2, x1: cx + l / 2 + 4, y1: cy + hauteur / 2 }
+    if (!libre(r)) continue
+    etiquettesPosees.push(r)
+    let y = r.y0 + numero * 0.65
+    ctx.font = `italic 400 ${numero}px ${SERIF}`
+    ctx.lineWidth = numero * 0.3
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)'
+    ctx.strokeText(c.numero, cx, y)
+    ctx.fillStyle = PALETTE.gris
+    ctx.fillText(c.numero, cx, y)
+    y += numero * 0.65 + fs * 0.575
+    ctx.font = police(fs)
+    ctx.lineWidth = fs * 0.28
+    ctx.fillStyle = c.teinte
+    for (const x of lignes) {
+      ctx.strokeText(x, cx, y)
+      ctx.fillText(x, cx, y)
+      y += fs * 1.15
     }
   }
   ctx.restore()
