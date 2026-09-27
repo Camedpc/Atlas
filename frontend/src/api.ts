@@ -6,6 +6,9 @@
 
 const BASE = import.meta.env.VITE_API_URL ?? ''
 
+/** Page de démo (/demo) : l'application ouverte sur l'espace de démo choisi dans la page admin. */
+export const DEMO = /^\/demo\/?$/.test(location.pathname)
+
 // Jeton d'accès du serveur de l'orchestrateur (ATLAS_JETON_ACCES), saisi une fois et gardé dans ce navigateur.
 const CLE_JETON = 'atlas.jeton'
 
@@ -58,6 +61,71 @@ export function enregistrerCleOpenAI(cle: string | null) {
 /** « sk-proj-…abcd » : de quoi reconnaître sa clé sans l'afficher. */
 export function cleMasquee(cle: string): string {
   return `${cle.slice(0, cle.startsWith('sk-proj-') ? 8 : 3)}…${cle.slice(-4)}`
+}
+
+/** Réglages publics du site (GET /api/site) : vidéo de l'accueil et son affiche, espace de démo. */
+export interface ReglagesSite {
+  video: string | null
+  affiche: string | null
+  /** Id de l'espace de démo (la copie de travail), null si l'admin n'en a pas choisi. */
+  demo: string | null
+}
+
+/** État de la page admin (GET /api/admin). */
+export interface EtatAdmin {
+  projets: Projet[]
+  demo: { modele?: string; copie?: string } | null
+  site: ReglagesSite
+  video: { chemin: string; type: string; nom: string } | null
+}
+
+/** Mot de passe admin refusé (401) ou page admin désactivée (503) : le message est à montrer tel quel. */
+export class AdminRefuse extends Error {}
+
+/** Appel d'une route admin (mot de passe en en-tête X-Atlas-Admin) ; l'erreur porte le message du serveur. */
+async function appelAdmin<T>(motDePasse: string, chemin: string, init: RequestInit = {}): Promise<T> {
+  const entetes: Record<string, string> = { 'X-Atlas-Admin': motDePasse, ...(init.headers as Record<string, string>) }
+  const r = await fetch(BASE + chemin, { ...init, headers: entetes })
+  const corps = await r.json().catch(() => null) as { detail?: unknown } | null
+  const message = typeof corps?.detail === 'string' ? corps.detail : `Erreur ${r.status}`
+  if (r.status === 401 || r.status === 503) throw new AdminRefuse(message)
+  if (!r.ok) throw new Error(message)
+  return corps as T
+}
+
+export const admin = {
+  etat: (mdp: string) => appelAdmin<EtatAdmin>(mdp, '/api/admin'),
+  /** L'espace devient le modèle de la démo, et la démo repart de lui. */
+  choisirDemo: (mdp: string, modeleId: string) =>
+    appelAdmin<{ ok: boolean; copie: Projet }>(mdp, '/api/admin/demo', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ modele_id: modeleId }),
+    }),
+  reinitialiserDemo: (mdp: string) =>
+    appelAdmin<{ ok: boolean; copie: Projet }>(mdp, '/api/admin/demo/reinitialiser', { method: 'POST' }),
+  /** Téléverse la vidéo (ou l'affiche) de la page d'accueil ; `progression` reçoit la part envoyée (0 à 1). */
+  televerser: (mdp: string, genre: 'video' | 'affiche', fichier: File, progression: (part: number) => void) =>
+    new Promise<void>((resolve, reject) => {
+      const xhr = new XMLHttpRequest()
+      xhr.open('POST', `${BASE}/api/admin/media/${genre}?nom=${encodeURIComponent(fichier.name)}`)
+      xhr.setRequestHeader('X-Atlas-Admin', mdp)
+      xhr.setRequestHeader('Content-Type', fichier.type)
+      xhr.upload.onprogress = (e) => e.lengthComputable && progression(e.loaded / e.total)
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) return resolve()
+        let message = `Erreur ${xhr.status}`
+        try {
+          const detail = JSON.parse(xhr.responseText).detail
+          if (typeof detail === 'string') message = detail
+        } catch {
+          // réponse sans JSON
+        }
+        reject(xhr.status === 401 ? new AdminRefuse(message) : new Error(message))
+      }
+      xhr.onerror = () => reject(new Error('Serveur injoignable.'))
+      xhr.send(fichier)
+    }),
 }
 
 /** Le serveur a refusé le jeton (401) : l'interface doit en demander un. */
@@ -404,6 +472,12 @@ async function appel<T>(chemin: string, init?: RequestInit, avecCle = false, cle
 }
 
 export const api = {
+  /** Lu sur l'origine de la page (Vercel en production) : l'accueil s'affiche même si le serveur est arrêté. */
+  site: async (): Promise<ReglagesSite> => {
+    const r = await fetch('/api/site')
+    if (!r.ok) throw new Error(`/api/site : ${r.status}`)
+    return r.json()
+  },
   // Sans espace : le graphe du projet « defaut ».
   graphe: (projetId: string | null) =>
     appel<Graphe>(`/api/graphe${projetId ? `?projet_id=${encodeURIComponent(projetId)}` : ''}`),

@@ -133,6 +133,46 @@ export class PanneauSessions {
     }
   }
 
+  /** Page de démo : un bandeau « Démo » sous l'espace, avec « Réinitialiser » (mot de passe admin, en deux temps). */
+  afficherDemo(reinitialiser: (motDePasse: string) => Promise<unknown>) {
+    const bandeau = document.createElement('div')
+    bandeau.className = 'demo-sessions'
+    bandeau.innerHTML = `
+      <div class="demo-ligne"><span class="demo-etiquette">Démo</span>
+        <button type="button" class="demo-reinitialiser">Réinitialiser</button></div>
+      <form class="demo-formulaire" hidden>
+        <p>Remet la démo dans son état d’origine : tout ce qui y a été fait disparaît.</p>
+        <input type="password" placeholder="Mot de passe admin" autocomplete="current-password" required />
+        <div class="demo-ligne"><button type="button" class="demo-annuler">Annuler</button>
+          <button type="submit">Réinitialiser</button></div>
+        <p class="demo-erreur" hidden></p>
+      </form>`
+    this.tete.after(bandeau)
+    const formulaire = bandeau.querySelector('form')!
+    const erreur = bandeau.querySelector<HTMLElement>('.demo-erreur')!
+    const basculer = (ouvert: boolean) => {
+      formulaire.hidden = !ouvert
+      erreur.hidden = true
+      if (ouvert) formulaire.querySelector('input')!.focus()
+    }
+    bandeau.querySelector('.demo-reinitialiser')!.addEventListener('click', () => basculer(formulaire.hidden !== false))
+    bandeau.querySelector('.demo-annuler')!.addEventListener('click', () => basculer(false))
+    formulaire.addEventListener('submit', async (e) => {
+      e.preventDefault()
+      const bouton = formulaire.querySelector<HTMLButtonElement>('button[type=submit]')!
+      bouton.disabled = true
+      bouton.textContent = 'Réinitialisation…'
+      try {
+        await reinitialiser(formulaire.querySelector('input')!.value)
+      } catch (err) {
+        erreur.hidden = false
+        erreur.textContent = err instanceof Error ? err.message : String(err)
+        bouton.disabled = false
+        bouton.textContent = 'Réinitialiser'
+      }
+    })
+  }
+
   afficherProjets(projets: Projet[], courant: string | null, utilisateur: string) {
     this.projets = projets
     this.projet = courant

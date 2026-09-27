@@ -1,0 +1,164 @@
+/* Page admin : cartes sobres sur le papier du site. */
+
+.admin {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 24px 24px 72px;
+}
+
+.admin h1 {
+  margin: 8px 0 24px;
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: 40px;
+  letter-spacing: -0.5px;
+}
+
+.etiquette-admin {
+  border: 1px solid var(--trait);
+  border-radius: 999px;
+  padding: 2px 10px;
+  color: var(--gris);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+button.lien-discret {
+  border: 0;
+  background: none;
+  font-family: var(--sans);
+  cursor: pointer;
+}
+
+.carte {
+  margin-bottom: 20px;
+  padding: 24px;
+  border: 1px solid var(--trait);
+  border-radius: 14px;
+  background: var(--blanc);
+}
+
+.carte h2 {
+  margin: 0 0 8px;
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: 26px;
+}
+
+.carte p {
+  margin: 0 0 16px;
+  color: var(--encre-2);
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.carte .discret {
+  color: var(--gris);
+  font-size: 13px;
+}
+
+.connexion {
+  max-width: 420px;
+  margin: 48px auto 0;
+}
+
+.connexion h1 {
+  margin-top: 0;
+  font-size: 32px;
+}
+
+label {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 16px;
+  color: var(--encre-2);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+input[type='password'],
+select {
+  width: 100%;
+  border: 1px solid var(--trait);
+  border-radius: 10px;
+  background: var(--blanc);
+  padding: 10px 12px;
+  font: 15px var(--sans);
+  color: var(--encre);
+}
+
+input[type='file'] {
+  font: 14px var(--sans);
+  color: var(--gris);
+}
+
+.etat {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 16px;
+  margin: 0 0 18px;
+  font-size: 14px;
+}
+
+.etat dt {
+  color: var(--gris);
+}
+
+.etat dd {
+  margin: 0;
+}
+
+.ligne {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.ligne select {
+  flex: 1;
+  min-width: 0;
+}
+
+.bouton.danger {
+  border-color: var(--rouge);
+  color: var(--rouge);
+}
+
+.apercu {
+  display: block;
+  width: 100%;
+  margin-bottom: 8px;
+  border-radius: 10px;
+  background: var(--encre);
+  aspect-ratio: 16 / 9;
+}
+
+progress {
+  width: 100%;
+  height: 6px;
+  margin-bottom: 12px;
+  accent-color: var(--encre);
+}
+
+.message {
+  margin: 4px 0 12px !important;
+  font-size: 14px !important;
+}
+
+.message.erreur {
+  color: var(--rouge) !important;
+}
+
+@media (max-width: 640px) {
+  .admin,
+  .site-tete {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .ligne {
+    flex-direction: column;
+  }
+}
