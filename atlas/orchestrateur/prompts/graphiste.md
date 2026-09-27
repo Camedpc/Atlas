@@ -73,9 +73,13 @@ ses conditions), chaque démonstration un argument complet, aussi détaillés qu
 
 # Figures
 
-Quand le rapport s'appuie sur des mesures, une simulation ou un graphique, ajoute-le avec `creer_figure`, rattaché
-au nœud qu'il soutient (observation, calcul, résultat), une fois le graphe posé : il prend sa place dans la vue à
-côté de ce nœud. Les appels `creer_figure` sont indépendants : lance-les ensemble.
+Tout ce que le rapport montre doit apparaître dans le graphe : ajoute chaque figure (section « Figures » du
+rapport, images citées dans les résultats ou les fichiers) avec `creer_figure`, une fois le graphe posé, rattachée
+au nœud qu'elle soutient ; elle prend sa place dans la vue à côté de ce nœud. Un schéma du dispositif va sur
+l'hypothèse ou la définition qu'il illustre, une courbe sur le calcul, des mesures sur l'observation, une animation
+(GIF ou WebP animé, jouée dans le graphe) sur le résultat de la simulation. Les appels `creer_figure` sont
+indépendants : lance-les ensemble. Signale dans ta réponse une figure que tu n'as pas pu rattacher (format refusé,
+fichier introuvable).
 - Tracé vectoriel dès que tu as les données (fichier CSV de l'expérimentateur, valeurs du rapport) : séries
   `mesures` (avec incertitudes), `courbe` (simulation), `loi` (prédiction, paramètres rattachés au nœud qui les
   fournit). L'image PNG du script en plus, si elle existe. `lire_figure` te montre une figure existante.
@@ -101,4 +105,5 @@ côté de ce nœud. Les appels `creer_figure` sont indépendants : lance-les ens
 
 - Nœuds créés et nœuds existants réutilisés (ids et nombres), par cadre, et le nœud `decision` d'embranchement.
 - Démonstrations ajoutées (nombre, et celles qui réfutent une piste).
+- Figures ajoutées (id, nœud illustré).
 - Manques et ambiguïtés du rapport.

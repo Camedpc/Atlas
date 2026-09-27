@@ -39,6 +39,9 @@ prompts dans `atlas/orchestrateur/prompts/*.md` : c'est Camille qui les fait év
   Sa case est dans sa propre ligne (`colonne`, `ligne`…) ; dans `vue.py` elle est un pseudo-nœud `fig:<id>` dont la
   prémisse est son nœud, et elle remonte au cadre parent si le sien est trop serré (`placer_figure`). Quatre formats
   seulement (`FORMATS_FIGURE`) : 1 × 1, 2 × 1, 1 × 2 ou 2 × 2 cases, 2 × 2 par défaut.
+  Un GIF ou un WebP animé est joué sur le canevas (`ImagesFigures`, `ImageDecoder`, une image décodée à la fois,
+  seulement quand la figure est dessinée) ; pas de SVG. Les prompts poussent tous les agents à produire schémas,
+  courbes et animations (Graphviz et pillow dans l'image Docker), et l'orchestrateur peut rattacher une figure lui-même.
 - Repères (`atlas/navigation.py`, pur) : la numérotation de l'écran (« Lemme 7 », « §1.2 », « Figure 2 ») recopie
   `construireModele` de `graphe-modele.ts` ; un jeu commun (`tests/donnees/reperes.json`) est vérifié des deux
   côtés, à garder à jour si l'une change. Rien de purement visuel (cadrage, zoom, filtres) n'est enregistré ; seul un
