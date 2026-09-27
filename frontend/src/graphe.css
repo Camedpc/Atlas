@@ -315,6 +315,34 @@
   margin-right: auto;
 }
 
+.gr-format {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--trait, #e5e5e1);
+  border-radius: 4px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.gr-format i {
+  display: block;
+  border: 1px solid var(--texte-2, #52525b);
+  border-radius: 1px;
+}
+
+.gr-format:hover {
+  background: var(--fond-2, #f4f4f2);
+}
+
+.gr-format.actif {
+  outline: 1.5px solid var(--gr-accent);
+  outline-offset: 1px;
+}
+
 .gr-teinte {
   width: 16px;
   height: 16px;

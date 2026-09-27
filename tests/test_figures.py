@@ -7,7 +7,7 @@ import pytest
 
 from atlas import figures, vue
 from atlas.figures import ErreurFigure
-from atlas.vue import EtatVue, NoeudVue
+from atlas.vue import ErreurVue, EtatVue, NoeudVue
 
 
 def _trace(**series) -> dict:
@@ -117,15 +117,31 @@ def _avec_figure() -> EtatVue:
     return etat
 
 
-def test_figure_placee_a_droite_de_son_noeud_sur_trois_cases():
+def test_figure_placee_a_droite_de_son_noeud_en_2_x_2():
     etat = _avec_figure()
     p = vue.placer_figure(etat, "fig:courbe", None, *vue.TAILLE_FIGURE)
     obs = etat.placements["obs"]
-    assert (p.colonne, p.ligne, p.largeur, p.hauteur) == (obs.colonne + 1, obs.ligne, 3, 2)
+    assert (p.colonne, p.ligne, p.largeur, p.hauteur) == (obs.colonne + 1, obs.ligne, 2, 2)
     # Réorganiser place aussi une figure jamais placée, avec sa taille de figure.
     apres, _ = vue.appliquer(etat, [{"op": "reorganiser"}])
     assert (apres.placements["fig:courbe"].largeur, apres.placements["fig:courbe"].hauteur) == vue.TAILLE_FIGURE
-    assert "[2,0+3x2] fig:courbe · figure — Courbe (illustre obs)" in vue.rendre_texte(apres)
+    assert "[2,0+2x2] fig:courbe · figure — Courbe (illustre obs)" in vue.rendre_texte(apres)
+
+
+def test_quatre_formats_de_figure():
+    etat = _avec_figure()
+    etat, _ = vue.appliquer(etat, [{"op": "placer", "noeud": "fig:courbe"}])
+    assert (etat.placements["fig:courbe"].largeur, etat.placements["fig:courbe"].hauteur) == (2, 2)
+    for largeur, hauteur in vue.FORMATS_FIGURE:
+        op = {"op": "placer", "noeud": "fig:courbe", "largeur": largeur, "hauteur": hauteur}
+        apres, _ = vue.appliquer(etat, [op])
+        assert (apres.placements["fig:courbe"].largeur, apres.placements["fig:courbe"].hauteur) == (largeur, hauteur)
+    for largeur, hauteur in ((3, 2), (2, 3), (1, 3)):
+        with pytest.raises(ErreurVue, match="Format de figure"):
+            vue.appliquer(etat, [{"op": "placer", "noeud": "fig:courbe", "largeur": largeur, "hauteur": hauteur}])
+    # Un nœud, lui, garde toutes ses tailles.
+    apres, _ = vue.appliquer(etat, [{"op": "placer", "noeud": "h", "largeur": 3, "hauteur": 1}])
+    assert apres.placements["h"].largeur == 3
 
 
 def test_figure_remonte_au_cadre_parent_quand_le_sien_est_trop_serre():

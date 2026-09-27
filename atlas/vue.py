@@ -26,7 +26,9 @@ GENRES = ("sous_probleme", "etape", "piste_abandonnee", "libre")
 ROLES = ("principale", "auxiliaire", "technique", "contexte")
 TAILLE_MAX = 8
 PREFIXE_FIGURE = "fig:"
-TAILLE_FIGURE = (3, 2)
+TAILLE_FIGURE = (2, 2)
+FORMATS_FIGURE = ((1, 1), (2, 1), (1, 2), (2, 2))
+"""Formats d'une figure (largeur × hauteur, en cases) : une case, deux côte à côte, deux l'une sur l'autre, ou 2 × 2."""
 # Disposition : au-delà de cette hauteur (en cases), une colonne de départs se replie en plusieurs.
 HAUTEUR_COLONNE = 8
 # Recherche d'une case libre : au-delà, on renonce plutôt que de boucler.
@@ -112,6 +114,13 @@ class Rect:
 
     def coupe(self, autre: Rect) -> bool:
         return not (self.c1 < autre.c0 or autre.c1 < self.c0 or self.l1 < autre.l0 or autre.l1 < self.l0)
+
+
+def verifier_format(largeur: int, hauteur: int) -> None:
+    if (largeur, hauteur) not in FORMATS_FIGURE:
+        raise ErreurVue(
+            f"Format de figure « {largeur} × {hauteur} » : 1 × 1, 2 × 1, 1 × 2 ou 2 × 2 (largeur × hauteur, en cases)."
+        )
 
 
 def est_figure(noeud_id: str) -> bool:
@@ -664,8 +673,11 @@ def _appliquer_une(etat: EtatVue, op: dict[str, Any], renommages: dict[str, str]
         nid = _noeud_existant(etat, op.get("noeud"))
         ancien = etat.placements.get(nid)
         groupe = _groupe_existant(etat, op["groupe"]) if "groupe" in op else (ancien.groupe_id if ancien else ...)
-        largeur = _taille(op.get("largeur", ancien.largeur if ancien else 1), "Largeur")
-        hauteur = _taille(op.get("hauteur", ancien.hauteur if ancien else 1), "Hauteur")
+        defaut = (ancien.largeur, ancien.hauteur) if ancien else TAILLE_FIGURE if est_figure(nid) else (1, 1)
+        largeur = _taille(op.get("largeur", defaut[0]), "Largeur")
+        hauteur = _taille(op.get("hauteur", defaut[1]), "Hauteur")
+        if est_figure(nid):
+            verifier_format(largeur, hauteur)
         if "colonne" in op or "ligne" in op:
             if "colonne" not in op or "ligne" not in op:
                 raise ErreurVue("Donne colonne et ligne ensemble (ou aucune des deux pour un placement automatique).")

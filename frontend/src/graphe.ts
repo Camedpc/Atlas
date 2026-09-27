@@ -14,7 +14,7 @@ import { instantane, operationsVers, type Entree, type Instantane } from './grap
 import { Contenu } from './graphe-contenu'
 import { dansCadre, dessiner, niveauDe, oublierMesures, PALETTE, positionsRenvois, referenceDe, rgba, type Camera, type EtatDessin } from './graphe-dessin'
 import { ImagesFigures, ouvrirFenetre } from './graphe-figures'
-import { CADRE, CLE_FONCTION, construireModele, dansRect, GRILLE, PREFIXE_FIGURE, rectBloc, TEINTES, union, type Bloc, type Modele, type Rect, type Surcharge } from './graphe-modele'
+import { CADRE, CLE_FONCTION, construireModele, dansRect, FORMATS_FIGURE, GRILLE, PREFIXE_FIGURE, rectBloc, TEINTES, union, type Bloc, type Modele, type Rect, type Surcharge } from './graphe-modele'
 import { echapper } from './rendu'
 
 /** Paliers de zoom de l'éditeur Blueprint d'UE5 (−12 à +7), plus trois paliers lointains ; le pincement
@@ -1267,6 +1267,7 @@ export class VueGraphe {
 
   private ouvrirMenu(c: Cible, sx: number, sy: number): void {
     type Article = { libelle: string; raccourci?: string; action?: () => void; inactif?: string } | 'sep' | { couleurs: string }
+      | { format: string }
     const articles: Article[] = []
     let titre = ''
     if (c.genre === 'bloc' || c.genre === 'renvoi') {
@@ -1292,6 +1293,7 @@ export class VueGraphe {
       if (b.figure) {
         const illustre = b.figure.noeud_id
         articles.push({ libelle: 'Ouvrir en grand', raccourci: 'double-clic', action: () => this.ouvrirFigure(id) })
+        articles.push({ format: id })
         articles.push(this.base.blocs.has(illustre)
           ? { libelle: `Montrer le nœud illustré (${referenceDe(this.base, illustre)})`, action: () => this.montrer(illustre) }
           : { libelle: 'Montrer le nœud illustré', inactif: 'absent du graphe' })
@@ -1334,6 +1336,23 @@ export class VueGraphe {
           b.addEventListener('click', () => {
             this.fermerMenu()
             void this.executer([{ op: 'modifier_groupe', id: a.couleurs, couleur: t ?? '' }], 'Changer la couleur du cadre')
+          })
+        }
+      } else if ('format' in a) {
+        // Format d'une figure (largeur × hauteur en cases) ; elle garde sa case, et la vue refuse un chevauchement.
+        const ligne = element(this.menu, 'div', 'gr-menu-couleurs')
+        ligne.innerHTML = '<span>Format</span>'
+        const f = this.base.blocs.get(a.format)!
+        for (const [largeur, hauteur] of FORMATS_FIGURE) {
+          const b = element(ligne, 'button', 'gr-format') as HTMLButtonElement
+          b.type = 'button'
+          b.title = `${largeur} × ${hauteur} case${largeur * hauteur > 1 ? 's' : ''} (largeur × hauteur)`
+          b.innerHTML = `<i style="width:${largeur * 7}px;height:${hauteur * 7}px"></i>`
+          if (f.largeur === largeur && f.hauteur === hauteur) b.classList.add('actif')
+          b.addEventListener('click', () => {
+            this.fermerMenu()
+            const ou = f.place ? { colonne: f.colonne, ligne: f.ligne, groupe: f.groupe ?? '', fixe: f.fixe } : {}
+            void this.executer([{ op: 'placer', noeud: a.format, ...ou, largeur, hauteur }], 'Changer le format de la figure')
           })
         }
       } else {
