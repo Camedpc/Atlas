@@ -31,8 +31,6 @@ const INDEX_1_1 = ZOOMS.findIndex(([z]) => z === 1)
 const SEUIL_GLISSER = 4
 /** Au-delà, une relecture qui change beaucoup de cases (réorganisation) n'est pas animée. */
 const DEPLACES_ANIMES_MAX = 60
-/** Délai qui distingue un clic sur une barre de titre (réduire) d'un double-clic (renommer). */
-const DELAI_DOUBLE_CLIC = 260
 /** Au doigt : seuil de glisser plus large (le doigt tremble), appui long et double toucher. */
 const SEUIL_GLISSER_DOIGT = 10
 const DELAI_APPUI_LONG = 450
@@ -53,7 +51,7 @@ export const AIDE_COMMANDES: [string, string][] = [
   ['Ctrl + A', 'Tout sélectionner'],
   ['Glisser un nœud', 'Déplacer la sélection, case par case ; déposée dans un cadre, elle y entre'],
   ['Glisser une barre de titre', 'Déplacer le cadre et tout son contenu'],
-  ['Clic sur une barre de titre, ou ▾', 'Réduire le cadre en nœud-fonction, ou le déployer'],
+  ['Clic sur ▾ d’une barre de titre', 'Réduire le cadre en nœud-fonction, ou le déployer'],
   ['Double-clic sur une barre de titre', 'Renommer le cadre'],
   ['Double-clic sur un nœud, ou Entrée', 'Ouvrir sa fiche'],
   ['Double-clic sur une figure, ou Entrée', 'L’ouvrir en grand, ou en 3D pour une scène animée (Échap pour fermer)'],
@@ -93,7 +91,7 @@ type Geste =
   | { genre: 'vue'; x0: number; y0: number; camX: number; camY: number; bouge: boolean; bouton: number; cible?: Cible }
   // `saisi` : saisi au doigt par un appui long (relâché sans bouger : menu contextuel).
   | { genre: 'noeuds'; x0: number; y0: number; origines: Map<string, Origine>; dc: number; dl: number; bouge: boolean; seul: string | null; saisi?: boolean }
-  | { genre: 'cadre'; x0: number; y0: number; cadre: string; origines: Map<string, Origine>; dc: number; dl: number; bouge: boolean; titre: boolean; saisi?: boolean }
+  | { genre: 'cadre'; x0: number; y0: number; cadre: string; origines: Map<string, Origine>; dc: number; dl: number; bouge: boolean; saisi?: boolean }
   | { genre: 'rectangle'; x0: number; y0: number; ajout: boolean; avant: Set<string>; bouge: boolean }
   | { genre: 'renvoi'; x0: number; y0: number; id: string; bouge: boolean }
   | { genre: 'repli'; x0: number; y0: number; cadre: string; bouge: boolean }
@@ -163,7 +161,6 @@ export class VueGraphe {
   private pile: Entree[] = []
   private refaire: Entree[] = []
   private enCours = false
-  private minuterieTitre = 0
   private molette = 0
   /** Doigts posés sur la scène (position écran), pincement en cours, appui long, dernier toucher. */
   private doigts = new Map<number, { sx: number; sy: number }>()
@@ -732,7 +729,7 @@ export class VueGraphe {
     if (c.genre === 'renvoi') this.geste = { genre: 'renvoi', x0: sx, y0: sy, id: c.id, bouge: false }
     else if (c.genre === 'titre' && c.glyphe) this.geste = { genre: 'repli', x0: sx, y0: sy, cadre: c.cadre, bouge: false }
     else if (c.genre === 'titre' || c.genre === 'fonction') {
-      this.geste = { genre: 'cadre', x0: sx, y0: sy, cadre: c.cadre, origines: this.originesCadre(c.cadre), dc: 0, dl: 0, bouge: false, titre: c.genre === 'titre' }
+      this.geste = { genre: 'cadre', x0: sx, y0: sy, cadre: c.cadre, origines: this.originesCadre(c.cadre), dc: 0, dl: 0, bouge: false }
     } else if (c.genre === 'bloc') {
       let seul: string | null = null
       if (mod.ctrl) {
@@ -919,10 +916,6 @@ export class VueGraphe {
         void this.executer([{ op: 'deplacer_groupe', id: g.cadre, colonnes: g.dc, lignes: g.dl }], 'Déplacer le cadre')
       } else if (g.bouge) this.finirGlisser()
       else if (g.saisi) this.ouvrirMenu(this.cibleEn(g.x0, g.y0), g.x0, g.y0)
-      else if (g.titre) {
-        clearTimeout(this.minuterieTitre)
-        this.minuterieTitre = window.setTimeout(() => void this.basculerRepli(g.cadre), DELAI_DOUBLE_CLIC)
-      }
     } else if (g.genre === 'rectangle') {
       this.rectangle.hidden = true
       if (!g.bouge && !g.ajout) this.selection.clear()
@@ -984,10 +977,8 @@ export class VueGraphe {
   private doubleClicEn(sx: number, sy: number): void {
     this.fermerMenu()
     const c = this.cibleEn(sx, sy)
-    if (c.genre === 'titre') {
-      clearTimeout(this.minuterieTitre)
-      this.renommerCadre(c.cadre)
-    } else if (c.genre === 'bloc') {
+    if (c.genre === 'titre') this.renommerCadre(c.cadre)
+    else if (c.genre === 'bloc') {
       const b = this.base.blocs.get(c.id)
       if (b?.figure) this.ouvrirFigure(b.id)
       else if (b?.document) this.ouvrirDocument(b.id)
@@ -1348,7 +1339,7 @@ export class VueGraphe {
       titre = `${g.numero} ${g.nom}`
       articles.push({ libelle: 'Renommer', raccourci: 'double-clic', action: () => this.renommerCadre(g.id) })
       articles.push({ couleurs: g.id })
-      articles.push({ libelle: g.replie ? 'Déployer' : 'Réduire en nœud-fonction', raccourci: 'clic sur le titre', action: () => void this.basculerRepli(g.id) })
+      articles.push({ libelle: g.replie ? 'Déployer' : 'Réduire en nœud-fonction', raccourci: '▾', action: () => void this.basculerRepli(g.id) })
       articles.push({ libelle: 'Réorganiser le cadre', action: () => void this.executer([{ op: 'reorganiser', groupe: g.id }], 'Réorganiser le cadre') })
       articles.push('sep')
       articles.push({ libelle: 'Supprimer le cadre (les nœuds restent)', action: () => void this.executer([{ op: 'supprimer_groupe', id: g.id }], 'Supprimer le cadre') })
