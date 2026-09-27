@@ -26,7 +26,8 @@ GENRES = ("sous_probleme", "etape", "piste_abandonnee", "libre")
 ROLES = ("principale", "auxiliaire", "technique", "contexte")
 TAILLE_MAX = 8
 PREFIXE_FIGURE = "fig:"
-TAILLE_FIGURE = (3, 2)
+# Une figure occupe une case, comme un nœud : on l'ouvre en grand dans sa fenêtre (double-clic).
+TAILLE_FIGURE = (1, 1)
 # Disposition : au-delà de cette hauteur (en cases), une colonne de départs se replie en plusieurs.
 HAUTEUR_COLONNE = 8
 # Recherche d'une case libre : au-delà, on renonce plutôt que de boucler.

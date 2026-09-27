@@ -36,6 +36,7 @@ function fausseVue() {
     zoomerDe: vi.fn((f: number) => (v.camera = { ...v.camera, z: v.camera.z * f })),
     cadrerNoeuds: vi.fn((ids: string[]) => (v.cadres.push([...ids]), ids.length > 0)),
     cadrerGraphe: vi.fn(() => v.toutCadre++),
+    figures: ['portrait'],
     visibles: () => [{ id: 'thm', nom: 'Théorème', x: 10, y: 20 }, { id: 'Id-Hors-Protocole', nom: 'x', x: 0, y: 0 }],
   }
   return v
@@ -136,6 +137,14 @@ describe('lots exécutés sur la vue 2D', () => {
     expect(cr.ok).toBe(false)
     expect(cr.resultats.map((r) => [r.index, r.ok])).toEqual([[0, false], [1, true], [2, false]])
     expect(vue.zoomerDe).toHaveBeenCalledWith(2)
+  })
+
+  it('cadrer une figure : son bloc « fig:<id> » ; figure inconnue refusée', async () => {
+    const { vue, pilote } = installer()
+    expect((await pilote.commander({ op: 'cadrer', cibles: [{ figure: 'portrait' }, { noeud: 'thm' }] })).ok).toBe(true)
+    expect(vue.cadres.at(-1)).toEqual(['fig:portrait', 'thm'])
+    const cr = await pilote.commander({ op: 'cadrer', cibles: [{ figure: 'absente' }] })
+    expect(cr.resultats[0]).toMatchObject({ ok: false, erreur: { code: 'introuvable' } })
   })
 
   it('un geste de l\'utilisateur prévient le pilote, une image identique non', () => {

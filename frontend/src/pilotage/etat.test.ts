@@ -161,7 +161,7 @@ describe('appliquerLot', () => {
     for (const [chemin, brut] of Object.entries(exemples)) {
       const l = brut as LotCommandes
       const ids = new Set(['lemme_compacite', 'theoreme_principal', 'choix_jauge', 'lemme_a'])
-      const index = construireIndex([...ids].map((id) => ({ id, conversation: CONV })))
+      const index = construireIndex([...ids].map((id) => ({ id, conversation: CONV })), ['portrait_phase'])
       const r = appliquerLot({ ...ETAT, selection: { noeud: 'lemme_a' } }, l.commandes, index, l.atomique ?? true)
       expect(r.ok, `${chemin} : ${JSON.stringify(r.resultats.filter((x) => !x.ok))}`).toBe(true)
     }

@@ -348,6 +348,11 @@ export class VueGraphe {
     return this.projetId
   }
 
+  /** Ids des figures de la vue (sans « fig: »). */
+  get figures(): string[] {
+    return (this.vue.figures ?? []).map((f) => f.id)
+  }
+
   /** Nœud sélectionné (le premier, s'il y en a plusieurs). */
   get noeudSelectionne(): string | null {
     for (const id of this.selection) if (this.base.blocs.get(id)?.noeud && !this.base.blocs.get(id)?.figure) return id

@@ -9,14 +9,20 @@ import type {
   CommandeBas, EtatAffichage, EtatFiltres, ErreurProtocole, IdNoeud, NomVue, ParametresLecture, RefNoeud,
 } from './protocole'
 
-/** Ce que le modèle doit savoir des données : ids de nœuds et nœuds par conversation. */
+/** Ce que le modèle doit savoir des données : ids de nœuds, nœuds par conversation, figures de la vue. */
 export interface IndexDonnees {
   noeuds: ReadonlySet<IdNoeud>
   parConversation: ReadonlyMap<string, readonly IdNoeud[]>
+  /** Ids des figures (sans « fig: ») ; vide si la vue n'en a pas. */
+  figures: ReadonlySet<string>
 }
+
+/** Préfixe d'une figure parmi les éléments à cadrer (comme dans la vue). */
+export const PREFIXE_FIGURE = 'fig:'
 
 /** Action à jouer après la mise en état : ce qui n'est pas un état stable de l'écran. */
 export type Effet =
+  /** `noeuds` : ids de nœuds, et figures sous la forme « fig:<id> ». */
   | { genre: 'cadrer'; noeuds: IdNoeud[] }
   | { genre: 'cadrer'; tout: true }
   | { genre: 'cadrer'; selection: true }
@@ -35,7 +41,10 @@ export function filtresVides(): EtatFiltres {
   return { conversation: null, noeuds: [], statuts: [], types: [], periode: { debut: null, fin: null }, texte: '', mode: 'masquer' }
 }
 
-export function construireIndex(noeuds: readonly { id: IdNoeud; conversation: string | null }[]): IndexDonnees {
+export function construireIndex(
+  noeuds: readonly { id: IdNoeud; conversation: string | null }[],
+  figures: readonly string[] = [],
+): IndexDonnees {
   const parConversation = new Map<string, IdNoeud[]>()
   for (const n of noeuds) {
     if (n.conversation === null) continue
@@ -44,7 +53,7 @@ export function construireIndex(noeuds: readonly { id: IdNoeud; conversation: st
     l.push(n.id)
   }
   for (const l of parConversation.values()) l.sort()
-  return { noeuds: new Set(noeuds.map((n) => n.id)), parConversation }
+  return { noeuds: new Set(noeuds.map((n) => n.id)), parConversation, figures: new Set(figures) }
 }
 
 export function estErreur(r: Application | ErreurProtocole): r is ErreurProtocole {
@@ -65,7 +74,7 @@ function verifierParametres(p: ParametresLecture): ErreurProtocole | null {
   return null
 }
 
-/** Nœuds désignés par des cibles, dans l'ordre, sans doublon. */
+/** Nœuds (et figures « fig:<id> ») désignés par des cibles, dans l'ordre, sans doublon. */
 function resoudreCibles(cibles: Extract<CommandeBas, { op: 'cadrer' }>['cibles'], index: IndexDonnees): IdNoeud[] | ErreurProtocole {
   if (typeof cibles === 'string') return []
   const ids: IdNoeud[] = []
@@ -74,6 +83,9 @@ function resoudreCibles(cibles: Extract<CommandeBas, { op: 'cadrer' }>['cibles']
       const e = verifierNoeud(c, index)
       if (e) return e
       ids.push(c.noeud)
+    } else if ('figure' in c) {
+      if (!index.figures.has(c.figure)) return erreur('introuvable', `Figure inconnue : ${c.figure}`, { figure: c.figure })
+      ids.push(PREFIXE_FIGURE + c.figure)
     } else {
       const l = index.parConversation.get(c.conversation)
       if (!l?.length) return erreur('introuvable', `Aucun nœud pour la conversation ${c.conversation}`, { conversation: c.conversation })

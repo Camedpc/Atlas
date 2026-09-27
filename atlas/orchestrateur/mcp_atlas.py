@@ -287,7 +287,7 @@ def creer_figure(
       Une loi est tracée avec sa bande d'incertitude ; expressions : + - * / ^, sqrt, exp, ln, log10, sin, cos,
       tan, tanh, arctan, abs, pi. Ne mets jamais de points inventés dans une série « mesures ».
     - source : d'où viennent les données ou l'image (script, fichier, article).
-    - groupe : cadre de la vue (par défaut celui du nœud) ; largeur, hauteur : en cases (défaut 3 × 2).
+    - groupe : cadre de la vue (par défaut celui du nœud) ; largeur, hauteur : ignorés (une case, comme un nœud).
     - remplacer : vrai pour remplacer une figure existante (elle garde sa place)."""
     donnees = _lire_fichier_image(image) if image else None
     ligne = ecriture.creer_figure(

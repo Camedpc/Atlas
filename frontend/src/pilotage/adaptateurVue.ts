@@ -149,7 +149,7 @@ export class AdaptateurVue implements Ecran {
   }
 
   index(): IndexDonnees {
-    return construireIndex(this.connus.map((n) => ({ id: n.id, conversation: n.conversation_id })))
+    return construireIndex(this.connus.map((n) => ({ id: n.id, conversation: n.conversation_id })), this.vue.figures)
   }
 
   refuser(c: CommandeBas): ErreurProtocole | null {

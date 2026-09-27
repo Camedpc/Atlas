@@ -421,7 +421,8 @@ def creer_figure(
         l_defaut, h_defaut = vue.TAILLE_FIGURE
         cadre = groupe or (p.groupe_id if (p := etat.placements.get(noeud_id)) else None)
         try:
-            place = vue.placer_figure(etat, fid, cadre, largeur or l_defaut, hauteur or h_defaut)
+            # Une case, comme un nœud (largeur et hauteur demandées ne comptent plus : voir vue.TAILLE_FIGURE).
+            place = vue.placer_figure(etat, fid, cadre, l_defaut, h_defaut)
         except vue.ErreurVue:
             return ligne  # la vue la montrera « non placée » ; une réorganisation la rattrapera
         _ecrire_placements(projet_id, [place])

@@ -110,9 +110,9 @@ def charger_etat_vue(projet_id: str) -> vue.EtatVue:
         fid = vue.PREFIXE_FIGURE + f["id"]
         noeuds[fid] = vue.NoeudVue(fid, f["titre"], "figure", None, ((f["noeud_id"], "principale"),))
         if f["colonne"] is not None:
-            places[fid] = vue.Placement(
-                fid, f["colonne"], f["ligne"], f["groupe_id"], f["largeur"], f["hauteur"], f["fixe"]
-            )
+            # Une case, quelle que soit la taille enregistrée : les figures plus grandes laissaient d'immenses blocs.
+            largeur, hauteur = vue.TAILLE_FIGURE
+            places[fid] = vue.Placement(fid, f["colonne"], f["ligne"], f["groupe_id"], largeur, hauteur, f["fixe"])
 
     return vue.EtatVue(
         noeuds=noeuds,

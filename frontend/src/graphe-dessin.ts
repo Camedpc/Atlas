@@ -30,10 +30,18 @@ export const PALETTE = {
 }
 
 /** Seuils des niveaux de détail (z = px d'écran par px de mise en page). */
-export const SEUIL_POINT = 0.225
+export const SEUIL_POINT = 0.175
 export const SEUIL_CONTENU = 0.6
 /** Corps du texte des blocs (px de mise en page). */
 export const CORPS = 12.5
+/** Taille minimale des titres à l'écran (px) : de loin, ils restent lisibles au lieu de disparaître. */
+export const TITRE_MIN = 10
+
+/** Corps des titres à l'écran (px) et grossissement par rapport au texte à l'échelle (≥ 1). */
+function corpsTitre(z: number): { fs: number; g: number } {
+  const fs = Math.max(CORPS * z, TITRE_MIN)
+  return { fs, g: fs / (CORPS * z) }
+}
 
 export type Niveau = 'point' | 'titre' | 'contenu'
 
@@ -420,15 +428,17 @@ function dessinerBloc(ctx: CanvasRenderingContext2D, e: EtatDessin, b: Bloc, X: 
 
 /** Titre seul (niveau intermédiaire, ou en attendant la composition HTML) : tête en gras puis le nom. */
 function dessinerTitre(ctx: CanvasRenderingContext2D, b: Bloc, X: (x: number) => number, Y: (y: number) => number, z: number, estompe: boolean): void {
-  const fs = CORPS * z
-  if (fs < 5) return
-  const larg = b.w - 14
-  const interligne = CORPS * 1.2
-  const max = Math.floor((b.h - 10) / interligne)
-  if (max < 1) return
+  // De loin, le titre est grossi (g) : moins de mots par ligne et moins de lignes, coupés au bord du bloc.
+  const { fs, g } = corpsTitre(z)
+  const larg = (b.w - 14) / g
+  const interligne = CORPS * 1.2 * g
+  const max = Math.max(1, Math.floor((b.h - 10) / interligne))
   const tete = `${b.libelle} ${b.numero}`
-  const suite = lignes(texteBrut(b.noeud.nom), larg, max - 1)
+  const suite = max > 1 ? lignes(texteBrut(b.noeud.nom), larg, max - 1) : []
   ctx.save()
+  ctx.beginPath()
+  ctx.rect(X(b.x), Y(b.y), b.w * z, b.h * z)
+  ctx.clip()
   if (estompe) ctx.globalAlpha = 0.3
   ctx.textBaseline = 'top'
   ctx.textAlign = 'left'
@@ -595,9 +605,11 @@ function dessinerFonction(ctx: CanvasRenderingContext2D, e: EtatDessin, c: Cadre
 
 function dessinerTitreFonction(ctx: CanvasRenderingContext2D, c: Cadre, X: (x: number) => number, Y: (y: number) => number, z: number): void {
   const f = c.fonction!
-  const fs = CORPS * z
-  if (fs < 5) return
+  const { fs, g } = corpsTitre(z)
   ctx.save()
+  ctx.beginPath()
+  ctx.rect(X(f.x), Y(f.y), f.w * z, f.h * z)
+  ctx.clip()
   ctx.textBaseline = 'top'
   ctx.textAlign = 'left'
   ctx.fillStyle = PALETTE.encre
@@ -605,7 +617,7 @@ function dessinerTitreFonction(ctx: CanvasRenderingContext2D, c: Cadre, X: (x: n
   const x0 = X(f.x + 8), y0 = Y(f.y + 8)
   ctx.fillText(`Sous-problème ${c.numero}`, x0, y0)
   ctx.font = `400 ${fs}px ${SERIF}`
-  lignes(`${texteBrut(c.nom)} — réduit, ${c.enonces} énoncés`, f.w - 16, 1).forEach((l, k) => ctx.fillText(l, x0, y0 + (k + 1) * CORPS * 1.2 * z))
+  lignes(`${texteBrut(c.nom)} — réduit, ${c.enonces} énoncés`, (f.w - 16) / g, 1).forEach((l, k) => ctx.fillText(l, x0, y0 + (k + 1) * CORPS * 1.2 * z * g))
   ctx.restore()
 }
 
@@ -668,9 +680,11 @@ function dessinerFigure(ctx: CanvasRenderingContext2D, e: EtatDessin, b: Bloc, X
 
 /** Titre d'une figure sur le canevas (vue intermédiaire, ou en attendant le HTML). */
 function dessinerTitreFigure(ctx: CanvasRenderingContext2D, b: Bloc, X: (x: number) => number, Y: (y: number) => number, z: number, estompe: boolean): void {
-  const fs = CORPS * z
-  if (fs < 5) return
+  const { fs } = corpsTitre(z)
   ctx.save()
+  ctx.beginPath()
+  ctx.rect(X(b.x), Y(b.y), b.w * z, b.h * z)
+  ctx.clip()
   if (estompe) ctx.globalAlpha = 0.3
   ctx.textBaseline = 'middle'
   ctx.textAlign = 'left'

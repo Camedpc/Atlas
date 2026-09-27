@@ -117,15 +117,15 @@ def _avec_figure() -> EtatVue:
     return etat
 
 
-def test_figure_placee_a_droite_de_son_noeud_sur_trois_cases():
+def test_figure_placee_a_droite_de_son_noeud_sur_une_case():
     etat = _avec_figure()
     p = vue.placer_figure(etat, "fig:courbe", None, *vue.TAILLE_FIGURE)
     obs = etat.placements["obs"]
-    assert (p.colonne, p.ligne, p.largeur, p.hauteur) == (obs.colonne + 1, obs.ligne, 3, 2)
+    assert (p.colonne, p.ligne, p.largeur, p.hauteur) == (obs.colonne + 1, obs.ligne, 1, 1)
     # Réorganiser place aussi une figure jamais placée, avec sa taille de figure.
     apres, _ = vue.appliquer(etat, [{"op": "reorganiser"}])
     assert (apres.placements["fig:courbe"].largeur, apres.placements["fig:courbe"].hauteur) == vue.TAILLE_FIGURE
-    assert "[2,0+3x2] fig:courbe · figure — Courbe (illustre obs)" in vue.rendre_texte(apres)
+    assert "[2,0] fig:courbe · figure — Courbe (illustre obs)" in vue.rendre_texte(apres)
 
 
 def test_figure_remonte_au_cadre_parent_quand_le_sien_est_trop_serre():
@@ -142,7 +142,7 @@ def test_figure_remonte_au_cadre_parent_quand_le_sien_est_trop_serre():
             {"op": "placer", "noeud": "voisin", "groupe": "bas", "colonne": 0, "ligne": 2},
         ],
     )
-    p = vue.placer_figure(etat, "fig:courbe", "haut", *vue.TAILLE_FIGURE)
+    p = vue.placer_figure(etat, "fig:courbe", "haut", 3, 2)  # une figure plus grande qu'une case
     assert p.groupe_id == "parent"
     etat.placements["fig:courbe"] = p
     assert not vue.conflits(etat)
