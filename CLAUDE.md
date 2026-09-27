@@ -32,6 +32,12 @@ prompts dans `atlas/orchestrateur/prompts/*.md` : c'est Camille qui les fait év
   (à droite des prémisses, sans chevauchement) dans `atlas/vue.py` (pur) ; écriture par `ecriture.organiser_vue`,
   tout ou rien, journalisée (action `vue`). Le sens reste dans `noeuds.type`, `noeuds.details` et
   `demonstrations.roles` (rôle des prémisses non principales ; `justifie_par` garde la liste complète).
+- Figures (`figures`, module pur `atlas/figures.py`) : un graphique rattaché à un nœud, vectoriel (`trace` : axes,
+  séries `mesures` / `courbe` / `loi` ; les lois sont évaluées sans `eval` et échantillonnées côté serveur avec leur
+  bande d'incertitude) et/ou une image (bucket privé Supabase Storage « figures », servie par
+  `/api/figures/{id}/image`, renvoyée en bloc image par l'outil MCP `lire_figure` : Codex la montre au modèle).
+  Sa case est dans sa propre ligne (`colonne`, `ligne`…) ; dans `vue.py` elle est un pseudo-nœud `fig:<id>` dont la
+  prémisse est son nœud, et elle remonte au cadre parent si le sien est trop serré (`placer_figure`).
 - `noeuds.parents` / `noeuds.enfants` (parents = prémisses) sont maintenus par trigger depuis `demonstrations` :
   ne jamais les écrire. `noeuds.conversation_id` dit seulement qui a créé le nœud.
 - Un graphe par espace : `noeuds`, `demonstrations` et `journal` portent `projet_id` (non nul, « defaut » pour

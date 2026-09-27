@@ -63,6 +63,7 @@ def surcharges_thread(conversation_id: str, projet: str | None = None, projet_id
     """Réglages Codex d'Atlas, appliqués à chaque thread. `projet` est le dossier de l'espace dans le bunker,
     `projet_id` l'espace dont les serveurs MCP lisent et écrivent le graphe."""
     graphe = {"ATLAS_PROJET_ID": projet_id} if projet_id else {}
+    session = bunker.dossier_session(conversation_id, projet)
     surcharges: dict[str, Any] = {
         "web_search": "live",
         # Titres de réflexion (« Je vérifie… »), comme dans la CLI : sans ce réglage, Codex n'en envoie aucun.
@@ -77,7 +78,8 @@ def surcharges_thread(conversation_id: str, projet: str | None = None, projet_id
                 "cwd": str(config.RACINE),
                 # Codex ne transmet pas tout l'environnement aux serveurs MCP : on nomme ce qu'il leur faut.
                 "env_vars": ["SUPABASE_URL", "SUPABASE_SECRET_KEY"],
-                "env": {"ATLAS_CONVERSATION_ID": conversation_id, **graphe},
+                # Le dossier de la session : les images des figures y sont lues (chemins relatifs à lui).
+                "env": {"ATLAS_CONVERSATION_ID": conversation_id, "ATLAS_DOSSIER_SESSION": str(session), **graphe},
             },
             "verificateur": {
                 "command": sys.executable,
@@ -99,7 +101,6 @@ def surcharges_thread(conversation_id: str, projet: str | None = None, projet_id
         agents["max_concurrent_threads_per_session"] = config.MAX_SOUS_AGENTS
     surcharges["agents"] = agents
     # Hérités par les sous-agents : toute l'équipe travaille dans le bunker de la session.
-    session = bunker.dossier_session(conversation_id, projet)
     surcharges["shell_environment_policy"] = bunker.environnement_shell(session)
     if config.BUNKER:
         surcharges |= bunker.permissions_session(session)

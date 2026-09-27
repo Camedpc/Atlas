@@ -4,7 +4,7 @@ Chaque espace de travail a son graphe : `projet_id` le choisit (absent = le proj
 """
 
 from fastapi import APIRouter, HTTPException, Query
-from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi.responses import JSONResponse, PlainTextResponse, Response
 
 from . import lecture, projets, vue
 from .modeles import DetailNoeud, EntreeJournal, Graphe, Vue
@@ -50,7 +50,21 @@ def vue_du_graphe(
 ) -> Vue | PlainTextResponse:
     """Vue de l'espace : cadres (avec leur rectangle de cases), placements, étiquettes. `format=texte` donne la
     même vue telle que l'IA la lit (outil MCP lire_vue)."""
-    etat = lecture.charger_etat_vue(projets.id_ou_defaut(projet_id))
+    projet = projets.id_ou_defaut(projet_id)
+    etat = lecture.charger_etat_vue(projet)
     if format == "texte":
         return PlainTextResponse(vue.rendre_texte(etat))
-    return lecture.vue_pour_le_front(etat)
+    return lecture.vue_pour_le_front(etat, lecture.lister_figures(projet))
+
+
+@routeur.get("/figures/{figure_id}/image")
+def image_de_figure(figure_id: str, projet_id: str | None = None) -> Response:
+    """L'image d'une figure (bucket privé « figures ») ; ?v= dans l'URL sert seulement à contourner le cache."""
+    figure = lecture.lire_figure(projets.id_ou_defaut(projet_id), figure_id)
+    if figure is None or figure["image_chemin"] is None:
+        raise HTTPException(404, f"Figure sans image : {figure_id}")
+    return Response(
+        lecture.lire_image_figure(figure["image_chemin"]),
+        media_type=figure["image_type"],
+        headers={"Cache-Control": "private, max-age=86400", "X-Content-Type-Options": "nosniff"},
+    )

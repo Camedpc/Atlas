@@ -23,7 +23,8 @@ Harness de hackathon : des agents IA transforment leurs raisonnements scientifiq
 | `GET /api/graphe?projet_id=` | Tous les nœuds (avec statut et démonstrations) et toutes les arêtes du graphe d'un espace |
 | `GET /api/noeuds/{id}?projet_id=` | Un nœud, ses prémisses et les nœuds qui l'utilisent |
 | `GET /api/journal?projet_id=&noeud_id=&limite=&avant_id=` | Historique, le plus récent d'abord |
-| `GET /api/vue?projet_id=&format=json\|texte` | Vue de l'espace : cadres (et leur rectangle), placements en cases, étiquettes ; `texte` = ce que lit l'IA |
+| `GET /api/vue?projet_id=&format=json\|texte` | Vue de l'espace : cadres (et leur rectangle), placements en cases, étiquettes ; `texte` = ce que lit l'IA ; `figures` (graphiques et images, placés comme `fig:<id>`) |
+| `GET /api/figures/{id}/image?projet_id=` | Image d'une figure (bucket privé) |
 | `GET /api/docs` | Documentation interactive |
 
 Chaque espace de travail (projet) a son propre graphe : `projet_id` le choisit, et son absence désigne le

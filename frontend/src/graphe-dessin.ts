@@ -9,10 +9,13 @@
 // - Niveaux de détail selon le zoom z (px d'écran par px de mise en page) : z < 0,225 → un carré de la couleur du
 //   cadre par bloc, liaisons en un seul trait gris ; z < 0,6 → cadres et titres écrits sur le canevas ; au-delà →
 //   contenu HTML (KaTeX) des seuls blocs visibles (graphe-contenu.ts). Seul ce qui touche l'écran est dessiné.
+// - Figures (graphe-figures.ts) : cadre gris fin ; de loin, titre et icône ; au niveau « contenu », le tracé pgfplots
+//   (ou l'image) et le titre, la légende et les titres d'axes en HTML. Un pointillé gris les relie au nœud illustré.
 
 import type { Statut } from './api'
 import type { Contenu } from './graphe-contenu'
 import { echapper, enLigne, formulesAffichees, rendreTex, texConfiance, texteBrut } from './formules'
+import { COULEURS_FIGURE, dessinerIcone, dessinerImage, dessinerTrace, geometrieBloc, htmlFigure, TETE_FIGURE, type ImagesFigures } from './graphe-figures'
 import { CADRE, CLE_FONCTION, FONCTION, type Bloc, type Cadre, type Modele, type Rect } from './graphe-modele'
 
 export const SERIF = `'CMU Serif Atlas', KaTeX_Main, 'Latin Modern Roman', 'CMU Serif', 'Computer Modern', 'Times New Roman', serif`
@@ -64,6 +67,8 @@ export interface EtatDessin {
   cadreCible: string | null
   /** Hypothèse survolée : ses dépendants portent « sous (ii) ». */
   hypothese: Bloc | null
+  /** Images des figures (chargées à la demande). */
+  images: ImagesFigures | null
 }
 
 const LIBELLE_STATUT: Record<Statut, string> = {
@@ -188,8 +193,9 @@ export function dessiner(ctx: CanvasRenderingContext2D, e: EtatDessin, contenu: 
   // 1. Cadres (parents d'abord).
   for (const c of m.cadresOrdonnes) if (c.rect && coupe(c.rect, vue)) dessinerCadre(ctx, e, c, X, Y)
 
-  // 2. Liaisons.
+  // 2. Liaisons, et pointillés des figures vers leur nœud.
   dessinerLiens(ctx, e, vue, niveau, X, Y)
+  if (niveau !== 'point') dessinerAttaches(ctx, e, vue, X, Y)
 
   // 3. Blocs et nœuds-fonctions.
   const actifs = e.hypothese?.portee ?? null
@@ -197,9 +203,9 @@ export function dessiner(ctx: CanvasRenderingContext2D, e: EtatDessin, contenu: 
     const parCouleur = new Map<string, number[]>()
     for (const b of m.blocs.values()) {
       if (b.cache || b.x > vue.x1 || b.x + b.w < vue.x0 || b.y > vue.y1 || b.y + b.h < vue.y0) continue
-      const cote = Math.max(3, Math.min(7, b.w * z * 0.18))
+      const cote = b.figure ? Math.max(3, Math.min(9, b.h * z * 0.3)) : Math.max(3, Math.min(7, b.w * z * 0.18))
       const couleur = e.selection.has(b.id) || e.survol === b.id ? PALETTE.accent
-        : b.groupe ? m.cadres.get(b.groupe)!.teinte : PALETTE.encre
+        : b.figure ? COULEURS_FIGURE.cadre : b.groupe ? m.cadres.get(b.groupe)!.teinte : PALETTE.encre
       const cle = e.estompes?.has(b.id) ? `${couleur}|e` : couleur
       const liste = parCouleur.get(cle) ?? parCouleur.set(cle, []).get(cle)!
       liste.push(X(b.x + b.w / 2) - cote / 2, Y(b.y + b.h / 2) - cote / 2, cote)
@@ -223,6 +229,13 @@ export function dessiner(ctx: CanvasRenderingContext2D, e: EtatDessin, contenu: 
     for (const b of m.blocs.values()) {
       if (b.cache || b.x > vue.x1 || b.x + b.w < vue.x0 || b.y > vue.y1 || b.y + b.h < vue.y0) continue
       const estompe = !!e.estompes?.has(b.id)
+      if (b.figure) {
+        dessinerFigure(ctx, e, b, X, Y, niveau, estompe)
+        const pose = niveau === 'contenu'
+          && contenu.placer(b.id, cleFigure(b, m), () => htmlFigure(b.figure!, b.numero, referenceDe(m, b.figure!.noeud_id), b.w, b.h), X(b.x), Y(b.y), z, b.w, b.h, estompe)
+        if (!pose) dessinerTitreFigure(ctx, b, X, Y, z, estompe)
+        continue
+      }
       const sous = actifs?.has(b.id) ?? false
       dessinerBloc(ctx, e, b, X, Y, estompe, sous)
       let pose = false
@@ -496,7 +509,7 @@ function calculerAgregat(c: Cadre, m: Modele): Agregat {
   let confiance: number | null = null
   let maillon: Bloc | null = null
   for (const b of m.blocs.values()) {
-    if (!b.groupe || !dansCadre(m, b.groupe, c.id)) continue
+    if (b.figure || !b.groupe || !dansCadre(m, b.groupe, c.id)) continue
     const s = b.noeud.statut
     if (RANG_STATUT[s] < RANG_STATUT[statut]) statut = s
     if (s === 'a_verifier') aVerifier++
@@ -591,6 +604,133 @@ function dessinerTitreFonction(ctx: CanvasRenderingContext2D, c: Cadre, X: (x: n
   ctx.fillText(`Sous-problème ${c.numero}`, x0, y0)
   ctx.font = `400 ${fs}px ${SERIF}`
   lignes(`${texteBrut(c.nom)} — réduit, ${c.enonces} énoncés`, f.w - 16, 1).forEach((l, k) => ctx.fillText(l, x0, y0 + (k + 1) * CORPS * 1.2 * z))
+  ctx.restore()
+}
+
+// ─── Figures ─────────────────────────────────────────────────────────────────
+
+/** « Lemme 7 » : référence du nœud illustré par une figure (null s'il n'est pas dans le graphe). */
+export function referenceDe(m: Modele, noeudId: string): string | null {
+  const b = m.blocs.get(noeudId)
+  return b && !b.figure ? `${b.libelle} ${b.numero}` : null
+}
+
+function cleFigure(b: Bloc, m: Modele): string {
+  const f = b.figure!
+  return `${b.id}|${b.numero}|${f.titre}|${f.modifie_le}|${b.w}|${b.h}|${referenceDe(m, f.noeud_id) ?? ''}`
+}
+
+/** Cadre de la figure, puis (niveau « contenu ») son tracé ou son image ; de loin, une icône. */
+function dessinerFigure(ctx: CanvasRenderingContext2D, e: EtatDessin, b: Bloc, X: (x: number) => number, Y: (y: number) => number, niveau: Niveau, estompe: boolean): void {
+  const z = e.cam.z
+  const f = b.figure!
+  const x0 = Math.round(X(b.x)) + 0.5, y0 = Math.round(Y(b.y)) + 0.5
+  const w = Math.round(b.w * z) - 1, h = Math.round(b.h * z) - 1
+  const choisi = e.selection.has(b.id)
+  const conflit = !!e.conflits?.has(b.id)
+  const survole = e.survol === b.id
+  ctx.save()
+  if (estompe) ctx.globalAlpha = 0.3
+  ctx.fillStyle = PALETTE.surface
+  ctx.fillRect(x0, y0, w, h)
+  if (niveau === 'contenu') {
+    const g = geometrieBloc(f, b.w, b.h)
+    ctx.save()
+    ctx.beginPath()
+    ctx.rect(x0, y0, w, h)
+    ctx.clip()
+    ctx.translate(X(b.x), Y(b.y))
+    ctx.scale(z, z)
+    if (f.trace) dessinerTrace(ctx, f.trace, g, z)
+    else if (f.image) dessinerImage(ctx, f, g, e.images?.obtenir(f) ?? null)
+    ctx.restore()
+  } else {
+    const t = Math.min(b.h - TETE_FIGURE - 16, b.w * 0.3, 70) * z
+    if (t > 8) dessinerIcone(ctx, x0 + w / 2, y0 + (TETE_FIGURE * z + h) / 2, t, !f.trace)
+  }
+  ctx.strokeStyle = conflit ? PALETTE.erreur : choisi || survole ? PALETTE.accent : COULEURS_FIGURE.cadre
+  ctx.lineWidth = conflit || choisi ? 1.6 : survole ? 1.4 : 0.8
+  ctx.strokeRect(x0, y0, w, h)
+  // Filet sous le bandeau du titre.
+  if (z >= 0.3) {
+    const yf = Math.round(Y(b.y + TETE_FIGURE)) + 0.5
+    ctx.strokeStyle = '#d6d6d6'
+    ctx.lineWidth = 0.6
+    ctx.beginPath()
+    ctx.moveTo(x0 + 6 * z, yf)
+    ctx.lineTo(x0 + w - 6 * z, yf)
+    ctx.stroke()
+  }
+  ctx.restore()
+}
+
+/** Titre d'une figure sur le canevas (vue intermédiaire, ou en attendant le HTML). */
+function dessinerTitreFigure(ctx: CanvasRenderingContext2D, b: Bloc, X: (x: number) => number, Y: (y: number) => number, z: number, estompe: boolean): void {
+  const fs = CORPS * z
+  if (fs < 5) return
+  ctx.save()
+  if (estompe) ctx.globalAlpha = 0.3
+  ctx.textBaseline = 'middle'
+  ctx.textAlign = 'left'
+  ctx.fillStyle = PALETTE.encre
+  const x0 = X(b.x + 8), ym = Y(b.y + TETE_FIGURE / 2)
+  // Petites capitales imitées : la capitale, puis le reste en capitales réduites.
+  ctx.font = `400 ${fs}px ${SERIF}`
+  ctx.fillText('F', x0, ym)
+  let x = x0 + ctx.measureText('F').width
+  ctx.font = `400 ${fs * 0.78}px ${SERIF}`
+  ctx.fillText('IGURE', x, ym)
+  x += ctx.measureText('IGURE').width
+  ctx.font = `400 ${fs}px ${SERIF}`
+  const suite = ` ${b.numero} — ${texteBrut(b.figure!.titre)}`
+  ctx.fillText(tronquer(ctx, suite, X(b.x + b.w - 8) - x), x, ym)
+  ctx.restore()
+}
+
+/** Pointillé gris fin du nœud illustré (ou du cadre réduit qui le cache) vers chaque figure visible. */
+function dessinerAttaches(ctx: CanvasRenderingContext2D, e: EtatDessin, vue: Rect, X: (x: number) => number, Y: (y: number) => number): void {
+  const m = e.modele
+  const segments: { accent: boolean; pts: number[] }[] = []
+  for (const b of m.blocs.values()) {
+    if (!b.figure || b.cache) continue
+    const rep = m.representant.get(b.figure.noeud_id)
+    if (!rep) continue
+    let r: Rect | null = null
+    if (rep.startsWith(CLE_FONCTION)) {
+      const fo = m.cadres.get(rep.slice(CLE_FONCTION.length))?.fonction
+      if (fo) r = { x0: fo.x, y0: fo.y, x1: fo.x + fo.w, y1: fo.y + fo.h }
+    } else {
+      const n = m.blocs.get(rep)
+      if (n) r = { x0: n.x, y0: n.y, x1: n.x + n.w, y1: n.y + n.h }
+    }
+    if (!r) continue
+    const fr: Rect = { x0: b.x, y0: b.y, x1: b.x + b.w, y1: b.y + b.h }
+    const xm = (Math.max(fr.x0, r.x0) + Math.min(fr.x1, r.x1)) / 2
+    let pts: number[] | null = null
+    if (fr.x0 >= r.x1) pts = [r.x1, (r.y0 + r.y1) / 2, fr.x0, (fr.y0 + fr.y1) / 2]
+    else if (fr.x1 <= r.x0) pts = [r.x0, (r.y0 + r.y1) / 2, fr.x1, (fr.y0 + fr.y1) / 2]
+    else if (fr.y0 >= r.y1) pts = [xm, r.y1, xm, fr.y0]
+    else if (fr.y1 <= r.y0) pts = [xm, r.y0, xm, fr.y1]
+    if (!pts) continue
+    const bbox = { x0: Math.min(pts[0]!, pts[2]!), y0: Math.min(pts[1]!, pts[3]!), x1: Math.max(pts[0]!, pts[2]!), y1: Math.max(pts[1]!, pts[3]!) }
+    if (!coupe(bbox, vue)) continue
+    const accent = e.selection.has(b.id) || e.survol === b.id || e.selection.has(rep) || e.survol === rep
+    segments.push({ accent, pts })
+  }
+  if (!segments.length) return
+  ctx.save()
+  ctx.lineWidth = Math.max(0.7, Math.min(1, 0.9 * e.cam.z))
+  ctx.setLineDash([1.5, 3])
+  for (const accent of [false, true]) {
+    ctx.strokeStyle = accent ? PALETTE.accent : PALETTE.grisClair
+    ctx.beginPath()
+    for (const s of segments) {
+      if (s.accent !== accent) continue
+      ctx.moveTo(X(s.pts[0]!), Y(s.pts[1]!))
+      ctx.lineTo(X(s.pts[2]!), Y(s.pts[3]!))
+    }
+    ctx.stroke()
+  }
   ctx.restore()
 }
 

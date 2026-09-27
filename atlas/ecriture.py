@@ -7,7 +7,7 @@ Les refus métier lèvent `ErreurGraphe`, dont le message est renvoyé tel quel 
 import re
 from typing import Any
 
-from . import lecture, vue
+from . import figures, lecture, vue
 from .client import supabase
 from .modeles import Action, TypeNoeud, Validite
 
@@ -198,10 +198,15 @@ def noter_demonstration(
 # ── Vue du graphe ────────────────────────────────────────────────────────────
 
 
-def _placer(projet_id: str, etat: vue.EtatVue, noeud_id: str, groupe: str | None | Any) -> None:
+def _placer(
+    projet_id: str, etat: vue.EtatVue, noeud_id: str, groupe: str | None | Any, largeur: int = 1, hauteur: int = 1
+) -> None:
     """Placement automatique d'un nœud (sans journal : c'est la conséquence d'une écriture déjà journalisée)."""
+    ancien = etat.placements.get(noeud_id)
+    if ancien is not None:
+        largeur, hauteur = ancien.largeur, ancien.hauteur
     try:
-        place = vue.placer_auto(etat, noeud_id, groupe)
+        place = vue.placer_auto(etat, noeud_id, groupe, largeur, hauteur)
     except vue.ErreurVue:
         return  # la vue le montrera « non placé » ; une réorganisation le rattrapera
     if etat.placements.get(noeud_id) == place:
@@ -224,9 +229,21 @@ def _ligne_placement(projet_id: str, p: vue.Placement) -> dict:
 
 
 def _ecrire_placements(projet_id: str, placements: list[vue.Placement]) -> None:
-    if placements:
-        lignes = [_ligne_placement(projet_id, p) for p in placements]
+    lignes = [_ligne_placement(projet_id, p) for p in placements if not vue.est_figure(p.noeud_id)]
+    if lignes:
         supabase().table("placements").upsert(lignes, on_conflict="projet_id,noeud_id").execute()
+    # La case d'une figure est rangée dans sa propre ligne de `figures`.
+    for p in placements:
+        if vue.est_figure(p.noeud_id):
+            case = {k: v for k, v in _ligne_placement(projet_id, p).items() if k not in ("projet_id", "noeud_id")}
+            (
+                supabase()
+                .table("figures")
+                .update(case)
+                .eq("projet_id", projet_id)
+                .eq("id", p.noeud_id.removeprefix(vue.PREFIXE_FIGURE))
+                .execute()
+            )
 
 
 def organiser_vue(*, projet_id: str, operations: list[dict[str, Any]], auteur: str, essai: bool = False) -> dict:
@@ -283,7 +300,11 @@ def organiser_vue(*, projet_id: str, operations: list[dict[str, Any]], auteur: s
         ).execute()
     _ecrire_placements(projet_id, diff["placements"])
     for nid, nom in renommages.items():
-        base.table("noeuds").update({"nom": nom}).eq("projet_id", projet_id).eq("id", nid).execute()
+        if vue.est_figure(nid):
+            fid = nid.removeprefix(vue.PREFIXE_FIGURE)
+            base.table("figures").update({"titre": nom}).eq("projet_id", projet_id).eq("id", fid).execute()
+        else:
+            base.table("noeuds").update({"nom": nom}).eq("projet_id", projet_id).eq("id", nid).execute()
     for nid, eid in diff["marques_ajoutees"]:
         base.table("noeuds_etiquettes").upsert(
             {"projet_id": projet_id, "noeud_id": nid, "etiquette_id": eid},
@@ -302,3 +323,99 @@ def organiser_vue(*, projet_id: str, operations: list[dict[str, Any]], auteur: s
         base.table("groupes").delete().eq("projet_id", projet_id).eq("id", gid).execute()
     _journaliser("vue", projet_id=projet_id, auteur=auteur, noeud_id=None, apres={"operations": operations, **resume})
     return resume
+
+
+# ── Figures ──────────────────────────────────────────────────────────────────
+
+
+def creer_figure(
+    *,
+    projet_id: str,
+    id: str,
+    noeud_id: str,
+    titre: str,
+    auteur: str,
+    legende: str | None = None,
+    trace: dict | None = None,
+    image: bytes | None = None,
+    source: str | None = None,
+    groupe: str | None = None,
+    largeur: int | None = None,
+    hauteur: int | None = None,
+    conversation_id: str | None = None,
+    remplacer: bool = False,
+) -> dict:
+    """Crée (ou remplace) une figure qui illustre `noeud_id`, puis la place dans la vue : dans `groupe` s'il est
+    donné, sinon dans le cadre de son nœud, juste à droite de lui. Remplacer garde sa case et son cadre."""
+    verifier_id(id)
+    if not titre.strip():
+        raise ErreurGraphe("Une figure a besoin d'un titre.")
+    if trace is None and image is None:
+        raise ErreurGraphe("Une figure est un tracé (trace), une image, ou les deux.")
+    try:
+        trace = figures.valider_trace(trace) if trace is not None else None
+        examen = figures.examiner_image(image) if image is not None else None
+        if largeur is not None:
+            vue._taille(largeur, "Largeur")
+        if hauteur is not None:
+            vue._taille(hauteur, "Hauteur")
+    except (figures.ErreurFigure, vue.ErreurVue) as e:
+        raise ErreurGraphe(str(e)) from None
+    cites = figures.noeuds_cites(trace) if trace else set()
+    trouves = _existants(projet_id, [noeud_id, *cites])
+    if noeud_id not in trouves:
+        raise ErreurGraphe(f"Nœud inexistant : {noeud_id}. Une figure illustre un nœud existant.")
+    if manquants := sorted(cites - trouves):
+        raise ErreurGraphe(f"Paramètres rattachés à des nœuds inexistants : {', '.join(manquants)}.")
+    ancienne = lecture.lire_figure(projet_id, id)
+    if ancienne is not None and not remplacer:
+        raise ErreurGraphe(f"La figure {id} existe déjà : passe remplacer=true pour la remplacer.")
+    etat = lecture.charger_etat_vue(projet_id)
+    if groupe and groupe not in etat.groupes:
+        raise ErreurGraphe(f"Cadre inexistant : {groupe}. Crée-le avec organiser_vue (creer_groupe), ou omets groupe.")
+
+    ligne: dict[str, Any] = {
+        "projet_id": projet_id,
+        "id": id,
+        "noeud_id": noeud_id,
+        "titre": titre.strip(),
+        "legende": (legende or "").strip() or None,
+        "trace": trace,
+        "source": (source or "").strip() or None,
+        "conversation_id": conversation_id,
+        "image_chemin": None,
+        "image_type": None,
+        "image_largeur": None,
+        "image_hauteur": None,
+    }
+    if examen is not None:
+        mime, l, h = examen
+        chemin = f"{projet_id}/{id}.{figures.EXTENSIONS[mime]}"
+        supabase().storage.from_("figures").upload(
+            chemin, image, {"content-type": mime, "upsert": "true", "cache-control": "3600"}
+        )
+        ligne |= {"image_chemin": chemin, "image_type": mime, "image_largeur": l, "image_hauteur": h}
+    if ancienne is not None and ancienne["image_chemin"] and ancienne["image_chemin"] != ligne["image_chemin"]:
+        supabase().storage.from_("figures").remove([ancienne["image_chemin"]])
+    ligne |= {k: v for k, v in {"largeur": largeur, "hauteur": hauteur}.items() if v is not None}
+    if ancienne is None:
+        supabase().table("figures").insert(ligne).execute()
+    else:
+        ligne["version"] = ancienne["version"] + 1
+        supabase().table("figures").update(ligne).eq("projet_id", projet_id).eq("id", id).execute()
+    journal = {k: v for k, v in ligne.items() if k != "trace"} | {"series": len(trace["series"]) if trace else 0}
+    _journaliser("figure", projet_id=projet_id, auteur=auteur, noeud_id=noeud_id, apres=journal)
+
+    fid = vue.PREFIXE_FIGURE + id
+    etat.noeuds[fid] = vue.NoeudVue(fid, ligne["titre"], "figure", None, ((noeud_id, "principale"),))
+    if (largeur, hauteur) != (None, None):
+        etat.placements.pop(fid, None)  # nouvelle taille : on lui cherche une place qui la contienne
+    if fid not in etat.placements:
+        l_defaut, h_defaut = vue.TAILLE_FIGURE
+        cadre = groupe or (p.groupe_id if (p := etat.placements.get(noeud_id)) else None)
+        try:
+            place = vue.placer_figure(etat, fid, cadre, largeur or l_defaut, hauteur or h_defaut)
+        except vue.ErreurVue:
+            return ligne  # la vue la montrera « non placée » ; une réorganisation la rattrapera
+        _ecrire_placements(projet_id, [place])
+    return ligne

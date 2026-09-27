@@ -1,8 +1,9 @@
 // Jeu synthétique pour éprouver la vue à grande taille, en développement seulement (`?synthetique=1000`) : chapitres
 // de 40 énoncés dans des cadres (un sous-cadre par chapitre), prémisses vers la gauche, formules Unicode et LaTeX.
-// Lecture seule : rien n'est écrit en base.
+// Quelques figures vectorielles (mesures, lois et bandes, échelles log) y sont jointes. Lecture seule : rien n'est écrit
+// en base.
 
-import type { Demonstration, Graphe, GroupeVue, Noeud, PlacementVue, RolePremisse, Statut, TypeNoeud, Vue } from './api'
+import type { Demonstration, FigureVue, Graphe, GroupeVue, Noeud, PlacementVue, RolePremisse, Statut, TypeNoeud, Vue } from './api'
 
 const TYPES: TypeNoeud[] = ['lemme', 'proposition', 'lemme', 'assertion', 'calcul', 'observation', 'theoreme', 'definition']
 const STATUTS: Statut[] = ['etabli', 'etabli', 'a_verifier', 'a_verifier', 'suspendu', 'invalide', 'ouvert']
@@ -90,5 +91,99 @@ export function jeuSynthetique(n: number): { graphe: Graphe; vue: Vue } {
       }
     }
   }
-  return { graphe: { noeuds, aretes }, vue: { groupes, placements, etiquettes: [], marques: [] } }
+  // Figures : une par chapitre sur trois, sous ses énoncés (3 × 2 cases), qui illustre son 11e énoncé.
+  const figures: FigureVue[] = []
+  for (let k = 0; k < chapitres; k += 3) {
+    const noeud = `n${k * parChapitre + 10}`
+    if (!parId.has(noeud)) continue
+    const f = figureSynthetique(figures.length, noeud, r)
+    figures.push(f)
+    placements.push({
+      noeud_id: `fig:${f.id}`, groupe_id: `ch${k}`, colonne: (k % parLigne) * 9, ligne: Math.floor(k / parLigne) * 9 + 6,
+      largeur: 3, hauteur: 2, fixe: false,
+    })
+  }
+  return { graphe: { noeuds, aretes }, vue: { groupes, placements, etiquettes: [], marques: [], figures } }
+}
+
+/** Figure vectorielle synthétique, de quatre sortes : chute (loi et bande), loi de puissance (log-log), deux séries
+ * de mesures et une simulation, décroissance (y en log). */
+function figureSynthetique(i: number, noeud: string, r: () => number): FigureVue {
+  const bruit = () => (r() - 0.5) * 2
+  const base = { id: `synth_${i}`, noeud_id: noeud, image: false, image_largeur: null, image_hauteur: null, modifie_le: '2026-09-27T00:00:00Z' }
+  const pas = (a: number, b: number, n: number) => Array.from({ length: n }, (_, k) => a + ((b - a) * k) / (n - 1))
+  switch (i % 4) {
+    case 0: {
+      const vl = 7.4, s = 0.35
+      const v = (t: number, u: number) => u * Math.tanh((9.81 * t) / u)
+      return {
+        ...base, titre: 'Vitesse de chute d’un filtre à café',
+        legende: 'Vitesse $v$ en fonction du temps $t$ ; trait plein : $v = v_\\ell \\tanh(g t / v_\\ell)$ avec $v_\\ell = 7{,}4 \\pm 0{,}35$ m/s, aplat : ±1σ.',
+        source: 'docs_session/chute.csv',
+        trace: {
+          x: { titre: '$t$', unite: 's', echelle: 'lin', min: 0 },
+          y: { titre: '$v$', unite: 'm·s⁻¹', echelle: 'lin', min: 0 },
+          series: [
+            { genre: 'mesures', nom: 'Chronophotographie', points: pas(0.1, 2, 12).map((t) => [t, v(t, vl) + bruit() * 0.25, 0.3]) },
+            {
+              genre: 'loi', nom: 'Prédiction', expression: 'v_l*tanh(g*x/v_l)', variable: 'x',
+              parametres: { v_l: { valeur: vl, incertitude: s }, g: { valeur: 9.81 } }, de: 0, a: 2.1,
+              points: pas(0, 2.1, 60).map((t) => [t, v(t, vl)]),
+              bande: pas(0, 2.1, 60).map((t) => [t, v(t, vl - s), v(t, vl + s)]),
+            },
+          ],
+        },
+      }
+    }
+    case 1: {
+      const loi = (x: number) => 2.1 * x ** 1.5
+      return {
+        ...base, titre: 'Période orbitale et demi-grand axe',
+        legende: 'Troisième loi de Kepler : $T \\propto a^{3/2}$ (échelles logarithmiques).', source: null,
+        trace: {
+          x: { titre: '$a$', unite: 'UA', echelle: 'log' },
+          y: { titre: '$T$', unite: 'an', echelle: 'log' },
+          series: [
+            { genre: 'mesures', nom: 'Planètes', points: [0.39, 0.72, 1, 1.52, 5.2, 9.54, 19.2, 30.1].map((a) => [a, loi(a) * (1 + bruit() * 0.08), loi(a) * 0.1, a * 0.05]) },
+            {
+              genre: 'loi', nom: '$T = k\\,a^{3/2}$', expression: 'k*x^1.5', variable: 'x', parametres: { k: { valeur: 2.1, incertitude: 0.15 } },
+              points: pas(-0.5, 1.55, 40).map((l) => [10 ** l, loi(10 ** l)]),
+              bande: pas(-0.5, 1.55, 40).map((l) => [10 ** l, 1.95 * 10 ** (1.5 * l), 2.25 * 10 ** (1.5 * l)]),
+            },
+          ],
+        },
+      }
+    }
+    case 2:
+      return {
+        ...base, titre: 'Hauteur de la fontaine de chaînette',
+        legende: 'Deux séries de mesures et la simulation numérique ; la hauteur croît comme $v^2$.', source: 'scripts/simulation.py',
+        trace: {
+          x: { titre: '$v^2$', unite: 'm²·s⁻²', echelle: 'lin' },
+          y: { titre: '$h_2$', unite: 'cm', echelle: 'lin' },
+          series: [
+            { genre: 'mesures', nom: 'Série A', points: pas(4, 30, 9).map((x) => [x, 0.52 * x + bruit() * 0.9, 0.8]) },
+            { genre: 'mesures', nom: 'Série B', points: pas(6, 32, 8).map((x) => [x, 0.49 * x + bruit() * 1.1, 1, 0.6]) },
+            { genre: 'courbe', nom: 'Simulation', points: pas(0, 34, 30).map((x) => [x, 0.5 * x + 0.02 * x * Math.sin(x / 3)]) },
+          ],
+        },
+      }
+    default:
+      return {
+        ...base, titre: 'Décroissance de l’activité',
+        legende: 'Activité $A(t) = A_0 e^{-t/\\tau}$, $\\tau = 12{,}3$ h.', source: null,
+        trace: {
+          x: { titre: '$t$', unite: 'h', echelle: 'lin', min: 0, max: 60 },
+          y: { titre: '$A$', unite: 'Bq', echelle: 'log' },
+          series: [
+            { genre: 'mesures', nom: 'Compteur', points: pas(2, 56, 10).map((t) => [t, 12000 * Math.exp(-t / 12.3) * (1 + bruit() * 0.1), 12000 * Math.exp(-t / 12.3) * 0.08]) },
+            {
+              genre: 'loi', nom: 'Ajustement', expression: 'A0*exp(-x/tau)', variable: 'x', parametres: { A0: { valeur: 12000 }, tau: { valeur: 12.3, incertitude: 0.6 } },
+              points: pas(0, 60, 50).map((t) => [t, 12000 * Math.exp(-t / 12.3)]),
+              bande: pas(0, 60, 50).map((t) => [t, 12000 * Math.exp(-t / 11.7), 12000 * Math.exp(-t / 12.9)]),
+            },
+          ],
+        },
+      }
+  }
 }

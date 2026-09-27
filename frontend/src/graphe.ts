@@ -10,8 +10,9 @@ import './graphe.css'
 import { api, RefusVue, type Graphe, type Noeud, type OperationVue, type Vue } from './api'
 import { instantane, operationsVers, type Entree, type Instantane } from './graphe-annuler'
 import { Contenu } from './graphe-contenu'
-import { dansCadre, dessiner, niveauDe, oublierMesures, PALETTE, positionsRenvois, rgba, type Camera, type EtatDessin } from './graphe-dessin'
-import { CADRE, CLE_FONCTION, construireModele, dansRect, GRILLE, rectBloc, TEINTES, union, type Bloc, type Modele, type Rect, type Surcharge } from './graphe-modele'
+import { dansCadre, dessiner, niveauDe, oublierMesures, PALETTE, positionsRenvois, referenceDe, rgba, type Camera, type EtatDessin } from './graphe-dessin'
+import { ImagesFigures, ouvrirFenetre } from './graphe-figures'
+import { CADRE, CLE_FONCTION, construireModele, dansRect, GRILLE, PREFIXE_FIGURE, rectBloc, TEINTES, union, type Bloc, type Modele, type Rect, type Surcharge } from './graphe-modele'
 import { echapper } from './rendu'
 
 /** Paliers de zoom de l'éditeur Blueprint d'UE5 (−12 à +7, au-delà de 1:1 avec Ctrl), plus trois paliers lointains. */
@@ -41,7 +42,8 @@ export const AIDE_COMMANDES: [string, string][] = [
   ['Clic sur une barre de titre, ou ▾', 'Réduire le cadre en nœud-fonction, ou le déployer'],
   ['Double-clic sur une barre de titre', 'Renommer le cadre'],
   ['Double-clic sur un nœud', 'Ouvrir sa fiche'],
-  ['F2', 'Renommer le nœud sélectionné'],
+  ['Double-clic sur une figure', 'L’ouvrir en grand (Échap ou clic hors pour fermer)'],
+  ['F2', 'Renommer le nœud ou la figure sélectionnés'],
   ['C', 'Créer un cadre autour de la sélection'],
   ['Origine (Home)', 'Cadrer tout le graphe'],
   ['F', 'Cadrer la sélection'],
@@ -120,10 +122,17 @@ export class VueGraphe {
   private zoomEl: HTMLElement
   private rectangle: HTMLElement
   private renommage: ((valider: boolean) => void) | null = null
+  private images: ImagesFigures
+  /** Fenêtre d'une figure ouverte en grand : sa fermeture. */
+  private fermerFenetre: (() => void) | null = null
 
   constructor(scene: HTMLElement, options: OptionsVueGraphe) {
     this.scene = scene
     this.options = options
+    this.images = new ImagesFigures(
+      (f) => (this.projetId && f.image ? api.imageFigure(this.projetId, f.id, f.modifie_le) : null),
+      () => this.demander(),
+    )
     scene.classList.add('gr-scene')
     scene.tabIndex = 0
     scene.setAttribute('aria-label', 'Graphe de raisonnement (aide : bouton ?)')
@@ -204,6 +213,8 @@ export class VueGraphe {
       this.refaire = []
       this.aCadrer = true
       this.options.surOuvrir(null)
+      this.fermerFenetre?.()
+      this.images.vider()
     }
     this.lectureSeule = lectureSeule
   }
@@ -215,8 +226,12 @@ export class VueGraphe {
     this.estompes = conversationId
       ? new Set(graphe.noeuds.filter((n) => n.conversation_id !== conversationId).map((n) => n.id))
       : null
-    for (const id of [...this.selection]) if (!graphe.noeuds.some((n) => n.id === id)) this.selection.delete(id)
+    // Une figure s'estompe avec le nœud qu'elle illustre.
+    if (this.estompes) {
+      for (const f of vue.figures ?? []) if (this.estompes.has(f.noeud_id)) this.estompes.add(PREFIXE_FIGURE + f.id)
+    }
     this.reconstruire()
+    for (const id of [...this.selection]) if (!this.base.blocs.has(id)) this.selection.delete(id)
     if (this.aCadrer && graphe.noeuds.length && this.largeur) {
       this.aCadrer = false
       this.cadrerTout()
@@ -245,7 +260,8 @@ export class VueGraphe {
     this.selection.add(id)
     const r = this.rectRepresentant(this.modele.representant.get(id) ?? id)
     if (r) this.centrerSur((r.x0 + r.x1) / 2, (r.y0 + r.y1) / 2)
-    this.options.surOuvrir(this.base.blocs.get(id)!.noeud)
+    const b = this.base.blocs.get(id)!
+    this.options.surOuvrir(b.figure ? null : b.noeud)
     this.demander()
   }
 
@@ -371,6 +387,7 @@ export class VueGraphe {
       conflits: this.conflits,
       cadreCible: this.cadreCible,
       hypothese: this.hypothese,
+      images: this.images,
     }
     dessiner(this.ctx, etat, this.contenu)
     const [, nom] = ZOOMS[this.iZoom]!
@@ -583,8 +600,32 @@ export class VueGraphe {
     if (c.genre === 'titre') {
       clearTimeout(this.minuterieTitre)
       this.renommerCadre(c.cadre)
-    } else if (c.genre === 'bloc') this.options.surOuvrir(this.base.blocs.get(c.id)?.noeud ?? null)
-    else if (c.genre === 'fonction') void this.basculerRepli(c.cadre)
+    } else if (c.genre === 'bloc') {
+      const b = this.base.blocs.get(c.id)
+      if (b?.figure) this.ouvrirFigure(b.id)
+      else this.options.surOuvrir(b?.noeud ?? null)
+    } else if (c.genre === 'fonction') void this.basculerRepli(c.cadre)
+  }
+
+  /** Ouvre une figure en grand (tracé agrandi ou image, légende complète, nœud illustré). */
+  ouvrirFigure(id: string): void {
+    const b = this.base.blocs.get(id)
+    if (!b?.figure) return
+    this.fermerFenetre?.()
+    const f = b.figure
+    const cible = this.base.blocs.get(f.noeud_id)
+    const reference = referenceDe(this.base, f.noeud_id)
+    this.fermerFenetre = ouvrirFenetre({
+      figure: f,
+      numero: b.numero,
+      noeud: cible && reference ? { reference, nom: cible.noeud.nom } : null,
+      images: this.images,
+      surNoeud: () => this.montrer(f.noeud_id),
+      surFermer: () => {
+        this.fermerFenetre = null
+        this.scene.focus({ preventScroll: true })
+      },
+    })
   }
 
   private roulette(e: WheelEvent): void {
@@ -629,7 +670,9 @@ export class VueGraphe {
   // ─── Opérations ────────────────────────────────────────────────────────────
 
   private instantane(): Instantane {
-    return instantane(this.vue, this.graphe.noeuds.map((n) => [n.id, n.nom]))
+    const noms: [string, string][] = this.graphe.noeuds.map((n) => [n.id, n.nom])
+    for (const f of this.vue.figures ?? []) noms.push([PREFIXE_FIGURE + f.id, f.titre])
+    return instantane(this.vue, noms)
   }
 
   private peutEcrire(): boolean {
@@ -737,7 +780,8 @@ export class VueGraphe {
     this.surcharges = new Map([...g.origines].map(([id, o]) => [id, { colonne: o.colonne + g.dc, ligne: o.ligne + g.dl, groupe: cible ?? o.groupe }]))
     this.modele = construireModele(this.graphe, this.vue, this.surcharges)
     this.cadreCible = null
-    await this.executer(ops, ops.length > 1 ? `Déplacer ${ops.length} nœuds` : 'Déplacer le nœud')
+    const seul = ops.length === 1 && String(ops[0]!.noeud).startsWith(PREFIXE_FIGURE) ? 'Déplacer la figure' : 'Déplacer le nœud'
+    await this.executer(ops, ops.length > 1 ? `Déplacer ${ops.length} blocs` : seul)
   }
 
   private async basculerRepli(cadre: string): Promise<void> {
@@ -783,8 +827,9 @@ export class VueGraphe {
     const cible = id ?? (this.selection.size === 1 ? [...this.selection][0]! : null)
     const b = cible ? this.modele.blocs.get(cible) : undefined
     if (!b || b.cache) return this.avis('Sélectionne un seul nœud visible pour le renommer (F2).')
+    // Une figure se renomme par la même opération : son titre.
     this.ouvrirSaisie(b.x, b.y, b.x + b.w, b.y + 26, b.noeud.nom, (nom) => {
-      if (nom !== b.noeud.nom) void this.executer([{ op: 'renommer_noeud', id: b.id, nom }], 'Renommer le nœud')
+      if (nom !== b.noeud.nom) void this.executer([{ op: 'renommer_noeud', id: b.id, nom }], b.figure ? 'Renommer la figure' : 'Renommer le nœud')
     })
   }
 
@@ -836,7 +881,13 @@ export class VueGraphe {
         : { libelle: 'Sortir du cadre', inactif: 'hors cadre' })
       articles.push('sep')
       if (this.selection.size > 1) articles.push({ libelle: 'Cadre autour de la sélection', raccourci: 'C', action: () => void this.creerCadre() })
-      articles.push({ libelle: 'Ouvrir la fiche', raccourci: 'double-clic', action: () => this.options.surOuvrir(b.noeud) })
+      if (b.figure) {
+        const illustre = b.figure.noeud_id
+        articles.push({ libelle: 'Ouvrir en grand', raccourci: 'double-clic', action: () => this.ouvrirFigure(id) })
+        articles.push(this.base.blocs.has(illustre)
+          ? { libelle: `Montrer le nœud illustré (${referenceDe(this.base, illustre)})`, action: () => this.montrer(illustre) }
+          : { libelle: 'Montrer le nœud illustré', inactif: 'absent du graphe' })
+      } else articles.push({ libelle: 'Ouvrir la fiche', raccourci: 'double-clic', action: () => this.options.surOuvrir(b.noeud) })
       articles.push({ libelle: 'Cadrer la sélection', raccourci: 'F', action: () => this.cadrerSelection() })
     } else if (c.genre === 'titre' || c.genre === 'cadre' || c.genre === 'fonction') {
       const g = this.base.cadres.get(c.cadre)!

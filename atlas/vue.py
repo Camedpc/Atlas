@@ -8,6 +8,9 @@ Règles de la grille :
 - un nœud occupe largeur × hauteur cases, et deux nœuds ne partagent jamais une case ;
 - un nœud est dans un seul cadre ; le rectangle d'un cadre englobe les cases de ses nœuds et de ses sous-cadres ;
 - deux cadres frères laissent au moins une case d'écart (place pour la barre de titre, pas de chevauchement).
+
+Une figure occupe ses propres cases : elle entre dans la vue comme un pseudo-nœud `fig:<id>`, de type « figure »,
+dont la seule prémisse est le nœud qu'elle illustre ; elle se place donc par défaut juste à droite de lui.
 """
 
 from __future__ import annotations
@@ -22,6 +25,8 @@ MOTIF_COULEUR = re.compile(r"^#[0-9a-f]{6}$")
 GENRES = ("sous_probleme", "etape", "piste_abandonnee", "libre")
 ROLES = ("principale", "auxiliaire", "technique", "contexte")
 TAILLE_MAX = 8
+PREFIXE_FIGURE = "fig:"
+TAILLE_FIGURE = (3, 2)
 # Recherche d'une case libre : au-delà, on renonce plutôt que de boucler.
 LIGNES_CHERCHEES = 400
 
@@ -103,6 +108,10 @@ class Rect:
 
     def coupe(self, autre: Rect) -> bool:
         return not (self.c1 < autre.c0 or autre.c1 < self.c0 or self.l1 < autre.l0 or autre.l1 < self.l0)
+
+
+def est_figure(noeud_id: str) -> bool:
+    return noeud_id.startswith(PREFIXE_FIGURE)
 
 
 def rect_de(p: Placement) -> Rect:
@@ -235,6 +244,21 @@ def placer_auto(
     raise ErreurVue(f"Aucune case libre trouvée pour {noeud_id} : réorganise la vue ou place-le à la main.")
 
 
+def placer_figure(etat: EtatVue, figure_id: str, groupe_id: str | None, largeur: int, hauteur: int) -> Placement:
+    """Comme `placer_auto`, mais si le cadre est trop serré entre ses voisins pour une figure (souvent plus grande
+    qu'un nœud), elle remonte d'un cadre à l'autre jusqu'à trouver de la place."""
+    cadres: list[str | None] = []
+    while groupe_id is not None:
+        cadres.append(groupe_id)
+        groupe_id = etat.groupes[groupe_id].parent_id
+    for cadre in [*cadres, None]:
+        try:
+            return placer_auto(etat, figure_id, cadre, largeur, hauteur)
+        except ErreurVue:
+            continue
+    raise ErreurVue(f"Aucune case libre trouvée pour {figure_id} : réorganise la vue ou place-la à la main.")
+
+
 def _verificateur(etat: EtatVue, groupe_id: str | None):
     """Test rapide d'un rectangle candidat pour un nœud du cadre `groupe_id` (sans refaire `conflits` en entier) :
     cases libres, pas dans un sous-cadre de son cadre, et chaque cadre ancêtre, agrandi du candidat, reste à une
@@ -309,7 +333,12 @@ def reorganiser(etat: EtatVue, groupe_id: str | None = None) -> EtatVue:
             ancien = etat.placements[nid]
             nouvel.placements[nid] = placer_auto(nouvel, nid, ancien.groupe_id, ancien.largeur, ancien.hauteur)
     for nid in ordre_logique(etat, non_places):
-        nouvel.placements[nid] = placer_auto(nouvel, nid, None)
+        if est_figure(nid):
+            # Près de son nœud, dans son cadre s'il y a la place.
+            noeud = nouvel.placements.get(etat.noeuds[nid].premisses[0][0]) if etat.noeuds[nid].premisses else None
+            nouvel.placements[nid] = placer_figure(nouvel, nid, noeud.groupe_id if noeud else None, *TAILLE_FIGURE)
+        else:
+            nouvel.placements[nid] = placer_auto(nouvel, nid, None)
     return nouvel
 
 
@@ -497,6 +526,8 @@ def _appliquer_une(etat: EtatVue, op: dict[str, Any], renommages: dict[str, str]
         etat.etiquettes[eid] = Etiquette(eid, nom, _couleur(op.get("couleur")))
     elif genre in ("etiqueter", "retirer_etiquette"):
         nid = _noeud_existant(etat, op.get("noeud"))
+        if est_figure(nid):
+            raise ErreurVue("Les étiquettes se posent sur les nœuds, pas sur les figures.")
         eid = op.get("etiquette")
         if eid not in etat.etiquettes:
             raise ErreurVue(f"Étiquette inexistante : {eid}. Crée-la avec creer_etiquette.")
@@ -529,7 +560,8 @@ LEGENDE = (
     "Grille : colonne vers la droite (des prémisses vers les conclusions), ligne vers le bas. "
     "[c,l] = case du nœud (+LxH s'il est plus grand) ; statut ✓ établi, ? à vérifier, ✗ invalide, ⊘ suspendu, "
     "○ ouvert ; ⟵ prémisses (a principale, +a auxiliaire, #a technique, ~a contexte) ; #étiquette ; "
-    "« fixe » = placé à la main. Un cadre = ▸ id « nom » (genre) et son rectangle de cases."
+    "« fixe » = placé à la main. Un cadre = ▸ id « nom » (genre) et son rectangle de cases. "
+    "fig:<id> = une figure (graphique ou image) qui illustre le nœud indiqué ; lire_figure pour la voir."
 )
 
 
@@ -542,7 +574,9 @@ def _ligne_noeud(etat: EtatVue, p: Placement, retrait: str) -> str:
     if n.statut:
         morceaux.append(SYMBOLES_STATUT.get(n.statut, n.statut))
     texte = " · ".join(morceaux) + f" — {n.nom}"
-    if n.premisses:
+    if est_figure(n.id):
+        texte += f" (illustre {n.premisses[0][0]})" if n.premisses else ""
+    elif n.premisses:
         texte += " ⟵ " + " ".join(PREFIXES_ROLE.get(r, "") + i for i, r in n.premisses)
     marques = sorted(e for nid, e in etat.marques if nid == n.id)
     if marques:

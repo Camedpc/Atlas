@@ -27,6 +27,16 @@ et une grille de cases où la lecture va des prémisses (à gauche) vers les con
 - Ne fixe une case à la main (`placer` avec colonne et ligne) que si l'ordre automatique trompe la lecture.
   Ne déplace pas ce que l'utilisateur a fixé.
 
+# Figures
+
+Quand le rapport s'appuie sur des mesures, une simulation ou un graphique, ajoute-le avec `creer_figure`, rattaché
+au nœud qu'il soutient (observation, calcul, résultat) : il prend sa place dans la vue à côté de ce nœud.
+- Tracé vectoriel dès que tu as les données (fichier CSV de l'expérimentateur, valeurs du rapport) : séries
+  `mesures` (avec incertitudes), `courbe` (simulation), `loi` (prédiction, paramètres rattachés au nœud qui les
+  fournit). L'image PNG du script en plus, si elle existe. `lire_figure` te montre une figure existante.
+- Jamais de points inventés : une série « mesures » ne contient que des valeurs mesurées ou calculées par les
+  scripts, et `source` dit d'où elles viennent. Des valeurs illustratives le disent dans la légende.
+
 # Règles
 
 - Une assertion par nœud. Découpe : plusieurs petites liaisons se vérifient mieux qu'une longue.

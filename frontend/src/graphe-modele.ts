@@ -3,8 +3,11 @@
 //
 // Les positions viennent de /api/vue (colonne, ligne) : rien n'est mis en page ici, sauf les nœuds jamais placés,
 // rangés provisoirement sous le reste (la première opération « placer » les inscrit en base).
+//
+// Une figure (graphique ou image, « fig:<id> ») est un bloc comme un autre pour la grille (sélection, glisser, cadres,
+// annuler) : `figure` est renseigné, et `noeud` n'en est qu'un tenant-lieu (nom = titre, sans statut ni démonstration).
 
-import type { Graphe, GroupeVue, Noeud, TypeNoeud, Validite, Vue } from './api'
+import type { FigureVue, Graphe, GroupeVue, Noeud, TypeNoeud, Validite, Vue } from './api'
 
 /** Pas de la grille et taille d'un bloc 1 × 1 (px de mise en page) ; l'écart sert aux liaisons et aux cadres. */
 export const GRILLE = { pasX: 280, pasY: 170, blocL: 236, blocH: 124 }
@@ -75,6 +78,8 @@ export interface Bloc {
   confiance: number | null
   /** Hypothèse : énoncés qui en dépendent (transitivement). */
   portee: Set<string> | null
+  /** Bloc d'une figure (sinon null) ; son `numero` est celui de la figure (« Figure 2 »). */
+  figure: FigureVue | null
 }
 
 export interface Broche {
@@ -151,6 +156,10 @@ export interface Surcharge {
 }
 
 export const CLE_FONCTION = 'cadre:'
+/** Préfixe des figures dans les placements et les opérations de vue. */
+export const PREFIXE_FIGURE = 'fig:'
+/** Taille par défaut d'une figure (cases). */
+export const TAILLE_FIGURE = { largeur: 3, hauteur: 2 }
 
 const romains = (n: number) => {
   const t: [number, string][] = [[1000, 'm'], [900, 'cm'], [500, 'd'], [400, 'cd'], [100, 'c'], [90, 'xc'], [50, 'l'],
@@ -176,7 +185,8 @@ export function estHypothese(n: Noeud): boolean {
 export function construireModele(graphe: Graphe, vue: Vue, surcharges?: Map<string, Surcharge>): Modele {
   const { pasX, pasY, blocL, blocH } = GRILLE
   const noeuds = new Map(graphe.noeuds.map((n) => [n.id, n]))
-  const placements = new Map(vue.placements.filter((p) => noeuds.has(p.noeud_id)).map((p) => [p.noeud_id, p]))
+  const figures = new Map((vue.figures ?? []).map((f) => [PREFIXE_FIGURE + f.id, f]))
+  const placements = new Map(vue.placements.filter((p) => noeuds.has(p.noeud_id) || figures.has(p.noeud_id)).map((p) => [p.noeud_id, p]))
 
   // Nœuds jamais placés : sous tout le reste, sur autant de colonnes que la vue (6 au moins).
   let maxC = -1, maxL = -1
@@ -187,6 +197,14 @@ export function construireModele(graphe: Graphe, vue: Vue, surcharges?: Map<stri
   const nonPlaces = graphe.noeuds.filter((n) => !placements.has(n.id)).map((n) => n.id).sort()
   const colonnes = Math.max(6, maxC + 1)
   const provisoire = new Map(nonPlaces.map((id, k) => [id, { colonne: k % colonnes, ligne: maxL + 2 + Math.floor(k / colonnes) }]))
+  // Figures jamais placées : encore dessous, côte à côte (3 × 2 cases chacune).
+  const figuresNonPlacees = [...figures.keys()].filter((id) => !placements.has(id)).sort()
+  const ligneFigures = maxL + 2 + Math.ceil(nonPlaces.length / colonnes) + (nonPlaces.length ? 1 : 0)
+  const parRangee = Math.max(1, Math.floor(colonnes / TAILLE_FIGURE.largeur))
+  figuresNonPlacees.forEach((id, k) => provisoire.set(id, {
+    colonne: (k % parRangee) * TAILLE_FIGURE.largeur,
+    ligne: ligneFigures + Math.floor(k / parRangee) * TAILLE_FIGURE.hauteur,
+  }))
 
   // Numérotation stable : ordre des cases en base (colonne, ligne), puis les non placés ; les hypothèses à part.
   const ordre = graphe.noeuds.map((n) => {
@@ -250,8 +268,47 @@ export function construireModele(graphe: Graphe, vue: Vue, surcharges?: Map<stri
       validite: meilleure?.validite ?? null,
       confiance: meilleure?.confiance ?? null,
       portee: null,
+      figure: null,
     })
   }
+
+  // Figures : numérotées à part (« Figure 2 »), dans l'ordre des cases.
+  const ordreFigures = [...figures.keys()].map((id) => ({ id, p: placements.get(id) ?? provisoire.get(id)! }))
+  ordreFigures.sort((a, b) => a.p.colonne - b.p.colonne || a.p.ligne - b.p.ligne || (a.id < b.id ? -1 : 1))
+  ordreFigures.forEach(({ id }, k) => {
+    const f = figures.get(id)!
+    const p = placements.get(id)
+    const s = surcharges?.get(id)
+    const base = p ?? { ...provisoire.get(id)!, ...TAILLE_FIGURE, groupe_id: null, fixe: false }
+    const colonne = s?.colonne ?? base.colonne
+    const ligne = s?.ligne ?? base.ligne
+    const groupe = s ? s.groupe : base.groupe_id && groupes.has(base.groupe_id) ? base.groupe_id : null
+    blocs.set(id, {
+      id,
+      noeud: tenantLieu(id, f),
+      colonne,
+      ligne,
+      largeur: base.largeur,
+      hauteur: base.hauteur,
+      x: colonne * pasX,
+      y: ligne * pasY,
+      w: base.largeur * pasX - (pasX - blocL),
+      h: base.hauteur * pasY - (pasY - blocH),
+      groupe,
+      fixe: base.fixe,
+      place: !!p,
+      numero: String(k + 1),
+      libelle: 'Figure',
+      hypothese: false,
+      majeur: false,
+      cache: reduitExterieur(groupe),
+      renvois: [],
+      validite: null,
+      confiance: null,
+      portee: null,
+      figure: f,
+    })
+  })
 
   // Portée des hypothèses : tout ce qui en dépend.
   for (const b of blocs.values()) {
@@ -291,7 +348,7 @@ export function construireModele(graphe: Graphe, vue: Vue, surcharges?: Map<stri
     for (let id = b.groupe, d = 0; id && d < 50; id = cadres.get(id)?.parent ?? null, d++) {
       const c = cadres.get(id)
       if (!c) break
-      c.enonces++
+      if (!b.figure) c.enonces++
       const r: [number, number, number, number] = [b.colonne, b.ligne, b.colonne + b.largeur - 1, b.ligne + b.hauteur - 1]
       c.cases = c.cases
         ? [Math.min(c.cases[0], r[0]), Math.min(c.cases[1], r[1]), Math.max(c.cases[2], r[2]), Math.max(c.cases[3], r[3])]
@@ -499,6 +556,14 @@ export function construireModele(graphe: Graphe, vue: Vue, surcharges?: Map<stri
     representant,
     bornes: bornes ?? { x0: 0, y0: 0, x1: GRILLE.blocL, y1: GRILLE.blocH },
     nonPlaces: nonPlaces.length,
+  }
+}
+
+/** Nœud tenant-lieu d'une figure : ce que les chemins communs aux blocs lisent (nom = titre). */
+function tenantLieu(id: string, f: FigureVue): Noeud {
+  return {
+    projet_id: '', id, nom: f.titre, enonce: f.legende ?? '', admis: false, type: null, details: null, parents: [],
+    enfants: [], conversation_id: null, statut: 'etabli', demonstrations: [],
   }
 }
 

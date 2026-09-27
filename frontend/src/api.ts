@@ -112,10 +112,63 @@ export interface EtiquetteVue {
 
 export interface Vue {
   groupes: GroupeVue[]
+  /** Nœuds et figures placés ; une figure y figure sous l'id « fig:<id> ». */
   placements: PlacementVue[]
   etiquettes: EtiquetteVue[]
   /** [noeud_id, etiquette_id]. */
   marques: [string, string][]
+  /** Figures (graphiques et images) rattachées aux nœuds ; absent d'un serveur plus ancien. */
+  figures?: FigureVue[]
+}
+
+/** Axe d'un tracé (atlas/figures.py). */
+export interface Axe {
+  /** Markdown + LaTeX court (« $t$ »). */
+  titre: string
+  unite?: string
+  echelle: 'lin' | 'log'
+  min?: number
+  max?: number
+}
+
+/** Paramètre d'une loi : valeur, incertitude, et le nœud qui la fournit. */
+export interface ParametreLoi {
+  valeur: number
+  incertitude?: number
+  noeud?: string
+}
+
+export type Serie =
+  /** Points [x, y], [x, y, σy] ou [x, y, σy, σx]. */
+  | { genre: 'mesures'; nom: string; source?: string; points: number[][] }
+  /** Points [x, y], tracés en ligne. */
+  | { genre: 'courbe'; nom: string; source?: string; points: number[][] }
+  /** Loi échantillonnée par le serveur : points [x, y] et bande ±1σ [x, ymin, ymax]. */
+  | {
+    genre: 'loi'; nom: string; expression: string; variable: string; parametres: Record<string, ParametreLoi>
+    de?: number; a?: number; points?: number[][]; bande?: number[][]
+  }
+
+export interface Trace {
+  x: Axe
+  y: Axe
+  series: Serie[]
+}
+
+/** Une figure : tracé vectoriel et / ou image, qui illustre un nœud et a sa place dans la grille (« fig:<id> »). */
+export interface FigureVue {
+  id: string
+  noeud_id: string
+  titre: string
+  /** Markdown + LaTeX. */
+  legende: string | null
+  trace: Trace | null
+  /** Vrai : une image est servie par GET /api/figures/{id}/image. */
+  image: boolean
+  image_largeur: number | null
+  image_hauteur: number | null
+  source: string | null
+  modifie_le: string
 }
 
 /** Une opération de vue (voir organiser_vue dans atlas/orchestrateur/mcp_atlas.py). */
@@ -259,6 +312,9 @@ export const api = {
     if (!r.ok) throw new Error(`/vue : ${r.status} ${await r.text()}`)
     return (await r.json()) as Record<string, unknown>
   },
+  /** Image d'une figure (fetch : le jeton d'accès est un en-tête) ; `v` ne sert qu'à contourner le cache. */
+  imageFigure: async (projetId: string, figureId: string, v: string) =>
+    (await requete(`/api/figures/${encodeURIComponent(figureId)}/image?projet_id=${encodeURIComponent(projetId)}&v=${encodeURIComponent(v)}`)).blob(),
   projets: () => appel<ListeProjets>('/api/projets'),
   creerProjet: (nom: string) =>
     appel<Projet>('/api/projets', { method: 'POST', body: JSON.stringify({ nom }) }),

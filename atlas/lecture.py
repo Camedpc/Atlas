@@ -9,13 +9,14 @@ from collections.abc import Callable
 
 from postgrest import SyncSelectRequestBuilder
 
-from . import graphe, vue
+from . import figures, graphe, vue
 from .client import supabase
 from .modeles import (
     Demonstration,
     DetailNoeud,
     EntreeJournal,
     EtiquetteVue,
+    FigureVue,
     Graphe,
     GroupeVue,
     LigneNoeud,
@@ -98,24 +99,74 @@ def charger_etat_vue(projet_id: str) -> vue.EtatVue:
     def lignes(table: str) -> list[dict]:
         return supabase().table(table).select("*").eq("projet_id", projet_id).execute().data
 
+    places = {
+        r["noeud_id"]: vue.Placement(
+            r["noeud_id"], r["colonne"], r["ligne"], r["groupe_id"], r["largeur"], r["hauteur"], r["fixe"]
+        )
+        for r in lignes("placements")
+    }
+    # Les figures entrent dans la vue comme des pseudo-nœuds fig:<id>, avec leur nœud pour seule prémisse.
+    for f in lister_figures(projet_id, colonnes=COLONNES_VUE_FIGURE):
+        fid = vue.PREFIXE_FIGURE + f["id"]
+        noeuds[fid] = vue.NoeudVue(fid, f["titre"], "figure", None, ((f["noeud_id"], "principale"),))
+        if f["colonne"] is not None:
+            places[fid] = vue.Placement(
+                fid, f["colonne"], f["ligne"], f["groupe_id"], f["largeur"], f["hauteur"], f["fixe"]
+            )
+
     return vue.EtatVue(
         noeuds=noeuds,
         groupes={
             r["id"]: vue.Groupe(r["id"], r["nom"], r["parent_id"], r["genre"], r["couleur"], r["replie"], r["ordre"])
             for r in lignes("groupes")
         },
-        placements={
-            r["noeud_id"]: vue.Placement(
-                r["noeud_id"], r["colonne"], r["ligne"], r["groupe_id"], r["largeur"], r["hauteur"], r["fixe"]
-            )
-            for r in lignes("placements")
-        },
+        placements=places,
         etiquettes={r["id"]: vue.Etiquette(r["id"], r["nom"], r["couleur"]) for r in lignes("etiquettes")},
         marques={(r["noeud_id"], r["etiquette_id"]) for r in lignes("noeuds_etiquettes")},
     )
 
 
-def vue_pour_le_front(etat: vue.EtatVue) -> Vue:
+COLONNES_VUE_FIGURE = "id, noeud_id, titre, groupe_id, colonne, ligne, largeur, hauteur, fixe"
+
+
+def lister_figures(projet_id: str, *, noeud_id: str | None = None, colonnes: str = "*") -> list[dict]:
+    q = supabase().table("figures").select(colonnes).eq("projet_id", projet_id)
+    if noeud_id is not None:
+        q = q.eq("noeud_id", noeud_id)
+    return q.order("id").execute().data
+
+
+def lire_figure(projet_id: str, figure_id: str) -> dict | None:
+    lignes = supabase().table("figures").select("*").eq("projet_id", projet_id).eq("id", figure_id).execute().data
+    return lignes[0] if lignes else None
+
+
+def lire_image_figure(chemin: str) -> bytes:
+    return supabase().storage.from_("figures").download(chemin)
+
+
+def figure_pour_le_front(f: dict) -> FigureVue:
+    trace = f["trace"]
+    if trace is not None:
+        try:
+            trace = figures.tracer(trace)
+        except figures.ErreurFigure:
+            pass  # validé à l'écriture ; une loi devenue illisible est montrée sans ses points
+    return FigureVue(
+        id=f["id"],
+        noeud_id=f["noeud_id"],
+        titre=f["titre"],
+        legende=f["legende"],
+        trace=trace,
+        image=f["image_chemin"] is not None,
+        image_largeur=f["image_largeur"],
+        image_hauteur=f["image_hauteur"],
+        source=f["source"],
+        modifie_le=f["modifie_le"],
+    )
+
+
+def vue_pour_le_front(etat: vue.EtatVue, figures_de_l_espace: list[dict] | None = None) -> Vue:
     groupes = []
     for g in etat.groupes.values():
         r = vue.rect_groupe(etat, g.id)
@@ -147,4 +198,5 @@ def vue_pour_le_front(etat: vue.EtatVue) -> Vue:
         ],
         etiquettes=[EtiquetteVue(id=e.id, nom=e.nom, couleur=e.couleur) for e in etat.etiquettes.values()],
         marques=[list(m) for m in sorted(etat.marques)],
+        figures=[figure_pour_le_front(f) for f in figures_de_l_espace or []],
     )

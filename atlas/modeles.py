@@ -23,6 +23,7 @@ Action = Literal[
     "verdict",
     "import",
     "vue",
+    "figure",
 ]
 
 TypeNoeud = Literal[
@@ -219,9 +220,27 @@ class EtiquetteVue(BaseModel):
     couleur: str | None
 
 
+class FigureVue(BaseModel):
+    """Table `figures` : un graphique ou une image qui illustre un nœud. Sa place est dans `placements`, sous
+    l'id `fig:<id>`. Les lois du tracé arrivent déjà échantillonnées (`points`, `bande`)."""
+
+    id: str
+    noeud_id: str
+    titre: str
+    legende: str | None
+    trace: dict[str, Any] | None
+    image: bool
+    """Vrai si une image est servie par GET /api/figures/{id}/image?projet_id=."""
+    image_largeur: int | None
+    image_hauteur: int | None
+    source: str | None
+    modifie_le: datetime
+
+
 class Vue(BaseModel):
     groupes: list[GroupeVue]
     placements: list[PlacementVue]
     etiquettes: list[EtiquetteVue]
     marques: list[list[str]]
     """[noeud_id, etiquette_id]."""
+    figures: list[FigureVue] = []
