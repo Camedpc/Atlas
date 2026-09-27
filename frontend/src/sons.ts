@@ -2,20 +2,21 @@
 // avec Web Audio, sans fichier. Plusieurs familles à essayer : le choix se fait dans le menu du micro et reste
 // dans ce navigateur.
 // Hors communication, chacun dans son propre contexte (Windows baisse de 80 % par défaut les autres sons pendant
-// une communication) : l'ouverture au clic, avant que le micro s'ouvre ; la fermeture une fois le micro et
-// l'audio de l'appel relâchés. Chaque son est précédé d'un souffle inaudible qui réveille la sortie : un casque
+// une communication) : l'ouverture finit quand le micro commence à capter (voix.ts, juste avant) ; la fermeture
+// une fois le micro et l'audio de l'appel relâchés. Chaque son est précédé d'un souffle inaudible qui réveille la sortie : un casque
 // USB-C en veille avale sinon le début du son.
 
 export type Sens = 'ouverture' | 'fermeture'
 
-export const SONS: { id: string; nom: string; description: string }[] = [
-  { id: 'carillon', nom: 'Carillon', description: 'Deux notes douces, montantes puis descendantes' },
-  { id: 'bulle', nom: 'Bulle', description: 'Un « pop » qui monte, puis qui retombe' },
-  { id: 'cristal', nom: 'Cristal', description: 'Une clochette claire, aux harmoniques de verre' },
-  { id: 'marimba', nom: 'Marimba', description: 'Trois notes boisées en arpège' },
-  { id: 'souffle', nom: 'Souffle', description: 'Un souffle filtré qui s’ouvre, puis se referme' },
-  { id: 'declic', nom: 'Déclic', description: 'Un clic discret, presque imperceptible' },
-  { id: 'aucun', nom: 'Aucun', description: 'Pas de son' },
+/** `duree` : partie audible du son d'ouverture (s), après laquelle le micro s'ouvre. */
+export const SONS: { id: string; nom: string; description: string; duree: number }[] = [
+  { id: 'carillon', nom: 'Carillon', description: 'Deux notes douces, montantes puis descendantes', duree: 0.45 },
+  { id: 'bulle', nom: 'Bulle', description: 'Un « pop » qui monte, puis qui retombe', duree: 0.16 },
+  { id: 'cristal', nom: 'Cristal', description: 'Une clochette claire, aux harmoniques de verre', duree: 0.4 },
+  { id: 'marimba', nom: 'Marimba', description: 'Trois notes boisées en arpège', duree: 0.3 },
+  { id: 'souffle', nom: 'Souffle', description: 'Un souffle filtré qui s’ouvre, puis se referme', duree: 0.42 },
+  { id: 'declic', nom: 'Déclic', description: 'Un clic discret, presque imperceptible', duree: 0.11 },
+  { id: 'aucun', nom: 'Aucun', description: 'Pas de son', duree: 0 },
 ]
 
 const CLE = 'atlas.voix.son'
@@ -143,6 +144,12 @@ export function jouerSon(sens: Sens, id = sonChoisi(), ctx?: AudioContext, sorti
   }
   recette(c, vers, t, sens)
   if (propre) window.setTimeout(() => void c.close(), (REVEIL_S + 1.5) * 1000)
+}
+
+/** Délai entre `jouerSon('ouverture')` et la fin du son choisi : le moment d'ouvrir le micro. */
+export function finSonOuverture(id = sonChoisi()): number {
+  const son = SONS.find((s) => s.id === id)
+  return RECETTES[id] && son ? REVEIL_S + son.duree : 0
 }
 
 /** Aperçu : l'ouverture puis, un instant après, la fermeture. */

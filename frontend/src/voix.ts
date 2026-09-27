@@ -5,7 +5,7 @@
 import { jetonAcces, urlAppel } from './api'
 import { analyseur, type SourcesPastille } from './pastille'
 import { Generations } from './generations'
-import { jouerSon, REVEIL_S } from './sons'
+import { finSonOuverture, jouerSon } from './sons'
 
 export const VOIX_GRADIUM: [string, string][] = [
   ['iEu63s1rhn_kegTr', 'Gaspard'],
@@ -96,11 +96,34 @@ interface BoucleWebRTC {
   sortie: HTMLAudioElement
 }
 
+const CLE_LATENCE = 'atlas.voix.latence-micro'
+
+/** Durée d'ouverture du micro par le système, mesurée aux appels précédents (ms). */
+function latenceMicro(): number {
+  try {
+    return Number(localStorage.getItem(CLE_LATENCE)) || 800
+  } catch {
+    return 800
+  }
+}
+
+function retenirLatenceMicro(ms: number) {
+  try {
+    localStorage.setItem(CLE_LATENCE, String(Math.round(0.5 * latenceMicro() + 0.5 * Math.min(ms, 3000))))
+  } catch {
+    // navigation privée : on garde la valeur par défaut
+  }
+}
+
 export class Appel {
   private ws: WebSocket | null = null
   private contexte: AudioContext | null = null
   private flux: MediaStream | null = null
   private lecteur: AudioWorkletNode | null = null
+  private analyseAtlas: AnalyserNode | null = null
+  /** Première trame du micro reçue : on peut parler (la pastille passe en écoute). */
+  private microCapte = false
+  private minuterieSon = 0
   private boucle: BoucleWebRTC | null = null
   /** webrtc, sauf si la boucle n'a pas pu s'établir (repli : sortie directe du moteur audio). */
   private modeLecture: 'webrtc' | 'webaudio' = 'webrtc'
@@ -138,10 +161,9 @@ export class Appel {
     }
   }
 
-  /** Au clic : son d'ouverture, WebSocket en parallèle, puis le micro juste après le son (micro ouvert pendant le
-   * son, Windows le baisserait de 80 % : il réduit les autres sons pendant une communication). On peut parler dès
-   * lors : le serveur garde le micro jusqu'à l'ouverture de la transcription et le lui rejoue, et la réponse attend
-   * qu'Atlas voix soit prêt. */
+  /** Au clic, tout part en parallèle : WebSocket, sortie de la voix et micro. Le son d'ouverture se termine quand
+   * le micro commence à capter : on peut parler dès lors. Le serveur garde le micro jusqu'à l'ouverture de la
+   * transcription et le lui rejoue, et la réponse attend qu'Atlas voix soit prêt. */
   private async lancer(conversationId: string) {
     this.messages.clear()
     this.generations.nouvelAppel()
@@ -150,7 +172,7 @@ export class Appel {
     this.audioDemande = true
     this.enAttente = []
     this.afficherEtat('demarrage')
-    jouerSon('ouverture')
+    performance.mark('atlas-voix:clic') // repères de délai, lisibles dans l'onglet Performance
     const ws = new WebSocket(urlAppel(conversationId))
     ws.binaryType = 'arraybuffer'
     this.ws = ws
@@ -170,6 +192,7 @@ export class Appel {
       // Par la sortie WebRTC de l'appel (0,2 à 0,9 s de retard), il était coupé à la fermeture de cette sortie.
       const avecAudio = this.contexte !== null || this.audioDemande
       this.audioDemande = false
+      window.clearTimeout(this.minuterieSon)
       this.fermerAudio()
       if (avecAudio) jouerSon('fermeture')
       cancelAnimationFrame(this.image)
@@ -182,16 +205,39 @@ export class Appel {
       this.image = requestAnimationFrame(suivre)
     }
     this.image = requestAnimationFrame(suivre)
-    await this.ouvrirApresSon(ws)
+    await this.ouvrirAudio(ws)
   }
 
-  /** Micro et sortie de la voix, une fois le son d'ouverture joué. */
-  private async ouvrirApresSon(ws: WebSocket) {
-    await new Promise((ok) => window.setTimeout(ok, (REVEIL_S + 0.35) * 1000))
-    if (this.ws !== ws) return // raccroché entre-temps
+  /** Micro et sortie de la voix, demandés dès le clic. Windows met ~0,8 s à ouvrir le micro (mesuré) : le son
+   * d'ouverture est programmé pour finir à ce moment-là, d'après la durée mesurée aux appels précédents. Il sonne
+   * juste avant la capture : micro ouvert, Windows le baisserait de 80 % (il réduit les autres sons pendant une
+   * communication). */
+  private async ouvrirAudio(ws: WebSocket) {
+    const debut = performance.now()
+    // Annulation d'écho, réduction de bruit et gain automatique du navigateur (ceux des visios).
+    const demande = navigator.mediaDevices.getUserMedia({
+      audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+    })
+    const avance = Math.max(0, latenceMicro() - finSonOuverture() * 1000)
+    this.minuterieSon = window.setTimeout(() => {
+      performance.mark('atlas-voix:son')
+      jouerSon('ouverture')
+    }, avance)
     try {
-      await this.ouvrirAudio()
+      await this.preparerSortie()
+      performance.mark('atlas-voix:sortie-prete')
+      const flux = await demande
+      performance.mark('atlas-voix:micro-accorde')
+      retenirLatenceMicro(performance.now() - debut)
+      if (this.ws !== ws) {
+        for (const piste of flux.getTracks()) piste.stop()
+        this.fermerAudio() // raccroché entre-temps
+        return
+      }
+      this.brancherMicro(flux)
     } catch (e) {
+      window.clearTimeout(this.minuterieSon)
+      void demande.then((flux) => flux.getTracks().forEach((piste) => piste.stop())).catch(() => {})
       this.rappels.surInfo(`Micro indisponible : ${e instanceof Error ? e.message : String(e)}`, true)
       this.raccrocher()
       return
@@ -231,21 +277,12 @@ export class Appel {
 
   // ─── Audio ───
 
-  private async ouvrirAudio() {
+  /** Sortie de la voix : contexte, lecteur, boucle WebRTC. */
+  private async preparerSortie() {
+    this.microCapte = false
     this.contexte = new AudioContext({ sampleRate: 48000, latencyHint: 'interactive' })
     await this.contexte.audioWorklet.addModule('/voix-worklets.js')
-    // Annulation d'écho, réduction de bruit et gain automatique du navigateur (ceux des visios).
-    this.flux = await navigator.mediaDevices.getUserMedia({
-      audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-    })
-    const source = this.contexte.createMediaStreamSource(this.flux)
-    const micro = new AudioWorkletNode(this.contexte, 'micro')
-    micro.port.onmessage = (e) => {
-      if (this.muet || !this.ws) return
-      if (this.ws.readyState === WebSocket.OPEN) this.ws.send(e.data.pcm)
-      else if (this.ws.readyState === WebSocket.CONNECTING) this.enAttente.push(e.data.pcm)
-    }
-    source.connect(micro)
+    performance.mark('atlas-voix:worklets')
     this.lecteur = new AudioWorkletNode(this.contexte, 'lecteur', { outputChannelCount: [1] })
     this.lecteur.port.onmessage = (e) => {
       this.position = { joues: e.data.joues, t: performance.now() }
@@ -256,14 +293,34 @@ export class Appel {
       }
       this.envoyer({ type: 'lecture', gen: this.generations.courante, joue_s: e.data.joues / 48000, fini })
     }
-    // Les deux voix de la pastille : le micro après annulation d'écho, et ce que joue le lecteur.
-    const toi = analyseur(this.contexte)
-    const atlas = analyseur(this.contexte)
-    source.connect(toi)
-    this.lecteur.connect(atlas)
+    this.analyseAtlas = analyseur(this.contexte)
+    this.lecteur.connect(this.analyseAtlas)
     await this.brancherSortie()
     await this.contexte.resume()
-    this.rappels.surSources({ toi, atlas })
+  }
+
+  /** Le micro, une fois accordé et la sortie prête : ses trames partent dès la première. */
+  private brancherMicro(flux: MediaStream) {
+    const contexte = this.contexte
+    if (!contexte || !this.analyseAtlas) return
+    this.flux = flux
+    const source = contexte.createMediaStreamSource(flux)
+    const micro = new AudioWorkletNode(contexte, 'micro')
+    micro.port.onmessage = (e) => {
+      if (!this.microCapte) {
+        this.microCapte = true
+        performance.mark('atlas-voix:premiere-trame')
+        this.afficherEtat()
+      }
+      if (this.muet || !this.ws) return
+      if (this.ws.readyState === WebSocket.OPEN) this.ws.send(e.data.pcm)
+      else if (this.ws.readyState === WebSocket.CONNECTING) this.enAttente.push(e.data.pcm)
+    }
+    source.connect(micro)
+    // Les deux voix de la pastille : le micro après annulation d'écho, et ce que joue le lecteur.
+    const toi = analyseur(contexte)
+    source.connect(toi)
+    this.rappels.surSources({ toi, atlas: this.analyseAtlas })
   }
 
   /** Relie le lecteur aux haut-parleurs par une boucle WebRTC locale. En sortie directe du moteur audio de la
@@ -333,6 +390,8 @@ export class Appel {
     this.flux = null
     this.contexte = null
     this.lecteur = null
+    this.analyseAtlas = null
+    this.microCapte = false
     for (const piste of flux?.getAudioTracks() ?? []) piste.enabled = false // plus rien ne part vers Atlas
     window.setTimeout(() => {
       if (boucle) {
@@ -475,7 +534,7 @@ export class Appel {
   private afficherEtat(etat?: EtatAppel) {
     if (etat) this.etatServeur = etat
     // Micro ouvert : on peut parler, même si Atlas voix finit de se préparer (il répondra une fois prêt).
-    const serveur = this.etatServeur === 'demarrage' && this.contexte !== null ? 'ecoute' : this.etatServeur
+    const serveur = this.etatServeur === 'demarrage' && this.microCapte ? 'ecoute' : this.etatServeur
     const affiche = this.enLecture && serveur !== 'demarrage' ? 'parle' : serveur
     this.rappels.surEtatVoix(affiche)
   }
