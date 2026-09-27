@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-@README.md
+@docs/technique.md
 
 Lint : `.venv/Scripts/ruff check .` (config `ruff.toml`) et `npm run lint --prefix frontend` (oxlint).
 Un hook vérifie les types du front (`tsc --noEmit`) après chaque édition de `frontend/src/*.ts`.

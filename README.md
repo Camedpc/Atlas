@@ -1,159 +1,337 @@
 # Atlas
 
-Harness de hackathon : des agents IA transforment leurs raisonnements scientifiques en graphe
-(nœuds = énoncés, démonstrations = arêtes depuis les prémisses), stocké dans Supabase.
+**Un outil pour le chercheur : il dirige une équipe d'agents IA, et leur raisonnement devient un graphe qu'il
+lit, vérifie, corrige et réorganise.** Atlas ne remplace pas le chercheur : il lui donne une équipe qui travaille
+sous ses yeux, et le dernier mot lui revient.
 
-## Structure
+![Atlas : la conversation avec l'orchestrateur à gauche, le graphe de raisonnement à droite](docs/images/01-ensemble.jpg)
 
-| Dossier | Rôle |
-|---|---|
-| `supabase/` | Schéma (`migrations/`) et données de démo (`seed.sql`) |
-| `atlas/` | Graphe en Python : modèles, calcul des statuts, requêtes Supabase, conversations |
-| `atlas/orchestrateur/` | Orchestrateur de recherche (SDK Codex) et ses routes |
-| `atlas/serveur.py` | Serveur longue durée : lecture + conversations (local, puis VM) |
-| `api/index.py` | Lecture seule, déployée comme fonction Python sur Vercel |
-| `frontend/` | Interface : espace et sessions à gauche, conversation et arbre des agents au centre, graphe de raisonnement (éditable à la souris, bouton « ? »), agent graph ou documents à droite |
-| `tests/` | Tests Python (sans réseau) |
-| `film/` | Film de présentation (Remotion, captures du vrai produit) : voir `film/README.md` |
+---
 
-## API
+## En bref
 
-| Route | Renvoie |
-|---|---|
-| `GET /api/health` | État de la connexion Supabase |
-| `GET /api/graphe?projet_id=` | Tous les nœuds (avec statut et démonstrations) et toutes les arêtes du graphe d'un espace |
-| `GET /api/noeuds/{id}?projet_id=` | Un nœud, ses prémisses et les nœuds qui l'utilisent |
-| `GET /api/journal?projet_id=&noeud_id=&limite=&avant_id=` | Historique, le plus récent d'abord |
-| `GET /api/vue?projet_id=&format=json\|texte` | Vue de l'espace : cadres (et leur rectangle), placements en cases, étiquettes ; `texte` = ce que lit l'IA ; `figures` (graphiques et images, placés comme `fig:<id>`) |
-| `GET /api/figures/{id}/image?projet_id=` | Image d'une figure (bucket privé) |
-| `GET /api/docs` | Documentation interactive |
+- **Le chercheur pose une question** (« Comment la période d'un pendule dépend-elle de l'amplitude ? »).
+- **Une équipe d'agents la traite sous ses yeux** : un orchestrateur confie des missions à des *directeurs de
+  labo*, qui font chercher la littérature et lancer des calculs ou des simulations, puis rédigent un rapport. Le
+  chercheur suit chaque agent en direct, peut écrire à n'importe lequel en cours de route pour le réorienter, ou
+  l'arrêter.
+- **Un *graphiste* transforme chaque rapport en graphe de raisonnement** : chaque case est un énoncé (hypothèse,
+  définition, lemme, résultat, décision…), chaque flèche une démonstration qui part de ses prémisses.
+- **Un vérificateur indépendant note chaque démonstration** (valide ou non, avec une confiance entre 0 et 1).
+  Le statut de chaque énoncé (*établi*, *suspendu*, *invalide*…) en découle et se propage dans tout le graphe :
+  on voit d'un coup d'œil ce qui tient et ce qui repose sur une hypothèse fragile.
+- **Le chercheur garde la main sur le résultat** : il ouvre chaque énoncé, voit sur quoi il repose et son
+  verdict, réorganise le graphe à la souris, relance les agents là où le raisonnement est faible, et peut leur
+  parler à la voix. Formules LaTeX, figures (courbes, images, animations, scènes 3D) et fichiers produits sont
+  tous consultables.
 
-Chaque espace de travail (projet) a son propre graphe : `projet_id` le choisit, et son absence désigne le
-projet « defaut ».
+**Démo en ligne** : <https://atlas-nine-bay.vercel.app> (lancer une recherche demande un jeton d'accès, à
+demander à l'équipe). **Pour l'essayer chez soi** : [Démarrage rapide](#démarrage-rapide), une quinzaine de
+minutes.
 
-Servies seulement par `atlas.serveur` (pas sur Vercel) :
+---
 
-| Route | Rôle |
-|---|---|
-| `GET /api/projets` | Espaces de travail (projets) et utilisateur |
-| `POST /api/projets` | Crée un espace (`{"nom", "description"?}`) et son dossier dans le bunker |
-| `GET /api/projets/{id}/fichiers` | Arborescence du dossier de l'espace dans le bunker (vue Documents) |
-| `GET /api/projets/{id}/fichier?chemin=` | Contenu d'un fichier de l'espace, pour l'aperçu |
-| `POST /api/projets/{id}/vue` | Réarrange la vue (`{"operations": [...], "essai"?}`, mêmes opérations que l'outil MCP `organiser_vue`) |
-| `GET /api/conversations?projet_id=` | Conversations (d'un espace), la plus récente d'abord |
-| `POST /api/conversations` | Crée une conversation (`{"titre"?, "projet_id"?}`) |
-| `GET /api/conversations/{id}` | Conversation, `en_cours` (tour de l'orchestrateur), `actif` (un agent travaille), `brouillons` (texte en cours d'écriture), dernière exécution |
-| `GET /api/conversations/{id}/messages?apres_id=&agent=` | Messages de l'orchestrateur, ou d'un sous-agent (`agent` = chemin Codex) |
-| `GET /api/conversations/{id}/agents` | Arbre des agents : en direct pendant un tour, sinon celui du dernier tour |
-| `POST /api/conversations/{id}/messages` | `{"contenu", "agent"?, "modele"?, "effort"?}` : lance un tour, ou s'injecte dans le tour en cours |
-| `POST /api/conversations/{id}/arreter` | `{"agent"?}` : arrête tout (orchestrateur et sous-agents), ou un seul sous-agent |
-| `WS /api/conversations/{id}/voix` | Appel vocal avec Atlas voix (premier message : `{"type": "auth", "jeton"}`) |
-| `/api/voix/appels/{appel}/…` | Outils du serveur MCP `voix` : confier à l'orchestrateur, son état, petites tâches, écran du graphe |
-| `GET /api/orchestrateur/modeles` | Modèles Codex proposés à l'orchestrateur, leurs efforts, et les réglages par défaut (avec `X-Atlas-Cle-OpenAI` : ceux de la clé) |
-| `POST /api/orchestrateur/compte` | Vérifie la clé OpenAI de l'en-tête `X-Atlas-Cle-OpenAI` et y connecte Codex ; agents dont le modèle manque |
-| `DELETE /api/orchestrateur/compte` | Oublie la clé de l'en-tête : supprime sa connexion et ses threads du serveur |
+## Sommaire
 
-Chaque nœud porte aussi `parents` (ses prémisses) et `enfants` (les nœuds qui le citent), maintenus par
-trigger à partir des démonstrations, et `conversation_id` (la conversation qui l'a créé).
+1. [Démarrage rapide](#démarrage-rapide)
+2. [Visite guidée](#visite-guidée)
+3. [Comment ça marche](#comment-ça-marche)
+4. [Installation détaillée et réglages](#installation-détaillée-et-réglages)
+5. [Dépannage](#dépannage)
+6. [Organisation du dépôt](#organisation-du-dépôt)
+7. [Équipe](#équipe)
 
-Le statut d'un nœud (`etabli`, `suspendu`, `a_verifier`, `invalide`, `ouvert`) n'est pas stocké :
-il est calculé à partir de tout le graphe dans `atlas/graphe.py`.
+---
 
-## Dev local
+## Démarrage rapide
+
+Tout tourne sur votre machine : une base Supabase locale (dans Docker), le serveur Python et l'interface web.
+Rien ne touche la production.
+
+### Il vous faut
+
+| Outil | Version | Vérifier |
+|---|---|---|
+| Git | toute | `git --version` |
+| Python | 3.10 minimum, 3.13 conseillé | `python --version` |
+| Node.js | 20 ou plus | `node --version` |
+| Docker Desktop | installé **et démarré** | `docker info` |
+| Un accès OpenAI | une clé API (<https://platform.openai.com/api-keys>) **ou** un abonnement ChatGPT | |
+
+### 1. Récupérer le code et les dépendances
 
 ```bash
-cp .env.example .env            # puis renseigner SUPABASE_SECRET_KEY
+git clone https://github.com/Camedpc/Atlas.git
+cd Atlas
 python -m venv .venv
-.venv/Scripts/pip install -r requirements-dev.txt   # macOS/Linux : .venv/bin/pip
-.venv/Scripts/python -m uvicorn atlas.serveur:app --port 8000 --reload --reload-dir atlas --reload-dir api
-npm install --prefix frontend
-npm run dev --prefix frontend   # http://localhost:5173 (proxy /api → :8000)
-.venv/Scripts/python -m pytest
+.venv/Scripts/pip install -r requirements-dev.txt   # macOS / Linux : .venv/bin/pip
+npm install                                          # outils Supabase
+npm install --prefix frontend                        # interface
 ```
 
-## Base de données
+Le paquet `openai-codex` installe aussi le moteur d'agents Codex : rien d'autre à installer.
+
+### 2. Démarrer la base locale
 
 ```bash
-npx supabase link --project-ref uykaupigovrvgwsckbcn
-npm run db:push                 # applique les migrations et le seed
+npm run db:local        # 1er lancement : quelques minutes (images Docker)
+npm run db:local:env    # affiche API_URL et la clé secrète locale
 ```
 
-## Déploiement
+La base est créée avec toutes les tables et un petit graphe de démonstration.
 
-Vercel, configuré par `vercel.json` : build du front dans `frontend/dist`, et `/api/*` servi par
-`api/index.py`. Variables à définir sur Vercel : `SUPABASE_URL`, `SUPABASE_SECRET_KEY`.
+### 3. Remplir `.env`
 
-## Orchestrateur
+```bash
+cp .env.example .env
+```
 
-L'orchestrateur est Codex piloté par son [SDK Python](https://github.com/openai/codex/tree/main/sdk/python)
-(`openai-codex`, qui installe aussi le binaire Codex) : accès complet sans demande d'approbation, recherche web
-en direct, un dossier `espace/<conversation>/` et un thread Codex par conversation. Il lit le graphe via le
-serveur MCP `atlas`, lancé par Codex : il lit le graphe (`lire_graphe`, `lire_noeud`) et l'écrit lui-même
-(`creer_noeud`, `ajouter_demonstration` ; nœuds tagués par la conversation, démonstrations « à vérifier »). Il est isolé de la machine : son propre
-`CODEX_HOME` (`espace/.codex`), aucune lecture de `~/.codex`, de hooks ni d'`AGENTS.md` du dépôt.
+Dans `.env`, changez ou ajoutez ces lignes :
 
-L'orchestrateur délègue à des sous-agents Codex dans le même thread : `directeur_de_labo` (qui lance lui-même
-`litterature` et `experimentateur`, et écrit `journal.md` et `rapport.md` dans `directeurs/NN-sujet/`) et
-`graphiste` (qui met un rapport en graphe). Il fait ensuite juger les démonstrations par l'outil `verifier` du
-serveur MCP `verificateur` : un modèle économique juge chaque démonstration, un modèle de recours rejuge les
-verdicts invalides ou peu sûrs, et le verdict (`validite`, `confiance`) est écrit sur la démonstration.
+```ini
+SUPABASE_URL=http://127.0.0.1:54321
+SUPABASE_SECRET_KEY=<SECRET_KEY, ou SERVICE_ROLE_KEY, affichée par npm run db:local:env>
+ATLAS_BASE_LOCALE=1            # garde-fou : refuse toute base qui n'est pas locale
+OPENAI_API_KEY=sk-...          # votre clé ; laissez vide si vous utilisez ChatGPT (voir ci-dessous)
+ATLAS_MAX_SOUS_AGENTS=2        # conseillé pour un premier essai : moins d'agents en parallèle, moins cher
+```
 
-Chaque conversation a son dossier (`atlas/orchestrateur/bunker.py`) :
-`espace/utilisateurs/<utilisateur>/<projet>/sessions/<conversation>/`, avec `conv/` (copie de la conversation),
-`docs_session/`, `scripts/` et `.tmp/`, et un Python partagé dans `espace/partage/`. Les agents ont pour consigne de
-ne rien consulter hors de leur session et de leur projet ; en local, `ATLAS_BUNKER=1` confine en plus leurs
-écritures par le sandbox de Codex (impossible sur la VM, qui tourne à 0).
+Sans clé API, connectez votre compte ChatGPT (une fenêtre de navigateur s'ouvre) :
 
-- Prompts (un fichier par agent, relus à chaque tour) : `atlas/orchestrateur/prompts/`
-- Rôles, modèles et efforts par défaut : `atlas/orchestrateur/sous_agents.py`
-- Vérificateur : `atlas/orchestrateur/verificateur.py` et `mcp_verificateur.py`
-- Étapes après chaque tour (vide pour l'instant) : `atlas/orchestrateur/pipeline.py`
-- Réglages : variables `ATLAS_*` et `OPENAI_API_KEY` dans `.env.example`
+```bash
+.venv/Scripts/python -m atlas.orchestrateur.connexion
+```
 
-Connexion, dans le `CODEX_HOME` d'Atlas uniquement :
+> Si votre compte n'a pas accès aux modèles par défaut, renseignez `ATLAS_MODELE_ORCHESTRATEUR` et les
+> `ATLAS_MODELE_*` des agents avec des modèles disponibles (voir les commentaires de `.env.example`).
 
-- en dev, ton compte ChatGPT : `.venv/Scripts/python -m atlas.orchestrateur.connexion` (ouvre le navigateur ;
-  `--code` pour une connexion par code sur une VM, à activer dans ChatGPT → Paramètres → Sécurité ;
-  `--statut` affiche le compte utilisé) ;
-- en production, une clé API : renseigner `OPENAI_API_KEY` dans le `.env` suffit, elle est prioritaire.
+### 4. Lancer
 
-### Atlas voix
+Dans deux terminaux :
 
-Le bouton micro de la saisie ouvre un appel avec **Atlas voix** (`atlas/voix/`), la façade vocale de la
-conversation : transcription et synthèse Gradium en direct (on parle en continu, on lui coupe la parole, on lui
-donne des consignes), cerveau Codex rapide (`gpt-6-sol`, effort bas, mode fast), dans le bunker de la session.
+```bash
+.venv/Scripts/python -m uvicorn atlas.serveur:app --port 8000 --reload --reload-dir atlas --reload-dir api
+```
 
-- Au décroché, elle reçoit les 30 derniers messages de la conversation (tour d'échauffement muet).
-- Recherche : elle la confie à l'orchestrateur (outil `confier_orchestrateur` du serveur MCP `voix`) — nouveau
-  tour, ou consigne injectée dans son tour en cours. Il n'y a jamais d'orchestrateur imbriqué.
-- Elle reçoit ses étapes clés (sous-agents directs lancés ou terminés, `SuiviAgents` → `gestionnaire.abonner`)
-  et sa réponse finale, et les annonce dans les silences, une phrase par étape. Les rapports bruts restent chez
-  l'orchestrateur.
-- Petites tâches pratiques : elle-même ou un petit sous-agent de fond (`lancer_tache`).
-- « Stop » la fait taire ; seule une demande explicite arrête la recherche.
-- Elle peut raccrocher (outil `terminer_appel`) : à la demande ou quand l'échange est conclu, toujours après un
-  au revoir joué en entier ; si Camille reprend la parole, l'appel continue.
-- Préparée à l'avance (`atlas/voix/prechauffage.py`) : dès qu'une conversation s'ouvre, un cerveau démarré et échauffé
-  attend l'appel (prêt en ~0,4 s au lieu de ~7 s), gardé `ATLAS_VOIX_PRECHAUFFAGE_S`.
-- Au clic, le micro est demandé tout de suite (Windows met ~1 s à l'ouvrir) ; le son d'ouverture, au choix dans le
-  menu du micro, finit quand il commence à capter. Ce qui est dit avant qu'Atlas voix soit prêt est rejoué à Gradium.
-- Au raccrochage, la transcription de l'appel (enregistrée sous l'agent `/voix`) est ajoutée en tête du
-  prochain message que reçoit l'orchestrateur, sur le modèle choisi dans la saisie.
-- Dans l'arbre et l'agent graph, Atlas voix est un sommet (`/voix`) ; l'orchestrateur devient son enfant s'il
-  lui a confié du travail. Elle y reste jusqu'à la prochaine relance écrite de l'orchestrateur.
+```bash
+npm run dev --prefix frontend
+```
 
-- La voix d'Atlas sort par une boucle WebRTC locale (comme une visio) : en sortie directe du moteur audio de la
-  page, l'annulation d'écho de Chrome décrochait après quelques interruptions et Atlas s'entendait en boucle.
-- Gradium coupe une session de transcription à 300 s (offre gratuite) : elle est renouvelée au premier silence,
-  sans perdre le micro reçu pendant la réouverture. `ATLAS_VOIX_ENREGISTRER=1` enregistre le micro reçu et les
-  tours transcrits dans le `.tmp` de la session, pour diagnostiquer une mauvaise transcription.
+Ouvrez <http://localhost:5173>. Vous devez voir le graphe de démonstration (« une suite croissante et majorée
+converge »). Vérification rapide : `curl http://localhost:8000/api/health` répond `{"ok":true,"supabase":"ok"}`.
 
-Prompts : `atlas/orchestrateur/prompts/voix.md` et `tache_vocale.md`. Réglages : `GRADIUM_API_KEY` et
-`ATLAS_VOIX_*` dans `.env.example`. Prototype autonome d'origine et ses bancs d'essai : `voix-live/`, sur la branche `voix/agent-live`.
+### 5. Première recherche
 
-### Sur une VM
+Cliquez sur **+ Nouvelle recherche** et envoyez par exemple :
 
-Docker + Caddy (HTTPS) + jeton d'accès : voir [`deploiement/README.md`](deploiement/README.md).
+> Montre que la somme de deux entiers pairs est paire, en construisant le raisonnement dans le graphe, en peu de
+> nœuds.
 
-Tout l'état utile est dans Supabase. Les threads Codex vivent dans `espace/.codex` : copier `espace/` sur la VM
-les conserve ; sinon chaque conversation repart de son historique de messages, sans perte visible.
+Les messages et les appels d'outils de l'orchestrateur défilent au centre, les agents apparaissent dans
+**Agent graph**, puis les nœuds arrivent dans **Graphe de raisonnement**. Un vrai tour d'agents consomme des
+crédits OpenAI (ou le quota de l'abonnement ChatGPT).
+
+Guide pas à pas, avec vérifications à chaque étape : [`docs/tester-en-local.md`](docs/tester-en-local.md).
+
+---
+
+## Visite guidée
+
+L'écran a trois colonnes : **les espaces et leurs sessions** à gauche, **la conversation** au centre, et à droite
+trois onglets : **Graphe de raisonnement**, **Agent graph** et **Documents**. Chaque *espace* (sélecteur en haut à
+gauche) a son propre graphe et son propre dossier de fichiers ; chaque *session* est une conversation avec
+l'orchestrateur.
+
+### 1. Le graphe de raisonnement
+
+![Graphe de raisonnement zoomé : hypothèses de modélisation, décision, puis équation du mouvement](docs/images/02-graphe.jpg)
+
+Chaque case est un **énoncé**, numéroté comme dans un article (« Hypothèse (ii) », « Proposition 6 »,
+« Définition 3 »). Les flèches vont des **prémisses** vers ce qu'elles démontrent ; les prémisses secondaires
+apparaissent en renvoi (« cf. 3 ») pour ne pas surcharger le dessin. Les **cadres** colorés (§1, §2…) regroupent
+les énoncés d'une même partie du raisonnement ; on peut les réduire en un seul bloc.
+
+Le contour d'une case dit son **statut**, recalculé à chaque lecture à partir de tout le graphe :
+
+| Contour | Statut | Signification |
+|---|---|---|
+| plein | **établi** | admis, ou démontré de façon valide à partir de prémisses toutes établies |
+| tirets | **à vérifier** | une démonstration existe mais n'a pas encore été jugée |
+| tirets espacés | **suspendu** | la démonstration est valide, mais une prémisse n'est pas (encore) établie |
+| barré | **invalide** | le vérificateur a rejeté la démonstration |
+| pointillés | **ouvert** | aucune démonstration pour l'instant (hypothèse de travail, conjecture) |
+
+Le zoom change le niveau de détail : de loin, des carrés colorés et les titres des cadres ; de près, les formules
+et le texte complet.
+
+**Se déplacer** : glisser le fond comme une carte, molette pour zoomer, `0` pour tout cadrer, `F` pour cadrer la
+sélection. **Réorganiser** : glisser un nœud (il se range case par case), `C` pour créer un cadre autour de la
+sélection, clic droit pour le menu, `Ctrl+Z` pour annuler. Le bouton **?** en haut à droite liste toutes les
+commandes, souris et tactile. La case **Cette conversation** n'affiche que les nœuds créés par la session ouverte.
+
+### 2. La fiche d'un énoncé et son verdict
+
+![Fiche de la Proposition 6 : énoncé, prémisses, démonstration vérifiée avec une confiance de 0,99](docs/images/03-fiche.jpg)
+
+Un **double-clic** sur une case ouvre sa fiche : l'énoncé complet, ses prémisses et les énoncés qui l'utilisent
+(cliquables), puis chaque démonstration avec son **verdict** (« vérifiée · c = 0,99 ») et le rôle de chaque
+prémisse (principale, auxiliaire, technique, contexte). Le verdict vient du vérificateur : un premier modèle
+juge chaque démonstration ; si elle est jugée invalide ou avec une confiance trop faible, un second modèle plus
+puissant la rejuge et c'est son avis qui compte.
+
+### 3. Les décisions
+
+![Figure illustrant une décision : deux conventions de coordonnées pour le même mouvement](docs/images/04-decision.jpg)
+
+Quand un raisonnement fait un **choix** (quel modèle, quelle convention, quelle méthode), le graphiste le pose
+comme un nœud *décision*, dessiné en losange : sa fiche donne la question, les options et les raisons du choix, et
+des flèches partent vers la branche de chaque option. Une décision n'a pas à être démontrée : elle est toujours
+établie, et tout ce qui en dépend l'est sous cette condition.
+
+### 4. Les figures
+
+![Deux figures vectorielles rattachées au Calcul 18 : altitude et vitesse au cours de la chute](docs/images/05-figures.jpg)
+
+Un énoncé peut porter des **figures**, placées à côté de lui et reliées par un pointillé. Elles sont soit
+**vectorielles** (mesures avec barres d'erreur, courbes, lois tracées avec leur bande d'incertitude, rendues
+comme dans un article LaTeX), soit des **images** produites par les agents (schémas, graphiques matplotlib,
+diagrammes Graphviz, GIF et WebP animés joués dans le graphe). Double-clic pour l'ouvrir en grand.
+
+![Figure image : schéma et courbes du lâcher, produite par un agent](docs/images/06-schema.jpg)
+
+### 5. Les figures 3D animées (branche `visu/figures-3d`)
+
+![Scène 3D d'un pendule simple, avec les énergies et l'angle tracés en direct à côté](docs/images/07-figure-3d.jpg)
+
+Un agent peut aussi produire une **scène 3D animée** (Plotly) : Atlas exécute son script à part (sans secrets,
+durée bornée), vérifie la scène et la range comme une figure. Dans le graphe, elle apparaît comme une case
+marquée d'un cube « 3D » ; **double-cliquer** fait plonger la caméra dans la scène, qui tourne en boucle (vitesse
+×0,5 / ×1 / ×2, glisser pour tourner autour), avec ses graphiques 2D synchronisés à côté.
+
+![La case d'une figure 3D dans le graphe, à droite](docs/images/08-case-3d.jpg)
+
+Cette fonction est sur la branche `visu/figures-3d`, pas encore fusionnée dans `main`. Pour l'essayer sans lancer
+d'agent : `git switch visu/figures-3d`, puis `npm run db:local:reset` (la branche ajoute une migration),
+relancez le serveur et ouvrez <http://localhost:5173/?synthetique=40> : un graphe synthétique en lecture seule,
+qui contient la scène du pendule.
+
+### 6. Les agents au travail
+
+![Agent graph : l'orchestrateur, un directeur de labo et ses deux sous-agents, et le graphiste](docs/images/09-agent-graph.jpg)
+
+L'onglet **Agent graph** montre en direct qui fait quoi : la question, l'orchestrateur, les directeurs de labo
+qu'il a lancés et leurs propres sous-agents (littérature, expérimentateur), le graphiste. Chaque bloc donne son
+état, sa durée, ses jetons et son résultat. **Cliquer sur un agent** en fait le destinataire de la saisie : votre
+message lui est transmis pendant qu'il travaille. Le bouton d'arrêt stoppe tout, ou un seul agent.
+
+Au centre, la conversation affiche la réponse de l'orchestrateur (Markdown et LaTeX), ses étapes et chacun de
+ses appels d'outils, dépliables. Le sélecteur sous la saisie choisit le modèle et l'effort de raisonnement ; on
+peut y mettre sa propre clé OpenAI, gardée dans le navigateur.
+
+### 7. Les documents
+
+L'onglet **Documents** montre le dossier de l'espace : rapports et journaux des directeurs de labo, scripts,
+données CSV, figures, PDF, avec un aperçu de chaque fichier.
+
+### 8. Parler à Atlas
+
+![Session lancée à la voix : la demande transmise par Atlas voix à l'orchestrateur](docs/images/10-voix.jpg)
+
+Le bouton **micro** de la saisie ouvre un appel avec **Atlas voix** (demande une clé
+[Gradium](https://gradium.ai) : `GRADIUM_API_KEY`). On parle en continu, on peut lui couper la parole ; elle
+confie les recherches à l'orchestrateur, annonce ses étapes clés dans les silences, et peut piloter l'écran du
+graphe (« montre-moi le lemme 7 », « vue d'ensemble »). Au raccrochage, la transcription est jointe au prochain
+message de la conversation.
+
+---
+
+## Comment ça marche
+
+```
+Question ─► Orchestrateur ─┬─► Directeur de labo ─┬─► Littérature      (sources, état de l'art)
+                           │   (journal, rapport)  └─► Expérimentateur  (code, simulations, figures)
+                           ├─► Graphiste           rapport ─► nœuds, démonstrations, cadres, figures
+                           ├─► Vérificateur        note chaque démonstration (validité, confiance)
+                           └─► Réponse à l'utilisateur
+```
+
+- **Agents** : [Codex](https://github.com/openai/codex) piloté par son SDK Python, un thread par conversation,
+  sous-agents natifs de Codex. Rôles, modèles et efforts dans `atlas/orchestrateur/sous_agents.py`, consignes de
+  chaque agent dans `atlas/orchestrateur/prompts/`.
+- **Outils** : les agents lisent et écrivent le graphe par un serveur MCP (`atlas/orchestrateur/mcp_atlas.py`) ;
+  chaque écriture est journalisée. Chaque conversation travaille dans son propre dossier.
+- **Graphe** : stocké dans Supabase (Postgres). Le statut des nœuds n'est jamais stocké, il est recalculé à
+  chaque lecture (`atlas/graphe.py`) ; un cycle de démonstrations ne peut pas s'auto-valider.
+- **Interface** : TypeScript sans framework (Vite), graphe dessiné sur canevas avec KaTeX.
+- **En production** : le site et la lecture du graphe sur Vercel, les agents sur une VM (Docker + Caddy),
+  Supabase entre les deux. Guide : [`deploiement/README.md`](deploiement/README.md).
+
+Référence complète (routes de l'API, modèle de données, bunker des agents, voix) :
+[`docs/technique.md`](docs/technique.md).
+
+---
+
+## Installation détaillée et réglages
+
+- **Pas à pas complet**, avec les règles de sécurité et la vérification de chaque étape :
+  [`docs/tester-en-local.md`](docs/tester-en-local.md).
+- **Tous les réglages** sont des variables d'environnement, commentées dans [`.env.example`](.env.example).
+  Les principales :
+
+| Variable | Rôle |
+|---|---|
+| `SUPABASE_URL`, `SUPABASE_SECRET_KEY` | la base (locale en développement) |
+| `OPENAI_API_KEY` | clé OpenAI ; vide = compte ChatGPT connecté par `atlas.orchestrateur.connexion` |
+| `ATLAS_MODELE_*`, `ATLAS_EFFORT_*` | modèle et effort de chaque agent (orchestrateur, directeur, littérature, expérimentateur, graphiste, vérificateur) |
+| `ATLAS_MAX_SOUS_AGENTS` | nombre de sous-agents simultanés |
+| `ATLAS_SEUIL_CONFIANCE` | en dessous, le verdict est rejugé par le modèle de recours |
+| `GRADIUM_API_KEY` | voix (facultatif) |
+| `ATLAS_BUNKER` | `1` : le sandbox de Codex limite les écritures des agents à leur dossier |
+
+**Au quotidien**
+
+| Besoin | Commande |
+|---|---|
+| Repartir d'une base propre | `npm run db:local:reset` |
+| Arrêter la base locale | `npm run db:local:stop` |
+| Tests (sans réseau ni base) | `.venv/Scripts/python -m pytest -q` et `npm test --prefix frontend` |
+| Lint | `.venv/Scripts/ruff check .` et `npm run lint --prefix frontend` |
+
+---
+
+## Dépannage
+
+| Symptôme | Solution |
+|---|---|
+| `docker info` échoue | démarrer Docker Desktop, attendre qu'il soit prêt, relancer `npm run db:local` |
+| Ports 54321 à 54324 déjà pris | un autre projet Supabase tourne : `npx supabase stop --all` |
+| « ATLAS_BASE_LOCALE est activé mais SUPABASE_URL pointe vers… » | `.env` vise une base distante : remettre `SUPABASE_URL=http://127.0.0.1:54321` |
+| « Codex n'est pas connecté » | `OPENAI_API_KEY` vide ou mal collée, ou lancer `python -m atlas.orchestrateur.connexion` |
+| Modèle introuvable ou non autorisé | renseigner les `ATLAS_MODELE_*` avec des modèles de votre compte |
+| Le graphe reste vide | vérifier `curl http://localhost:8000/api/health` ; le front attend l'API sur le port 8000 |
+| Un changement Python semble ignoré (Windows) | arrêter tous les processus du port 8000 et relancer le serveur |
+| Erreur EPERM / EBUSY sur `node_modules` | dossier synchronisé (OneDrive…) : mettre la synchronisation en pause |
+
+---
+
+## Organisation du dépôt
+
+| Dossier | Contenu |
+|---|---|
+| `atlas/` | cœur Python : modèles, calcul des statuts, lecture et écriture du graphe, vue, figures |
+| `atlas/orchestrateur/` | agents Codex, prompts, serveurs MCP, vérificateur |
+| `atlas/voix/` | Atlas voix (appel vocal) |
+| `atlas/serveur.py` | serveur complet (lecture, conversations, agents) |
+| `api/index.py` | API en lecture seule, déployée sur Vercel |
+| `frontend/` | interface web |
+| `supabase/` | schéma (`migrations/`) et données de démonstration (`seed.sql`) |
+| `tests/` | tests Python, sans réseau |
+| `deploiement/` | installation sur une VM (Docker, Caddy) |
+| `film/` | film de présentation (Remotion), voir `film/README.md` |
+| `docs/` | guide d'installation locale, référence technique, captures |
+
+---
+
+## Équipe
+
+*(noms à compléter)*
