@@ -113,14 +113,19 @@
 }
 
 .ligne-espace {
-  display: flex;
-  align-items: center;
+  position: relative;
 }
 
+/* Posée sur l'étiquette, au bout du nom (qu'elle recouvre un peu), plutôt qu'à côté. */
 .menu-espaces .supprimer-espace {
-  flex: none;
+  position: absolute;
+  top: 50%;
+  right: 4px;
   width: auto;
-  padding: 5px;
+  padding: 4px;
+  transform: translateY(-50%);
+  background: var(--fond-2);
+  box-shadow: -10px 0 8px -2px var(--fond-2);
   color: var(--texte-3);
   opacity: 0;
 }
