@@ -121,6 +121,26 @@ async def consigner(appel_id: str, tache: int, corps: Message) -> dict:
     return {"transmis": await _session(appel_id).taches.orienter(tache, corps.message)}
 
 
+class Affichage(BaseModel):
+    demande: str = Field(min_length=1)
+    extrait: str = ""
+    titre: str = ""
+
+
+class Reponse(BaseModel):
+    reponse: str = Field(min_length=1)
+
+
+@routeur_outils.post("/affichage")
+async def afficher(appel_id: str, corps: Affichage) -> dict:
+    return await _session(appel_id).affichages.lancer(corps.demande, corps.extrait, corps.titre)
+
+
+@routeur_outils.post("/affichage/{tache}/reponse")
+async def repondre_affichage(appel_id: str, tache: int, corps: Reponse) -> dict:
+    return await _session(appel_id).affichages.repondre(tache, corps.reponse)
+
+
 @routeur_outils.post("/taches/{tache}/arreter")
 async def arreter_tache(appel_id: str, tache: int) -> dict:
     return {"arretee": await _session(appel_id).taches.arreter(tache)}

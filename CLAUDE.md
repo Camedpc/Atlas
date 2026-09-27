@@ -132,7 +132,7 @@ message), Gradium STT/TTS (`GRADIUM_API_KEY`, 3 sessions max en offre gratuite �
 conversation via le serveur MCP `voix` (qui rappelle `atlas.serveur`, `ATLAS_URL_INTERNE`) et reçoit ses étapes par
 `gestionnaire.abonner` ; au raccrochage, `gestionnaire.deposer_pont` ajoute la transcription au prochain tour.
 Sous `ATLAS_BUNKER=1`, un outil MCP sans `default_tools_approval_mode = "approve"` est refusé ou invisible
-(approval never) : la voix le pose sur ses serveurs. Transcription dans `messages` sous l'agent `/voix`. Lecture de la voix par boucle WebRTC locale
+(approval never) : la voix le pose sur ses serveurs. Transcription dans `messages` sous l'agent `/voix`. Affichage (`atlas/voix/affichage.py`) : l'outil `afficher` crée une tâche `navigateur` dans le registre d'AtlasVoice (`ATLAS_AFFICHAGE_URL`, P1) et la suit jusqu'à sa fin ; questions et résultats reviennent en messages [Affichage]. Lecture de la voix par boucle WebRTC locale
 (`voix.ts`) : en sortie Web Audio directe, l'annulation d'écho de Chrome décroche après des interruptions et la
 voix s'entend en boucle. Gradium : 300 s max par session STT (renouvelée au silence, `ATLAS_VOIX_STT_DUREE`).
 
