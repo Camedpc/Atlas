@@ -1,0 +1,12 @@
+{
+  "id": "v0-reference",
+  "titre": "V0 · Référence",
+  "resume": "Variante sobre qui démontre toutes les fonctions du moteur : granularité continue, trois faces, 3D façon Blender, lignée, filtres, survol.",
+  "idees": [
+    "Halo d'incertitude sous chaque nœud (largeur de l'intervalle de confiance)",
+    "Bordure colorée selon qui a validé (réducteur de nœud)",
+    "Repères d'axes qui apparaissent selon la face regardée (temps, couloirs)",
+    "Section de panneau et réglages propres à la variante"
+  ],
+  "ordre": 0
+}

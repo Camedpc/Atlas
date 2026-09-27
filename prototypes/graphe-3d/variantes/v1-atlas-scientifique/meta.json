@@ -1,0 +1,17 @@
+{
+  "id": "v1-atlas-scientifique",
+  "titre": "V1 · Atlas scientifique",
+  "resume": "Le graphe mis en page comme une figure de revue : papier blanc cassé, encre, palette désaturée, noms de catégories écrits sur les agrégats, anneau de confiance et bordure de validation.",
+  "idees": [
+    "Anneau de confiance : arc foncé jusqu'à l'estimation, arc clair sur l'intervalle [bas ; haut]",
+    "Bordure simple / double / pleine selon la validation (IA, humain, IA + humain), remplissage = statut",
+    "Vues temps et type en rangées façon forest plot : barre d'erreur (min–max, 10–90 %, interquartile), disque à la médiane, noms alignés à gauche",
+    "Détail (anneau, bordure) seulement quand il est lisible : au survol, sur la lignée, au zoom ; sinon un point de couleur de statut",
+    "Noms des catégories écrits sur ou sous les agrégats, corps ∝ poids, placement sans chevauchement",
+    "Enfants qui jaillissent du parent avec un ressort amorti ; à la fermeture ils se resserrent puis fondent dans un parent qui gonfle",
+    "Fiche de survol en légende de figure : petites capitales, échelle de confiance graduée 0–1, mini-diagramme des prémisses",
+    "Territoires des domaines (union de disques teintée et cernée), arêtes fines courbes et fléchées",
+    "Panneau à onglets qui pousse le graphe (Filtres / Catégories / Sélection / Légende) et légende de figure vivante"
+  ],
+  "ordre": 1
+}

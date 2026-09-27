@@ -1,0 +1,15 @@
+{
+  "id": "v4-instrument",
+  "titre": "V4 · Instrument",
+  "resume": "Le graphe lu comme un instrument de mesure : faces du cube, grilles et règles graduées sémantiques (dates, couloirs de type, bandes thématiques, secteurs), réticule de lecture, symboles de statut et barres d'erreur, en-tête de viewport et N-panel façon Blender.",
+  "idees": [
+    "Faces du fond du cube avec grilles sémantiques, estompées selon l'angle ; axes X/Y/Z colorés comme Blender",
+    "Règles graduées posées sur les arêtes du cube, collées au bord de l'écran quand on zoome (mois / semaines / jours, couloirs, bandes)",
+    "Réticule au survol : rappels pointillés vers les axes et valeurs lues (date exacte, couloir, sous-thème), étendue d'un agrégat",
+    "Étendue des agrégats en barre d'erreur horizontale graduée (min–max, q10–q90, interquartile), reprise par le crochet du réticule",
+    "Statut par forme (● ◐ ✕), validation par deux petits indicateurs, intervalle de confiance en barres d'erreur (programme WebGL maison)",
+    "En-tête de viewport (nom de vue façon Blender, menus Vue / Sélection / Granularité, 2D/3D, faces/cube) et menu circulaire des vues",
+    "Regroupement par cases période × type (× origine) placées à la coordonnée de leur intervalle, transitions ease-out-expo"
+  ],
+  "ordre": 4
+}

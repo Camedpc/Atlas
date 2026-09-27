@@ -1,0 +1,16 @@
+{
+  "id": "v6-corolles",
+  "titre": "V6 · Corolles",
+  "resume": "Chaque agrégat est un petit diagramme : un anneau dont les secteurs donnent les statuts, un anneau fin pour la validation, le nom et l'effectif au centre. À l'ouverture, les enfants éclosent en corolle ordonnée.",
+  "idees": [
+    "Agrégat = donut : secteurs de statut, anneau fin de validation, nom et effectif au centre, rayon ∝ √n",
+    "Éclosion en corolle : les enfants sortent en éventail ordonné (statut, date, validation, confiance) puis rejoignent leur place ; repli en pétales",
+    "Le parent se déroule pendant l'éclosion (secteurs qui s'écartent) ; au survol ils se détachent",
+    "Survol d'un secteur : « 23 incertains » et mise en avant (ou aperçu) de ces nœuds",
+    "Violon de confiance sous une feuille survolée : couleur = statut, contour = validation",
+    "Communautés Louvain à trois niveaux en alternative aux catégories",
+    "Panneau gauche en cartes flottantes qui entrent en cascade",
+    "Ouverture globale en vague sobre, disque compact en zone dense, rubans de statuts en vues face et droite"
+  ],
+  "ordre": 6
+}
