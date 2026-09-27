@@ -141,7 +141,13 @@ def test_verifier_rejuge_les_cas_douteux_et_isole_les_erreurs(monkeypatch):
     notes: list[dict] = []
     monkeypatch.setattr(ecriture, "noter_demonstration", lambda **champs: notes.append(champs))
 
-    resultats = {r["noeud_id"]: r for r in asyncio.run(verificateur.verifier("p1", []))}
+    monkeypatch.setattr(lecture, "charger_etat_vue", lambda _projet: (_ for _ in ()).throw(RuntimeError("hors ligne")))
+    recits: list[dict] = []
+
+    async def raconter(evenement):
+        recits.append(evenement)
+
+    resultats = {r["noeud_id"]: r for r in asyncio.run(verificateur.verifier("p1", [], raconter))}
 
     assert resultats["sur"]["modele"] == "gpt-6-luna"
     assert resultats["douteux"]["modele"] == "gpt-6-sol"
@@ -149,6 +155,15 @@ def test_verifier_rejuge_les_cas_douteux_et_isole_les_erreurs(monkeypatch):
     assert ("douteux", "gpt-6-sol") in appels and ("sur", "gpt-6-sol") not in appels
     assert sorted(n["noeud_id"] for n in notes) == ["douteux", "sur"]
     assert all(n["auteur"] == "verificateur" and n["projet_id"] == "p1" for n in notes)
+    # Récit pour l'agent graph : sans vue lisible, le nom du nœud tient lieu de repère.
+    assert (recits[0], recits[-1]) == ({"type": "debut", "total": 3}, {"type": "fin"})
+    douteux = [(r["type"], r.get("etape"), r.get("final")) for r in recits if r.get("cle") == "douteux/Directe"]
+    assert douteux == [
+        ("juge", "juge", None), ("verdict", "juge", False), ("juge", "recours", None), ("verdict", "recours", True)
+    ]
+    titres = {r.get("titre") for r in recits if r["type"] == "juge"}
+    assert titres == {"SUR · Directe", "DOUTEUX · Directe", "CASSE · Directe"}
+    assert {"type": "erreur", "cle": "casse/Directe", "message": "panne"} in recits
 
 
 # ── Bunker ───────────────────────────────────────────────────────────────────

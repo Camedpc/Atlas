@@ -179,6 +179,14 @@ async def arreter(conversation_id: str, corps: Arret | None = None) -> dict:
     return {"ok": True}
 
 
+@routeur.post("/{conversation_id}/verification", status_code=202)
+async def verification(conversation_id: str, evenement: dict) -> dict:
+    """Interne : le serveur MCP du vérificateur raconte son avancement (`SuiviAgents.verification`), pour l'arbre
+    des agents et le fil de chaque juge."""
+    await gestionnaire.verification(conversation_id, evenement)
+    return {"ok": True}
+
+
 @routeur_modeles.get("/modeles")
 async def modeles(cle: str | None = Depends(cle_openai)) -> dict:
     """Modèles proposés pour l'orchestrateur (ceux du compte de la clé, s'il y en a une), avec leurs efforts, et les

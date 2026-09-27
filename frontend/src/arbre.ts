@@ -9,6 +9,7 @@ import {
   VOIX,
   couleurRole,
   estFini,
+  estJuge,
   etat,
   formatDuree,
   formatTokens,
@@ -190,7 +191,7 @@ export class ArbreAgents {
           <span class="prefixe">${prefixe}</span><span class="symbole" style="color:${estFini(a) ? '' : couleurRole(a.role)}">${SYMBOLES[a.etat]}</span>
           <span class="nom">${echapper(nom)}</span>${tache}${repli}
           <span class="activite">${echapper(activite)}</span>
-          <span class="mesures">${a.nb_outils ? `${a.nb_outils} outils · ` : ''}${formatTokens(a.tokens)} tok · ${duree}</span>
+          <span class="mesures">${a.nb_outils ? `${a.nb_outils} outils · ` : ''}${estJuge(a) ? '' : `${formatTokens(a.tokens)} tok · `}${duree}</span>
         </div>`
       })
       .join('')

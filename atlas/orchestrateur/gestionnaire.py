@@ -392,6 +392,19 @@ class Gestionnaire:
         if methode == "turn/completed" and cid not in self._tours and execution_id:
             await asyncio.to_thread(conversations.enregistrer_agents, execution_id, suivi.instantane())
 
+    async def verification(self, conversation_id: str, evenement: dict[str, Any]) -> None:
+        """Avancement de l'outil `verifier`, raconté par son serveur MCP : l'arbre le montre, et chaque verdict va
+        dans le fil de son juge (voir `SuiviAgents.verification`). Ignoré si la conversation n'est plus suivie."""
+        suivi = self._suivis.get(conversation_id)
+        if suivi is None:
+            return
+        execution_id = self._derniere.get(conversation_id)
+        for chemin, texte in suivi.verification(evenement):
+            await asyncio.to_thread(
+                conversations.ajouter_message, conversation_id, "assistant", texte, execution_id=execution_id,
+                agent=chemin,
+            )
+
     async def _menage(self) -> None:
         """Décharge de Codex les conversations inutilisées où plus aucun agent ne travaille."""
         while True:

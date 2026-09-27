@@ -14,6 +14,7 @@ const COULEURS: Record<string, string> = {
   litterature: '#0f766e',
   experimentateur: '#6d28d9',
   graphiste: '#be185d',
+  scribe: '#4338ca',
   verificateur: '#15803d',
   recours: '#a16207',
   atlas_voice: '#1d4ed8',
@@ -26,6 +27,7 @@ const LIBELLES: Record<string, string> = {
   litterature: 'Littérature',
   experimentateur: 'Expérimentateur',
   graphiste: 'Graphiste',
+  scribe: 'Scribe',
   verificateur: 'Vérificateur',
   recours: 'Recours',
   atlas_voice: 'Atlas voix',
@@ -38,6 +40,7 @@ const ICONES: Record<string, string> = {
   litterature: '¶',
   experimentateur: '∫',
   graphiste: '◇',
+  scribe: '✎',
   verificateur: '✓',
   recours: '§',
   atlas_voice: '∿',
@@ -57,11 +60,14 @@ export const libelleRole = (role: string) => LIBELLES[role] ?? role
 export const iconeRole = (role: string) => ICONES[role] ?? '•'
 export const estFini = (a: Agent) => a.etat === 'termine' || a.etat === 'echec' || a.etat === 'interrompu'
 export const estVivant = (a: Agent) => a.etat === 'actif'
+/** Le vérificateur et ses juges (outil `verifier`) : des threads éphémères, à qui l'on ne peut pas écrire. */
+export const estJuge = (a: Agent | undefined) => !!a && (a.role === 'verificateur' || a.role === 'recours')
 
 /** Nom de la tâche donné par l'agent parent : dernier segment du chemin (`/root/hydrures_pression`). */
 export function mission(a: Agent): string {
   if (a.chemin === RACINE) return 'Orchestrateur'
   if (a.chemin === VOIX) return 'Appel vocal'
+  if (a.titre) return a.titre
   return a.chemin.slice(a.chemin.lastIndexOf('/') + 1).replace(/[_-]+/g, ' ')
 }
 

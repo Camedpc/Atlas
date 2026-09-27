@@ -140,6 +140,8 @@
 .bp .noeud.e-echec .tete { background: var(--echec); }
 .bp .noeud.e-echec .badge { display: block; }
 .bp .noeud.e-echec .rang .val.v-resultat { color: var(--echec); }
+/* Juge du vérificateur qui a rejeté la démonstration : le verdict en rouge, sans l'alarme d'un échec. */
+.bp .noeud.invalide .rang[data-k="verdict"] .val { color: var(--echec); }
 .bp .noeud.choisi { opacity: 1; outline: 2px solid var(--choix); outline-offset: 2px; }
 
 /* Nœud événement */

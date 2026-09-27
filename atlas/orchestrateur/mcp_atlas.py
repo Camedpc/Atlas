@@ -426,8 +426,8 @@ def creer_figure_3d(
 
 @serveur.tool()
 def lire_figure(id: str) -> list[str | Image]:
-    """Une figure du graphe : son nœud, sa légende, sa source, les données de son tracé (axes, points, lois et
-    paramètres), le résumé de sa scène 3D, et son image si elle en a une (tu la vois)."""
+    """Une figure du graphe : son nœud, sa légende, sa source, le fichier d'origine de son image, les données de son
+    tracé (axes, points, lois et paramètres), le résumé de sa scène 3D, et son image si elle en a une (tu la vois)."""
     figure = lecture.lire_figure(_projet(), id.removeprefix(vue.PREFIXE_FIGURE))
     if figure is None:
         raise ecriture.ErreurGraphe(f"Figure inexistante : {id}. lire_vue liste les figures (fig:<id>).")
@@ -436,6 +436,8 @@ def lire_figure(id: str) -> list[str | Image]:
         lignes.append(f"Légende : {figure['legende']}")
     if figure["source"]:
         lignes.append(f"Source : {figure['source']}")
+    if figure.get("fichier"):
+        lignes.append(f"Fichier d'origine (relatif au projet) : {figure['fichier']}")
     if figure["trace"]:
         lignes.append("Tracé :\n" + figures.resumer_trace(figure["trace"]))
     if figure.get("scene_chemin"):

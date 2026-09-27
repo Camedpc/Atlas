@@ -13,7 +13,8 @@ Atlas est un harnais de recherche scientifique. Dans un seul thread Codex par co
 des missions à des directeurs de labo (qui convoquent `litterature` et `experimentateur`, tiennent `journal.md` et
 rédigent `rapport.md` dans `directeurs/NN-sujet/`), fait transformer chaque rapport en graphe par le `graphiste`
 (nœud = assertion, démonstration = liaison depuis ses prémisses `justifie_par`), puis appelle l'outil `verifier`
-qui note chaque liaison. L'UI : conversations à gauche, graphe de raisonnement (vision R41, éditable façon Blueprint d'UE5) à droite. Rôles dans `sous_agents.py`,
+qui note chaque liaison ; après une recherche d'ampleur, le `scribe` en rédige l'article (LaTeX compilé en PDF, dans
+`doc_projet/<sujet>/papiers/NN-…/`, avec les figures et la carte du raisonnement). L'UI : conversations à gauche, graphe de raisonnement (vision R41, éditable façon Blueprint d'UE5) à droite. Rôles dans `sous_agents.py`,
 prompts dans `atlas/orchestrateur/prompts/*.md` : c'est Camille qui les fait évoluer (prompt engineering).
 
 ## Modèle de graphe
@@ -42,6 +43,11 @@ prompts dans `atlas/orchestrateur/prompts/*.md` : c'est Camille qui les fait év
   Un GIF ou un WebP animé est joué sur le canevas (`ImagesFigures`, `ImageDecoder`, une image décodée à la fois,
   seulement quand la figure est dessinée) ; pas de SVG. Les prompts poussent tous les agents à produire schémas,
   courbes et animations (Graphviz et pillow dans l'image Docker), et l'orchestrateur peut rattacher une figure lui-même.
+  Scène 3D animée (`atlas/figures3d.py`, pur ; `figures.scene_chemin` / `scene_script`) : outil MCP `creer_figure_3d`,
+  Atlas exécute lui-même le script Plotly de l'agent (`orchestrateur/figure3d.py` : processus à part, sans secrets,
+  `ATLAS_DELAI_FIGURE3D`), garde la seule scène 3D et les graphiques 2D vérifiés, la range en JSON dans le bucket
+  (`/api/figures/{id}/scene`). Front : case avec un cube « 3D », double-clic = mode 3D (`graphe-3d.ts`, plotly.js
+  chargé à la demande, boucle, vitesse, glisser pour tourner) ; `?synthetique=N` contient une scène (pendule).
 - Repères (`atlas/navigation.py`, pur) : la numérotation de l'écran (« Lemme 7 », « §1.2 », « Figure 2 ») recopie
   `construireModele` de `graphe-modele.ts` ; un jeu commun (`tests/donnees/reperes.json`) est vérifié des deux
   côtés, à garder à jour si l'une change. Rien de purement visuel (cadrage, zoom, filtres) n'est enregistré ; seul un
@@ -149,6 +155,10 @@ Vérificateur : serveur MCP `mcp_verificateur.py` (délai `ATLAS_DELAI_VERIFICAT
 (threads éphémères, lecture seule, sortie structurée) : `ATLAS_MODELE_VERIFICATEUR` juge, et si « invalide » ou sous
 `ATLAS_SEUIL_CONFIANCE`, `ATLAS_MODELE_VERIFICATEUR_RECOURS` rejuge et fait foi ; verdict écrit par
 `ecriture.noter_demonstration` (validite, confiance ; justification au journal, action `verdict`).
+Dans l'arbre et l'agent graph, il n'est pas un sous-agent Codex : son serveur MCP raconte son avancement à
+`POST /api/conversations/{id}/verification` (`ATLAS_URL_INTERNE`), et `SuiviAgents.verification` en fait des agents
+(`<appelant>/verification`, un juge par démonstration titré par son repère, `…/recours` s'il rejuge) ; chaque verdict
+va dans le fil de son juge et du vérificateur, en lecture seule. La fin de l'outil clôt ce qui n'a pas été raconté.
 
 Atlas voix (`atlas/voix/`) : appel vocal par WebSocket (`/api/conversations/{id}/voix`, jeton dans le premier
 message), Gradium STT/TTS (`GRADIUM_API_KEY`, 3 sessions max en offre gratuite → un appel à la fois), thread Codex

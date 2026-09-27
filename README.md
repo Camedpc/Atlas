@@ -26,6 +26,7 @@ Harness de hackathon : des agents IA transforment leurs raisonnements scientifiq
 | `GET /api/journal?projet_id=&noeud_id=&limite=&avant_id=` | Historique, le plus récent d'abord |
 | `GET /api/vue?projet_id=&format=json\|texte` | Vue de l'espace : cadres (et leur rectangle), placements en cases, étiquettes ; `texte` = ce que lit l'IA ; `figures` (graphiques et images, placés comme `fig:<id>`) ; `documents` (fichiers et dossiers du projet, placés comme `doc:<id>`) et `liens_documents` |
 | `GET /api/figures/{id}/image?projet_id=` | Image d'une figure (bucket privé) |
+| `GET /api/figures/{id}/scene?projet_id=` | Scène 3D animée d'une figure (JSON Plotly vérifié, bucket privé) |
 | `GET /api/docs` | Documentation interactive |
 
 Chaque espace de travail (projet) a son propre graphe : `projet_id` le choisit, et son absence désigne le
@@ -47,6 +48,7 @@ Servies seulement par `atlas.serveur` (pas sur Vercel) :
 | `GET /api/conversations/{id}/agents` | Arbre des agents : en direct pendant un tour, sinon celui du dernier tour |
 | `POST /api/conversations/{id}/messages` | `{"contenu", "agent"?, "modele"?, "effort"?}` : lance un tour, ou s'injecte dans le tour en cours |
 | `POST /api/conversations/{id}/arreter` | `{"agent"?}` : arrête tout (orchestrateur et sous-agents), ou un seul sous-agent |
+| `POST /api/conversations/{id}/verification` | Interne : avancement de l'outil `verifier` (juges, verdicts), pour l'arbre des agents |
 | `WS /api/conversations/{id}/voix` | Appel vocal avec Atlas voix (premier message : `{"type": "auth", "jeton"}`) |
 | `/api/voix/appels/{appel}/…` | Outils du serveur MCP `voix` : confier à l'orchestrateur, son état, petites tâches, écran du graphe |
 | `GET /api/orchestrateur/modeles` | Modèles Codex proposés à l'orchestrateur, leurs efforts, et les réglages par défaut (avec `X-Atlas-Cle-OpenAI` : ceux de la clé) |
@@ -97,6 +99,9 @@ L'orchestrateur délègue à des sous-agents Codex dans le même thread : `direc
 `graphiste` (qui met un rapport en graphe). Il fait ensuite juger les démonstrations par l'outil `verifier` du
 serveur MCP `verificateur` : un modèle économique juge chaque démonstration, un modèle de recours rejuge les
 verdicts invalides ou peu sûrs, et le verdict (`validite`, `confiance`) est écrit sur la démonstration.
+Après une recherche d'ampleur, il fait rédiger l'article par le `scribe` : un papier scientifique en LaTeX, compilé
+en PDF (`doc_projet/<sujet>/papiers/NN-…/`), avec les démonstrations, les verdicts, les figures et la carte du
+raisonnement (LaTeX est dans l'image Docker).
 
 Chaque conversation a son dossier (`atlas/orchestrateur/bunker.py`) :
 `espace/utilisateurs/<utilisateur>/<projet>/sessions/<conversation>/`, avec `conv/` (copie de la conversation),

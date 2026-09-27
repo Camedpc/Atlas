@@ -347,6 +347,10 @@ export interface Agent {
   resultat: string | null
   /** Début de l'étape en cours (secondes), null si l'agent ne travaille pas. */
   depuis?: number | null
+  /** Nom affiché à la place de celui tiré du chemin (démonstration jugée : « Lemme 7 · récurrence »). */
+  titre?: string | null
+  /** Verdict d'un juge du vérificateur. */
+  verdict?: { validite: 'valide' | 'invalide'; confiance: number } | null
 }
 
 export interface EtatConversation extends Conversation {

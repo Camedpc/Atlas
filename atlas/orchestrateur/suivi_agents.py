@@ -10,6 +10,10 @@ Pas d'I/O : `recevoir` renvoie ce qu'il faut enregistrer (items terminés des so
 Le processus Codex restant ouvert entre les tours, les sous-agents continuent de travailler (et de notifier)
 après la fin du tour de l'orchestrateur : l'arbre vit tant que le thread est chargé. `brouillons` garde le texte
 qu'un agent est en train d'écrire (deltas), pour l'afficher avant la fin du message.
+
+Le vérificateur (outil `verifier` du serveur MCP `verificateur`) n'est pas un sous-agent Codex : ses juges sont des
+threads éphémères d'un autre processus, qui raconte son avancement par `verification`. Il apparaît sous l'agent qui
+l'a appelé (`<appelant>/verification`), avec un nœud par démonstration jugée et, dessous, le recours s'il rejuge.
 """
 
 import time
@@ -40,6 +44,10 @@ LONGUEUR_MAX_ACTIVITE = 200
 LONGUEUR_MAX_RESULTAT = 600
 LONGUEUR_MAX_REPONSE = 4000
 
+ROLE_VERIFICATEUR = "verificateur"
+ROLE_RECOURS = "recours"
+OUTIL_VERIFIER = "verificateur.verifier"
+
 
 @dataclass
 class Agent:
@@ -65,6 +73,10 @@ class Agent:
     tokens_debut: int = 0
     """Jetons du thread au début de l'exécution en cours : `tokens`, `nb_outils` et `debut` valent pour elle seule
     (un sous-agent relancé repart de zéro, comme dans Claude Code)."""
+    titre: str | None = None
+    """Nom affiché à la place de celui tiré du chemin (démonstration jugée : « Lemme 7 · récurrence »)."""
+    verdict: dict[str, Any] | None = None
+    """Verdict d'un juge du vérificateur : validite, confiance."""
 
 
 @dataclass
@@ -79,6 +91,20 @@ class Etape:
     role: str
     mission: str
     resultat: str | None = None
+
+
+@dataclass
+class Verification:
+    """Un appel de l'outil `verifier` : son nœud dans l'arbre et ceux de ses démonstrations."""
+
+    chemin: str
+    appelant: str
+    total: int
+    demonstrations: dict[str, str] = field(default_factory=dict)
+    """Clé de la démonstration → chemin de son nœud."""
+    verdicts: dict[str, str] = field(default_factory=dict)
+    """Clé → verdict qui fait foi (« valide », « invalide » ou « erreur »)."""
+    close: bool = False
 
 
 @dataclass
@@ -121,6 +147,8 @@ class SuiviAgents:
         self.brouillons: dict[str, str] = {}
         # Chemin -> ((item, partie), texte) du titre de réflexion en cours de réception.
         self._titres: dict[str, tuple[Any, str]] = {}
+        # Appel de `verifier` (id tiré par son serveur MCP) -> sa vérification.
+        self._verifications: dict[str, Verification] = {}
 
     @classmethod
     def depuis(cls, instantane: list[dict[str, Any]] | None, horloge: Callable[[], float] = time.time) -> "SuiviAgents":
@@ -232,6 +260,8 @@ class SuiviAgents:
             case "item/started" if item is not None:
                 self._debut_item(agent, item)
             case "item/completed" if item is not None:
+                if item.get("type") == "mcpToolCall" and _outil(item) == OUTIL_VERIFIER:
+                    self._clore_verifications(agent.chemin)
                 fini_avant = agent.etat in ETATS_FINIS
                 self._fin_item(agent, item)
                 if item.get("type") == "agentMessage":
@@ -242,6 +272,134 @@ class SuiviAgents:
                     # Hors tour, personne d'autre n'enregistre le fil de l'orchestrateur (« X a terminé »).
                     evenements.a_enregistrer.append((RACINE, item))
         return evenements
+
+    # ── vérificateur ──
+
+    def verification(self, evenement: dict[str, Any]) -> list[tuple[str, str]]:
+        """Avancement d'un appel de `verifier`, raconté par son serveur MCP (`appel` : id de l'appel) :
+
+        - `debut` (`total`) : le nœud du vérificateur apparaît sous l'agent qui a appelé l'outil ;
+        - `juge` (`cle`, `titre`, `etape` = juge ou recours, `modele`) : un juge commence ;
+        - `verdict` (`cle`, `etape`, `modele`, `validite`, `confiance`, `justification`, `final`) : il a jugé ;
+        - `erreur` (`cle`, `message`) : la démonstration n'a pas pu être jugée ;
+        - `fin`.
+
+        Renvoie les messages à enregistrer, (chemin, texte) : chaque verdict dans le fil de son juge, et celui qui
+        fait foi aussi dans le fil du vérificateur."""
+        appel = str(evenement.get("appel") or "")
+        genre = evenement.get("type")
+        maintenant = self._horloge()
+        if genre == "debut":
+            if appel not in self._verifications:
+                self._ouvrir_verification(appel, int(evenement.get("total") or 0))
+            return []
+        v = self._verifications.get(appel)
+        if v is None or v.close:
+            return []
+        messages: list[tuple[str, str]] = []
+        cle = str(evenement.get("cle") or "")
+        juge = self.agents.get(v.demonstrations.get(cle, ""))
+        recours = self.agents.get(f"{juge.chemin}/recours") if juge else None
+        match genre:
+            case "juge" if evenement.get("etape") == "recours":
+                if juge is not None:
+                    recours = Agent(
+                        f"{juge.chemin}/recours", f"{juge.thread_id}:recours", juge.chemin, ROLE_RECOURS,
+                        maintenant, modele=evenement.get("modele"), titre=juge.titre, outil="Recours",
+                        activite="Rejuge", depuis=maintenant,
+                    )
+                    self.agents[recours.chemin] = recours
+            case "juge" if juge is None:
+                chemin = f"{v.chemin}/{len(v.demonstrations) + 1}"
+                v.demonstrations[cle] = chemin
+                self.agents[chemin] = Agent(
+                    chemin, f"verification:{appel}:{cle}", v.chemin, ROLE_VERIFICATEUR, maintenant,
+                    modele=evenement.get("modele"), titre=str(evenement.get("titre") or cle), outil="Juge",
+                    activite="Juge", depuis=maintenant,
+                )
+            case "verdict":
+                cible = recours if evenement.get("etape") == "recours" else juge
+                if cible is None:
+                    return []
+                validite = "invalide" if evenement.get("validite") == "invalide" else "valide"
+                confiance = float(evenement.get("confiance") or 0)
+                justification = str(evenement.get("justification") or "").strip()
+                cible.verdict = {"validite": validite, "confiance": confiance}
+                cible.etat, cible.fin, cible.outil, cible.depuis = "termine", maintenant, None, None
+                cible.activite = f"{validite.capitalize()} · confiance {_virgule(confiance)}"
+                cible.resultat = _court(justification, LONGUEUR_MAX_RESULTAT) or cible.activite
+                modele = evenement.get("modele") or cible.modele or "?"
+                texte = (
+                    f"**{cible.titre}** : {validite}, confiance {_virgule(confiance)} "
+                    f"({modele}{', recours' if cible is recours else ''})"
+                    + (f"\n\n{justification}" if justification else "")
+                )
+                messages.append((cible.chemin, texte))
+                if evenement.get("final", True):
+                    v.verdicts[cle] = validite
+                    messages.append((v.chemin, texte))
+            case "erreur":
+                message = str(evenement.get("message") or "erreur inconnue")
+                for a in (recours, juge):
+                    if a is not None and a.etat not in ETATS_FINIS:
+                        a.etat, a.fin, a.outil, a.depuis, a.activite = "echec", maintenant, None, None, "Échec"
+                        a.resultat = _court(message, LONGUEUR_MAX_RESULTAT)
+                v.verdicts[cle] = "erreur"
+                texte = f"**{juge.titre if juge else cle}** : non jugée ({message})"
+                messages += [(c, texte) for c in ([juge.chemin] if juge else []) + [v.chemin]]
+            case "fin":
+                self._clore_verification(v, "termine")
+        self._resumer(v)
+        return messages
+
+    def _ouvrir_verification(self, appel: str, total: int) -> None:
+        # L'agent en train d'appeler `verifier` (le plus récent s'ils sont plusieurs), sinon l'orchestrateur.
+        appelants = [a for a in self.agents.values() if a.outil == OUTIL_VERIFIER and a.etat not in ETATS_FINIS]
+        appelant = max(appelants, key=lambda a: a.depuis or 0).chemin if appelants else RACINE
+        chemin, k = f"{appelant}/verification", 2
+        while chemin in self.agents:
+            chemin, k = f"{appelant}/verification_{k}", k + 1
+        maintenant = self._horloge()
+        self.agents[chemin] = Agent(
+            chemin, f"verification:{appel}", appelant, ROLE_VERIFICATEUR, maintenant, outil="Vérification",
+            depuis=maintenant,
+        )
+        self._verifications[appel] = v = Verification(chemin, appelant, total)
+        self._resumer(v)
+
+    def _resumer(self, v: Verification) -> None:
+        """Décompte du nœud du vérificateur : « 7/12 jugées · 5 valides · 2 invalides »."""
+        agent = self.agents[v.chemin]
+        jugees = list(v.verdicts.values())
+        morceaux = [f"{len(jugees)}/{v.total} jugée{'s' if len(jugees) > 1 else ''}"]
+        for verdict in ("valide", "invalide", "erreur"):
+            if n := jugees.count(verdict):
+                morceaux.append(f"{n} {verdict}{'s' if n > 1 else ''}")
+        agent.titre = f"{v.total} démonstration{'s' if v.total > 1 else ''}"
+        if v.close:
+            agent.resultat = " · ".join(morceaux)
+        else:
+            agent.activite = " · ".join(morceaux)
+
+    def _clore_verification(self, v: Verification, etat: EtatAgent) -> None:
+        maintenant = self._horloge()
+        v.close = True
+        for juge in v.demonstrations.values():
+            for chemin in (f"{juge}/recours", juge):
+                a = self.agents.get(chemin)
+                if a is not None and a.etat not in ETATS_FINIS:
+                    a.etat, a.fin, a.outil, a.depuis, a.activite = "interrompu", maintenant, None, None, "Interrompu"
+        a = self.agents[v.chemin]
+        if a.etat not in ETATS_FINIS:
+            a.etat, a.fin, a.outil, a.depuis = etat, maintenant, None, None
+            a.activite = {"termine": "Terminé", "interrompu": "Interrompu"}.get(etat, "Échec")
+        self._resumer(v)
+
+    def _clore_verifications(self, appelant: str) -> None:
+        """L'appel de `verifier` est fini : ce qui n'a pas été raconté ne le sera plus (serveur MCP tombé, délai)."""
+        for v in self._verifications.values():
+            if v.appelant == appelant and not v.close:
+                self._clore_verification(v, "termine" if len(v.verdicts) >= v.total else "echec")
 
     # ── interne ──
 
@@ -287,8 +445,7 @@ class SuiviAgents:
             case "commandExecution":
                 outil, activite = "Commande", _commande(item)
             case "mcpToolCall":
-                outil = f"{item.get('server', '?')}.{item.get('tool', '?')}"
-                activite = outil
+                outil = activite = _outil(item)
             case "webSearch":
                 outil, activite = "Recherche web", str(item.get("query") or "")
             case "fileChange":
@@ -322,6 +479,14 @@ class SuiviAgents:
         if type_ == "collabAgentToolCall" and item.get("tool") == "wait":
             agent.etat, agent.activite = "actif", "Réfléchit"
         agent.outil = None
+
+
+def _virgule(confiance: float) -> str:
+    return f"{confiance:.2f}".replace(".", ",")
+
+
+def _outil(item: dict) -> str:
+    return f"{item.get('server', '?')}.{item.get('tool', '?')}"
 
 
 def agents_figes(instantane: list[dict[str, Any]] | None) -> list[Agent]:
