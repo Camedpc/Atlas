@@ -128,7 +128,10 @@ class Relais:
         attente = self._attendre(lot.lot_id)
         for file in e.connexions:
             file.put_nowait(lot)
-        return await self._resultat(lot.lot_id, attente, delai_s, e)
+        # Les pauses du lot (`attendre`) s'ajoutent au délai du compte rendu.
+        pauses = sum(c.secondes for c in lot.commandes if c.op == "attendre")
+        delai = (config.AFFICHAGE_DELAI_S if delai_s is None else delai_s) + pauses
+        return await self._resultat(lot.lot_id, attente, delai, e)
 
     def recevoir_compte_rendu(self, ecran: str, utilisateur_id: str, cr: CompteRendu) -> None:
         e = self.ecran(ecran, utilisateur_id)

@@ -444,3 +444,33 @@ def test_prompt_ancien_force_ou_sans_espace(monkeypatch):
     assert "cadres" not in entree and "ref" not in entree["noeuds"][0] and "camera" in entree["ecran"]
     # Le type vient de la base, même avec l'ancien prompt (la déduction par préfixe ne sert que sans type).
     assert next(x for x in entree["noeuds"] if x["id"] == "cor_final")["type"] == "proposition"
+
+
+def test_deplacer_attendre_et_retablir_sur_la_grille():
+    from app.agents.navigation.navigateur import Graphe as G
+    from app.agents.navigation.vue_atlas import construire
+
+    v = construire(NOEUDS_TYPES, VUE)
+    g = G(NOEUDS_TYPES, v)
+    e = etat(projet=PROJET)
+    # Cases : def (0,0), lemme faible (1,0), thm (2,0), cor (3,0), figure (2,1), choix (0,1), lemme fort (1,1).
+    lot, _ = construire_lot([
+        {"op": "cadrer", "cibles": [{"noeud": "thm_principal"}]},
+        {"op": "attendre", "secondes": 3},
+        {"op": "deplacer", "deplacements": [{"noeud": "cor_final", "colonne": 5, "ligne": 0},
+                                            {"noeud": "fig:courbe", "colonne": 3, "ligne": 0}]},
+        {"op": "retablir_disposition"}], 1, e, [], g)
+    cmds = [c.model_dump(exclude_unset=True) for c in lot.commandes]
+    assert cmds[1] == {"op": "attendre", "secondes": 3.0}
+    assert cmds[2]["deplacements"] == [{"noeud": "cor_final", "colonne": 5, "ligne": 0},
+                                       {"figure": "courbe", "colonne": 3, "ligne": 0}]
+    # La figure prend la case libérée par cor_final dans la même commande ; une case prise est refusée.
+    with pytest.raises(ValueError, match="déjà occupée par 'thm_principal'"):
+        construire_lot([{"op": "deplacer", "deplacements": [{"noeud": "cor_final", "colonne": 2, "ligne": 0}]}], 1, e, [], g)
+    # Les positions provisoires de l'écran comptent : cor_final déjà en (5, 0) libère (3, 0).
+    deplace = etat(projet=PROJET, deplacements=[{"noeud": "cor_final", "colonne": 5, "ligne": 0}])
+    construire_lot([{"op": "deplacer", "deplacements": [{"noeud": "isole", "colonne": 3, "ligne": 0}]}], 1, deplace, [], g)
+    with pytest.raises(ValueError, match="secondes entre 0 et 10"):
+        construire_lot([{"op": "attendre", "secondes": 30}], 1, e, [], g)
+    with pytest.raises(ValueError, match="pas de grille"):
+        construire_lot([{"op": "deplacer", "deplacements": [{"noeud": "isole", "colonne": 9, "ligne": 9}]}], 1, e, [], GRAPHE)

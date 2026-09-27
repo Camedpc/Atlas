@@ -12,7 +12,7 @@ from .vue_atlas import VueAtlas, zoom
 
 # Ce que la vue 2D sait faire (les autres ops sont refusées par l'écran : voir adaptateurVue.ts).
 OPS_VUE = ["cadrer", "zoomer", "selectionner", "portee", "surligner", "filtres", "effacer_filtres", "fiche",
-           "panneau", "restaurer", "recharger_donnees"]
+           "panneau", "deplacer", "retablir_disposition", "attendre", "restaurer", "recharger_donnees"]
 
 COMMANDE_VUE = {
     "type": "object",
@@ -31,6 +31,9 @@ COMMANDE_VUE = {
             "ajoutés à noeuds), conversation (UUID ou null), statuts, types, periode {debut, fin}, texte, "
             "mode (estomper)")},
         "ouvert": {"type": "boolean", "description": "panneau : colonne de la conversation (false = graphe plus large)"},
+        "deplacements": {"type": "array", "description": (
+            "deplacer : liste de {noeud: id, colonne, ligne} ou {figure: id, colonne, ligne} (cases entières ≥ 0, libres)")},
+        "secondes": {"type": "number", "description": "attendre : pause avant la commande suivante (0 à 10 s)"},
     },
     "required": ["op"],
 }
@@ -88,11 +91,11 @@ modifier le graphe) : ne fais que la partie affichage ;
 très loin, on ne lit rien ; titres : références et noms lisibles ; contenu : énoncés complets, à partir de −3) ; \
 selection, portee, surlignes, filtres, fiche (panneau de détail ouvert), visibles (nœuds à l'écran, du centre vers \
 les bords, avec leur position x, y en pixels depuis le coin haut gauche), survol, conversation_affichee, \
-panneau_conversation_ouvert ;
-- noeuds : tout le graphe (id, ref, nom, type, statut, cadre, début de l'énoncé, premisses et consequences \
-directes) ;
+panneau_conversation_ouvert, deplacements (positions provisoires en cours sur cet écran) ;
+- noeuds : tout le graphe (id, ref, nom, type, statut, cadre, case [colonne, ligne] à l'écran, début de \
+l'énoncé, premisses et consequences directes) ;
 - cadres : id, numero, nom, genre, dans (cadre parent), reduit, noeuds (tous ceux qu'il contient) ;
-- figures : id, ref, titre, illustre (le nœud qu'elle illustre), cadre ;
+- figures : id, ref, titre, illustre (le nœud qu'elle illustre), cadre, case ;
 - conversations (id, titre) et pile_profondeur (nombre d'états qu'on peut restaurer).
 
 Commandes de l'écran :
@@ -108,14 +111,27 @@ Pour ne garder qu'un ensemble : patch.noeuds, patch.autour [{noeud, etendue}] (p
 dont il dépend, sa preuve ; consequences : tout ce qui en dépend ; lignee : les deux ; seul) ou patch.cadres ; \
 critères : statuts, types, periode, texte, conversation. effacer_filtres retire tous les filtres.
 - panneau {ouvert} : colonne de la conversation ; la fermer élargit le graphe.
+- deplacer {deplacements} : pose des nœuds ou des figures sur d'autres cases de la grille, sur cet écran \
+seulement : le graphe (ses liens), la vue enregistrée et la numérotation ne changent pas, les flèches suivent. \
+Chaque élément a une case [colonne, ligne] (colonne vers la droite, ligne vers le bas ; un nœud par case) : \
+choisis des cases libres, en gardant de préférence la lecture de gauche à droite (prémisses à gauche de leurs \
+conséquences). Sert à écarter des nœuds serrés ou superposés, à rapprocher ce qu'on compare, à mettre une figure \
+à côté du nœud qu'elle illustre. retablir_disposition remet toutes les cases comme dans la vue enregistrée.
+- attendre {secondes} : pause (10 s au plus) avant la commande suivante, pour les enchaînements (« zoome sur X, \
+attends 3 s, puis montre son chemin logique » : cadrer, attendre, puis la suite).
 - restaurer : revient à l'état d'avant le dernier changement ; écris seulement {"op": "restaurer"} (autant de \
 restaurer que de pas en arrière, dans la limite de pile_profondeur).
 - recharger_donnees : relit le graphe.
 La vue n'a ni 3D, ni orbite, ni niveaux de détail, ni thème : ne les demande pas.
 
 Pour bien faire :
-- « Montre X » : cadre X ; si c'est un nœud, sélectionne-le aussi. Une figure se cadre ({figure}) ; pour la lire en \
-grand, l'utilisateur double-clique dessus.
+- « Montre X » : cadre X ; si c'est un nœud, sélectionne-le aussi. Une figure se cadre ({figure}) : cadrée seule, \
+elle remplit l'écran ; l'utilisateur peut aussi l'ouvrir en grand d'un double-clic.
+- « Je ne vois pas bien », « plus gros » : pour une figure, cadre-la seule ; pour un nœud, cadre-le seul ou ouvre \
+sa fiche ; sinon zoomer franchement (2 ou plus) plutôt que par petits pas. « Encore » répète la dernière action \
+en plus fort.
+- « Chemin logique », « ce qui mène à X », « la preuve de X » : sélectionne X et filtre autour de lui (premisses), \
+puis cadrer "tout".
 - « N'affiche que », « isole », « ce qui sert à prouver » : filtres, puis cadrer "tout" (qui montre ce qui passe).
 - Pour lire un énoncé, ouvre sa fiche plutôt que de zoomer. Pour lire les titres d'un cadre entier, cadre-le.
 - Enchaîne autant de commandes qu'il faut, dans l'ordre.
@@ -147,4 +163,5 @@ def ecran_vue(etat: EtatAffichage, vue: VueAtlas) -> dict[str, Any]:
         "survol": ref(etat.survol),
         "conversation_affichee": etat.conversation_affichee,
         "panneau_conversation_ouvert": etat.panneau_ouvert,
+        "deplacements": [d.model_dump(exclude_none=True) for d in etat.deplacements or []],
     }

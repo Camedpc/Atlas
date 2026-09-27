@@ -68,6 +68,17 @@ class VueAtlas:
     """id → {numero, nom, genre, parent, replie, noeuds (tout le sous-arbre, hors figures)}."""
     figures: dict[str, dict[str, Any]] = field(default_factory=dict)
     """id sans « fig: » → {ref, titre, illustre, cadre}."""
+    cases: dict[str, tuple[int, int, int, int]] = field(default_factory=dict)
+    """id de nœud ou « fig:<id> » → (colonne, ligne, largeur, hauteur) dans la vue enregistrée (non placés compris)."""
+
+    def cases_effectives(self, deplacements: list[Any] | None) -> dict[str, tuple[int, int, int, int]]:
+        """Cases à l'écran : la vue enregistrée, avec les positions provisoires de l'écran (P4 `deplacements`)."""
+        cases = dict(self.cases)
+        for d in deplacements or []:
+            cle = d.noeud if d.noeud is not None else PREFIXE_FIGURE + d.figure
+            if cle in cases:
+                cases[cle] = (d.colonne, d.ligne, *cases[cle][2:])
+        return cases
 
     def pour_le_modele(self) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
         """Cadres et figures tels que le modèle les reçoit (dans l'ordre de lecture)."""
@@ -108,6 +119,9 @@ def construire(noeuds: list[dict[str, Any]], vue: dict[str, Any]) -> VueAtlas:
         return (p["colonne"], p["ligne"]) if p else provisoire[i]
 
     v = VueAtlas()
+    for i in [*par_id, *figures]:
+        p = placements.get(i)
+        v.cases[i] = (p["colonne"], p["ligne"], p["largeur"], p["hauteur"]) if p else (*provisoire[i], 1, 1)
     # Numérotation : ordre des cases (colonne, ligne, id) ; les hypothèses à part, en romains.
     k = h = 0
     for i in sorted(par_id, key=lambda i: (*case(i), i)):

@@ -347,6 +347,45 @@
         }
       },
       "additionalProperties": false
+    },
+    "Deplacement": {
+      "description": "Position provisoire d'un nœud ou d'une figure dans la grille de la vue 2D (case : colonne vers la droite, ligne vers le bas), sur cet écran seulement : la vue enregistrée et la numérotation ne changent pas.",
+      "type": "object",
+      "properties": {
+        "noeud": {
+          "$ref": "#/$defs/IdNoeud"
+        },
+        "figure": {
+          "$ref": "#/$defs/IdNoeud"
+        },
+        "colonne": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "ligne": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000
+        }
+      },
+      "required": [
+        "colonne",
+        "ligne"
+      ],
+      "oneOf": [
+        {
+          "required": [
+            "noeud"
+          ]
+        },
+        {
+          "required": [
+            "figure"
+          ]
+        }
+      ],
+      "additionalProperties": false
     }
   }
 }

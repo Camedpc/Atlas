@@ -82,7 +82,8 @@ def deduire_type(n: dict[str, Any]) -> str:
 
 # ── ce que le modèle reçoit ─────────────────────────────────────────────────
 
-def _resume_noeud(n: dict[str, Any], vue: VueAtlas | None = None) -> dict[str, Any]:
+def _resume_noeud(n: dict[str, Any], vue: VueAtlas | None = None,
+                  cases: dict[str, tuple[int, int, int, int]] | None = None) -> dict[str, Any]:
     """id, (référence dans la vue), nom, type (en base, sinon déduit), statut, (cadre), début de l'énoncé,
     prémisses et conséquences directes."""
     out: dict[str, Any] = {"id": n["id"]}
@@ -91,6 +92,8 @@ def _resume_noeud(n: dict[str, Any], vue: VueAtlas | None = None) -> dict[str, A
     out |= {"nom": n.get("nom") or "", "type": n.get("type") or deduire_type(n)}
     if vue is not None and (cadre := vue.cadres.get(vue.cadre_de.get(n["id"], ""))):
         out["cadre"] = cadre["numero"]
+    if cases and n["id"] in cases:
+        out["case"] = list(cases[n["id"]][:2])
     for cle in ("statut", "conversation_id"):
         if n.get(cle) is not None:
             out[cle] = n[cle]
@@ -286,6 +289,8 @@ class Graphe:
         # Vue 2D : cadres (par id et par numéro « §2 ») → leurs nœuds ; figures (id sans « fig: »).
         self.cadres: dict[str, list[str]] = {}
         self.figures: set[str] = set()
+        self.vue = vue
+        self.cases = bool(vue is not None and vue.cases)
         if vue is not None:
             for cid, c in vue.cadres.items():
                 self.cadres[cid] = self.cadres[c["numero"]] = [i for i in c["noeuds"] if i in self.ids]
@@ -293,6 +298,10 @@ class Graphe:
         self.noms = {n["id"]: n.get("nom") or n["id"] for n in noeuds}
         self.parents = {n["id"]: [p for p in n.get("parents") or [] if p in self.ids] for n in noeuds}
         self.enfants = {n["id"]: [e for e in n.get("enfants") or [] if e in self.ids] for n in noeuds}
+
+    def cases_ecran(self, etat: EtatAffichage) -> dict[str, tuple[int, int, int, int]] | None:
+        """Cases à l'écran (vue 2D avec les positions provisoires en cours), ou None sans grille."""
+        return self.vue.cases_effectives(etat.deplacements) if self.vue is not None else None
 
     def _parcours(self, depart: str, voisins: dict[str, list[str]]) -> set[str]:
         vus, pile = {depart}, [depart]
@@ -319,7 +328,7 @@ CHAMPS_OP = {
     "vue": ("nom",), "orbiter": ("d_azimut_deg", "d_elevation_deg"), "zoomer": ("facteur",), "cadrer": ("cibles",),
     "selectionner": ("cible",), "portee": ("cible",), "surligner": ("cibles",), "filtres": ("patch",),
     "effacer_filtres": (), "fiche": ("cible",), "panneau": ("ouvert",), "theme": ("theme",), "restaurer": (),
-    "recharger_donnees": (),
+    "recharger_donnees": (), "deplacer": ("deplacements",), "retablir_disposition": (), "attendre": ("secondes",),
 }
 
 
@@ -350,12 +359,59 @@ def _developper_filtres(patch: Any, graphe: Graphe) -> Any:
     return patch
 
 
+def _developper_deplacements(deplacements: Any, graphe: Graphe, cases: dict[str, list[int]]) -> list[dict[str, Any]]:
+    """Positions provisoires : éléments connus, cases entières ≥ 0, et jamais sur la case d'un autre élément.
+    `cases` (id ou « fig:<id> » → [colonne, ligne, largeur, hauteur]) est mis à jour pour les commandes suivantes."""
+    if not isinstance(deplacements, list) or not deplacements:
+        raise ValueError("deplacer : deplacements est une liste de {noeud ou figure, colonne, ligne}")
+    sortie: list[dict[str, Any]] = []
+    for d in deplacements:
+        if not isinstance(d, dict):
+            raise ValueError("deplacer : chaque déplacement est un objet {noeud ou figure, colonne, ligne}")
+        noeud, figure = d.get("noeud"), d.get("figure")
+        if isinstance(noeud, str) and noeud.startswith(PREFIXE_FIGURE):
+            noeud, figure = None, noeud
+        if (noeud is None) == (figure is None):
+            raise ValueError("deplacer : chaque déplacement désigne un nœud ou une figure")
+        if figure is not None:
+            figure = str(figure).removeprefix(PREFIXE_FIGURE)
+            if figure not in graphe.figures:
+                raise ValueError(f"figure inconnue : {figure!r}")
+        elif noeud not in graphe.ids:
+            raise ValueError(f"id de nœud inconnu : {noeud!r} ; utilise seulement les id de la liste")
+        colonne, ligne = d.get("colonne"), d.get("ligne")
+        if not (isinstance(colonne, int) and isinstance(ligne, int) and colonne >= 0 and ligne >= 0):
+            raise ValueError("deplacer : colonne et ligne sont des entiers ≥ 0 (cases de la grille)")
+        cle = noeud if noeud is not None else PREFIXE_FIGURE + figure
+        if cle in cases:
+            cases[cle] = [colonne, ligne, *cases[cle][2:]]
+        sortie.append({**({"noeud": noeud} if noeud is not None else {"figure": figure}), "colonne": colonne, "ligne": ligne})
+    # Un élément déplacé sur une case déjà prise : refusé (le modèle recommence avec des cases libres). Seuls les
+    # éléments déplacés sont vérifiés : un chevauchement déjà présent dans la vue enregistrée ne bloque rien.
+    deplaces = {d.get("noeud") or PREFIXE_FIGURE + d["figure"] for d in sortie}
+
+    def couvertes(cle: str) -> list[tuple[int, int]]:
+        c, lg, w, h = cases[cle]
+        return [(x, y) for x in range(c, c + w) for y in range(lg, lg + h)]
+
+    occupees = {xy: cle for cle in cases if cle not in deplaces for xy in couvertes(cle)}
+    for cle in sorted(deplaces & cases.keys()):
+        for xy in couvertes(cle):
+            if xy in occupees:
+                raise ValueError(f"deplacer : la case {xy} de {cle!r} est déjà occupée par {occupees[xy]!r} ; "
+                                 "choisis des cases libres")
+            occupees[xy] = cle
+    return sortie
+
+
 def construire_lot(commandes: list[dict[str, Any]], tache_id: int, etat: EtatAffichage,
                    pile: list[EtatAffichage], graphe: Graphe) -> tuple[LotCommandes, int]:
     """LotCommandes validé depuis la sortie du modèle ; renvoie aussi le nombre d'états restaurés.
     Lève ValueError (message pour le modèle) si la sortie n'est pas exécutable, Refus pour « rien à annuler »."""
     propres: list[dict[str, Any]] = []
     restaures = 0
+    # Cases à l'écran (vue 2D), pour refuser un déplacement sur une case occupée.
+    cases = {k: list(v) for k, v in (graphe.cases_ecran(etat) or {}).items()}
     for c in commandes:
         op = c.get("op")
         if op not in CHAMPS_OP:
@@ -375,6 +431,14 @@ def construire_lot(commandes: list[dict[str, Any]], tache_id: int, etat: EtatAff
                 propre["cibles"] = _developper_cibles(op, propre["cibles"], graphe)
         if op == "filtres":
             propre["patch"] = _developper_filtres(propre.get("patch"), graphe)
+        if op == "deplacer":
+            if not graphe.cases:
+                raise ValueError("deplacer : cet écran n'a pas de grille (vue 2D seulement)")
+            propre["deplacements"] = _developper_deplacements(propre.get("deplacements"), graphe, cases)
+        if op == "retablir_disposition" and graphe.vue is not None:
+            cases = {k: list(v) for k, v in graphe.vue.cases.items()}
+        if op == "attendre" and not (isinstance(propre.get("secondes"), (int, float)) and 0 < propre["secondes"] <= 10):
+            raise ValueError("attendre : secondes entre 0 et 10")
         if op == "restaurer":
             if restaures >= len(pile):
                 raise Refus("etat_invalide", "Il n'y a rien à annuler.")
@@ -546,9 +610,12 @@ class AgentNavigateur:
         if d.echanges:
             entree["echanges"] = [{"question": q, "reponse": r} for q, r in d.echanges]
         entree["ecran"] = ecran_vue(etat, vue) if vue is not None else _ecran(etat)
-        entree["noeuds"] = [_resume_noeud(n, vue) for n in noeuds]
+        cases = vue.cases_effectives(etat.deplacements) if vue is not None else None
+        entree["noeuds"] = [_resume_noeud(n, vue, cases) for n in noeuds]
         if vue is not None:
             entree["cadres"], entree["figures"] = vue.pour_le_modele()
+            for f in entree["figures"]:
+                f["case"] = list(cases[PREFIXE_FIGURE + f["id"]][:2])
         entree |= {
             "conversations": [_resume_conversation(c) for c in conversations],
             "pile_profondeur": len(pile),
@@ -586,8 +653,9 @@ class AgentNavigateur:
             log.exception("Tâche %s : échec de l'appel au modèle", d.tache_id)
             return Issue(False, "introuvable", f"Navigateur indisponible : {e}")
 
+        pauses = sum(c.secondes for c in lot_cmd.commandes if c.op == "attendre")
         r = await self.relais.post("/commandes", content=lot_cmd.model_dump_json(exclude_unset=True),
-                                   headers={"Content-Type": "application/json"})
+                                   headers={"Content-Type": "application/json"}, timeout=15 + pauses)
         cr = CompteRendu.model_validate_json(r.content)
         commandes = [c.model_dump(mode="json", exclude_unset=True, exclude={"etat"}) for c in lot_cmd.commandes]
         texte = json.dumps(commandes, ensure_ascii=False)

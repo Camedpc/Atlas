@@ -44,6 +44,12 @@
     "projet": {
       "description": "Facultatif : espace de travail dont le graphe est affiché (un graphe par espace). Absent : graphe unique ou espace par défaut.",
       "oneOf": [{ "$ref": "commun.schema.json#/$defs/Uuid" }, { "type": "null" }]
+    },
+    "deplacements": {
+      "description": "Facultatif (vue 2D) : positions provisoires en cours sur cet écran ; absent ou vide = vue enregistrée.",
+      "type": "array",
+      "items": { "$ref": "commun.schema.json#/$defs/Deplacement" },
+      "maxItems": 500
     }
   },
   "required": [

@@ -82,6 +82,21 @@ class RefFigure(Strict):
 Cible = RefNoeud | RefConversation | RefFigure
 
 
+class Deplacement(Strict):
+    """Position provisoire d'un nœud ou d'une figure (case de la grille de la vue 2D), sur cet écran seulement."""
+
+    noeud: IdNoeud | None = None
+    figure: IdNoeud | None = None
+    colonne: Annotated[int, Field(ge=0, le=10000)]
+    ligne: Annotated[int, Field(ge=0, le=10000)]
+
+    @model_validator(mode="after")
+    def _un_seul(self) -> "Deplacement":
+        if (self.noeud is None) == (self.figure is None):
+            raise ValueError("deplacement : un nœud ou une figure, pas les deux")
+        return self
+
+
 class ErreurProtocole(Strict):
     _nullables = frozenset({"details"})
 
@@ -183,6 +198,8 @@ class EtatAffichage(Strict):
     conversation_affichee: Uuid | None
     # Espace de travail dont le graphe est affiché (un graphe par espace) ; absent : graphe unique.
     projet: Uuid | None = None
+    # Vue 2D : positions provisoires en cours sur cet écran ; absent : vue enregistrée.
+    deplacements: Annotated[list[Deplacement], Field(max_length=500)] | None = None
 
     _nullables = frozenset({"projet"})
     _uniques = ("surlignes",)
@@ -295,7 +312,7 @@ class CmdFiltres(Strict):
 
 
 class CmdSansArgument(Strict):
-    op: Literal["effacer_filtres", "recharger_donnees"]
+    op: Literal["effacer_filtres", "recharger_donnees", "retablir_disposition"]
 
 
 class CmdFiche(Strict):
@@ -318,10 +335,22 @@ class CmdRestaurer(Strict):
     etat: EtatAffichage
 
 
+class CmdDeplacer(Strict):
+    """Vue 2D : positions provisoires dans la grille, sur cet écran seulement."""
+
+    op: Literal["deplacer"]
+    deplacements: Annotated[list[Deplacement], Field(min_length=1, max_length=200)]
+
+
+class CmdAttendre(Strict):
+    op: Literal["attendre"]
+    secondes: Annotated[float, Field(gt=0, le=10)]
+
+
 CommandeBas = Annotated[
     CmdStrategie | CmdParametresLecture | CmdLiensComplets | CmdMode | CmdVue | CmdOrbiter | CmdZoomer
     | CmdCadrer | CmdSelectionner | CmdPortee | CmdSurligner | CmdFiltres | CmdSansArgument | CmdFiche
-    | CmdPanneau | CmdTheme | CmdRestaurer,
+    | CmdPanneau | CmdTheme | CmdRestaurer | CmdDeplacer | CmdAttendre,
     Field(discriminator="op"),
 ]
 

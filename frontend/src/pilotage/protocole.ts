@@ -31,6 +31,8 @@ export type RefConversation = { conversation: string }
 /** Une figure de la vue, par son id sans le préfixe « fig: » (pour cadrer seulement). */
 export type RefFigure = { figure: string }
 export type Cible = RefNoeud | RefConversation | RefFigure
+/** Vue 2D : position provisoire d'un nœud ou d'une figure dans la grille, sur cet écran seulement. */
+export type Deplacement = ({ noeud: IdNoeud } | { figure: string }) & { colonne: number; ligne: number }
 
 export interface Periode { debut: string | null; fin: string | null }
 
@@ -78,6 +80,9 @@ export type CommandeBas =
   | { op: 'theme'; theme: Theme }
   | { op: 'restaurer'; etat: EtatAffichage }
   | { op: 'recharger_donnees' }
+  | { op: 'deplacer'; deplacements: Deplacement[] }
+  | { op: 'retablir_disposition' }
+  | { op: 'attendre'; secondes: number }
 
 export interface LotCommandes {
   version: 1
@@ -136,6 +141,8 @@ export interface EtatAffichage {
   conversation_affichee: string | null
   /** Espace de travail dont le graphe est affiché (un graphe par espace) ; absent : graphe unique. */
   projet?: string | null
+  /** Vue 2D : positions provisoires en cours ; absent : vue enregistrée. */
+  deplacements?: Deplacement[]
 }
 
 export type EtatResume = Pick<EtatAffichage, 'ecran' | 'strategie' | 'selection' | 'filtres' | 'conversation_affichee'> & {

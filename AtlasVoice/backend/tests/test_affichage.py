@@ -217,3 +217,17 @@ def test_http_droits_entre_utilisateurs(client, monkeypatch):
                        json=etat("ecran_de_u1", "u2").model_dump(mode="json", exclude_unset=True)).status_code == 403
     assert client.get("/api/affichage/ecrans/ecran_de_u1/flux").status_code == 403
     assert client.post("/api/affichage/ecrans", json={"ecran": "ecran_de_u1"}).status_code == 409
+
+
+async def test_les_pauses_du_lot_s_ajoutent_au_delai():
+    """Un lot avec `attendre` (0,2 s) : le relais attend son compte rendu au-delà du délai de base (0,05 s)."""
+    r = Relais()
+    r.declarer("u1", "ecran_a")
+    r.enregistrer_etat("ecran_a", "u1", etat("ecran_a"))
+    async with EcranFactice(r, "ecran_a", reponse=False):
+        lot = lot_commandes("ecran_a", commandes=[{"op": "attendre", "secondes": 0.2}])
+        attente = asyncio.create_task(r.commander(lot, delai_s=0.05))
+        await asyncio.sleep(0.12)  # au-delà de 0,05 s, mais la pause n'est pas finie : toujours en attente
+        assert not attente.done()
+        r.recevoir_compte_rendu("ecran_a", "u1", compte_rendu(lot.lot_id, etat("ecran_a")))
+        assert (await attente).ok

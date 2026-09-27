@@ -6,7 +6,7 @@
 // ne sont pas prédits ici : l'export de l'écran fait foi.
 
 import type {
-  CommandeBas, EtatAffichage, EtatFiltres, ErreurProtocole, IdNoeud, NomVue, ParametresLecture, RefNoeud,
+  CommandeBas, Deplacement, EtatAffichage, EtatFiltres, ErreurProtocole, IdNoeud, NomVue, ParametresLecture, RefNoeud,
 } from './protocole'
 
 /** Ce que le modèle doit savoir des données : ids de nœuds, nœuds par conversation, figures de la vue. */
@@ -31,6 +31,7 @@ export type Effet =
   | { genre: 'vue'; nom: NomVue }
   | { genre: 'camera'; camera: EtatAffichage['camera'] }
   | { genre: 'recharger' }
+  | { genre: 'attendre'; ms: number }
 
 export interface Application {
   etat: EtatAffichage
@@ -93,6 +94,11 @@ function resoudreCibles(cibles: Extract<CommandeBas, { op: 'cadrer' }>['cibles']
     }
   }
   return [...new Set(ids)]
+}
+
+/** Clé d'un déplacement : l'id du nœud, ou « fig:<id> » pour une figure (comme dans la vue). */
+export function cleDeplacement(d: Deplacement): string {
+  return 'noeud' in d ? d.noeud : PREFIXE_FIGURE + d.figure
 }
 
 /** Applique une commande (déjà validée par le schéma) : nouvel état visé, ou erreur sans rien changer. */
@@ -204,6 +210,24 @@ export function appliquer(etat: EtatAffichage, c: CommandeBas, index: IndexDonne
     }
     case 'recharger_donnees':
       return { etat: e, effet: { genre: 'recharger' } }
+    case 'deplacer': {
+      // Positions provisoires : les nouvelles remplacent celles des mêmes éléments, les autres restent.
+      const parCle = new Map((e.deplacements ?? []).map((d) => [cleDeplacement(d), d]))
+      for (const d of c.deplacements) {
+        if ('noeud' in d) {
+          const err = verifierNoeud({ noeud: d.noeud }, index)
+          if (err) return err
+        } else if (!index.figures.has(d.figure)) return erreur('introuvable', `Figure inconnue : ${d.figure}`, { figure: d.figure })
+        parCle.set(cleDeplacement(d), structuredClone(d))
+      }
+      e.deplacements = [...parCle.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([, d]) => d)
+      return { etat: e }
+    }
+    case 'retablir_disposition':
+      e.deplacements = []
+      return { etat: e }
+    case 'attendre':
+      return { etat: e, effet: { genre: 'attendre', ms: Math.round(c.secondes * 1000) } }
   }
 }
 

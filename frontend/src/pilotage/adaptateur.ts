@@ -159,6 +159,9 @@ export class AdaptateurAffichage {
       case 'recharger':
         await this.app.recharger()
         break
+      case 'attendre':
+        await new Promise((r) => setTimeout(r, effet.ms))
+        break
     }
     m.demanderRendu()
   }
