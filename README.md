@@ -38,8 +38,7 @@ du projet.
 2. [Visite guidée](#visite-guidée)
 3. [Comment ça marche](#comment-ça-marche)
 4. [Organisation du dépôt](#organisation-du-dépôt)
-5. [Installer Atlas sur sa machine (facultatif)](#installer-atlas-sur-sa-machine-facultatif)
-6. [Équipe](#équipe)
+5. [Équipe](#équipe)
 
 ---
 
@@ -215,18 +214,9 @@ Référence complète (routes de l'API, modèle de données, bunker des agents, 
 | `frontend/` | interface web |
 | `supabase/` | schéma (`migrations/`) et données de démonstration (`seed.sql`) |
 | `tests/` | tests Python, sans réseau |
-| `deploiement/` | installation sur une VM (Docker, Caddy) |
+| `deploiement/` | déploiement de notre serveur (Docker, Caddy) |
 | `film/` | film de présentation (Remotion), voir `film/README.md` |
-| `docs/` | référence technique, guide d'installation locale, captures |
-
----
-
-## Installer Atlas sur sa machine (facultatif)
-
-Pas nécessaire pour tester : le site suffit. Pour faire tourner Atlas chez soi, il faut Python 3.10+, Node.js 20+,
-Docker Desktop et un accès OpenAI (clé API ou abonnement ChatGPT). Le guide pas à pas, avec une base Supabase
-locale et une vérification à chaque étape, est dans [`docs/tester-en-local.md`](docs/tester-en-local.md) ;
-l'installation sur un serveur est dans [`deploiement/README.md`](deploiement/README.md).
+| `docs/` | référence technique, captures |
 
 ---
 
