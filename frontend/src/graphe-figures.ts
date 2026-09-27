@@ -629,19 +629,46 @@ export function dessinerIcone3D(ctx: CanvasRenderingContext2D, cx: number, cy: n
     ctx.lineTo(x0 + x + d, y0 + y - d)
   }
   ctx.stroke()
+  // « 3D » sur la face avant, dès que le cube est assez grand pour être lu.
+  if (t >= 28) {
+    ctx.fillStyle = COULEURS_FIGURE.gris
+    ctx.font = `600 ${Math.round(c * 0.38)}px ${SERIF}`
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText('3D', x0 + c / 2, y0 + c / 2 + c * 0.03)
+  }
   ctx.restore()
 }
 
-/** Case d'une scène 3D dans la grille (sans vignette) : le cube et l'invitation à l'ouvrir, dans la zone de `g`. */
-export function dessinerCaseScene(ctx: CanvasRenderingContext2D, g: Geometrie): void {
-  const t = Math.min(g.iw * 0.4, g.ih * 0.55, 90)
-  const cy = g.iy + g.ih / 2 - 8
+/** Case d'une scène 3D dans la grille (sans vignette) : le cube « 3D », puis ce que montre la scène (la légende, si
+ * la case est trop petite pour qu'elle soit écrite dessous) ou l'invitation à l'ouvrir. */
+export function dessinerCaseScene(ctx: CanvasRenderingContext2D, f: FigureVue, g: Geometrie): void {
+  const t = Math.min(g.iw * 0.45, g.ih * 0.55, 110)
+  const lignes = f.legende && g.pied <= 10 ? 2 : 1
+  const cy = g.iy + g.ih / 2 - (lignes * CORPS_LEGENDE * 1.25) / 2 - 4
   dessinerIcone3D(ctx, g.ix + g.iw / 2, cy, t)
   ctx.fillStyle = COULEURS_FIGURE.gris
   ctx.font = `italic 400 ${CORPS_LEGENDE}px ${SERIF}`
   ctx.textAlign = 'center'
   ctx.textBaseline = 'top'
-  ctx.fillText('Scène 3D animée — double-clic pour l’ouvrir', g.ix + g.iw / 2, cy + t / 2 + 10, g.iw - 8)
+  const y = cy + t / 2 + 8
+  if (lignes === 1) {
+    ctx.fillText('Scène 3D animée — double-clic pour l’ouvrir', g.ix + g.iw / 2, y, g.iw - 8)
+    return
+  }
+  // Légende sur deux lignes au plus, coupée aux mots.
+  const mots = texteCanevas(f.legende!).split(/\s+/)
+  const ecrites: string[] = ['']
+  for (const mot of mots) {
+    const essai = ecrites[ecrites.length - 1] ? `${ecrites[ecrites.length - 1]} ${mot}` : mot
+    if (ctx.measureText(essai).width <= g.iw - 12 || !ecrites[ecrites.length - 1]) ecrites[ecrites.length - 1] = essai
+    else if (ecrites.length < 2) ecrites.push(mot)
+    else {
+      ecrites[1] = tronquer(ctx, `${ecrites[1]} ${mot}`, g.iw - 12)
+      break
+    }
+  }
+  ecrites.forEach((l, k) => ctx.fillText(l, g.ix + g.iw / 2, y + k * CORPS_LEGENDE * 1.25, g.iw - 8))
 }
 
 /** Cache des images de figures : chargées à la demande, gardées (les plus anciennes oubliées au-delà de 40). */

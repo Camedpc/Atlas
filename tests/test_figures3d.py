@@ -64,7 +64,8 @@ def test_nan_et_infinis_deviennent_des_trous():
     ("figure", "message"),
     [
         ({"data": []}, "aucun tracé"),
-        ({"data": [{"type": "scatter", "x": [1]}]}, "« scatter » refusé"),
+        ({"data": [{"type": "scatter", "x": [1]}]}, "aucun tracé 3D"),
+        ({"data": [{"type": "scatter3d"}, {"type": "bar", "x": [1]}]}, "« bar » refusé"),
         ({"data": [{"x": [1]}]}, "« None » refusé"),
         ({"data": [{"type": "scatter3d", "scene": "scene2"}]}, "une seule scène"),
         ({"layout": {"scene2": {}}}, "une seule scène"),
@@ -88,6 +89,30 @@ def test_json_fps_et_taille_refuses(monkeypatch):
     monkeypatch.setattr(figures3d, "SCENE_OCTETS_MAX", 10)
     with pytest.raises(ErreurFigure, match="trop lourde"):
         figures3d.valider_scene(_scene())
+
+
+def test_graphiques_2d_a_cote_de_la_scene_resumes_a_part():
+    data = [
+        {"type": "scatter3d", "x": [0, 1], "y": [0, 1], "z": [0, 2]},
+        {"type": "scatter", "name": "Énergie totale", "x": [0, 1, 2], "y": [5, 5, 5], "xaxis": "x2", "yaxis": "y2"},
+        {"type": "scatter", "x": [0], "y": [4], "xaxis": "x2", "yaxis": "y2", "mode": "markers"},
+    ]
+    layout = {
+        "scene": {"domain": {"x": [0, 0.6]}},
+        "xaxis2": {"title": {"text": "t (s)"}},
+        "yaxis2": {"title": {"text": "E (J)"}},
+    }
+    # Le point qui avance sur la courbe (tracé 2), et la scène (tracé 0).
+    images = [{"data": [{"x": [0.5], "y": [3]}, {"x": [0, 9]}], "traces": [2, 0]}]
+    scene = figures3d.valider_scene(_scene(data=data, layout=layout, frames=images))
+    assert figures3d.resumer_scene(scene) == (
+        "Scène 3D animée : 1 images à 10 im/s, boucle de 0.1 s.\n"
+        "Tracés : scatter3d, scatter ×2.\n"
+        "Axes : x ∈ [0, 9] ; y ∈ [0, 1] ; z ∈ [0, 2].\n"
+        "Graphiques 2D :\n"
+        "- « Énergie totale » E (J) ∈ [5, 5] en fonction de t (s) ∈ [0, 2]\n"
+        "- E (J) ∈ [3, 4] en fonction de t (s) ∈ [0, 0.5]"
+    )
 
 
 def test_resume_avec_etendues_sur_toutes_les_images_et_tableaux_types():
@@ -164,7 +189,7 @@ def test_pendule_produit_une_scene(session):
     figure = production.scene["figure"]
     assert production.scene["atlas"]["fps"] == 20
     assert 30 <= len(figure["frames"]) <= 50  # une période d'environ 2 s
-    assert [t["type"] for t in figure["data"]] == ["scatter3d"] * 4
+    assert [t["type"] for t in figure["data"]] == ["scatter3d"] * 4 + ["scatter"] * 7  # scène, puis énergies et angle
     assert production.script.startswith('"""Figure 3D d\'exemple')
     assert "Scène 3D animée" in figures3d.resumer_scene(production.scene)
 

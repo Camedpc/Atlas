@@ -774,7 +774,7 @@ function dessinerFigure(ctx: CanvasRenderingContext2D, e: EtatDessin, b: Bloc, X
     ctx.translate(X(b.x), Y(b.y))
     ctx.scale(z, z)
     // Une scène 3D s'ouvre au double-clic ; sa case n'a pas de vignette.
-    if (f.scene) dessinerCaseScene(ctx, g)
+    if (f.scene) dessinerCaseScene(ctx, f, g)
     else if (f.trace) dessinerTrace(ctx, f.trace, g, z)
     else if (f.image) dessinerImage(ctx, f, g, e.images?.obtenir(f) ?? null)
     ctx.restore()

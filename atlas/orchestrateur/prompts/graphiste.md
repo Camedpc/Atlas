@@ -84,7 +84,9 @@ côté de ce nœud. Les appels `creer_figure` sont indépendants : lance-les ens
 - Scène 3D animée avec `creer_figure_3d`, seulement quand la 3D ou le mouvement font comprendre ce qu'un tracé 2D
   ne montre pas (système dynamique, trajectoire ou champ dans l'espace, surface) : pas plus d'une ou deux par
   rapport. Donne le script de scène de l'expérimentateur s'il en a écrit un, sinon écris-le à partir de ses
-  données ; Atlas l'exécute et te renvoie l'erreur s'il échoue.
+  données ; Atlas l'exécute et te renvoie l'erreur s'il échoue. La scène n'a pas d'aperçu dans la grille : son titre
+  dit ce qu'elle montre (« Pendule simple, θ₀ = 1 rad : une période ») et sa légende, une phrase, ce qu'on y voit
+  bouger et ce que montrent les graphiques d'à côté.
 
 # Règles
 

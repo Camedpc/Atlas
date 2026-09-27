@@ -13,7 +13,7 @@ import { ouvrir3d } from './graphe-3d'
 import { animer, type Animation } from './graphe-animation'
 import { instantane, operationsVers, type Entree, type Instantane } from './graphe-annuler'
 import { Contenu } from './graphe-contenu'
-import { dansCadre, dessiner, niveauDe, oublierMesures, PALETTE, positionsRenvois, referenceDe, rgba, type Camera, type EtatDessin } from './graphe-dessin'
+import { dansCadre, dessiner, niveauDe, oublierMesures, PALETTE, positionsRenvois, referenceDe, rgba, SEUIL_CONTENU, SEUIL_POINT, type Camera, type EtatDessin } from './graphe-dessin'
 import { ImagesFigures, ouvrirFenetre } from './graphe-figures'
 import { CADRE, CLE_FONCTION, construireModele, dansRect, FORMATS_FIGURE, GRILLE, PREFIXE_FIGURE, rectBloc, TEINTES, union, type Bloc, type Modele, type Rect, type Surcharge } from './graphe-modele'
 import { echapper } from './rendu'
@@ -1008,10 +1008,19 @@ export class VueGraphe {
         numero: b.numero,
         charger: () => chargerScene(f),
         cadrer: async () => {
-          await this.cadrerNoeuds([b.id])
-          const r = this.rectRepresentant(this.modele.representant.get(b.id) ?? b.id)
+          // La vue devient le plancher de la scène : la case au milieu (environ 15 % de la largeur), entourée
+          // d'une bonne part du graphe (le plancher est ensuite agrandi pour que la case ait la taille de la boîte).
+          const rep = this.modele.representant.get(b.id) ?? b.id
+          const avant = this.rectRepresentant(rep)
+          if (avant) {
+            // Zoom gardé dans le niveau « titres » (cartes lisibles) : en dessous, la vue passe aux points.
+            const voulu = (0.15 * this.largeurUtile) / (avant.x1 - avant.x0)
+            const z = this.borneZoom(Math.min(SEUIL_CONTENU * 0.9, Math.max(SEUIL_POINT * 1.5, voulu)))
+            await this.placerCamera((avant.x0 + avant.x1) / 2, (avant.y0 + avant.y1) / 2, z)
+          }
+          const r = this.rectRepresentant(rep)
           const { x, y, z } = this.cam
-          return r ? { x: ((r.x0 + r.x1) / 2) * z + x, y: ((r.y0 + r.y1) / 2) * z + y } : null
+          return r ? { x: ((r.x0 + r.x1) / 2) * z + x, y: ((r.y0 + r.y1) / 2) * z + y, largeur: (r.x1 - r.x0) * z } : null
         },
         surFermer: () => {
           this.fermerFenetre = null

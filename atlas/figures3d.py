@@ -8,7 +8,8 @@ script de l'agent :
 
 Le front la joue en boucle avec ses propres commandes (lecture, vitesse, caméra) : les boutons et curseurs de Plotly
 (`updatemenus`, `sliders`) sont retirés, comme les images (`layout.images`, qui iraient chercher des URL) et les
-couleurs et tailles de fond. Seuls les tracés 3D sont admis, dans une seule scène. Les tableaux numpy arrivent
+couleurs et tailles de fond. Une seule scène 3D, et à côté, si l'agent le veut, des graphiques 2D (`scatter`, par
+exemple l'énergie en fonction du temps avec un point qui avance d'une image à l'autre). Les tableaux numpy arrivent
 encodés (`{"dtype": "f8", "bdata": "<base64>"}`, format de plotly.js) : ils sont gardés tels quels, et décodés
 seulement pour le résumé.
 """
@@ -34,6 +35,8 @@ IMAGES_MAX = 600
 FPS_DEFAUT = 20
 FPS_MIN, FPS_MAX = 1, 60
 TYPES_3D = ("scatter3d", "surface", "mesh3d", "cone", "streamtube", "isosurface", "volume")
+# Graphiques 2D à côté de la scène (build gl3d de plotly.js : scatter seulement).
+TYPES_2D = ("scatter",)
 # Remplacés par le front (commandes, fond, taille) ou dangereux (images chargées depuis une URL).
 RETIRES_LAYOUT = ("updatemenus", "sliders", "images", "paper_bgcolor", "plot_bgcolor", "width", "height", "autosize")
 AUTRE_SCENE = re.compile(r"^scene\d+$")
@@ -64,8 +67,11 @@ def _verifier_trace(t: Any, quoi: str, type_requis: bool) -> None:
     genre = t.get("type")
     if genre is None and not type_requis:
         return
+    if genre in TYPES_2D:
+        return
     if genre not in TYPES_3D:
-        raise ErreurFigure(f"{quoi} : type « {genre} » refusé ; types 3D admis : {', '.join(TYPES_3D)}.")
+        admis = ", ".join(TYPES_3D)
+        raise ErreurFigure(f"{quoi} : type « {genre} » refusé ; admis : {admis}, et scatter pour les graphiques 2D.")
     if t.get("scene", "scene") != "scene":
         raise ErreurFigure(f"{quoi} : une seule scène 3D par figure (tracé sur « {t['scene']} »).")
 
@@ -95,6 +101,8 @@ def valider_scene(donnees: bytes) -> dict[str, Any]:
         raise ErreurFigure("La figure n'a aucun tracé (data vide) : ajoute au moins un tracé 3D.")
     for k, t in enumerate(data):
         _verifier_trace(t, f"Tracé {k}", type_requis=True)
+    if not any(t["type"] in TYPES_3D for t in data):
+        raise ErreurFigure("La figure n'a aucun tracé 3D : les graphiques 2D accompagnent une scène 3D.")
     images = figure.get("frames") or []
     if not isinstance(images, list):
         raise ErreurFigure("frames doit être une liste d'images.")
@@ -169,8 +177,26 @@ def _titre(axe: Any) -> str | None:
     return titre if isinstance(titre, str) and titre.strip() else None
 
 
+def _traces_par_indice(figure: dict[str, Any]) -> list[list[dict[str, Any]]]:
+    """Pour chaque tracé de `data`, ses versions : lui-même, puis celles des images (rattachées par `traces`)."""
+    versions: list[list[dict[str, Any]]] = [[t] for t in figure["data"]]
+    for image in figure["frames"]:
+        for k, t in enumerate(image.get("data") or []):
+            indices = image.get("traces")
+            n = indices[k] if indices is not None and k < len(indices) else k
+            if isinstance(t, dict) and 0 <= n < len(versions):
+                versions[n].append(t)
+    return versions
+
+
+def _etendue(versions: list[dict[str, Any]], nom: str) -> str:
+    vals = [v for t in versions for v in _valeurs(t.get(nom))]
+    return f" ∈ [{_nombre_court(min(vals))}, {_nombre_court(max(vals))}]" if vals else ""
+
+
 def resumer_scene(scene: dict[str, Any]) -> str:
-    """La scène en texte : animation, tracés, titres et étendues des axes (sur toutes les images)."""
+    """La scène en texte : animation, tracés, titres et étendues des axes (sur toutes les images), puis les
+    graphiques 2D (nom, axes, étendues)."""
     figure = scene["figure"]
     fps = scene["atlas"]["fps"]
     n = len(figure["frames"])
@@ -181,14 +207,24 @@ def resumer_scene(scene: dict[str, Any]) -> str:
     types = Counter(t["type"] for t in figure["data"])
     lignes.append("Tracés : " + ", ".join(f"{g} ×{c}" if c > 1 else g for g, c in types.items()) + ".")
     reglages = figure["layout"].get("scene") or {}
-    traces = [*figure["data"], *(t for image in figure["frames"] for t in image.get("data") or [])]
+    versions = _traces_par_indice(figure)
+    en_3d = [v for t, vs in zip(figure["data"], versions, strict=True) if t["type"] in TYPES_3D for v in vs]
     axes = []
     for nom in "xyz":
-        vals = [v for t in traces if isinstance(t, dict) for v in _valeurs(t.get(nom))]
         titre = _titre(reglages.get(f"{nom}axis"))
-        texte = f"{nom} ({titre})" if titre else nom
-        if vals:
-            texte += f" ∈ [{_nombre_court(min(vals))}, {_nombre_court(max(vals))}]"
-        axes.append(texte)
+        axes.append((f"{nom} ({titre})" if titre else nom) + _etendue(en_3d, nom))
     lignes.append("Axes : " + " ; ".join(axes) + ".")
+    graphiques = []
+    for t, vs in zip(figure["data"], versions, strict=True):
+        if t["type"] not in TYPES_2D:
+            continue
+        noms = []
+        for lettre in "xy":
+            ref = t.get(f"{lettre}axis") or lettre
+            titre = _titre(figure["layout"].get(f"{lettre}axis{ref[1:]}"))
+            noms.append((titre or lettre) + _etendue(vs, lettre))
+        nom = f"« {t['name']} » " if isinstance(t.get("name"), str) and t["name"] else ""
+        graphiques.append(f"- {nom}{noms[1]} en fonction de {noms[0]}")
+    if graphiques:
+        lignes.append("Graphiques 2D :\n" + "\n".join(graphiques))
     return "\n".join(lignes)

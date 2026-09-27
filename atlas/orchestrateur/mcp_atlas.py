@@ -336,9 +336,14 @@ def creer_figure_3d(
       Plotly `fig` (import plotly.graph_objects as go) avec ses `frames` pour l'animation (une image par pas de
       temps ; traces=[…] pour ne redonner que les tracés qui bougent), et peut définir `fps` (20 par défaut).
       N'exporte rien et n'appelle pas fig.show().
-    - Tracés 3D seulement (scatter3d, surface, mesh3d, cone, streamtube, isosurface, volume), une seule scène.
-      Fixe les bornes des axes (layout.scene.xaxis.range…) pour qu'ils ne bougent pas d'une image à l'autre, et
-      fais enchaîner la dernière image sur la première (une période entière) : l'animation tourne en boucle.
+    - Une seule scène 3D (scatter3d, surface, mesh3d, cone, streamtube, isosurface, volume). À côté, si c'est
+      utile, des graphiques 2D (scatter) des grandeurs qui varient dans le temps (énergies, angle, vitesse…) :
+      make_subplots(rows=2, cols=2, specs=[[{"type": "scene", "rowspan": 2}, {"type": "xy"}], [None, {"type": "xy"}]],
+      column_widths=[0.62, 0.38]), la courbe entière en fixe et un point ou un trait vertical qui avance d'une image
+      à l'autre (dans les frames, traces=[…] donne les indices des tracés mis à jour).
+      Fixe les bornes des axes (layout.scene.xaxis.range…, xaxis2.range…) pour qu'ils ne bougent pas d'une image à
+      l'autre, et fais enchaîner la dernière image sur la première (une période entière) : l'animation tourne en
+      boucle.
       600 images et 15 Mo au plus.
     - Les boutons, curseurs et fonds de Plotly sont retirés : Atlas a ses propres commandes (lecture, vitesse).
     - id, noeud_id, titre, legende, groupe, largeur, hauteur, remplacer : comme creer_figure.
