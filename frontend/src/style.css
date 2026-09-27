@@ -740,6 +740,24 @@ body.sessions-repliees .deplier-sessions {
 }
 
 /* Message que l'agent est en train d'écrire (deltas Codex), remplacé par le message final. */
+.msg.reflexion {
+  color: #71717a;
+  font-size: 13px;
+  font-style: italic;
+}
+
+/* Étape en cours de l'agent affiché (titre de réflexion ou outil, et depuis quand). */
+.msg.etape-en-cours {
+  color: #71717a;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.msg.etape-en-cours::before {
+  content: '● ';
+  color: var(--accent);
+}
+
 .msg.brouillon {
   color: #52525b;
 }

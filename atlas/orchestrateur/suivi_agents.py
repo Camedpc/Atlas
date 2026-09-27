@@ -27,6 +27,7 @@ METHODES_SUIVIES = frozenset(
         "item/started",
         "item/completed",
         "item/agentMessage/delta",
+        "item/reasoning/summaryTextDelta",
         "turn/started",
         "turn/completed",
         "thread/tokenUsage/updated",
@@ -58,6 +59,8 @@ class Agent:
     resultat: str | None = None
     tour: str | None = None
     """Tour Codex en cours de l'agent (pour l'interrompre), None s'il ne travaille pas."""
+    depuis: float | None = None
+    """Début de l'étape en cours (réflexion, outil, message) : « depuis 6 min », comme le minuteur de la CLI."""
     tokens_debut: int = 0
     """Jetons du thread au début de l'exécution en cours : `tokens`, `nb_outils` et `debut` valent pour elle seule
     (un sous-agent relancé repart de zéro, comme dans Claude Code)."""
@@ -97,6 +100,8 @@ class SuiviAgents:
         self._par_thread: dict[str, str] = {}
         # Chemin -> texte du message que l'agent est en train d'écrire.
         self.brouillons: dict[str, str] = {}
+        # Chemin -> ((item, partie), texte) du titre de réflexion en cours de réception.
+        self._titres: dict[str, tuple[Any, str]] = {}
 
     @classmethod
     def depuis(cls, instantane: list[dict[str, Any]] | None, horloge: Callable[[], float] = time.time) -> "SuiviAgents":
@@ -175,13 +180,25 @@ class SuiviAgents:
                     agent.tokens_debut += agent.tokens
                     agent.tokens = 0
                 agent.etat, agent.fin, agent.outil, agent.activite = "actif", None, None, "Réfléchit"
+                agent.depuis = maintenant
                 agent.tour = (params.get("turn") or {}).get("id") or agent.tour
             case "turn/completed":
                 statut = (params.get("turn") or {}).get("status")
                 agent.etat = {"completed": "termine", "interrupted": "interrompu"}.get(statut, "echec")
-                agent.fin, agent.outil, agent.tour = maintenant, None, None
+                agent.fin, agent.outil, agent.tour, agent.depuis = maintenant, None, None, None
                 agent.activite = {"termine": "Terminé", "interrompu": "Interrompu"}.get(agent.etat, "Échec")
                 self.brouillons.pop(agent.chemin, None)
+            case "item/reasoning/summaryTextDelta":
+                # Titre de la réflexion en cours, reconstitué au fil des deltas.
+                delta = params.get("delta")
+                if isinstance(delta, str) and agent.etat not in ETATS_FINIS:
+                    cle = (params.get("itemId"), params.get("summaryIndex"))
+                    precedent = self._titres.get(agent.chemin)
+                    texte = (precedent[1] if precedent and precedent[0] == cle else "") + delta
+                    self._titres[agent.chemin] = (cle, texte)
+                    titre = texte.strip().strip("*").strip()
+                    if titre:
+                        agent.activite = _court(titre, LONGUEUR_MAX_ACTIVITE)
             case "item/agentMessage/delta":
                 delta = params.get("delta")
                 if isinstance(delta, str):
@@ -197,7 +214,7 @@ class SuiviAgents:
                 self._fin_item(agent, item)
                 if item.get("type") == "agentMessage":
                     self.brouillons.pop(agent.chemin, None)
-                if agent.chemin != RACINE and item.get("type") not in ("userMessage", "reasoning"):
+                if agent.chemin != RACINE and item.get("type") != "userMessage":
                     evenements.a_enregistrer.append((agent.chemin, item))
                 elif agent.chemin == RACINE and fini_avant and item.get("type") == "subAgentActivity":
                     # Hors tour, personne d'autre n'enregistre le fil de l'orchestrateur (« X a terminé »).
@@ -249,6 +266,7 @@ class SuiviAgents:
             case "collabAgentToolCall":
                 if item.get("tool") == "wait":
                     agent.etat, agent.outil, agent.activite = "attend", None, "Attend ses sous-agents"
+                    agent.depuis = self._horloge()
                     return
                 outil = activite = f"Multi-agents : {item.get('tool', '?')}"
             case "subAgentActivity":
@@ -256,6 +274,7 @@ class SuiviAgents:
             case _:
                 outil = activite = str(type_)
         agent.etat = "actif"
+        agent.depuis = self._horloge()
         agent.outil = outil
         agent.activite = _court(activite or "", LONGUEUR_MAX_ACTIVITE)
         if outil is not None:

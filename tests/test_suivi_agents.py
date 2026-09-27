@@ -121,3 +121,26 @@ def test_un_sous_agent_relance_repart_de_zero_et_son_bilan_est_fige():
     suivi.recevoir("thread/tokenUsage/updated", {"threadId": DIR_ID, "tokenUsage": {"total": {"totalTokens": 1300}}})
     assert (dir_.nb_outils, dir_.tokens, dir_.fin) == (0, 300, None)
     assert suivi.bilan({"type": "subAgentActivity", "agentPath": "/root/hydrures", "kind": "started"}) is None
+
+
+def test_titre_de_reflexion_en_direct_et_etape_datee():
+    suivi = _suivi()
+    _lancement(suivi, RACINE_ID, "/root/hydrures", DIR_ID)
+    dir_ = suivi.agents["/root/hydrures"]
+    suivi.recevoir("turn/started", {"threadId": DIR_ID, "turn": {"id": "u1"}})
+    debut = dir_.depuis
+    for morceau in ("**Je rédige ", "le rapport**"):
+        suivi.recevoir(
+            "item/reasoning/summaryTextDelta",
+            {"threadId": DIR_ID, "itemId": "r", "summaryIndex": 0, "delta": morceau},
+        )
+    assert dir_.activite == "Je rédige le rapport"
+    suivi.recevoir("item/reasoning/summaryTextDelta", {"threadId": DIR_ID, "itemId": "r", "summaryIndex": 1,
+                                                        "delta": "**Je vérifie les unités**"})
+    assert dir_.activite == "Je vérifie les unités"
+    suivi.recevoir("item/started", {"threadId": DIR_ID, "item": {"type": "fileChange", "changes": []}})
+    assert dir_.depuis > debut
+    reflexion = {"type": "reasoning", "summary": ["**Je rédige le rapport**"], "id": "r"}
+    assert suivi.recevoir("item/completed", {"threadId": DIR_ID, "item": reflexion}).a_enregistrer == [
+        ("/root/hydrures", reflexion)
+    ]

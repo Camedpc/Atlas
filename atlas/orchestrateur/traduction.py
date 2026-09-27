@@ -8,8 +8,9 @@ from ..modeles import RoleMessage
 # Sorties de commandes, pages web, fichiers… peuvent être énormes : on n'en garde qu'un extrait.
 LONGUEUR_MAX_TEXTE = 4000
 
-# Items sans intérêt pour l'historique : l'écho du message utilisateur (déjà enregistré) et le raisonnement.
-IGNORES = {"userMessage", "reasoning"}
+# Items sans intérêt pour l'historique : l'écho du message utilisateur (déjà enregistré). Le raisonnement n'est
+# gardé que par ses titres de réflexion, s'il en a (comme les lignes « thinking » de la CLI Codex).
+IGNORES = {"userMessage"}
 
 
 class LigneMessage(NamedTuple):
@@ -30,10 +31,19 @@ def traduire(item: Any, bilan: dict[str, Any] | None = None) -> list[LigneMessag
         return [LigneMessage("assistant", texte, None)] if texte.strip() else []
     if type_ in IGNORES:
         return []
+    if type_ == "reasoning":
+        titres = titres_reflexion(element.get("summary"))
+        return [LigneMessage("outil", " · ".join(titres), {"type": "reasoning", "titres": titres})] if titres else []
     donnees = _tronquer(element)
     if bilan:
         donnees["bilan"] = bilan
     return [LigneMessage("outil", _resume(type_, donnees), donnees)]
+
+
+def titres_reflexion(resume: Any) -> list[str]:
+    """Titres d'un résumé de réflexion Codex (« **Je vérifie…** » → « Je vérifie… »)."""
+    parties = resume if isinstance(resume, list) else [resume] if isinstance(resume, str) else []
+    return [t for p in parties if isinstance(p, str) and (t := p.strip().strip("*").strip())]
 
 
 def _resume(type_: str, donnees: dict[str, Any]) -> str:

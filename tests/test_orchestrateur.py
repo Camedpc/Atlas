@@ -440,3 +440,11 @@ def test_tout_arreter_interrompt_aussi_les_sous_agents(monkeypatch):
 
     asyncio.run(scenario())
     assert interrompus[2:] == ["orchestrateur", ("t-calc", "u-calc")]
+
+
+def test_traduire_garde_les_titres_de_reflexion():
+    (ligne,) = traduire({"type": "reasoning", "summary": ["**Je vérifie n = 40**", "**Je conclus**"], "id": "r"})
+    assert ligne.role == "outil"
+    assert ligne.contenu == "Je vérifie n = 40 · Je conclus"
+    assert ligne.donnees == {"type": "reasoning", "titres": ["Je vérifie n = 40", "Je conclus"]}
+    assert traduire({"type": "reasoning", "summary": [], "id": "r"}) == []

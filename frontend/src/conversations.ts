@@ -26,11 +26,16 @@ function rendreOutil(m: Message): string {
   if (d.type === 'subAgentActivity' && typeof d.agentPath === 'string') {
     const genres: Record<string, string> = {
       started: 'lancé',
-      interacted: 'a reçu un message',
       interrupted: 'interrompu',
       completed: 'a terminé',
     }
     const nom = d.agentPath.slice(d.agentPath.lastIndexOf('/') + 1).replace(/[_-]+/g, ' ')
+    // « interacted » : l'agent de ce fil a écrit à agentPath (un sous-agent, ou son parent).
+    if (d.kind === 'interacted') {
+      const destinataire = d.agentPath === RACINE ? 'l’orchestrateur' : `<b>${echapper(nom)}</b>`
+      return `<div class="msg evenement-agent"><button type="button" class="lien-agent" data-chemin="${echapper(d.agentPath)}">
+        ↳ Message à ${destinataire}</button></div>`
+    }
     // Comme « Done (N tool uses · X tokens · durée) » de Claude Code : le bilan de cette exécution, joint par le
     // serveur ; à défaut (messages plus anciens), celui de l'arbre, rempli par majResumesAgents.
     const fin = d.kind === 'completed' || d.kind === 'interrupted'
@@ -42,6 +47,10 @@ function rendreOutil(m: Message): string {
         : `<span class="resume-agent" data-chemin="${echapper(d.agentPath)}"></span>`
     return `<div class="msg evenement-agent"><button type="button" class="lien-agent" data-chemin="${echapper(d.agentPath)}">
       ↳ Sous-agent <b>${echapper(nom)}</b> ${genres[String(d.kind)] ?? String(d.kind)}</button>${resume}</div>`
+  }
+  // Titres de réflexion, comme les lignes « thinking » de la CLI Codex.
+  if (d.type === 'reasoning' && Array.isArray(d.titres)) {
+    return `<div class="msg reflexion">${d.titres.map((t) => `<div>${echapper(String(t))}</div>`).join('')}</div>`
   }
   const type = typeof d.type === 'string' ? d.type : 'outil'
   const etiquettes: Record<string, string> = {
@@ -451,6 +460,25 @@ export class PanneauConversation {
     await this.rafraichir()
   }
 
+  /** Ligne d'état de l'agent affiché tant qu'il travaille, comme « • Working (6m 12s) » de la CLI Codex :
+   *  son étape en cours (titre de réflexion, outil) et depuis quand. Toujours tout en bas du fil. */
+  private majEtape() {
+    const a = etat.get(etat.selection)
+    let ligne = this.contenu.querySelector<HTMLElement>('.etape-en-cours')
+    if (!a || !this.actif || (a.etat !== 'actif' && a.etat !== 'attend')) {
+      ligne?.remove()
+      return
+    }
+    if (!ligne) {
+      ligne = document.createElement('div')
+      ligne.className = 'msg etape-en-cours'
+    }
+    if (ligne !== this.contenu.lastElementChild) this.contenu.append(ligne)
+    const texte = a.outil ? `${a.outil} · ${a.activite}` : a.activite
+    const duree = a.depuis ? ` · ${formatDuree(Date.now() / 1000 - a.depuis)}` : ''
+    ligne.textContent = `${texte}${duree}`
+  }
+
   /** Texte que l'agent affiché est en train d'écrire, toujours en bas du fil. */
   private majBrouillon(brouillons: Record<string, string>) {
     const texte = brouillons[etat.selection]
@@ -464,7 +492,10 @@ export class PanneauConversation {
       bloc = document.createElement('div')
       bloc.className = 'msg assistant brouillon'
     }
-    if (bloc !== this.contenu.lastElementChild) this.contenu.append(bloc)
+    const etape = this.contenu.querySelector('.etape-en-cours')
+    if (etape) {
+      if (bloc.nextElementSibling !== etape) etape.before(bloc)
+    } else if (bloc !== this.contenu.lastElementChild) this.contenu.append(bloc)
     if (bloc.dataset.texte !== texte) {
       bloc.dataset.texte = texte
       bloc.innerHTML = rendre(texte)
@@ -536,6 +567,7 @@ export class PanneauConversation {
       const premier = this.dernierId === undefined
       if (premier) this.contenu.innerHTML = ''
       this.contenu.querySelector('.brouillon')?.remove()
+      this.contenu.querySelector('.etape-en-cours')?.remove()
       this.contenu.insertAdjacentHTML('beforeend', nouveaux.map(rendreMessage).join(''))
       this.dernierId = nouveaux[nouveaux.length - 1].id
       if (enBas || premier) this.fil.scrollTop = this.fil.scrollHeight
@@ -562,6 +594,7 @@ export class PanneauConversation {
     majResumesAgents(this.contenu)
     this.majArreter()
     this.majBrouillon(conv.brouillons ?? {})
+    this.majEtape()
     if (enBas) this.fil.scrollTop = this.fil.scrollHeight
     if (changement) this.majSessions()
 

@@ -198,6 +198,8 @@ export interface Agent {
   debut: number
   fin: number | null
   resultat: string | null
+  /** Début de l'étape en cours (secondes), null si l'agent ne travaille pas. */
+  depuis?: number | null
 }
 
 export interface EtatConversation extends Conversation {

@@ -65,6 +65,8 @@ def surcharges_thread(conversation_id: str, projet: str | None = None, projet_id
     graphe = {"ATLAS_PROJET_ID": projet_id} if projet_id else {}
     surcharges: dict[str, Any] = {
         "web_search": "live",
+        # Titres de réflexion (« Je vérifie… »), comme dans la CLI : sans ce réglage, Codex n'en envoie aucun.
+        "model_reasoning_summary": "detailed",
         # Ne pas remonter jusqu'au dépôt Atlas (espace/ est dedans) chercher un .codex/ ou un AGENTS.md.
         "project_root_markers": [],
         "features": {"hooks": False},
