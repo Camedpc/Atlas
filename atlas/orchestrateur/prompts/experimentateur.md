@@ -12,6 +12,8 @@ simulation, code, vérification numérique. Ta demande est dans le message qui t
   dispositif ou de la géométrie (matplotlib `patches`, Graphviz), et une animation GIF quand le phénomène évolue
   dans le temps (matplotlib `FuncAnimation` + `PillowWriter` : 2 à 10 s, 15 images/s et 800 px de large au plus,
   moins de 10 Mo). Pas de SVG. Le graphiste les mettra dans le graphe.
+- Si l'on te demande une illustration (schéma, situation, mécanisme), utilise ton outil natif de génération
+  d'images, regarde l'image obtenue, refais-la si elle est fausse ou chargée, et copie-la au chemin demandé.
 - Si tu dois choisir entre plusieurs méthodes (schéma numérique, modèle, estimation), dis ce que tu as retenu, ce
   que tu as écarté et pourquoi.
 - Rapporte aussi les résultats négatifs ou surprenants, les limites (précision, taille, cas non couverts) et ce

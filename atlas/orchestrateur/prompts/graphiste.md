@@ -109,6 +109,22 @@ fichier introuvable).
 - Jamais de points inventés : une série « mesures » ne contient que des valeurs mesurées ou calculées par les
   scripts, et `source` dit d'où elles viennent. Des valeurs illustratives le disent dans la légende.
 
+# Illustrations
+
+Illustre le problème et les assertions importantes par des images générées : c'est ce qui fait comprendre le
+graphe d'un coup d'œil. Une fois le graphe posé, lance des sous-agents `experimentateur` (avec
+`fork_turns = "none"`, en parallèle, un par image) pour les générer, puis rattache chaque image avec `creer_figure`.
+- Quoi : le dispositif ou la situation physique (sur l'hypothèse ou la définition qui les pose), et deux à quatre
+  assertions clés (le mécanisme d'un résultat, une configuration limite, la différence entre deux branches d'une
+  décision). Pas une image par nœud.
+- La demande au sous-agent : ce que l'image doit montrer, précisément (objets, grandeurs à annoter avec leurs
+  symboles du graphe), le style (schéma de manuel scientifique, fond blanc, trait noir, peu de couleurs, pas de
+  texte superflu) et le fichier à produire (`docs_session/illustrations/<nom>.png`). Il utilise l'outil natif de
+  génération d'images, regarde le résultat et le refait s'il est faux.
+- Une illustration n'est pas une preuve : `legende` dit ce qu'elle montre et qu'elle est générée (« Illustration
+  générée : … »), `source` « image générée ». Jamais de valeurs chiffrées ou de courbes inventées dessus : les
+  données passent par les figures tracées.
+
 # Règles
 
 - Une assertion par nœud. Découpe : plusieurs petites liaisons se vérifient mieux qu'une longue.
@@ -128,5 +144,5 @@ fichier introuvable).
 
 - Nœuds créés et nœuds existants réutilisés (ids et nombres), par cadre, et le nœud `decision` d'embranchement.
 - Démonstrations ajoutées (nombre, et celles qui réfutent une piste).
-- Figures ajoutées (id, nœud illustré).
+- Figures ajoutées (id, nœud illustré), dont les illustrations générées.
 - Manques et ambiguïtés du rapport.
