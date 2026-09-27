@@ -113,6 +113,8 @@ export class Appel {
   private image = 0
   muet = false
   private demarrage = false
+  /** Le micro a été demandé pour cet appel (le son de fin ne sonne que si l'appel a vraiment commencé). */
+  private audioDemande = false
   private readonly rappels: RappelsAppel
 
   constructor(rappels: RappelsAppel) {
@@ -134,21 +136,16 @@ export class Appel {
     }
   }
 
+  /** L'appel démarre sans micro : Atlas voix se prépare (tour d'échauffement), puis, quand il est prêt, le son
+   * d'ouverture dit « tu peux parler » et le micro s'ouvre juste après. Le micro fermé pendant le son évite que
+   * Windows le baisse (il réduit de 80 % les autres sons pendant une communication). */
   private async lancer(conversationId: string) {
     this.messages.clear()
-    // Son d'ouverture au clic ; le micro n'ouvre qu'après, sinon Windows baisse ce son pendant la communication.
-    jouerSon('ouverture')
-    await new Promise((ok) => window.setTimeout(ok, (REVEIL_S + 0.35) * 1000))
     this.generations.nouvelAppel()
     this.enLecture = false
     this.position = { joues: 0, t: 0 }
+    this.audioDemande = false
     this.afficherEtat('demarrage')
-    try {
-      await this.ouvrirAudio()
-    } catch (e) {
-      this.rappels.surInfo(`Micro indisponible : ${e instanceof Error ? e.message : String(e)}`, true)
-      return
-    }
     const ws = new WebSocket(urlAppel(conversationId))
     ws.binaryType = 'arraybuffer'
     this.ws = ws
@@ -162,11 +159,11 @@ export class Appel {
       if (this.ws !== ws) return
       this.ws = null
       this.couperLecture(this.generations.courante)
-      // Le son de fin passe encore par la sortie de l'appel, qui ne se ferme qu'une fois le son joué.
       // Comme l'ouverture : micro et audio de l'appel relâchés d'abord, puis le son dans son propre contexte.
       // Par la sortie WebRTC de l'appel (0,2 à 0,9 s de retard), il était coupé à la fermeture de cette sortie.
+      const avecAudio = this.contexte !== null || this.audioDemande
       this.fermerAudio()
-      jouerSon('fermeture')
+      if (avecAudio) jouerSon('fermeture')
       cancelAnimationFrame(this.image)
       this.rappels.surSources(null)
       this.rappels.surPartiel('')
@@ -177,6 +174,22 @@ export class Appel {
       this.image = requestAnimationFrame(suivre)
     }
     this.image = requestAnimationFrame(suivre)
+  }
+
+  /** Atlas voix est prêt : son d'ouverture, puis micro et sortie de la voix. */
+  private async ouvrirApresSon() {
+    const ws = this.ws
+    jouerSon('ouverture')
+    await new Promise((ok) => window.setTimeout(ok, (REVEIL_S + 0.35) * 1000))
+    if (this.ws !== ws || !ws) return // raccroché entre-temps
+    try {
+      await this.ouvrirAudio()
+    } catch (e) {
+      this.rappels.surInfo(`Micro indisponible : ${e instanceof Error ? e.message : String(e)}`, true)
+      this.raccrocher()
+      return
+    }
+    if (this.ws !== ws) this.fermerAudio() // raccroché pendant l'ouverture du micro
   }
 
   raccrocher() {
@@ -452,6 +465,10 @@ export class Appel {
   private afficherEtat(etat?: EtatAppel) {
     if (etat) this.etatServeur = etat
     // Première écoute : Atlas voix est prêt, on peut parler.
+    if (etat === 'ecoute' && !this.audioDemande && this.ws) {
+      this.audioDemande = true
+      void this.ouvrirApresSon()
+    }
     const affiche = this.enLecture && this.etatServeur !== 'demarrage' ? 'parle' : this.etatServeur
     this.rappels.surEtatVoix(affiche)
   }
