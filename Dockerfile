@@ -13,8 +13,9 @@ RUN useradd --create-home --uid 1000 atlas \
 WORKDIR /app
 COPY requirements.txt requirements-agents.txt ./
 RUN pip install --no-cache-dir -r requirements-agents.txt
-# Paquets scientifiques courants, visibles depuis le Python partagé des agents (espace/partage/python).
-RUN pip install --no-cache-dir numpy scipy sympy pandas matplotlib networkx
+# Paquets scientifiques courants, visibles depuis le Python partagé des agents (espace/partage/python) ; plotly sert
+# aux scripts des figures 3D, qu'Atlas exécute avec ce Python (atlas/orchestrateur/figure3d.py).
+RUN pip install --no-cache-dir numpy scipy sympy pandas matplotlib networkx plotly
 
 COPY atlas ./atlas
 COPY api ./api

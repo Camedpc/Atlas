@@ -1,3 +1,5 @@
 -r requirements-agents.txt
 pytest>=8
 ruff>=0.6
+# Test complet des figures 3D (le serveur lui-même ne l'importe pas : seul le Python partagé des agents en a besoin).
+plotly>=6

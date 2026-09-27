@@ -612,6 +612,38 @@ export function dessinerIcone(ctx: CanvasRenderingContext2D, cx: number, cy: num
   ctx.restore()
 }
 
+/** Petite icône de scène 3D : un cube en perspective cavalière, centré en (cx, cy), de côté `t`. */
+export function dessinerIcone3D(ctx: CanvasRenderingContext2D, cx: number, cy: number, t: number): void {
+  const c = t * 0.62, d = t * 0.3
+  const x0 = cx - (c + d) / 2, y0 = cy - (c - d) / 2
+  ctx.save()
+  ctx.strokeStyle = COULEURS_FIGURE.cadre
+  ctx.lineWidth = Math.max(0.8, t * 0.035)
+  ctx.lineJoin = 'round'
+  ctx.beginPath()
+  // Face avant, face arrière décalée de (d, −d), et les quatre arêtes qui les relient.
+  ctx.rect(x0, y0, c, c)
+  ctx.rect(x0 + d, y0 - d, c, c)
+  for (const [x, y] of [[0, 0], [c, 0], [0, c], [c, c]] as const) {
+    ctx.moveTo(x0 + x, y0 + y)
+    ctx.lineTo(x0 + x + d, y0 + y - d)
+  }
+  ctx.stroke()
+  ctx.restore()
+}
+
+/** Case d'une scène 3D dans la grille (sans vignette) : le cube et l'invitation à l'ouvrir, dans la zone de `g`. */
+export function dessinerCaseScene(ctx: CanvasRenderingContext2D, g: Geometrie): void {
+  const t = Math.min(g.iw * 0.4, g.ih * 0.55, 90)
+  const cy = g.iy + g.ih / 2 - 8
+  dessinerIcone3D(ctx, g.ix + g.iw / 2, cy, t)
+  ctx.fillStyle = COULEURS_FIGURE.gris
+  ctx.font = `italic 400 ${CORPS_LEGENDE}px ${SERIF}`
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'top'
+  ctx.fillText('Scène 3D animée — double-clic pour l’ouvrir', g.ix + g.iw / 2, cy + t / 2 + 10, g.iw - 8)
+}
+
 /** Cache des images de figures : chargées à la demande, gardées (les plus anciennes oubliées au-delà de 40). */
 export class ImagesFigures {
   private cache = new Map<string, { etat: 'chargement' | 'pret' | 'erreur'; img: HTMLImageElement | null; url: string | null }>()
@@ -698,7 +730,8 @@ export function htmlTitreFigure(numero: string, titre: string): string {
 /** Contenu HTML d'une figure de la grille ; `illustre` : « Lemme 7 » (nœud illustré). */
 export function htmlFigure(f: FigureVue, numero: string, illustre: string | null, w: number, h: number): string {
   const g = geometrieBloc(f, w, h)
-  const joint = f.trace && f.image ? '<span class="gr-fig-joint">image jointe</span>' : ''
+  const joint = f.scene ? '<span class="gr-fig-joint">3D animée</span>'
+    : f.trace && f.image ? '<span class="gr-fig-joint">image jointe</span>' : ''
   const ref = illustre ? `<span class="gr-fig-ref">illustre ${echapper(illustre)}</span>` : ''
   const tete = `<div class="gr-fig-tete" style="height:${g.tete}px"><span class="gr-fig-titre">${htmlTitreFigure(numero, f.titre)}</span>${joint}${ref}</div>`
   const axes = f.trace ? htmlAxes(f.trace, g) : ''
