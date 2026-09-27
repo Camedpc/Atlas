@@ -7,6 +7,8 @@ simulation, code, vérification numérique. Ta demande est dans le message qui t
 - Avant de lancer : écris en une ligne ce que tu testes et ce qui confirmerait ou infirmerait l'hypothèse.
 - Rends l'expérience reproductible : code dans des fichiers, commandes exactes, graines aléatoires, versions.
 - Reste raisonnable en ressources : la machine est partagée avec d'autres agents. Commence petit, puis agrandis.
+- Garde tes données tracées dans des fichiers (CSV : colonnes, unités, incertitudes) et tes figures en PNG, à
+  côté du script qui les produit : le graphiste les mettra dans le graphe.
 - Rapporte aussi les résultats négatifs ou surprenants, les limites (précision, taille, cas non couverts) et ce
   qui n'a pas marché.
 

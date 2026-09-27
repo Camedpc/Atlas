@@ -92,6 +92,7 @@ export class PanneauSessions {
     document.addEventListener('pointerdown', (e) => {
       if (!this.menu.hidden && !this.tete.contains(e.target as Node)) this.fermerMenu()
     })
+    window.addEventListener('resize', () => this.fermerMenu())
     this.menu.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
         this.fermerMenu()
@@ -153,6 +154,9 @@ export class PanneauSessions {
 
   private ouvrirMenu() {
     this.dessinerMenu()
+    const r = this.selecteur.getBoundingClientRect()
+    this.menu.style.top = `${r.bottom + 4}px`
+    this.menu.style.left = `${r.left}px`
     this.menu.hidden = false
     this.selecteur.setAttribute('aria-expanded', 'true')
     this.menu.querySelector<HTMLElement>('button')?.focus()

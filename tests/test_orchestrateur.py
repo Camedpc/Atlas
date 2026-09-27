@@ -7,6 +7,7 @@ from openai_codex.types import ThreadItem
 from atlas import conversations
 from atlas.modeles import Conversation, Execution
 from atlas.orchestrateur import agent, gestionnaire, pipeline
+from atlas.orchestrateur.codex_vivant import codex_vivant
 from atlas.orchestrateur.gestionnaire import DejaEnCours, Gestionnaire, Reglages, titre_depuis
 from atlas.orchestrateur.traduction import LONGUEUR_MAX_TEXTE, traduire
 
@@ -51,7 +52,9 @@ def test_traduire_ignore_raisonnement_et_message_vide():
 def test_surcharges_declarent_le_serveur_mcp_et_coupent_les_hooks(monkeypatch, tmp_path):
     monkeypatch.setattr(agent.config, "CODEX_HOME", tmp_path)
     surcharges = agent.surcharges_thread("c1", "defaut", "p1")
-    assert surcharges["mcp_servers"]["atlas"]["env"] == {"ATLAS_CONVERSATION_ID": "c1", "ATLAS_PROJET_ID": "p1"}
+    env = surcharges["mcp_servers"]["atlas"]["env"]
+    assert env["ATLAS_CONVERSATION_ID"] == "c1" and env["ATLAS_PROJET_ID"] == "p1"
+    assert env["ATLAS_DOSSIER_SESSION"].replace("\\", "/").endswith("/sessions/c1")
     assert surcharges["mcp_servers"]["verificateur"]["env"]["ATLAS_PROJET_ID"] == "p1"
     assert surcharges["mcp_servers"]["atlas"]["args"] == ["-m", "atlas.orchestrateur.mcp_atlas"]
     assert surcharges["mcp_servers"]["verificateur"]["args"] == ["-m", "atlas.orchestrateur.mcp_verificateur"]
@@ -336,3 +339,114 @@ def test_reglages_du_tour_transmis_a_l_orchestrateur(monkeypatch):
 
     asyncio.run(scenario())
     assert recus == {"effort": "xhigh", "modele": "gpt-6-sol"}
+
+
+def test_message_pendant_le_demarrage_du_tour_attend_qu_il_soit_pret(monkeypatch):
+    trace = _faux_supabase(monkeypatch)
+    injectes: list[str] = []
+    fin_du_tour = asyncio.Event()
+
+    class FauxTour:
+        async def steer(self, texte):
+            injectes.append(texte)
+
+    async def faux_tour(conversation, texte, execution_id, sur_tour, **_):
+        await asyncio.sleep(0.3)  # thread à ouvrir : le tour n'est pas encore branché
+        sur_tour(FauxTour())
+        await fin_du_tour.wait()
+        return agent.ResultatTour("terminee")
+
+    monkeypatch.setattr(agent, "tour", faux_tour)
+    monkeypatch.setattr(pipeline, "ETAPES_APRES_RECHERCHE", [])
+
+    async def scenario():
+        g = Gestionnaire()
+        await g.envoyer(CONVERSATION.model_copy(), "question")
+        await g.envoyer(CONVERSATION.model_copy(), "précision")
+        fin_du_tour.set()
+        await _attendre(g)
+
+    asyncio.run(scenario())
+    assert injectes == ["précision"]
+    assert [m[1] for m in trace["messages"]] == ["question", "précision"]
+
+
+def test_message_juste_apres_la_fin_du_tour_lance_le_suivant(monkeypatch):
+    _faux_supabase(monkeypatch)
+    consignes: list[str] = []
+
+    class TourFini:
+        async def steer(self, texte):
+            raise RuntimeError("no active turn")
+
+    async def faux_tour(conversation, texte, execution_id, sur_tour, **_):
+        consignes.append(texte)
+        sur_tour(TourFini())
+        await asyncio.sleep(0.1)
+        return agent.ResultatTour("terminee")
+
+    monkeypatch.setattr(agent, "tour", faux_tour)
+    monkeypatch.setattr(pipeline, "ETAPES_APRES_RECHERCHE", [])
+
+    async def scenario():
+        g = Gestionnaire()
+        await g.envoyer(CONVERSATION.model_copy(), "question")
+        await asyncio.sleep(0.01)
+        await g.envoyer(CONVERSATION.model_copy(), "suite")
+        await _attendre(g)
+
+    asyncio.run(scenario())
+    assert consignes == ["question", "suite"]
+
+
+def test_tout_arreter_interrompt_aussi_les_sous_agents(monkeypatch):
+    _faux_supabase(monkeypatch)
+    interrompus: list = []
+    fin_du_tour = asyncio.Event()
+
+    class FauxTour:
+        async def interrupt(self):
+            interrompus.append("orchestrateur")
+            fin_du_tour.set()
+
+        async def steer(self, texte):
+            interrompus.append(("steer", texte))
+
+    async def faux_tour(conversation, texte, execution_id, sur_tour, suivi=None, **_):
+        suivi.demarrer_racine("t-root")
+        item = {"type": "subAgentActivity", "agentPath": "/root/calcul", "agentThreadId": "t-calc", "kind": "started"}
+        suivi.recevoir("item/completed", {"threadId": "t-root", "item": item})
+        suivi.recevoir("turn/started", {"threadId": "t-calc", "turn": {"id": "u-calc"}})
+        sur_tour(FauxTour())
+        await fin_du_tour.wait()
+        return agent.ResultatTour("arretee")
+
+    async def fausse_interruption(thread_id, tour_id):
+        interrompus.append((thread_id, tour_id))
+
+    monkeypatch.setattr(agent, "tour", faux_tour)
+    monkeypatch.setattr(codex_vivant, "interrompre", fausse_interruption)
+
+    async def scenario():
+        g = Gestionnaire()
+        await g.envoyer(CONVERSATION.model_copy(), "question")
+        while not g._tours.get("c1"):
+            await asyncio.sleep(0)
+        assert g.actif("c1")
+        assert await g.arreter("c1", "/root/calcul")
+        assert interrompus[0] == ("t-calc", "u-calc")
+        assert interrompus[1][0] == "steer" and "/root/calcul" in interrompus[1][1]
+        assert await g.arreter("c1")
+        await _attendre(g)
+        assert not g.en_cours("c1")
+
+    asyncio.run(scenario())
+    assert interrompus[2:] == ["orchestrateur", ("t-calc", "u-calc")]
+
+
+def test_traduire_garde_les_titres_de_reflexion():
+    (ligne,) = traduire({"type": "reasoning", "summary": ["**Je vérifie n = 40**", "**Je conclus**"], "id": "r"})
+    assert ligne.role == "outil"
+    assert ligne.contenu == "Je vérifie n = 40 · Je conclus"
+    assert ligne.donnees == {"type": "reasoning", "titres": ["Je vérifie n = 40", "Je conclus"]}
+    assert traduire({"type": "reasoning", "summary": [], "id": "r"}) == []

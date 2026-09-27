@@ -22,7 +22,17 @@ Action = Literal[
     "modification_demonstration",
     "verdict",
     "import",
+    "vue",
+    "figure",
 ]
+
+TypeNoeud = Literal[
+    "hypothese", "definition", "axiome", "choix_modelisation", "decision", "lemme", "proposition",
+    "theoreme", "assertion", "experience", "calcul", "observation", "resultat", "conjecture",
+]
+
+# Rôle d'une prémisse dans une démonstration (la vue et l'IA s'en servent pour hiérarchiser).
+RolePremisse = Literal["principale", "auxiliaire", "technique", "contexte"]
 
 
 # ── Lignes des tables ────────────────────────────────────────────────────────
@@ -38,6 +48,10 @@ class LigneNoeud(BaseModel):
     enonce: str
     admis: bool
     """Axiome, définition ou résultat connu : établi sans démonstration."""
+    type: TypeNoeud | None = None
+    """Nature de l'énoncé (hypothèse, lemme, observation…) ; None = non précisé."""
+    details: Any = None
+    """Décision : {question, alternatives, raison} ; choix de modélisation : {hypothese, portee, alternatives}."""
     parents: list[str] = []
     """Prémisses citées par au moins une démonstration du nœud (maintenu par trigger)."""
     enfants: list[str] = []
@@ -56,6 +70,8 @@ class Demonstration(BaseModel):
     nom_demonstration: str
     justifie_par: list[str]
     """Ids des nœuds utilisés comme prémisses."""
+    roles: dict[str, RolePremisse] = {}
+    """Rôle des prémisses non principales (une prémisse absente est principale)."""
     demonstration: str
     validite: Validite
     confiance: float | None = None
@@ -167,3 +183,64 @@ class DetailNoeud(Noeud):
     """Tous les nœuds cités par au moins une démonstration de ce nœud."""
     utilise_par: list[str]
     """Nœuds dont une démonstration cite celui-ci."""
+
+
+# ── Vue du graphe (une par espace) ───────────────────────────────────────────
+
+
+class GroupeVue(BaseModel):
+    """Table `groupes` : un cadre de la vue (imbricable), avec son rectangle de cases calculé."""
+
+    id: str
+    nom: str
+    parent_id: str | None
+    genre: str
+    couleur: str | None
+    replie: bool
+    ordre: int
+    rectangle: list[int] | None = None
+    """[colonne_min, ligne_min, colonne_max, ligne_max] (bornes incluses) ; None si le cadre est vide."""
+
+
+class PlacementVue(BaseModel):
+    """Table `placements` : la case d'un nœud et son cadre."""
+
+    noeud_id: str
+    groupe_id: str | None
+    colonne: int
+    ligne: int
+    largeur: int
+    hauteur: int
+    fixe: bool
+
+
+class EtiquetteVue(BaseModel):
+    id: str
+    nom: str
+    couleur: str | None
+
+
+class FigureVue(BaseModel):
+    """Table `figures` : un graphique ou une image qui illustre un nœud. Sa place est dans `placements`, sous
+    l'id `fig:<id>`. Les lois du tracé arrivent déjà échantillonnées (`points`, `bande`)."""
+
+    id: str
+    noeud_id: str
+    titre: str
+    legende: str | None
+    trace: dict[str, Any] | None
+    image: bool
+    """Vrai si une image est servie par GET /api/figures/{id}/image?projet_id=."""
+    image_largeur: int | None
+    image_hauteur: int | None
+    source: str | None
+    modifie_le: datetime
+
+
+class Vue(BaseModel):
+    groupes: list[GroupeVue]
+    placements: list[PlacementVue]
+    etiquettes: list[EtiquetteVue]
+    marques: list[list[str]]
+    """[noeud_id, etiquette_id]."""
+    figures: list[FigureVue] = []

@@ -52,10 +52,9 @@
   color: var(--texte-3);
 }
 
+/* Fixe (placé par sessions.ts) : déborde de la barre latérale, qui coupe son contenu, par-dessus la conversation. */
 .menu-espaces {
-  position: absolute;
-  top: calc(100% - 4px);
-  left: 8px;
+  position: fixed;
   z-index: 60;
   width: 280px;
   padding: 4px;

@@ -13,6 +13,30 @@ Graphe de l'espace de travail (chaque espace a le sien), avec les outils du serv
 - `ajouter_demonstration` : une liaison de raisonnement, qui justifie un nœud à partir de ses prémisses
   (`justifie_par`). Les prémisses doivent exister : crée-les d'abord.
 
+# Organisation visuelle
+
+Le graphe a une vue, en 2D, que l'utilisateur regarde et réarrange comme un Blueprint : des cadres (imbricables)
+et une grille de cases où la lecture va des prémisses (à gauche) vers les conclusions (à droite).
+- `lire_vue` : regarde la vue avant d'ajouter, pour ranger tes nœuds là où ils ont leur place.
+- Donne à chaque nœud son `type` (hypothese, definition, choix_modelisation, decision, lemme, observation,
+  resultat…) et, pour chaque démonstration, les `roles` des prémisses qui ne sont pas l'étape principale
+  (auxiliaire, technique, contexte) : seules les prémisses principales deviennent des flèches.
+- `organiser_vue` : crée un cadre par sous-problème du rapport (genre `sous_probleme`), et des sous-cadres pour les
+  groupes serrés (ex. les conditions aux limites) ; une piste abandonnée va dans un cadre `piste_abandonnee`.
+  Puis crée tes nœuds avec `groupe` : ils se placent seuls à droite de leurs prémisses.
+- Ne fixe une case à la main (`placer` avec colonne et ligne) que si l'ordre automatique trompe la lecture.
+  Ne déplace pas ce que l'utilisateur a fixé.
+
+# Figures
+
+Quand le rapport s'appuie sur des mesures, une simulation ou un graphique, ajoute-le avec `creer_figure`, rattaché
+au nœud qu'il soutient (observation, calcul, résultat) : il prend sa place dans la vue à côté de ce nœud.
+- Tracé vectoriel dès que tu as les données (fichier CSV de l'expérimentateur, valeurs du rapport) : séries
+  `mesures` (avec incertitudes), `courbe` (simulation), `loi` (prédiction, paramètres rattachés au nœud qui les
+  fournit). L'image PNG du script en plus, si elle existe. `lire_figure` te montre une figure existante.
+- Jamais de points inventés : une série « mesures » ne contient que des valeurs mesurées ou calculées par les
+  scripts, et `source` dit d'où elles viennent. Des valeurs illustratives le disent dans la légende.
+
 # Règles
 
 - Une assertion par nœud. Découpe : plusieurs petites liaisons se vérifient mieux qu'une longue.

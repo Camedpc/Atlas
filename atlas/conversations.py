@@ -101,6 +101,11 @@ def terminer_execution(
     supabase().table("executions").update(champs).eq("id", execution_id).execute()
 
 
+def enregistrer_agents(execution_id: str, agents: Any) -> None:
+    """Arbre des agents d'une exécution finie, mis à jour par les sous-agents qui travaillent encore après elle."""
+    supabase().table("executions").update({"agents": agents}).eq("id", execution_id).execute()
+
+
 def derniere_execution(conversation_id: str) -> Execution | None:
     lignes = (
         supabase()

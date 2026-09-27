@@ -9,7 +9,7 @@ from atlas import conversations
 from atlas.modeles import Conversation, Execution, Message
 from atlas.orchestrateur import agent, pipeline
 from atlas.orchestrateur.gestionnaire import Gestionnaire
-from atlas.orchestrateur.suivi_agents import RACINE, Etape, SuiviAgents
+from atlas.orchestrateur.suivi_agents import RACINE, SuiviAgents
 from atlas.voix.appels import Appels, DernierAppel, fusionner
 from atlas.voix.contexte import VOIX, annonce, contexte_decroche, pont
 from atlas.voix.texte import Decoupeur, est_echo, nettoyer
@@ -160,7 +160,11 @@ def _faux_supabase(monkeypatch):
         ),
     )
     monkeypatch.setattr(conversations, "derniere_execution", lambda cid: None)
-    monkeypatch.setattr(conversations, "ajouter_message", lambda cid, role, contenu, **kw: messages.append(contenu))
+    monkeypatch.setattr(
+        conversations,
+        "ajouter_message",
+        lambda cid, role, contenu, **kw: messages.append(contenu) if role == "utilisateur" else None,
+    )
     monkeypatch.setattr(conversations, "modifier_conversation", lambda cid, **champs: None)
     monkeypatch.setattr(conversations, "terminer_execution", lambda eid, statut, **kw: None)
     monkeypatch.setattr(pipeline, "ETAPES_APRES_RECHERCHE", [])
@@ -174,17 +178,28 @@ def test_gestionnaire_publie_les_etapes_et_la_fin_et_consomme_le_pont(monkeypatc
     messages = _faux_supabase(monkeypatch)
     recus: list[str] = []
 
-    async def faux_tour(conversation, texte, execution_id, sur_tour, suivi=None, sur_etape=None, **_):
+    g = Gestionnaire()
+
+    async def faux_tour(conversation, texte, execution_id, sur_tour, suivi=None, **_):
         recus.append(texte)
         sur_tour(SimpleNamespace())
-        sur_etape(Etape("lance", "/root/hydrures", "hydrures", "hydrures"))
+        # Un sous-agent démarre : la notification passe par l'écoute permanente du gestionnaire.
+        suivi.demarrer_racine("t-root", "gpt-6-astra")
+        lancement = {
+            "type": "subAgentActivity",
+            "agentPath": "/root/hydrures",
+            "agentThreadId": "t-dir",
+            "kind": "started",
+            "id": "x",
+        }
+        await g._recevoir("item/completed", {"threadId": "t-root", "item": lancement})
         suivi.derniere_reponse = "Tc ≈ 250 K."
         return agent.ResultatTour("terminee")
 
     monkeypatch.setattr(agent, "tour", faux_tour)
+    monkeypatch.setattr(agent, "enrichir", lambda suivi, thread_id: asyncio.sleep(0))
 
     async def scenario():
-        g = Gestionnaire()
         file = g.abonner("c1")
         g.deposer_pont("c1", "[Appel vocal …]")
         await g.envoyer(CONVERSATION.model_copy(), "Et la pression ?", origine="texte")
@@ -195,9 +210,9 @@ def test_gestionnaire_publie_les_etapes_et_la_fin_et_consomme_le_pont(monkeypatc
         await g.envoyer(CONVERSATION.model_copy(), "Merci")
         while g._taches:
             await asyncio.sleep(0)
-        return g, evenements
+        return evenements
 
-    g, evenements = asyncio.run(scenario())
+    evenements = asyncio.run(scenario())
     assert [e["type"] for e in evenements] == ["debut", "etape", "fin"]
     assert evenements[1]["genre"] == "lance" and evenements[2]["reponse"] == "Tc ≈ 250 K."
     assert recus == ["[Appel vocal …]\n\nEt la pression ?", "Merci"]

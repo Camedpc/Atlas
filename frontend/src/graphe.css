@@ -1,0 +1,647 @@
+/* Graphe de raisonnement (R41) : figure LaTeX classique sur fond blanc, Computer Modern (fontes de KaTeX), traits
+   fins, un seul bleu d'interaction (#1c4fa0). Aucun halo ni animation en boucle.
+   Texte en CMU Serif (Computer Modern complet, accents compris : les fontes de KaTeX n'ont pas « é »), formules
+   en KaTeX. */
+
+@font-face {
+  font-family: 'CMU Serif Atlas';
+  src: url('https://cdn.jsdelivr.net/gh/bitmaks/cm-web-fonts@latest/font/Serif/cmunrm.woff') format('woff');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'CMU Serif Atlas';
+  src: url('https://cdn.jsdelivr.net/gh/bitmaks/cm-web-fonts@latest/font/Serif/cmunbx.woff') format('woff');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'CMU Serif Atlas';
+  src: url('https://cdn.jsdelivr.net/gh/bitmaks/cm-web-fonts@latest/font/Serif/cmunti.woff') format('woff');
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'CMU Serif Atlas';
+  src: url('https://cdn.jsdelivr.net/gh/bitmaks/cm-web-fonts@latest/font/Serif/cmunbi.woff') format('woff');
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}
+
+.gr-scene {
+  --gr-serif: 'CMU Serif Atlas', KaTeX_Main, 'Latin Modern Roman', 'CMU Serif', 'Computer Modern', 'Times New Roman', serif;
+  --gr-accent: #1c4fa0;
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: #ffffff;
+  outline: none;
+  cursor: default;
+  user-select: none;
+  touch-action: none;
+}
+
+.gr-scene.gr-deplace {
+  cursor: grabbing;
+}
+
+.gr-scene.gr-main {
+  cursor: pointer;
+}
+
+.gr-canevas {
+  position: absolute;
+  inset: 0;
+}
+
+/* ── Contenu composé des blocs (graphe-contenu.ts) ── */
+
+.gr-couche {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.gr-bloc {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  box-sizing: border-box;
+  font-family: var(--gr-serif);
+  font-size: 12.5px;
+  line-height: 1.25;
+  color: #000;
+  font-kerning: normal;
+  /* La ligature « ff » de la fonte web CMU Serif sort en carré : sans ligatures. */
+  font-variant-ligatures: no-common-ligatures;
+}
+
+.gr-bloc .katex {
+  /* Même corps que le texte : les deux sont en Computer Modern. */
+  font-size: 1em;
+}
+
+.gr-estompe {
+  opacity: 0.3;
+}
+
+.gr-corps {
+  position: absolute;
+  inset: 0 0 20px 0;
+  padding: 5px 8px 0;
+  overflow: hidden;
+}
+
+.gr-corps-int {
+  transform-origin: 0 0;
+}
+
+.gr-tete {
+  hyphens: auto;
+}
+
+.gr-type {
+  font-weight: 700;
+}
+
+.gr-formule {
+  margin: 6px 0 2px;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.gr-f {
+  display: inline-block;
+}
+
+.gr-prose {
+  margin-top: 4px;
+  font-size: 0.92em;
+  text-align: justify;
+  hyphens: auto;
+  color: #1a1a1a;
+}
+
+.gr-hyp {
+  margin: 0;
+  text-align: justify;
+  hyphens: auto;
+}
+
+.gr-hyp-texte {
+  font-style: italic;
+}
+
+.gr-pied {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 3px;
+  height: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 0.8em;
+  color: #444;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.gr-pied-hyp {
+  justify-content: flex-end;
+  color: #666;
+}
+
+.gr-valid {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gr-doux {
+  color: #666;
+  font-weight: 400;
+}
+
+.gr-secours {
+  font-style: italic;
+}
+
+/* Nœud-fonction (cadre réduit, R19). */
+.gr-tete-f {
+  padding: 8px 8px 0;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.gr-rangee {
+  position: absolute;
+  left: 0;
+  right: 0;
+  padding: 0 10px 0 12px;
+  font-size: 0.86em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gr-rangee.gr-droite {
+  text-align: right;
+  padding: 0 12px 0 10px;
+}
+
+/* ── Interface de la vue ── */
+
+.gr-rectangle {
+  position: absolute;
+  border: 1px solid var(--gr-accent);
+  background: rgba(28, 79, 160, 0.06);
+  pointer-events: none;
+}
+
+.gr-rectangle[hidden],
+.gr-menu[hidden],
+.gr-saisie[hidden],
+.gr-aide[hidden],
+.gr-avis[hidden] {
+  display: none;
+}
+
+.gr-saisie {
+  position: absolute;
+  z-index: 4;
+  box-sizing: border-box;
+  padding: 0 6px;
+  border: 1px solid var(--gr-accent);
+  border-radius: 0;
+  background: #fff;
+  font: 700 13px var(--gr-serif);
+  color: #000;
+  outline: none;
+}
+
+.gr-menu {
+  position: absolute;
+  z-index: 5;
+  min-width: 15rem;
+  max-width: 22rem;
+  padding: 4px;
+  background: #fff;
+  border: 1px solid var(--trait-fort, #d4d4cf);
+  border-radius: 6px;
+  box-shadow: 0 6px 18px -10px rgba(24, 24, 27, 0.3);
+  font-size: 12.5px;
+}
+
+.gr-menu-titre {
+  padding: 4px 8px 6px;
+  font: italic 12.5px var(--gr-serif);
+  color: #555;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gr-menu-article {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 12px;
+  width: 100%;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  text-align: left;
+  font-size: 12.5px;
+  color: var(--texte, #18181b);
+  cursor: pointer;
+}
+
+.gr-menu-article span {
+  flex: 1;
+}
+
+.gr-menu-article:hover:not(:disabled),
+.gr-menu-article:focus-visible {
+  background: var(--fond-2, #f4f4f2);
+  outline: none;
+}
+
+.gr-menu-article:disabled {
+  color: var(--texte-3, #8b8b93);
+  cursor: default;
+}
+
+.gr-menu-article kbd {
+  font: 11px var(--mono, monospace);
+  color: var(--texte-3, #8b8b93);
+}
+
+.gr-menu-article small {
+  flex-basis: 100%;
+  font-size: 11px;
+  color: var(--texte-3, #8b8b93);
+}
+
+.gr-menu-sep {
+  margin: 4px 0;
+  border: 0;
+  border-top: 1px solid var(--trait, #e5e5e1);
+}
+
+.gr-menu-couleurs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 8px;
+}
+
+.gr-menu-couleurs span {
+  margin-right: auto;
+}
+
+.gr-teinte {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 1px solid;
+  border-radius: 3px;
+  font-size: 10px;
+  line-height: 14px;
+  color: #666;
+  cursor: pointer;
+}
+
+.gr-teinte.actif {
+  outline: 1.5px solid var(--gr-accent);
+  outline-offset: 1px;
+}
+
+.gr-aide {
+  position: absolute;
+  z-index: 6;
+  top: 12px;
+  right: 12px;
+  width: min(36rem, calc(100% - 24px));
+  max-height: calc(100% - 24px);
+  overflow: auto;
+  padding: 0.8rem 1rem;
+  background: #fff;
+  border: 1px solid var(--trait, #e5e5e1);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px -12px rgba(24, 24, 27, 0.25);
+  font-size: 12.5px;
+  color: var(--texte, #18181b);
+  user-select: text;
+}
+
+.gr-aide h3 {
+  margin: 0 0 0.5rem;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* Tableau façon booktabs : filets haut et bas, pas de filet vertical. */
+.gr-aide table {
+  width: 100%;
+  border-collapse: collapse;
+  border-top: 1.2px solid #000;
+  border-bottom: 1.2px solid #000;
+}
+
+.gr-aide th,
+.gr-aide td {
+  padding: 3px 0;
+  vertical-align: top;
+  text-align: left;
+}
+
+.gr-aide th {
+  padding-right: 1rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.gr-aide td {
+  color: var(--texte-2, #52525b);
+}
+
+.gr-aide p {
+  margin: 0.6rem 0 0;
+  color: var(--texte-2, #52525b);
+}
+
+.gr-avis {
+  position: absolute;
+  z-index: 4;
+  left: 50%;
+  bottom: 44px;
+  transform: translateX(-50%);
+  max-width: calc(100% - 32px);
+  padding: 6px 12px;
+  background: #fff;
+  border: 1px solid var(--trait-fort, #d4d4cf);
+  border-radius: 6px;
+  font-size: 12.5px;
+  color: var(--texte, #18181b);
+  pointer-events: none;
+}
+
+.gr-legende {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding: 5px 10px;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid var(--trait, #e5e5e1);
+  border-radius: 6px;
+  font: 12px var(--gr-serif);
+  color: #333;
+  pointer-events: none;
+}
+
+.gr-legende span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.gr-zoom {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  font: italic 12px var(--gr-serif);
+  color: #666;
+  pointer-events: none;
+}
+
+@media (max-width: 720px) {
+  .gr-legende {
+    display: none;
+  }
+}
+
+/* ── Figures (graphe-figures.ts) : textes posés sur le tracé du canevas ── */
+
+.gr-fig {
+  position: absolute;
+  inset: 0;
+}
+
+.gr-fig-tete {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.gr-fig-titre {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gr-fig-mot {
+  font-variant: small-caps;
+  letter-spacing: 0.02em;
+}
+
+.gr-fig-joint,
+.gr-fig-ref {
+  font-size: 0.82em;
+  font-style: italic;
+  color: #666;
+}
+
+.gr-fig-axe {
+  position: absolute;
+  height: 18px;
+  line-height: 18px;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  font-size: 12px;
+}
+
+.gr-fig-axe-y {
+  transform: rotate(-90deg);
+}
+
+.gr-fig-legende {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 4px;
+  overflow: hidden;
+  font-size: 11px;
+  line-height: 1.3;
+  color: #222;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.gr-fig-legende p {
+  display: inline;
+  margin: 0;
+}
+
+.gr-fig-legende p + p::before {
+  content: ' ';
+}
+
+/* Fenêtre d'une figure ouverte en grand. */
+.gr-fig-fond {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(24, 24, 27, 0.22);
+}
+
+.gr-fig-fenetre {
+  box-sizing: border-box;
+  max-width: min(960px, 100%);
+  max-height: 100%;
+  overflow: auto;
+  padding: 14px 20px 16px;
+  background: #fff;
+  border: 1px solid #d4d4cf;
+  border-radius: 8px;
+  box-shadow: 0 12px 32px -16px rgba(24, 24, 27, 0.35);
+  font-family: 'CMU Serif Atlas', KaTeX_Main, 'Latin Modern Roman', 'CMU Serif', 'Computer Modern', 'Times New Roman', serif;
+  font-size: 14px;
+  color: #000;
+  user-select: text;
+}
+
+.gr-fig-fenetre-tete {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.gr-fig-fenetre-tete h2 {
+  flex: 1;
+  margin: 0;
+  font-size: 16px;
+  font-weight: 400;
+}
+
+.gr-fig-fermer {
+  border: 0;
+  background: transparent;
+  font-size: 20px;
+  line-height: 1;
+  color: #666;
+  cursor: pointer;
+}
+
+.gr-fig-fermer:hover {
+  color: #000;
+}
+
+.gr-fig-trace {
+  position: relative;
+  margin: 0 auto;
+}
+
+.gr-fig-trace canvas {
+  position: absolute;
+  inset: 0;
+}
+
+.gr-fig-trace .gr-fig-axe {
+  font-size: 13px;
+}
+
+.gr-fig-image {
+  margin-top: 8px;
+  text-align: center;
+}
+
+.gr-fig-image summary {
+  text-align: left;
+  cursor: pointer;
+  color: #444;
+}
+
+.gr-fig-image img {
+  display: block;
+  max-width: 100%;
+  margin: 8px auto 0;
+}
+
+.gr-fig-attente {
+  padding: 40px 0;
+  background: #ececec;
+  color: #666;
+  font-style: italic;
+}
+
+.gr-fig-legende-complete {
+  margin-top: 10px;
+  text-align: justify;
+  hyphens: auto;
+}
+
+.gr-fig-legende-complete p {
+  margin: 0 0 0.4em;
+}
+
+.gr-fig-lois {
+  margin: 6px 0 0;
+  padding-left: 1.2em;
+  font-size: 13px;
+}
+
+.gr-fig-lois code,
+.gr-fig-meta code {
+  font-size: 12px;
+}
+
+.gr-fig-meta {
+  margin: 10px 0 0;
+  font-size: 12.5px;
+  color: #555;
+}
+
+.gr-fig-doux {
+  color: #666;
+}
+
+.gr-fig-lien {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: #1c4fa0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}

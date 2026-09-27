@@ -33,14 +33,23 @@ export class JetonRequis extends Error {}
 
 export type Statut = 'etabli' | 'suspendu' | 'a_verifier' | 'invalide' | 'ouvert'
 export type Validite = 'a_verifier' | 'valide' | 'invalide'
+export type TypeNoeud =
+  | 'hypothese' | 'definition' | 'axiome' | 'choix_modelisation' | 'decision' | 'lemme' | 'proposition'
+  | 'theoreme' | 'assertion' | 'experience' | 'calcul' | 'observation' | 'resultat' | 'conjecture'
+/** Rôle d'une prémisse dans une démonstration ; une prémisse absente de `roles` est principale. */
+export type RolePremisse = 'principale' | 'auxiliaire' | 'technique' | 'contexte'
 
 export interface Demonstration {
   projet_id: string
   noeud_id: string
   nom_demonstration: string
   justifie_par: string[]
+  /** Rôle des prémisses non principales. */
+  roles: Record<string, RolePremisse>
   demonstration: string
   validite: Validite
+  /** Note du vérificateur (0 à 1), null tant qu'elle n'est pas jugée. */
+  confiance: number | null
   auteur: string
 }
 
@@ -50,6 +59,9 @@ export interface Noeud {
   nom: string
   enonce: string
   admis: boolean
+  type: TypeNoeud | null
+  /** Décision : {question, alternatives, raison} ; choix de modélisation : {hypothese, portee, alternatives}. */
+  details: Record<string, unknown> | null
   parents: string[]
   enfants: string[]
   conversation_id: string | null
@@ -68,6 +80,102 @@ export interface Graphe {
   noeuds: Noeud[]
   aretes: Arete[]
 }
+
+/** Vue du graphe d'un espace (atlas/vue.py) : cadres imbriqués et nœuds placés en cases de grille. */
+export interface GroupeVue {
+  id: string
+  nom: string
+  parent_id: string | null
+  genre: 'sous_probleme' | 'etape' | 'piste_abandonnee' | 'libre'
+  couleur: string | null
+  replie: boolean
+  ordre: number
+  /** [colonne_min, ligne_min, colonne_max, ligne_max], bornes incluses ; null si le cadre est vide. */
+  rectangle: [number, number, number, number] | null
+}
+
+export interface PlacementVue {
+  noeud_id: string
+  groupe_id: string | null
+  colonne: number
+  ligne: number
+  largeur: number
+  hauteur: number
+  fixe: boolean
+}
+
+export interface EtiquetteVue {
+  id: string
+  nom: string
+  couleur: string | null
+}
+
+export interface Vue {
+  groupes: GroupeVue[]
+  /** Nœuds et figures placés ; une figure y figure sous l'id « fig:<id> ». */
+  placements: PlacementVue[]
+  etiquettes: EtiquetteVue[]
+  /** [noeud_id, etiquette_id]. */
+  marques: [string, string][]
+  /** Figures (graphiques et images) rattachées aux nœuds ; absent d'un serveur plus ancien. */
+  figures?: FigureVue[]
+}
+
+/** Axe d'un tracé (atlas/figures.py). */
+export interface Axe {
+  /** Markdown + LaTeX court (« $t$ »). */
+  titre: string
+  unite?: string
+  echelle: 'lin' | 'log'
+  min?: number
+  max?: number
+}
+
+/** Paramètre d'une loi : valeur, incertitude, et le nœud qui la fournit. */
+export interface ParametreLoi {
+  valeur: number
+  incertitude?: number
+  noeud?: string
+}
+
+export type Serie =
+  /** Points [x, y], [x, y, σy] ou [x, y, σy, σx]. */
+  | { genre: 'mesures'; nom: string; source?: string; points: number[][] }
+  /** Points [x, y], tracés en ligne. */
+  | { genre: 'courbe'; nom: string; source?: string; points: number[][] }
+  /** Loi échantillonnée par le serveur : points [x, y] et bande ±1σ [x, ymin, ymax]. */
+  | {
+    genre: 'loi'; nom: string; expression: string; variable: string; parametres: Record<string, ParametreLoi>
+    de?: number; a?: number; points?: number[][]; bande?: number[][]
+  }
+
+export interface Trace {
+  x: Axe
+  y: Axe
+  series: Serie[]
+}
+
+/** Une figure : tracé vectoriel et / ou image, qui illustre un nœud et a sa place dans la grille (« fig:<id> »). */
+export interface FigureVue {
+  id: string
+  noeud_id: string
+  titre: string
+  /** Markdown + LaTeX. */
+  legende: string | null
+  trace: Trace | null
+  /** Vrai : une image est servie par GET /api/figures/{id}/image. */
+  image: boolean
+  image_largeur: number | null
+  image_hauteur: number | null
+  source: string | null
+  modifie_le: string
+}
+
+/** Une opération de vue (voir organiser_vue dans atlas/orchestrateur/mcp_atlas.py). */
+export type OperationVue = { op: string } & Record<string, unknown>
+
+/** Refus du serveur (422) : le message est à montrer tel quel. */
+export class RefusVue extends Error {}
 
 export interface Conversation {
   id: string
@@ -143,10 +251,17 @@ export interface Agent {
   debut: number
   fin: number | null
   resultat: string | null
+  /** Début de l'étape en cours (secondes), null si l'agent ne travaille pas. */
+  depuis?: number | null
 }
 
 export interface EtatConversation extends Conversation {
+  /** L'orchestrateur a un tour en cours. */
   en_cours: boolean
+  /** L'orchestrateur ou un sous-agent travaille (les sous-agents continuent après le tour). */
+  actif: boolean
+  /** Messages en cours d'écriture, par chemin d'agent. */
+  brouillons: Record<string, string>
   derniere_execution: Execution | null
   /** Un appel vocal avec Atlas voix est ouvert (atlas/voix). */
   appel_en_cours: boolean
@@ -191,6 +306,28 @@ export const api = {
   // Sans espace : le graphe du projet « defaut ».
   graphe: (projetId: string | null) =>
     appel<Graphe>(`/api/graphe${projetId ? `?projet_id=${encodeURIComponent(projetId)}` : ''}`),
+  vue: (projetId: string | null) =>
+    appel<Vue>(`/api/vue${projetId ? `?projet_id=${encodeURIComponent(projetId)}` : ''}`),
+  /** Opérations de vue, tout ou rien ; RefusVue (422) avec le message du serveur si elles sont refusées. */
+  organiserVue: async (projetId: string, operations: OperationVue[]) => {
+    const entetes: Record<string, string> = { 'Content-Type': 'application/json' }
+    if (jetonEnMemoire) entetes.Authorization = `Bearer ${jetonEnMemoire}`
+    const r = await fetch(`${BASE}/api/projets/${encodeURIComponent(projetId)}/vue`, {
+      method: 'POST',
+      headers: entetes,
+      body: JSON.stringify({ operations }),
+    })
+    if (r.status === 401) throw new JetonRequis()
+    if (r.status === 422) {
+      const corps = (await r.json().catch(() => null)) as { detail?: unknown } | null
+      throw new RefusVue(typeof corps?.detail === 'string' ? corps.detail : 'Opération refusée par le serveur.')
+    }
+    if (!r.ok) throw new Error(`/vue : ${r.status} ${await r.text()}`)
+    return (await r.json()) as Record<string, unknown>
+  },
+  /** Image d'une figure (fetch : le jeton d'accès est un en-tête) ; `v` ne sert qu'à contourner le cache. */
+  imageFigure: async (projetId: string, figureId: string, v: string) =>
+    (await requete(`/api/figures/${encodeURIComponent(figureId)}/image?projet_id=${encodeURIComponent(projetId)}&v=${encodeURIComponent(v)}`)).blob(),
   projets: () => appel<ListeProjets>('/api/projets'),
   creerProjet: (nom: string) =>
     appel<Projet>('/api/projets', { method: 'POST', body: JSON.stringify({ nom }) }),
@@ -217,5 +354,10 @@ export const api = {
       body: JSON.stringify({ contenu, ...(agent ? { agent } : {}), ...reglages }),
     }),
   modeles: () => appel<Modeles>('/api/orchestrateur/modeles'),
-  arreter: (id: string) => appel<unknown>(`/api/conversations/${id}/arreter`, { method: 'POST' }),
+  /** Tout arrêter, ou seulement le sous-agent `agent`. */
+  arreter: (id: string, agent?: string | null) =>
+    appel<unknown>(`/api/conversations/${id}/arreter`, {
+      method: 'POST',
+      body: JSON.stringify(agent ? { agent } : {}),
+    }),
 }

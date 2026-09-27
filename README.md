@@ -12,7 +12,7 @@ Harness de hackathon : des agents IA transforment leurs raisonnements scientifiq
 | `atlas/orchestrateur/` | Orchestrateur de recherche (SDK Codex) et ses routes |
 | `atlas/serveur.py` | Serveur longue durée : lecture + conversations (local, puis VM) |
 | `api/index.py` | Lecture seule, déployée comme fonction Python sur Vercel |
-| `frontend/` | Interface : espace et sessions à gauche, conversation et arbre des agents au centre, graphe, agent graph ou documents à droite |
+| `frontend/` | Interface : espace et sessions à gauche, conversation et arbre des agents au centre, graphe de raisonnement (éditable à la souris, bouton « ? »), agent graph ou documents à droite |
 | `tests/` | Tests Python (sans réseau) |
 
 ## API
@@ -23,6 +23,8 @@ Harness de hackathon : des agents IA transforment leurs raisonnements scientifiq
 | `GET /api/graphe?projet_id=` | Tous les nœuds (avec statut et démonstrations) et toutes les arêtes du graphe d'un espace |
 | `GET /api/noeuds/{id}?projet_id=` | Un nœud, ses prémisses et les nœuds qui l'utilisent |
 | `GET /api/journal?projet_id=&noeud_id=&limite=&avant_id=` | Historique, le plus récent d'abord |
+| `GET /api/vue?projet_id=&format=json\|texte` | Vue de l'espace : cadres (et leur rectangle), placements en cases, étiquettes ; `texte` = ce que lit l'IA ; `figures` (graphiques et images, placés comme `fig:<id>`) |
+| `GET /api/figures/{id}/image?projet_id=` | Image d'une figure (bucket privé) |
 | `GET /api/docs` | Documentation interactive |
 
 Chaque espace de travail (projet) a son propre graphe : `projet_id` le choisit, et son absence désigne le
@@ -36,13 +38,14 @@ Servies seulement par `atlas.serveur` (pas sur Vercel) :
 | `POST /api/projets` | Crée un espace (`{"nom", "description"?}`) et son dossier dans le bunker |
 | `GET /api/projets/{id}/fichiers` | Arborescence du dossier de l'espace dans le bunker (vue Documents) |
 | `GET /api/projets/{id}/fichier?chemin=` | Contenu d'un fichier de l'espace, pour l'aperçu |
+| `POST /api/projets/{id}/vue` | Réarrange la vue (`{"operations": [...], "essai"?}`, mêmes opérations que l'outil MCP `organiser_vue`) |
 | `GET /api/conversations?projet_id=` | Conversations (d'un espace), la plus récente d'abord |
 | `POST /api/conversations` | Crée une conversation (`{"titre"?, "projet_id"?}`) |
-| `GET /api/conversations/{id}` | Conversation, exécution en cours et dernière exécution |
+| `GET /api/conversations/{id}` | Conversation, `en_cours` (tour de l'orchestrateur), `actif` (un agent travaille), `brouillons` (texte en cours d'écriture), dernière exécution |
 | `GET /api/conversations/{id}/messages?apres_id=&agent=` | Messages de l'orchestrateur, ou d'un sous-agent (`agent` = chemin Codex) |
 | `GET /api/conversations/{id}/agents` | Arbre des agents : en direct pendant un tour, sinon celui du dernier tour |
 | `POST /api/conversations/{id}/messages` | `{"contenu", "agent"?, "modele"?, "effort"?}` : lance un tour, ou s'injecte dans le tour en cours |
-| `POST /api/conversations/{id}/arreter` | Interrompt le tour en cours |
+| `POST /api/conversations/{id}/arreter` | `{"agent"?}` : arrête tout (orchestrateur et sous-agents), ou un seul sous-agent |
 | `WS /api/conversations/{id}/voix` | Appel vocal avec Atlas voix (premier message : `{"type": "auth", "jeton"}`) |
 | `/api/voix/appels/{appel}/…` | Outils du serveur MCP `voix` : confier à l'orchestrateur, son état, petites tâches |
 | `GET /api/orchestrateur/modeles` | Modèles Codex proposés à l'orchestrateur, leurs efforts, et les réglages par défaut |
@@ -137,7 +140,7 @@ donne des consignes), cerveau Codex rapide (`gpt-6-sol`, effort bas, mode fast),
   tours transcrits dans le `.tmp` de la session, pour diagnostiquer une mauvaise transcription.
 
 Prompts : `atlas/orchestrateur/prompts/voix.md` et `tache_vocale.md`. Réglages : `GRADIUM_API_KEY` et
-`ATLAS_VOIX_*` dans `.env.example`. Prototype autonome d'origine et ses bancs d'essai : `voix-live/`.
+`ATLAS_VOIX_*` dans `.env.example`. Prototype autonome d'origine et ses bancs d'essai : `voix-live/`, sur la branche `voix/agent-live`.
 
 ### Sur une VM
 

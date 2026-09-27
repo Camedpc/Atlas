@@ -1,4 +1,8 @@
-"""Un tour de l'orchestrateur (Codex) : envoie le message et enregistre au fil de l'eau ce que fait l'agent."""
+"""Un tour de l'orchestrateur (Codex) : envoie le message et enregistre au fil de l'eau ce que fait l'agent.
+
+Le processus Codex et les threads restent ouverts entre les tours (`codex_vivant`) : les notifications des
+sous-agents, pendant et après le tour, sont suivies par le gestionnaire.
+"""
 
 import asyncio
 import logging
@@ -21,9 +25,10 @@ from openai_codex.types import ReasoningEffort
 from .. import conversations, projets
 from ..modeles import Conversation
 from . import bunker, config
+from .codex_vivant import codex_vivant
 from .consignes import consigne_complete
 from .sous_agents import sous_agents
-from .suivi_agents import METHODES_SUIVIES, Etape, SuiviAgents
+from .suivi_agents import SuiviAgents
 from .traduction import traduire
 
 log = logging.getLogger(__name__)
@@ -58,8 +63,11 @@ def surcharges_thread(conversation_id: str, projet: str | None = None, projet_id
     """Réglages Codex d'Atlas, appliqués à chaque thread. `projet` est le dossier de l'espace dans le bunker,
     `projet_id` l'espace dont les serveurs MCP lisent et écrivent le graphe."""
     graphe = {"ATLAS_PROJET_ID": projet_id} if projet_id else {}
+    session = bunker.dossier_session(conversation_id, projet)
     surcharges: dict[str, Any] = {
         "web_search": "live",
+        # Titres de réflexion (« Je vérifie… »), comme dans la CLI : sans ce réglage, Codex n'en envoie aucun.
+        "model_reasoning_summary": "detailed",
         # Ne pas remonter jusqu'au dépôt Atlas (espace/ est dedans) chercher un .codex/ ou un AGENTS.md.
         "project_root_markers": [],
         "features": {"hooks": False},
@@ -70,7 +78,8 @@ def surcharges_thread(conversation_id: str, projet: str | None = None, projet_id
                 "cwd": str(config.RACINE),
                 # Codex ne transmet pas tout l'environnement aux serveurs MCP : on nomme ce qu'il leur faut.
                 "env_vars": ["SUPABASE_URL", "SUPABASE_SECRET_KEY"],
-                "env": {"ATLAS_CONVERSATION_ID": conversation_id, **graphe},
+                # Le dossier de la session : les images des figures y sont lues (chemins relatifs à lui).
+                "env": {"ATLAS_CONVERSATION_ID": conversation_id, "ATLAS_DOSSIER_SESSION": str(session), **graphe},
             },
             "verificateur": {
                 "command": sys.executable,
@@ -92,7 +101,6 @@ def surcharges_thread(conversation_id: str, projet: str | None = None, projet_id
         agents["max_concurrent_threads_per_session"] = config.MAX_SOUS_AGENTS
     surcharges["agents"] = agents
     # Hérités par les sous-agents : toute l'équipe travaille dans le bunker de la session.
-    session = bunker.dossier_session(conversation_id, projet)
     surcharges["shell_environment_policy"] = bunker.environnement_shell(session)
     if config.BUNKER:
         surcharges |= bunker.permissions_session(session)
@@ -124,44 +132,27 @@ async def tour(
     suivi: SuiviAgents | None = None,
     effort: str | None = None,
     modele: str | None = None,
-    sur_etape: Callable[[Etape], None] | None = None,
+    occupe: bool = False,
 ) -> ResultatTour:
     """Fait travailler l'orchestrateur sur `texte` jusqu'à sa réponse finale.
 
     `sur_tour` reçoit le tour dès qu'il est lancé, pour pouvoir l'interrompre ou l'orienter ; il peut lever
-    `Arret`. `suivi` est tenu à jour avec l'arbre des agents, et les items des sous-agents sont enregistrés
-    dans la conversation, rattachés à leur agent. `effort` et `modele` valent pour ce tour de l'orchestrateur
-    (par défaut ATLAS_EFFORT_ORCHESTRATEUR et le modèle du thread) ; les sous-agents gardent ceux de leur rôle.
-    `sur_etape` reçoit les étapes clés du tour (sous-agents directs lancés ou terminés), pour la voix.
+    `Arret`. `suivi` (l'arbre des agents, tenu à jour par le gestionnaire) voit l'orchestrateur repartir.
+    `effort` et `modele` valent pour ce tour de l'orchestrateur (par défaut ATLAS_EFFORT_ORCHESTRATEUR et le
+    modèle du thread) ; les sous-agents gardent ceux de leur rôle. `occupe` : des sous-agents travaillent encore
+    dans ce thread, qu'il ne faut pas recharger même si les consignes ont changé.
     """
     suivi = suivi if suivi is not None else SuiviAgents()
     projet = await asyncio.to_thread(projets.dossier_de, conversation.projet_id)
     projet_id = await asyncio.to_thread(projets.id_ou_defaut, conversation.projet_id)
     dossier = await asyncio.to_thread(bunker.preparer_session, conversation.id, projet)
 
-    async with AsyncCodex(config=config_codex()) as codex:
-        await _connecter(codex)
-
-        thread, texte = await _ouvrir_thread(codex, conversation, execution_id, texte, dossier, projet, projet_id)
-        if thread.id != conversation.session_agent:
-            await asyncio.to_thread(conversations.modifier_conversation, conversation.id, session_agent=thread.id)
-            conversation.session_agent = thread.id
-
-        suivi.demarrer_racine(thread.id, modele or config.MODELE)
-        file: asyncio.Queue = asyncio.Queue()
-        boucle = asyncio.get_running_loop()
-        retirer_espion = _espionner(codex, lambda *n: boucle.call_soon_threadsafe(file.put_nowait, n))
-        suiveur = asyncio.create_task(_suivre(codex, conversation.id, execution_id, suivi, file, sur_etape))
-        try:
-            return await _derouler(thread, texte, conversation.id, execution_id, sur_tour, effort, modele)
-        finally:
-            retirer_espion()
-            file.put_nowait(None)
-            try:
-                await asyncio.wait_for(suiveur, timeout=10)
-            except Exception:
-                log.warning("Suivi des agents interrompu", exc_info=True)
-                suiveur.cancel()
+    thread, texte = await _ouvrir_thread(conversation, execution_id, texte, dossier, projet, projet_id, occupe)
+    if thread.id != conversation.session_agent:
+        await asyncio.to_thread(conversations.modifier_conversation, conversation.id, session_agent=thread.id)
+        conversation.session_agent = thread.id
+    suivi.demarrer_racine(thread.id, modele or config.MODELE)
+    return await _derouler(thread, texte, conversation.id, execution_id, sur_tour, effort, modele, suivi)
 
 
 async def _derouler(
@@ -172,6 +163,7 @@ async def _derouler(
     sur_tour: Callable[[AsyncTurnHandle], None],
     effort: str | None,
     modele: str | None,
+    suivi: SuiviAgents,
 ) -> ResultatTour:
     handle = await thread.turn(texte, effort=ReasoningEffort(effort or config.EFFORT), model=modele or None)
     sur_tour(handle)
@@ -181,7 +173,7 @@ async def _derouler(
     async for evenement in handle.stream():
         charge = evenement.payload
         if isinstance(charge, ItemCompletedNotification):
-            for ligne in traduire(charge.item):
+            for ligne in traduire(charge.item, suivi.bilan(charge.item)):
                 await asyncio.to_thread(
                     conversations.ajouter_message,
                     conversation_id,
@@ -207,33 +199,7 @@ async def _derouler(
             return ResultatTour("erreur", message, usage)
 
 
-def _espionner(codex: AsyncCodex, rappel: Callable[[str, Any], None]) -> Callable[[], None]:
-    """Fait suivre à `rappel` les notifications utiles de tous les threads, sous-agents compris.
-
-    Appelé depuis le fil de lecture du SDK. Passe par son routeur interne (aucune API publique ne donne les
-    événements des sous-agents) : si le SDK change, le tour continue, sans arbre des agents.
-    Renvoie de quoi retirer l'espion.
-    """
-    try:
-        routeur = codex._client._sync._router
-        origine = routeur.route_notification
-    except AttributeError:
-        log.warning("Routeur du SDK Codex introuvable : pas de suivi des sous-agents")
-        return lambda: None
-
-    def espion(notification: Any) -> None:
-        try:
-            if notification.method in METHODES_SUIVIES:
-                rappel(notification.method, notification.payload)
-        except Exception:
-            log.exception("Notification %s non suivie", getattr(notification, "method", "?"))
-        origine(notification)
-
-    routeur.route_notification = espion
-    return lambda: setattr(routeur, "route_notification", origine)
-
-
-def _en_dict(charge: Any) -> dict[str, Any]:
+def en_dict(charge: Any) -> dict[str, Any]:
     if isinstance(charge, dict):
         return charge
     if isinstance(params := getattr(charge, "params", None), dict):
@@ -241,49 +207,11 @@ def _en_dict(charge: Any) -> dict[str, Any]:
     return charge.model_dump(mode="json", by_alias=True, exclude_none=True)
 
 
-async def _suivre(
-    codex: AsyncCodex,
-    conversation_id: str,
-    execution_id: str,
-    suivi: SuiviAgents,
-    file: asyncio.Queue,
-    sur_etape: Callable[[Etape], None] | None = None,
-) -> None:
-    """Tient `suivi` à jour et enregistre les items des sous-agents, jusqu'à recevoir None."""
-    enrichissements: set[asyncio.Task] = set()
-    while (notification := await file.get()) is not None:
-        methode, charge = notification
-        try:
-            evenements = suivi.recevoir(methode, _en_dict(charge))
-            if sur_etape is not None:
-                for etape in evenements.etapes:
-                    sur_etape(etape)
-            for thread_id in evenements.nouveaux:
-                tache = asyncio.create_task(_enrichir(codex, suivi, thread_id))
-                enrichissements.add(tache)
-                tache.add_done_callback(enrichissements.discard)
-            for chemin, item in evenements.a_enregistrer:
-                for ligne in traduire(item):
-                    await asyncio.to_thread(
-                        conversations.ajouter_message,
-                        conversation_id,
-                        ligne.role,
-                        ligne.contenu,
-                        execution_id=execution_id,
-                        donnees=ligne.donnees,
-                        agent=chemin,
-                    )
-        except Exception:
-            log.exception("Suivi des agents : notification %s ignorée", methode)
-    for tache in enrichissements:
-        tache.cancel()
-
-
-async def _enrichir(codex: AsyncCodex, suivi: SuiviAgents, thread_id: str) -> None:
+async def enrichir(suivi: SuiviAgents, thread_id: str) -> None:
     """Rôle, surnom et modèle d'un sous-agent, lus dans son thread (réessaie le temps qu'il soit écrit)."""
     for essai in range(3):
         try:
-            thread = (await codex._client.thread_read(thread_id, False)).thread
+            thread = await codex_vivant.lire_thread(thread_id)
         except Exception:
             await asyncio.sleep(1 + essai)
             continue
@@ -291,7 +219,7 @@ async def _enrichir(codex: AsyncCodex, suivi: SuiviAgents, thread_id: str) -> No
         return
 
 
-# Modèles proposés par Codex, relus au plus toutes les DUREE_CACHE_MODELES secondes (lancer Codex coûte ~1 s).
+# Modèles proposés par Codex, relus au plus toutes les DUREE_CACHE_MODELES secondes.
 DUREE_CACHE_MODELES = 600
 _cache_modeles: tuple[float, list[dict[str, Any]]] | None = None
 
@@ -301,9 +229,7 @@ async def modeles_disponibles() -> list[dict[str, Any]]:
     global _cache_modeles
     if _cache_modeles is not None and time.monotonic() - _cache_modeles[0] < DUREE_CACHE_MODELES:
         return _cache_modeles[1]
-    async with AsyncCodex(config=config_codex()) as codex:
-        await _connecter(codex)
-        reponse = await codex.models()
+    reponse = await (await codex_vivant.client()).models()
     modeles = [
         {
             "id": m.model,
@@ -339,23 +265,27 @@ async def _connecter(codex: AsyncCodex) -> None:
 
 
 async def _ouvrir_thread(
-    codex: AsyncCodex,
     conversation: Conversation,
     execution_id: str,
     texte: str,
     dossier: Path,
     projet: str,
     projet_id: str,
+    occupe: bool,
 ) -> tuple[AsyncThread, str]:
-    """Reprend le thread de la conversation, ou en ouvre un nouveau (avec l'historique si la reprise échoue)."""
+    """Thread de la conversation : déjà chargé, repris, ou nouveau (avec l'historique si la reprise échoue)."""
     parametres = parametres_thread(dossier, conversation.id, projet, projet_id)
-    if conversation.session_agent:
-        try:
-            return await codex.thread_resume(conversation.session_agent, **parametres), texte
-        except Exception:
-            log.warning("Thread %s introuvable, reprise par l'historique", conversation.session_agent, exc_info=True)
-            texte = await asyncio.to_thread(_avec_historique, conversation.id, execution_id, texte)
-    return await codex.thread_start(**parametres), texte
+    try:
+        return await codex_vivant.thread(conversation.id, conversation.session_agent, parametres, occupe), texte
+    except ConnexionManquante:
+        raise
+    except Exception:
+        if not conversation.session_agent:
+            raise
+        log.warning("Thread %s introuvable, reprise par l'historique", conversation.session_agent, exc_info=True)
+        codex_vivant.oublier(conversation.id)
+        texte = await asyncio.to_thread(_avec_historique, conversation.id, execution_id, texte)
+    return await codex_vivant.thread(conversation.id, None, parametres, occupe), texte
 
 
 def _avec_historique(conversation_id: str, execution_id: str, texte: str) -> str:

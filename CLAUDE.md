@@ -13,7 +13,7 @@ Atlas est un harnais de recherche scientifique. Dans un seul thread Codex par co
 des missions à des directeurs de labo (qui convoquent `litterature` et `experimentateur`, tiennent `journal.md` et
 rédigent `rapport.md` dans `directeurs/NN-sujet/`), fait transformer chaque rapport en graphe par le `graphiste`
 (nœud = assertion, démonstration = liaison depuis ses prémisses `justifie_par`), puis appelle l'outil `verifier`
-qui note chaque liaison. L'UI : conversations à gauche, graphe sigma.js à droite. Rôles dans `sous_agents.py`,
+qui note chaque liaison. L'UI : conversations à gauche, graphe de raisonnement (vision R41, éditable façon Blueprint d'UE5) à droite. Rôles dans `sous_agents.py`,
 prompts dans `atlas/orchestrateur/prompts/*.md` : c'est Camille qui les fait évoluer (prompt engineering).
 
 ## Modèle de graphe
@@ -26,6 +26,18 @@ prompts dans `atlas/orchestrateur/prompts/*.md` : c'est Camille qui les fait év
 - `journal` est append-only (triggers) : on n'y fait que des `insert`.
 - Espaces de travail : table `projets` (nom, description, `dossier` dans le bunker) ; `conversations.projet_id`
   (null = le projet « defaut », dossier historique du bunker). Le front arrive sur la page du dernier espace ouvert.
+- Vue du graphe (2D uniquement, une par espace, façon Blueprint) : `groupes` (cadres imbricables), `placements`
+  (case de grille colonne/ligne de chaque nœud, un seul cadre par nœud, `fixe` = placé à la main), `etiquettes`.
+  Les rectangles des cadres ne sont pas stockés (ils englobent leurs nœuds). Règles et placement automatique
+  (à droite des prémisses, sans chevauchement) dans `atlas/vue.py` (pur) ; écriture par `ecriture.organiser_vue`,
+  tout ou rien, journalisée (action `vue`). Le sens reste dans `noeuds.type`, `noeuds.details` et
+  `demonstrations.roles` (rôle des prémisses non principales ; `justifie_par` garde la liste complète).
+- Figures (`figures`, module pur `atlas/figures.py`) : un graphique rattaché à un nœud, vectoriel (`trace` : axes,
+  séries `mesures` / `courbe` / `loi` ; les lois sont évaluées sans `eval` et échantillonnées côté serveur avec leur
+  bande d'incertitude) et/ou une image (bucket privé Supabase Storage « figures », servie par
+  `/api/figures/{id}/image`, renvoyée en bloc image par l'outil MCP `lire_figure` : Codex la montre au modèle).
+  Sa case est dans sa propre ligne (`colonne`, `ligne`…) ; dans `vue.py` elle est un pseudo-nœud `fig:<id>` dont la
+  prémisse est son nœud, et elle remonte au cadre parent si le sien est trop serré (`placer_figure`).
 - `noeuds.parents` / `noeuds.enfants` (parents = prémisses) sont maintenus par trigger depuis `demonstrations` :
   ne jamais les écrire. `noeuds.conversation_id` dit seulement qui a créé le nœud.
 - Un graphe par espace : `noeuds`, `demonstrations` et `journal` portent `projet_id` (non nul, « defaut » pour
@@ -80,8 +92,9 @@ déclaré dans `surcharges_thread()` avec `features.hooks = false`. Codex ne tra
 serveurs MCP : toute variable nécessaire va dans `env_vars` (noms) ou `env` (ex. `ATLAS_CONVERSATION_ID`). Le paquet `mcp` est en 2.x : `MCPServer`, plus `FastMCP`.
 Lancer le serveur avec `--reload-dir atlas --reload-dir api` en dev (sinon les fichiers écrits dans `espace/` le
 redémarrent). Sous Windows, `--reload` peut rester bloqué après une rafale de modifications en laissant l'ancien
-processus répondre : si un changement Python semble ignoré, tuer le port 8000 et relancer. Un vrai tour d'agent consomme le quota Codex : les tests remplacent `agent.tour` et Supabase.
+processus répondre (un ancien worker orphelin peut même garder le port et servir l'ancien code) : si un changement Python semble ignoré, tuer tous les `python.exe` du port et relancer. Un vrai tour d'agent consomme le quota Codex : les tests remplacent `agent.tour` et Supabase.
 
+Processus Codex vivant (`codex_vivant.py`) : un seul app-server pour tout le serveur, gardé ouvert entre les tours, threads gardés chargés (`ATLAS_DUREE_THREAD_CHAUD`) — comme la CLI. Sans lui, les sous-agents mouraient à la fin du tour de l'orchestrateur (réponse jamais affichée) et chaque message coûtait ~4 s de démarrage. Le gestionnaire écoute en permanence toutes les notifications : un sous-agent qui continue après le tour (non attendu, relancé par `followup_task`) est suivi et enregistré ; `actif` (orchestrateur ou sous-agent au travail) pilote le suivi du front, `brouillons` le texte en cours d'écriture. Arrêter : tout (orchestrateur + `turn/interrupt` de chaque sous-agent, que Codex accepte en v2) ou un seul sous-agent (l'orchestrateur est prévenu par `prompts/interruption.md`, sinon il l'attend jusqu'au délai de `wait_agent`). Un message pendant le démarrage d'un tour attend qu'il soit prêt, juste après sa fin il lance le suivant (plus de 409).
 Sous-agents (multi-agents natif de Codex, testé sur 3 niveaux) : chaque rôle de `sous_agents.ROLES` devient
 `[agents.<nom>]` avec une couche de config générée dans `CODEX_HOME/roles/` (modèle, effort, prompt) ; modèles
 réglables par `ATLAS_MODELE_<ROLE>` / `ATLAS_EFFORT_<ROLE>`. Les rôles sont visibles de tous les agents : la
@@ -136,8 +149,21 @@ L'ancien backend agents (chercheur, vérificateur) reste lisible via `git show 1
   `conversations.ts` (colonne centrale), `sessions.ts` (barre latérale et sélecteur d'espace), `documents.ts`
   (arbre du bunker et aperçus, pdf.js), `agents.ts` (état partagé des agents et
   sélection = destinataire de la saisie), `arbre.ts` (arbre façon Claude Code), `agentgraph.ts` (Blueprint porté de
-  `visu/vue-sous-agents`), `graphe.ts` (sigma : réglages en tête, couleurs opaques uniquement), `rendu.ts`
-  (Markdown + LaTeX). Thème clair uniquement.
+  `visu/vue-sous-agents`), `rendu.ts` (Markdown + LaTeX). Thème clair uniquement.
+- Graphe de raisonnement (onglet de droite), porté du prototype R41 (worktree `Atlas-raisonnement`,
+  `prototypes/graphe-3d/raisonnement/r41-synthese-b/`) : positions = cases de `/api/vue` (× `GRILLE` de
+  `graphe-modele.ts`), jamais de mise en page côté front (les nœuds sans placement sont rangés provisoirement sous le
+  reste). `graphe-modele.ts` (pur : numérotation « Lemme 7 » / « Hypothèse (ii) » dans l'ordre colonne puis ligne,
+  cadres, cadres réduits en nœuds-fonctions, liaisons orthogonales dans les couloirs entre cases ; seules les prémisses
+  principales et auxiliaires sont des flèches, technique et contexte = renvois « cf. »), `graphe-dessin.ts` (canevas,
+  niveaux de détail z < 0,225 carrés / < 0,6 titres / contenu, culling), `graphe-contenu.ts` (HTML KaTeX des seuls
+  blocs visibles : cache, pool recyclé, budget par image, mesures groupées), `graphe.ts` (caméra aux paliers de zoom
+  d'UE5, commandes souris / clavier d'UE5 listées dans `AIDE_COMMANDES` et l'aide « ? », opérations
+  `POST /api/projets/{id}/vue` tout ou rien, annuler / rétablir par différence d'états dans `graphe-annuler.ts`),
+  `formules.ts` (extraction des formules de R41, plus le LaTeX explicite `$…$`). Texte en CMU Serif (jsdelivr,
+  `graphe.css`) : les fontes KaTeX n'ont pas les accents ; ligatures coupées (« ff » sort en carré). En dev,
+  `?synthetique=1000` charge un jeu synthétique en lecture seule et `window.atlasGraphe` expose la vue. Un onglet
+  masqué gèle requestAnimationFrame : pour tester par script, appeler `atlasGraphe.dessinerMaintenant()`.
 - Git : une branche par sujet (ex. `visu/graphe-3d`), merge dans `main`. Commits = phrase française courte,
   sans préfixe conventional-commit.
 

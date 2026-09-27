@@ -69,3 +69,78 @@ def test_reprise_depuis_l_instantane_du_tour_precedent():
 
 def test_mission_depuis_chemin():
     assert mission_depuis_chemin("/root/hydrures_sous-pression") == "hydrures sous pression"
+
+
+def test_brouillon_et_tour_en_cours():
+    suivi = _suivi()
+    _lancement(suivi, RACINE_ID, "/root/hydrures", DIR_ID)
+    suivi.recevoir("turn/started", {"threadId": DIR_ID, "turn": {"id": "u1"}})
+    assert suivi.agents["/root/hydrures"].tour == "u1"
+    for morceau in ("Trois ", "sources"):
+        suivi.recevoir("item/agentMessage/delta", {"threadId": DIR_ID, "itemId": "m", "delta": morceau})
+    assert suivi.brouillons == {"/root/hydrures": "Trois sources"}
+    message = {"type": "agentMessage", "text": "Trois sources", "id": "m"}
+    suivi.recevoir("item/completed", {"threadId": DIR_ID, "item": message})
+    assert suivi.brouillons == {}
+    suivi.recevoir("turn/completed", {"threadId": DIR_ID, "turn": {"status": "completed"}})
+    assert suivi.agents["/root/hydrures"].tour is None
+
+
+def test_fin_d_un_sous_agent_hors_tour_enregistree_dans_le_fil_de_l_orchestrateur():
+    suivi = _suivi()
+    _lancement(suivi, RACINE_ID, "/root/hydrures", DIR_ID)
+    fin = {"type": "subAgentActivity", "agentPath": "/root/hydrures", "agentThreadId": DIR_ID, "kind": "completed"}
+    # Pendant le tour, c'est le flux du tour qui l'enregistre.
+    assert suivi.recevoir("item/completed", {"threadId": RACINE_ID, "item": fin}).a_enregistrer == []
+    suivi.recevoir("turn/completed", {"threadId": RACINE_ID, "turn": {"status": "completed"}})
+    assert suivi.recevoir("item/completed", {"threadId": RACINE_ID, "item": fin}).a_enregistrer == [(RACINE, fin)]
+    assert [a.chemin for a in suivi.au_travail(sous_agents_seuls=True)] == ["/root/hydrures"]
+
+
+def test_un_arbre_relu_d_un_ancien_processus_ne_travaille_plus():
+    suivi = _suivi()
+    _lancement(suivi, RACINE_ID, "/root/hydrures", DIR_ID)
+    repris = SuiviAgents.depuis(suivi.instantane())
+    assert repris.agents["/root/hydrures"].etat == "interrompu"
+    assert repris.au_travail() == []
+
+
+def test_un_sous_agent_relance_repart_de_zero_et_son_bilan_est_fige():
+    suivi = _suivi()
+    _lancement(suivi, RACINE_ID, "/root/hydrures", DIR_ID)
+    dir_ = suivi.agents["/root/hydrures"]
+    suivi.recevoir("turn/started", {"threadId": DIR_ID, "turn": {"id": "u1"}})
+    suivi.recevoir("item/started", {"threadId": DIR_ID, "item": {"type": "webSearch", "query": "LaH10"}})
+    suivi.recevoir("thread/tokenUsage/updated", {"threadId": DIR_ID, "tokenUsage": {"total": {"totalTokens": 1000}}})
+    suivi.recevoir("turn/completed", {"threadId": DIR_ID, "turn": {"status": "completed"}})
+    fin = {"type": "subAgentActivity", "agentPath": "/root/hydrures", "agentThreadId": DIR_ID, "kind": "completed"}
+    premier = suivi.bilan(fin)
+    assert (premier["nb_outils"], premier["tokens"]) == (1, 1000)
+
+    suivi.recevoir("turn/started", {"threadId": DIR_ID, "turn": {"id": "u2"}})
+    suivi.recevoir("thread/tokenUsage/updated", {"threadId": DIR_ID, "tokenUsage": {"total": {"totalTokens": 1300}}})
+    assert (dir_.nb_outils, dir_.tokens, dir_.fin) == (0, 300, None)
+    assert suivi.bilan({"type": "subAgentActivity", "agentPath": "/root/hydrures", "kind": "started"}) is None
+
+
+def test_titre_de_reflexion_en_direct_et_etape_datee():
+    suivi = _suivi()
+    _lancement(suivi, RACINE_ID, "/root/hydrures", DIR_ID)
+    dir_ = suivi.agents["/root/hydrures"]
+    suivi.recevoir("turn/started", {"threadId": DIR_ID, "turn": {"id": "u1"}})
+    debut = dir_.depuis
+    for morceau in ("**Je rédige ", "le rapport**"):
+        suivi.recevoir(
+            "item/reasoning/summaryTextDelta",
+            {"threadId": DIR_ID, "itemId": "r", "summaryIndex": 0, "delta": morceau},
+        )
+    assert dir_.activite == "Je rédige le rapport"
+    suivi.recevoir("item/reasoning/summaryTextDelta", {"threadId": DIR_ID, "itemId": "r", "summaryIndex": 1,
+                                                        "delta": "**Je vérifie les unités**"})
+    assert dir_.activite == "Je vérifie les unités"
+    suivi.recevoir("item/started", {"threadId": DIR_ID, "item": {"type": "fileChange", "changes": []}})
+    assert dir_.depuis > debut
+    reflexion = {"type": "reasoning", "summary": ["**Je rédige le rapport**"], "id": "r"}
+    assert suivi.recevoir("item/completed", {"threadId": DIR_ID, "item": reflexion}).a_enregistrer == [
+        ("/root/hydrures", reflexion)
+    ]
