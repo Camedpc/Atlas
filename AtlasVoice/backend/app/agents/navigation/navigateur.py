@@ -98,7 +98,7 @@ def _resume_conversation(c: dict[str, Any]) -> dict[str, Any]:
 def _ecran(etat: EtatAffichage) -> dict[str, Any]:
     """Tout l'écran : l'état d'affichage complet (P4), sans les identifiants techniques."""
     d = json.loads(etat.model_dump_json(exclude_unset=True))
-    for cle in ("version", "ecran", "utilisateur_id", "version_donnees"):
+    for cle in ("version", "ecran", "utilisateur_id", "version_donnees", "projet"):
         d.pop(cle, None)
     return d
 
@@ -196,6 +196,9 @@ du graphe, en 3d.
 programme y met l'état (autant de restaurer que de pas en arrière, dans la limite de pile_profondeur).
 - panneau {ouvert} : panneau des conversations ; theme {clair | sombre}.
 Enchaîne autant de commandes qu'il faut ; après un filtre, cadrer "tout" montre ce qui reste.
+Selon l'application, l'écran peut être une vue 2D seulement, sans niveaux de détail : il refuse alors (etat_invalide, \
+« non pris en charge ») mode 3d, vue autre que face, orbiter, strategie, parametres_lecture, liens_complets ou le \
+thème sombre. Fais sans : cadrer, zoomer, selectionner, surligner, filtres et fiche suffisent presque toujours.
 
 Utilise uniquement les id de la liste ; n'en invente jamais. Si ce que l'utilisateur désigne n'existe pas, \
 dis-le plutôt que d'afficher autre chose. Dans tes messages, cite les noms des nœuds, jamais leurs id. Les \
@@ -394,7 +397,7 @@ class AgentNavigateur:
         # Par écran : pile des états (« revenir ») et historique des demandes (contexte du modèle).
         self.piles: dict[str, list[EtatAffichage]] = {}
         self.historiques: dict[str, list[Tour]] = {}
-        self._graphe: tuple[str, list[dict[str, Any]]] | None = None
+        self._graphe: tuple[tuple[str | None, str], list[dict[str, Any]]] | None = None
         # Un seul passage à l'écran à la fois : pile, historique et ordre des commandes restent cohérents.
         self._ecran_verrou = asyncio.Lock()
 
@@ -411,22 +414,26 @@ class AgentNavigateur:
         r.raise_for_status()
         return EtatAffichage.model_validate_json(r.content)
 
-    async def _charger_graphe(self, version: str) -> list[dict[str, Any]]:
-        if self._graphe is None or self._graphe[0] != version or not version:
-            r = await self.atlas.get("/graphe")
+    async def _charger_graphe(self, version: str, projet: str | None = None) -> list[dict[str, Any]]:
+        """Graphe affiché : celui de l'espace de l'écran (`projet`, P4) quand l'application en a plusieurs."""
+        cle = (projet, version)
+        if self._graphe is None or self._graphe[0] != cle or not version:
+            r = await self.atlas.get("/graphe", params={"projet_id": projet} if projet else None)
             r.raise_for_status()
-            self._graphe = (version, r.json()["noeuds"])
+            self._graphe = (cle, r.json()["noeuds"])
         return self._graphe[1]
 
-    async def _charger_conversations(self) -> list[dict[str, Any]]:
+    async def _charger_conversations(self, projet: str | None = None) -> list[dict[str, Any]]:
         """Toujours fournies au modèle, qui décide s'il en a besoin ; indisponibles : liste vide."""
         try:
             r = await self.atlas.get("/conversations")
             r.raise_for_status()
-            return r.json()
+            conversations = r.json()
         except httpx.HTTPError as e:
             log.warning("Conversations indisponibles (%s)", e)
             return []
+        # Un graphe par espace : seules les conversations de l'espace affiché ont des nœuds à l'écran.
+        return [c for c in conversations if not projet or c.get("projet_id") in (None, projet)]
 
     # ── une tâche du registre, de bout en bout ────────────────────
 
@@ -487,10 +494,10 @@ class AgentNavigateur:
             return Issue(False, "introuvable", "Aucun écran du graphe n'est ouvert.")
         pile = self.piles.setdefault(etat.ecran, [])
         try:
-            noeuds = await self._charger_graphe(etat.version_donnees)
+            noeuds = await self._charger_graphe(etat.version_donnees, etat.projet)
         except httpx.HTTPError as e:
             return Issue(False, "introuvable", f"Graphe indisponible : {e}")
-        conversations = await self._charger_conversations()
+        conversations = await self._charger_conversations(etat.projet)
 
         try:
             lot_cmd, restaures, explication = await self.planifier(

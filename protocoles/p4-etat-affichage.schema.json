@@ -40,6 +40,10 @@
     "conversation_affichee": {
       "description": "Conversation ouverte dans le panneau gauche du front.",
       "oneOf": [{ "$ref": "commun.schema.json#/$defs/Uuid" }, { "type": "null" }]
+    },
+    "projet": {
+      "description": "Facultatif : espace de travail dont le graphe est affiché (un graphe par espace). Absent : graphe unique ou espace par défaut.",
+      "oneOf": [{ "$ref": "commun.schema.json#/$defs/Uuid" }, { "type": "null" }]
     }
   },
   "required": [

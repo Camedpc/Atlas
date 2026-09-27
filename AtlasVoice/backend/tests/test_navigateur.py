@@ -136,19 +136,23 @@ class RegistreFactice:
 class Serveurs:
     """Relais (écran) et API Atlas simulés."""
 
-    def __init__(self, avec_ecran=True, ecran_ok=True):
+    def __init__(self, avec_ecran=True, ecran_ok=True, conversations=None, **ecran):
         self.avec_ecran, self.ecran_ok = avec_ecran, ecran_ok
+        self.ecran = ecran
+        self.conversations = conversations if conversations is not None else [{"id": CONV, "titre": "Énergie"}]
         self.lots: list[dict] = []
+        self.lectures_graphe: list[dict] = []
 
     def __call__(self, requete: httpx.Request) -> httpx.Response:
         chemin = requete.url.path
         if chemin == "/api/affichage/utilisateurs/u1/etat":
-            return httpx.Response(200, content=etat().model_dump_json(exclude_unset=True)) if self.avec_ecran \
-                else httpx.Response(404)
+            return httpx.Response(200, content=etat(**self.ecran).model_dump_json(exclude_unset=True)) \
+                if self.avec_ecran else httpx.Response(404)
         if chemin == "/api/graphe":
+            self.lectures_graphe.append(dict(requete.url.params))
             return httpx.Response(200, json={"noeuds": NOEUDS, "aretes": []})
         if chemin == "/api/conversations":
-            return httpx.Response(200, json=[{"id": CONV, "titre": "Énergie"}])
+            return httpx.Response(200, json=self.conversations)
         if chemin == "/api/affichage/commandes":
             corps = json.loads(requete.content)
             self.lots.append(corps)
@@ -316,3 +320,23 @@ async def test_lecture_de_l_appel_d_outil_en_flux(monkeypatch):
 
     monkeypatch.setattr(navigateur, "_flux", flux)
     assert await navigateur.appel_modele(ModeleLLM("openai", "m"))([]) == ("commander", {"commandes": []})
+
+
+async def test_graphe_et_conversations_de_l_espace_affiche():
+    """Un graphe par espace (application Atlas) : l'écran dit lequel il affiche (P4 `projet`)."""
+    projet, autre = "67900866-5415-4cf4-9262-4cd1cd16e06c", "eec321a2-2704-489f-8cc8-1909847cd259"
+    conversations = [{"id": CONV, "titre": "Énergie", "projet_id": projet},
+                     {"id": "11111111-2222-4333-8444-555555555555", "titre": "Ailleurs", "projet_id": autre}]
+    s, appeler = Serveurs(conversations=conversations, projet=projet), modele(ISOLER)
+    a = agent(s, appeler)
+    await a.mener(tache("montre la preuve du théorème"))
+    assert s.lectures_graphe == [{"projet_id": projet}]
+    entree = json.loads(appeler.recus[0][-1]["content"])
+    assert [c["id"] for c in entree["conversations"]] == [CONV] and "projet" not in entree["ecran"]
+    await a.fermer()
+
+    s = Serveurs()  # écran sans `projet` (graphe unique) : lecture sans paramètre
+    a = agent(s, modele(ISOLER))
+    await a.mener(tache("montre la preuve du théorème"))
+    assert s.lectures_graphe == [{}]
+    await a.fermer()

@@ -175,7 +175,10 @@ class EtatAffichage(Strict):
     visibles: Annotated[list[Visible], Field(max_length=50)]
     survol: RefNoeud | None
     conversation_affichee: Uuid | None
+    # Espace de travail dont le graphe est affiché (un graphe par espace) ; absent : graphe unique.
+    projet: Uuid | None = None
 
+    _nullables = frozenset({"projet"})
     _uniques = ("surlignes",)
 
 

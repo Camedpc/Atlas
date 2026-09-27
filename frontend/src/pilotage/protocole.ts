@@ -132,6 +132,8 @@ export interface EtatAffichage {
   visibles: { noeud: IdNoeud; libelle: string; x: number; y: number }[]
   survol: RefNoeud | null
   conversation_affichee: string | null
+  /** Espace de travail dont le graphe est affiché (un graphe par espace) ; absent : graphe unique. */
+  projet?: string | null
 }
 
 export type EtatResume = Pick<EtatAffichage, 'ecran' | 'strategie' | 'selection' | 'filtres' | 'conversation_affichee'> & {

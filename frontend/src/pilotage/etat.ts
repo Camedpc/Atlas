@@ -185,6 +185,9 @@ export function appliquer(etat: EtatAffichage, c: CommandeBas, index: IndexDonne
         ecran: e.ecran, utilisateur_id: e.utilisateur_id, version_donnees: e.version_donnees,
         visibles: e.visibles, survol: e.survol, conversation_affichee: e.conversation_affichee,
       }
+      // L'espace affiché non plus : « revenir » ne change pas d'espace.
+      delete restaure.projet
+      if (e.projet !== undefined) restaure.projet = e.projet
       return { etat: restaure, effet: { genre: 'camera', camera: structuredClone(r.camera) } }
     }
     case 'recharger_donnees':
