@@ -21,7 +21,7 @@ LONGUEUR_REPONSE_ANNONCEE = 3000
 
 _NOMS = {"utilisateur": "Camille", "assistant": "Orchestrateur"}
 _NOMS_VOIX = {"utilisateur": "Camille (à l'oral)", "assistant": "Atlas voix"}
-_ROLES = {"directeur_de_labo": "le directeur de labo", "graphiste": "le graphiste"}
+_ROLES = {"directeur_de_labo": "le directeur de labo", "graphiste": "le graphiste", "scribe": "le scribe"}
 
 
 def _court(texte: str, longueur: int) -> str:

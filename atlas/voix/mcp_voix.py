@@ -34,9 +34,9 @@ def _appel(chemin: str, corps: dict | None = None) -> str:
 @serveur.tool()
 def confier_orchestrateur(consigne: str) -> str:
     """Confie une recherche ou une analyse à l'orchestrateur d'Atlas (modèle puissant, directeurs de labo,
-    graphiste, vérificateur). Lance un nouveau tour s'il est libre, sinon injecte la consigne dans son tour en
-    cours. `consigne` : complète et autonome, dans les mots de Camille. Rend la main tout de suite ; ses étapes et
-    sa réponse arrivent ensuite dans des messages [Orchestrateur]."""
+    graphiste, vérificateur, scribe qui rédige l'article PDF). Lance un nouveau tour s'il est libre, sinon injecte
+    la consigne dans son tour en cours. `consigne` : complète et autonome, dans les mots de Camille. Rend la main
+    tout de suite ; ses étapes et sa réponse arrivent ensuite dans des messages [Orchestrateur]."""
     return _appel("/orchestrateur", {"consigne": consigne})
 
 
