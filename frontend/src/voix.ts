@@ -5,7 +5,7 @@
 import { jetonAcces, urlAppel } from './api'
 import { analyseur, type SourcesPastille } from './pastille'
 import { Generations } from './generations'
-import { DUREE_SON_S, jouerSon } from './sons'
+import { DUREE_SON_S, jouerSon, REVEIL_S } from './sons'
 
 export const VOIX_GRADIUM: [string, string][] = [
   ['iEu63s1rhn_kegTr', 'Gaspard'],
@@ -104,7 +104,6 @@ export class Appel {
   private boucle: BoucleWebRTC | null = null
   /** Sortie de la voix d'Atlas (boucle WebRTC, ou sortie directe en repli) : les sons de l'appel y passent aussi. */
   private sortieSons: AudioNode | null = null
-  private sonOuvertureJoue = false
   /** webrtc, sauf si la boucle n'a pas pu s'établir (repli : sortie directe du moteur audio). */
   private modeLecture: 'webrtc' | 'webaudio' = 'webrtc'
   private etatServeur: EtatAppel = 'demarrage'
@@ -115,6 +114,7 @@ export class Appel {
   private messages = new Map<string, Suivi>()
   private image = 0
   muet = false
+  private demarrage = false
   private readonly rappels: RappelsAppel
 
   constructor(rappels: RappelsAppel) {
@@ -126,9 +126,21 @@ export class Appel {
   }
 
   async demarrer(conversationId: string) {
-    if (this.ws) return
+    // Garde : entre le clic et l'ouverture du WebSocket (son, micro), un second clic lancerait un second appel.
+    if (this.ws || this.demarrage) return
+    this.demarrage = true
+    try {
+      await this.lancer(conversationId)
+    } finally {
+      this.demarrage = false
+    }
+  }
+
+  private async lancer(conversationId: string) {
     this.messages.clear()
-    this.sonOuvertureJoue = false
+    // Son d'ouverture au clic ; le micro n'ouvre qu'après, sinon Windows baisse ce son pendant la communication.
+    jouerSon('ouverture')
+    await new Promise((ok) => window.setTimeout(ok, (REVEIL_S + 0.35) * 1000))
     this.generations.nouvelAppel()
     this.enLecture = false
     this.position = { joues: 0, t: 0 }
@@ -443,11 +455,6 @@ export class Appel {
   private afficherEtat(etat?: EtatAppel) {
     if (etat) this.etatServeur = etat
     // Première écoute : Atlas voix est prêt, on peut parler.
-    // Par la sortie de la voix d'Atlas : un son à part serait baissé par Windows pendant la communication.
-    if (etat === 'ecoute' && !this.sonOuvertureJoue && this.contexte) {
-      this.sonOuvertureJoue = true
-      jouerSon('ouverture', undefined, this.contexte, this.sortieSons ?? undefined)
-    }
     const affiche = this.enLecture && this.etatServeur !== 'demarrage' ? 'parle' : this.etatServeur
     this.rappels.surEtatVoix(affiche)
   }

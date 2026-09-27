@@ -1,9 +1,10 @@
 // Petits sons de l'appel vocal : ouverture (Atlas voix est prêt à écouter) et fermeture (raccroché). Synthétisés
 // avec Web Audio, sans fichier. Plusieurs familles à essayer : le choix se fait dans le menu du micro et reste
 // dans ce navigateur.
-// Pendant l'appel, ils passent par le chemin de la voix d'Atlas (contexte de l'appel, sortie WebRTC) : Windows
-// baisse de 80 % par défaut les autres sons pendant une communication, et un contexte audio neuf perd le début
-// de sa sortie ; seul l'aperçu du menu, hors appel, a son propre contexte.
+// L'ouverture se joue au clic sur le micro, avant qu'il s'ouvre (Windows baisse de 80 % par défaut les autres
+// sons pendant une communication), dans son propre contexte. La fermeture passe par le chemin de la voix d'Atlas
+// (contexte de l'appel, sortie WebRTC), encore ouvert. Un son joué dans un contexte neuf est précédé d'un
+// souffle inaudible qui réveille la sortie : un casque USB-C en veille avale sinon le début du premier son.
 
 export type Sens = 'ouverture' | 'fermeture'
 
@@ -116,20 +117,39 @@ const RECETTES: Record<string, (ctx: AudioContext, sortie: AudioNode, t: number,
 /** Durée maximale d'un son (s) : l'appel attend au moins ça avant de fermer sa sortie audio. */
 export const DUREE_SON_S = 1.0
 
-/** Joue le son choisi (ou `id`). Sans contexte fourni, un contexte audio éphémère est créé puis fermé. */
+/** Souffle inaudible (−80 dB) qui réveille la sortie audio avant le son. */
+export const REVEIL_S = 0.35
+
+function souffleInaudible(ctx: AudioContext, sortie: AudioNode, t: number, duree: number) {
+  const tampon = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * duree), ctx.sampleRate)
+  const d = tampon.getChannelData(0)
+  for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * 1e-4
+  const s = ctx.createBufferSource()
+  s.buffer = tampon
+  s.connect(sortie)
+  s.start(t)
+}
+
+/** Joue le son choisi (ou `id`). Sans contexte fourni, un contexte audio éphémère est créé (sortie réveillée
+ * d'abord), puis fermé. */
 export function jouerSon(sens: Sens, id = sonChoisi(), ctx?: AudioContext, sortie?: AudioNode) {
   const recette = RECETTES[id]
   if (!recette) return
   const propre = !ctx
   const c = ctx ?? new AudioContext()
+  const vers = sortie ?? c.destination
   void c.resume()
-  // Un peu d'avance : un contexte qui vient d'ouvrir sa sortie en perd le tout début.
-  recette(c, sortie ?? c.destination, c.currentTime + (propre ? 0.12 : 0.03), sens)
-  if (propre) window.setTimeout(() => void c.close(), 1500)
+  let t = c.currentTime + 0.08 // de la marge : l'horloge avance pendant la programmation des notes
+  if (propre) {
+    souffleInaudible(c, vers, c.currentTime, REVEIL_S + 1)
+    t = c.currentTime + REVEIL_S
+  }
+  recette(c, vers, t, sens)
+  if (propre) window.setTimeout(() => void c.close(), (REVEIL_S + 1.5) * 1000)
 }
 
 /** Aperçu : l'ouverture puis, un instant après, la fermeture. */
 export function ecouterSon(id: string) {
   jouerSon('ouverture', id)
-  window.setTimeout(() => jouerSon('fermeture', id), 900)
+  window.setTimeout(() => jouerSon('fermeture', id), (REVEIL_S + 0.9) * 1000)
 }
