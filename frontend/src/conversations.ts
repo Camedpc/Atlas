@@ -770,29 +770,49 @@ export class PanneauConversation {
   private async envoyerMessage() {
     const contenu = this.saisie.value.trim()
     if (!contenu || estJuge(etat.get(etat.selection))) return
-    if (this.appel.ouvert) {
-      if (this.dictee) return // la saisie montre la dictée en cours, pas un message tapé
-      this.appel.ecrire(contenu)
-      this.tape = false
-      this.saisie.value = ''
-      this.ajusterSaisie()
-      return
-    }
-    const id = await this.assurerConversation()
-    if (!id) return
-    // Hors appel, Atlas voix n'écoute plus : ce qui est tapé depuis son fil va à l'orchestrateur.
-    const agent = etat.selection === RACINE || estVoix(etat.selection) ? null : etat.selection
+    // Pendant l'appel, la saisie peut montrer la dictée en cours, pas un message tapé.
+    if (this.appel.ouvert && this.dictee) return
+    if (this.appel.ouvert) this.tape = false
     this.saisie.value = ''
     this.ajusterSaisie()
+    if (!(await this.transmettre(contenu))) {
+      this.saisie.value = contenu
+      this.ajusterSaisie()
+    }
+  }
+
+  /** Destinataire de la saisie (« l’orchestrateur », nom du sous-agent, « Atlas voix ») ; null : fil en lecture seule. */
+  destinataire(): string | null {
+    if (estJuge(etat.get(etat.selection))) return null
+    if (estVoix(etat.selection)) return this.appel?.ouvert ? 'Atlas voix' : 'l’orchestrateur'
+    return etat.selection === RACINE ? 'l’orchestrateur' : nomAgent(etat.get(etat.selection), etat.selection)
+  }
+
+  /**
+   * Envoie un message au destinataire de la saisie (agent sélectionné, ou Atlas voix pendant l'appel), qu'il vienne
+   * de la saisie ou d'ailleurs (clic droit sur le graphe) ; false s'il n'est pas parti.
+   */
+  async transmettre(contenu: string): Promise<boolean> {
+    if (estJuge(etat.get(etat.selection))) return false
+    if (this.appel.ouvert) {
+      this.appel.ecrire(contenu)
+      return true
+    }
+    const id = await this.assurerConversation()
+    if (!id) return false
+    // Hors appel, Atlas voix n'écoute plus : ce qui est tapé depuis son fil va à l'orchestrateur.
+    const agent = etat.selection === RACINE || estVoix(etat.selection) ? null : etat.selection
     if (!agent) etat.question = contenu
+    let parti = true
     try {
       await api.envoyer(id, contenu, agent, this.selecteur.reglages)
     } catch (e) {
       this.contenu.insertAdjacentHTML('beforeend', `<div class="msg systeme">${echapper(String(e))}</div>`)
-      this.saisie.value = contenu
+      parti = false
     }
     window.clearTimeout(this.suivi)
     await this.rafraichir()
+    return parti
   }
 
   /** Ajoute les nouveaux messages, met l'arbre à jour et, tant que l'orchestrateur travaille, se rappelle. */

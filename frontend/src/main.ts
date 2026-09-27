@@ -88,6 +88,9 @@ const vueGraphe = new VueGraphe(document.querySelector<HTMLElement>('.graphe')!,
   recharger: () => chargerGraphe(),
   surChangement: () => adaptateur?.apresImage(),
   chargerScene: SYNTHETIQUE ? sceneSynthetique : undefined,
+  // Clic droit sur le graphe : message à l'agent sélectionné dans le chat, avec ce qui est sous le clic.
+  surDemander: (message) => conversation.transmettre(message),
+  destinataire: () => conversation.destinataire(),
 })
 // Développement : accès depuis la console (tests à la main, mesures d'images).
 if (import.meta.env.DEV) (window as unknown as { atlasGraphe: VueGraphe }).atlasGraphe = vueGraphe

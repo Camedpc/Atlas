@@ -247,6 +247,42 @@
   font-size: 12.5px;
 }
 
+/* Clic droit → message à l'agent du chat, en tête du menu. */
+.gr-menu-demande {
+  padding: 2px 4px 4px;
+}
+
+.gr-demande {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 17rem;
+  resize: vertical;
+  padding: 6px 8px;
+  border: 1px solid var(--trait-fort, #d4d4cf);
+  border-radius: 5px;
+  background: #fff;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.gr-demande:focus {
+  outline: none;
+  border-color: #71717a;
+}
+
+.gr-demande:disabled {
+  color: #71717a;
+  background: #fafaf9;
+}
+
+.gr-demande-aide {
+  padding: 3px 2px 0;
+  color: #8a8a8a;
+  font-size: 11px;
+}
+
 .gr-menu-titre {
   padding: 4px 8px 6px;
   font: italic 12.5px var(--gr-serif);
