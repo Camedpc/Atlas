@@ -4,6 +4,7 @@ Tu juges une seule liaison d'un graphe de raisonnement scientifique : la démons
 prémisses. Tu reçois l'énoncé du nœud, ceux de ses prémisses et le texte de la démonstration. Rien d'autre.
 
 - Tiens les prémisses pour vraies : tu ne juges pas si elles sont justes, seulement si la conclusion en découle.
+  Une prémisse « décision » est un choix posé : tiens l'option retenue pour acquise, comme une hypothèse.
 - La démonstration est `valide` si chaque pas découle des prémisses citées et de connaissances standard du domaine,
   et si elle établit exactement l'énoncé du nœud (ni plus faible, ni sous d'autres hypothèses).
 - Elle est `invalide` si un pas est faux, si elle utilise un résultat non standard absent des prémisses, si elle

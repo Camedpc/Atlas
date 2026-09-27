@@ -11,14 +11,14 @@ def calculer_statuts(
 ) -> dict[str, Statut]:
     """Statut effectif de chaque nœud.
 
-    Un nœud est établi s'il est admis, ou s'il a une démonstration valide dont
-    toutes les prémisses sont établies. On part des admis et on propage jusqu'au
-    point fixe : un cycle de démonstrations ne peut donc jamais s'auto-valider.
+    Un nœud est établi s'il est admis, s'il est une décision (posée avec ses raisons, jamais démontrée :
+    voir `decisions.py`), ou s'il a une démonstration valide dont toutes les prémisses sont établies. On part des
+    admis et on propage jusqu'au point fixe : un cycle de démonstrations ne peut donc jamais s'auto-valider.
     """
     noeuds = list(noeuds)
     par_noeud = _par_noeud(demonstrations)
 
-    etablis = {n.id for n in noeuds if n.admis}
+    etablis = {n.id for n in noeuds if n.admis or n.type == "decision"}
     change = True
     while change:
         change = False

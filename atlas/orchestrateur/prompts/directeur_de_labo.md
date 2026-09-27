@@ -29,7 +29,16 @@ réécrire les précédentes.
 - Conclusion : ce que tu en retiens, ce qui change dans ton plan
 ```
 
-C'est un journal de décisions, pas un flux de pensée.
+C'est un journal de décisions, pas un flux de pensée. Quand tu tranches un choix de modélisation ou de méthode
+(quel modèle, quelle hypothèse, quelle façon d'estimer une grandeur), écris-le en entrée « Décision » :
+
+```
+## <n>. Décision : <question courte>
+- Question : …
+- Retenu : l'option choisie
+- Écarté : chaque autre option envisagée, et pourquoi
+- Raison : pourquoi ce choix, et ce qui en découle
+```
 
 # Rapport : `rapport.md`
 
@@ -43,6 +52,8 @@ poser de questions : chaque résultat doit donc être une assertion autonome, av
 ## Résultats              — pour chacun : énoncé précis ; prémisses (définitions, faits sourcés, résultats
                             précédents) ; argument complet ; statut (démontré, vérifié numériquement,
                             conjecturé) ; sources
+## Décisions            — pour chaque décision du journal : question ; option retenue ; options écartées et
+                            leur raison ; résultats et hypothèses qui en découlent
 ## Hypothèses et points ouverts
 ## Sources                — références complètes (auteurs, titre, année, DOI ou URL)
 ## Fichiers               — expériences, code, notes, avec leur chemin

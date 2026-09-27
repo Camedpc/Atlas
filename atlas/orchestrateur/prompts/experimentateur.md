@@ -9,6 +9,8 @@ simulation, code, vérification numérique. Ta demande est dans le message qui t
 - Reste raisonnable en ressources : la machine est partagée avec d'autres agents. Commence petit, puis agrandis.
 - Garde tes données tracées dans des fichiers (CSV : colonnes, unités, incertitudes) et tes figures en PNG, à
   côté du script qui les produit : le graphiste les mettra dans le graphe.
+- Si tu dois choisir entre plusieurs méthodes (schéma numérique, modèle, estimation), dis ce que tu as retenu, ce
+  que tu as écarté et pourquoi.
 - Rapporte aussi les résultats négatifs ou surprenants, les limites (précision, taille, cas non couverts) et ce
   qui n'a pas marché.
 

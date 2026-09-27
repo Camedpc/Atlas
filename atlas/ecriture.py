@@ -8,7 +8,7 @@ import re
 from dataclasses import replace
 from typing import Any
 
-from . import figures, lecture, vue
+from . import decisions, figures, lecture, vue
 from .client import supabase
 from .modeles import Action, TypeNoeud, Validite
 
@@ -25,6 +25,21 @@ class ErreurGraphe(Exception):
 def verifier_id(noeud_id: str) -> None:
     if not MOTIF_ID.match(noeud_id):
         raise ErreurGraphe(f"Id invalide « {noeud_id} » : uniquement minuscules, chiffres et _ (ex. lemme_borne).")
+
+
+def valider_decision(details: Any, enonce: str) -> tuple[dict, str]:
+    """Détails normalisés d'une décision, et son énoncé (par défaut : l'option retenue et les écartées)."""
+    try:
+        details = decisions.valider(details)
+    except decisions.ErreurDecision as e:
+        raise ErreurGraphe(str(e)) from None
+    return details, enonce.strip() or decisions.enonce(details)
+
+
+REFUS_DEMONSTRATION_DECISION = (
+    "est une décision : elle ne se démontre pas. Ses raisons vont dans details (raison du choix, raison de chaque "
+    "alternative écartée), et elle pointe vers les nœuds qui en découlent par details.alternatives[].noeuds."
+)
 
 
 def normaliser_premisses(noeud_id: str, justifie_par: list[str]) -> list[str]:
@@ -66,10 +81,23 @@ def creer_noeud(
     details: dict | None = None,
     groupe: str | None = None,
 ) -> dict:
-    """Crée le nœud puis le place dans la vue : dans `groupe` s'il est donné, sinon près de ses voisins."""
+    """Crée le nœud puis le place dans la vue : dans `groupe` s'il est donné, sinon près de ses voisins.
+
+    Une décision (type « decision ») est validée (`decisions.valider`) ; les nœuds qui découlent de ses alternatives
+    doivent déjà exister."""
     verifier_id(id)
     if _existants(projet_id, [id]):
         raise ErreurGraphe(f"Le nœud {id} existe déjà : consulte-le avec lire_noeud et réutilise-le.")
+    resume = ""
+    if type == "decision":
+        details, enonce = valider_decision(details, enonce)
+        cibles = [n for n, _ in decisions.commandes(details)]
+        if manquants := sorted(set(cibles) - _existants(projet_id, cibles)):
+            raise ErreurGraphe(
+                f"Nœuds inexistants dans details.alternatives[].noeuds : {', '.join(manquants)}. Crée d'abord les "
+                "nœuds qui découlent de la décision (ou pose le tout avec poser_graphe)."
+            )
+        resume = decisions.resume(details)
     ligne = {
         "projet_id": projet_id,
         "id": id,
@@ -85,8 +113,8 @@ def creer_noeud(
         raise ErreurGraphe(f"Cadre inexistant : {groupe}. Crée-le avec organiser_vue (creer_groupe), ou omets groupe.")
     supabase().table("noeuds").insert(ligne).execute()
     _journaliser("creation_noeud", projet_id=projet_id, auteur=auteur, noeud_id=id, apres=ligne, raison=raison)
-    etat.noeuds[id] = vue.NoeudVue(id, nom, type)
-    _placer(projet_id, etat, id, groupe or ...)
+    etat.noeuds[id] = vue.NoeudVue(id, nom, type, resume=resume)
+    _placer(projet_id, etat, id, groupe or ..., *vue.taille_defaut(etat.noeuds[id]))
     return ligne
 
 
@@ -110,6 +138,9 @@ def ajouter_demonstration(
     trouves = _existants(projet_id, [noeud_id, *premisses])
     if noeud_id not in trouves:
         raise ErreurGraphe(f"Nœud inexistant : {noeud_id}. Crée-le d'abord avec creer_noeud.")
+    cible = supabase().table("noeuds").select("type").eq("projet_id", projet_id).eq("id", noeud_id).execute().data
+    if cible and cible[0].get("type") == "decision":
+        raise ErreurGraphe(f"{noeud_id} {REFUS_DEMONSTRATION_DECISION}")
     if manquants := [p for p in premisses if p not in trouves]:
         raise ErreurGraphe(f"Prémisses inexistantes : {', '.join(manquants)}. Crée ces nœuds avant de les citer.")
     deja = (
@@ -472,6 +503,13 @@ def planifier_graphe(
             quoi = "figure deux fois dans le lot" if nid in nouveaux else "existe déjà : réutilise-le (lire_noeud)"
             raise ErreurGraphe(f"{ou} : le nœud {nid} {quoi}.")
         nom, enonce = str(n.get("nom") or "").strip(), str(n.get("enonce") or "").strip()
+        type_noeud = n.get("type") or None
+        details = n.get("details") or None
+        if type_noeud == "decision":
+            try:
+                details, enonce = valider_decision(details, enonce)
+            except ErreurGraphe as e:
+                raise ErreurGraphe(f"{ou} : {e}") from None
         if not nom or not enonce:
             raise ErreurGraphe(f"{ou} : nom et enonce sont obligatoires.")
         admis = bool(n.get("admis", False))
@@ -481,7 +519,6 @@ def planifier_graphe(
         groupe = n.get("groupe") or None
         if groupe is not None and groupe not in apres.groupes:
             raise ErreurGraphe(f"{ou} : cadre inexistant « {groupe} » ; déclare-le dans cadres.")
-        type_noeud = n.get("type") or None
         lignes_noeuds.append(
             {
                 "projet_id": projet_id,
@@ -491,12 +528,25 @@ def planifier_graphe(
                 "admis": admis,
                 "conversation_id": conversation_id,
                 "type": type_noeud,
-                "details": n.get("details") or None,
+                "details": details,
             }
         )
         raisons[nid] = raison
         nouveaux[nid] = groupe
-        apres.noeuds[nid] = vue.NoeudVue(nid, nom, type_noeud)
+        resume = decisions.resume(details) if type_noeud == "decision" else ""
+        apres.noeuds[nid] = vue.NoeudVue(nid, nom, type_noeud, resume=resume)
+
+    # Décisions du lot : les nœuds qui découlent de leurs alternatives existent (dans le lot ou le graphe).
+    commandes: dict[str, list[tuple[str, bool]]] = {}
+    for i, l in enumerate(lignes_noeuds):
+        if l["type"] != "decision":
+            continue
+        commandes[l["id"]] = decisions.commandes(l["details"])
+        if manquants := [c for c, _ in commandes[l["id"]] if c not in apres.noeuds or c == l["id"]]:
+            raise ErreurGraphe(
+                f"noeuds[{i}] ({l['id']}) : details.alternatives[].noeuds cite des nœuds inexistants "
+                f"{', '.join(manquants)} ; ajoute-les à noeuds."
+            )
 
     lignes_demonstrations: list[dict[str, Any]] = []
     deja = set(demonstrations_existantes)
@@ -511,6 +561,8 @@ def planifier_graphe(
             raise ErreurGraphe(f"{ou} : {e}") from None
         if noeud_id not in apres.noeuds:
             raise ErreurGraphe(f"{ou} : nœud inexistant ; ajoute-le à noeuds.")
+        if apres.noeuds[noeud_id].type == "decision":
+            raise ErreurGraphe(f"{ou} : {noeud_id} {REFUS_DEMONSTRATION_DECISION}")
         if manquants := [p for p in premisses if p not in apres.noeuds]:
             raise ErreurGraphe(f"{ou} : prémisses inexistantes {', '.join(manquants)} ; ajoute-les à noeuds.")
         if not premisses:
@@ -541,6 +593,8 @@ def planifier_graphe(
                 forts[p] = role
         apres.noeuds[noeud_id] = replace(noeud, premisses=tuple(forts.items()))
 
+    vue.relier_decisions(apres.noeuds, commandes)
+
     # Mise en page : les cadres de premier niveau créés ici (avec leurs nœuds) et les nouveaux nœuds hors cadre
     # d'un bloc ; les nouveaux nœuds des cadres existants un par un, dans l'ordre logique.
     crees = {op["id"] for op in operations}
@@ -557,7 +611,7 @@ def planifier_graphe(
         if racines:
             apres = vue.disposer(apres, racines, dans_le_bloc)
         for nid in vue.ordre_logique(apres, [n for n in nouveaux if n not in dans_le_bloc]):
-            apres.placements[nid] = vue.placer_auto(apres, nid, nouveaux[nid])
+            apres.placements[nid] = vue.placer_auto(apres, nid, nouveaux[nid], *vue.taille_defaut(apres.noeuds[nid]))
     except vue.ErreurVue as e:
         raise ErreurGraphe(f"Mise en page impossible : {e}") from None
     if problemes := vue.conflits(apres):
@@ -565,6 +619,7 @@ def planifier_graphe(
 
     demontres = {d["noeud_id"] for d in lignes_demonstrations}
     utilises = {p for d in lignes_demonstrations for p in d["justifie_par"]}
+    utilises |= {d for d, liens in commandes.items() if liens} | {c for liens in commandes.values() for c, _ in liens}
     avertissements = [
         f"{l['id']} ({l['type'] or 'sans type'}) n'est ni admis ni démontré"
         for l in lignes_noeuds

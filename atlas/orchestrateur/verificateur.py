@@ -13,7 +13,7 @@ from typing import Any, Literal
 from openai_codex import ApprovalMode, AsyncCodex, Sandbox
 from openai_codex.types import ReasoningEffort
 
-from .. import ecriture, lecture
+from .. import decisions, ecriture, lecture
 from ..modeles import Demonstration, LigneNoeud
 from . import agent, config
 from .consignes import consigne
@@ -46,10 +46,15 @@ class Verdict:
 def demande(demonstration: Demonstration, noeuds: dict[str, LigneNoeud]) -> str:
     """Tout ce que voit le vérificateur : le nœud, ses prémisses et la démonstration."""
     noeud = noeuds[demonstration.noeud_id]
-    premisses = "\n\n".join(
-        f"### {p} — {noeuds[p].nom}\n{noeuds[p].enonce}" if p in noeuds else f"### {p}\n(nœud introuvable)"
-        for p in demonstration.justifie_par
-    )
+    def premisse(p: str) -> str:
+        if p not in noeuds:
+            return f"### {p}\n(nœud introuvable)"
+        n = noeuds[p]
+        if n.type == "decision":  # un choix posé avec ses raisons : à tenir pour acquis, comme une hypothèse
+            return f"### {p} — décision : {n.nom}\n{n.enonce}\n{decisions.texte(n.details)}"
+        return f"### {p} — {n.nom}\n{n.enonce}"
+
+    premisses = "\n\n".join(premisse(p) for p in demonstration.justifie_par)
     return (
         f"# Nœud à établir : {noeud.id} — {noeud.nom}\n{noeud.enonce}\n\n"
         f"# Prémisses\n{premisses or '(aucune)'}\n\n"
