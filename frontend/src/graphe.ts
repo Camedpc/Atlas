@@ -8,7 +8,7 @@
 // d'origine (le cadre s'agrandit). Pour sortir un nœud de son cadre : clic droit → « Sortir du cadre ».
 
 import './graphe.css'
-import { api, RefusVue, type Graphe, type Noeud, type OperationVue, type Vue } from './api'
+import { api, RefusVue, type FigureVue, type Graphe, type Noeud, type OperationVue, type SceneFigure, type Vue } from './api'
 import { ouvrir3d } from './graphe-3d'
 import { animer, type Animation } from './graphe-animation'
 import { instantane, operationsVers, type Entree, type Instantane } from './graphe-annuler'
@@ -103,6 +103,8 @@ export interface OptionsVueGraphe {
   recharger: () => Promise<void>
   /** Après chaque image : le pilotage compare l'écran à son dernier état exporté (P4). */
   surChangement?: () => void
+  /** Scène 3D d'une figure ; par défaut, lue sur le serveur (le jeu synthétique fournit la sienne). */
+  chargerScene?: (figure: FigureVue) => Promise<SceneFigure>
 }
 
 /** Un nœud à l'écran, en pixels de la scène (pilotage, P4 `visibles`). */
@@ -949,13 +951,15 @@ export class VueGraphe {
     this.fermerFenetre?.()
     const f = b.figure
     const projetId = this.projetId
-    if (f.scene && projetId) {
+    const chargerScene = this.options.chargerScene
+      ?? (projetId ? (x: FigureVue) => api.sceneFigure(projetId, x.id, x.modifie_le) : null)
+    if (f.scene && chargerScene) {
       this.fermerFenetre = ouvrir3d({
         scene: this.scene,
         calques: [this.canvas, this.contenu.couche],
         figure: f,
         numero: b.numero,
-        charger: () => api.sceneFigure(projetId, f.id, f.modifie_le),
+        charger: () => chargerScene(f),
         cadrer: async () => {
           await this.cadrerNoeuds([b.id])
           const r = this.rectRepresentant(this.modele.representant.get(b.id) ?? b.id)

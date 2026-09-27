@@ -1,9 +1,10 @@
 // Jeu synthétique pour éprouver la vue à grande taille, en développement seulement (`?synthetique=1000`) : chapitres
 // de 40 énoncés dans des cadres (un sous-cadre par chapitre), prémisses vers la gauche, formules Unicode et LaTeX.
-// Quelques figures vectorielles (mesures, lois et bandes, échelles log) y sont jointes. Lecture seule : rien n'est écrit
-// en base.
+// Quelques figures vectorielles (mesures, lois et bandes, échelles log) y sont jointes, et une scène 3D animée (le
+// pendule de tests/donnees/pendule3d.py, produit par Atlas dans graphe-synthetique-scene.json). Lecture seule : rien
+// n'est écrit en base.
 
-import type { Demonstration, FigureVue, Graphe, GroupeVue, Noeud, PlacementVue, RolePremisse, Statut, TypeNoeud, Vue } from './api'
+import type { Demonstration, FigureVue, Graphe, GroupeVue, Noeud, PlacementVue, RolePremisse, SceneFigure, Statut, TypeNoeud, Vue } from './api'
 
 const TYPES: TypeNoeud[] = ['lemme', 'proposition', 'lemme', 'assertion', 'calcul', 'observation', 'theoreme', 'definition']
 const STATUTS: Statut[] = ['etabli', 'etabli', 'a_verifier', 'a_verifier', 'suspendu', 'invalide', 'ouvert']
@@ -103,7 +104,23 @@ export function jeuSynthetique(n: number): { graphe: Graphe; vue: Vue } {
       largeur: 3, hauteur: 2, fixe: false,
     })
   }
+  // Scène 3D : à droite de la première figure, dans le premier chapitre.
+  if (parId.has('n10')) {
+    figures.push({
+      id: 'synth_3d', noeud_id: 'n10', titre: 'Pendule simple, $\\theta_0 = 1$ rad (une période)',
+      legende: 'Pendule non linéaire intégré par RK4, joué en boucle.', trace: null, image: false,
+      image_largeur: null, image_hauteur: null, scene: true, source: 'tests/donnees/pendule3d.py',
+      modifie_le: '2026-09-27T00:00:00Z',
+    })
+    placements.push({ noeud_id: 'fig:synth_3d', groupe_id: 'ch0', colonne: 4, ligne: 6, largeur: 3, hauteur: 2, fixe: false })
+  }
   return { graphe: { noeuds, aretes }, vue: { groupes, placements, etiquettes: [], marques: [], figures } }
+}
+
+/** Scène de la figure 3D du jeu synthétique. Pour la refaire après un changement du format : voir
+ * tests/donnees/pendule3d.py, exécuté par atlas/orchestrateur/figure3d.py (produire, puis figures3d.serialiser). */
+export async function sceneSynthetique(): Promise<SceneFigure> {
+  return (await import('./graphe-synthetique-scene.json')).default as unknown as SceneFigure
 }
 
 /** Figure vectorielle synthétique, de quatre sortes : chute (loi et bande), loi de puissance (log-log), deux séries
