@@ -49,7 +49,9 @@ ROLES = (
     Role(
         "graphiste",
         "Transforme un rapport de directeur de labo en graphe de raisonnement (nœuds et démonstrations), et rien "
-        "d'autre. Lancé par l'orchestrateur, avec le chemin du rapport.",
+        "d'autre. Par défaut, il complète le graphe existant du projet (réutilise les nœuds, marque les "
+        "embranchements par un nœud `decision`) ; il ne pose un raisonnement séparé que sur demande explicite. "
+        "Lancé par l'orchestrateur, avec le chemin du rapport.",
         # Banc du 2026-09-27 (rapport de 40 ko) : astra couvre tout le rapport là où sol en laisse un tiers ; le
         # niveau de service « fast » divise la durée par ~1,7 (mais consomme plus de quota).
         "gpt-6-astra",
