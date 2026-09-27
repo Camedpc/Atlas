@@ -6,6 +6,7 @@ import { AgentGraph } from './agentgraph'
 import { api, type Graphe, type Noeud, type RolePremisse, type Statut, type Vue } from './api'
 import { PanneauConversation } from './conversations'
 import { VueDocuments } from './documents'
+import { cheminProjet, ressembleAUnChemin } from './liens-fichiers'
 import { enLigne, formulesAffichees, nombre, rendreTex } from './formules'
 import { VueGraphe } from './graphe'
 import { lireDecision, type DetailsDecision } from './graphe-decision'
@@ -253,6 +254,21 @@ const conversation = new PanneauConversation(
 )
 
 const panneau = installerPoignees((replie) => conversation.replierSessions(replie))
+
+// Liens vers des fichiers du projet dans les messages (et chemins écrits en code) : ouverts dans la vue Documents
+// plutôt que suivis par le navigateur, qui ne mènerait nulle part.
+document.addEventListener('click', (e) => {
+  if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey) return
+  const cible = e.target as HTMLElement
+  const lien = cible.closest<HTMLAnchorElement>('a[href]')
+  const code = lien ? null : cible.closest<HTMLElement>('.msg code, .md code')
+  const texte = lien ? lien.getAttribute('href')! : code && ressembleAUnChemin(code.textContent ?? '') ? code.textContent! : null
+  const chemin = texte ? cheminProjet(texte, conversationId) : null
+  if (!chemin) return
+  e.preventDefault()
+  montrer('documents')
+  void documents.ouvrir(chemin)
+})
 
 // ─── Pilotage de l'écran (P3/P4) : Atlas voix, pendant un appel (voix.ts, atlas/voix/ecran.py) ───
 
