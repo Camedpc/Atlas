@@ -24,6 +24,10 @@ GRADIUM_WSS = _texte("ATLAS_VOIX_GRADIUM_WSS", "wss://eu.api.gradium.ai")
 STT_LANGUE = _texte("ATLAS_VOIX_LANGUE", "fr")
 STT_DELAI = int(_texte("ATLAS_VOIX_STT_DELAI", "10"))
 """Contexte en trames de 80 ms : 10 ≈ 0,35 à 0,7 s entre la fin de la phrase et le texte ; 16 ≈ 1,1 s."""
+STT_DUREE = float(_texte("ATLAS_VOIX_STT_DUREE", "240"))
+"""Âge (s) à partir duquel la session STT est renouvelée au premier silence : Gradium coupe à 300 s (offre gratuite)."""
+STT_DUREE_FORCEE = float(_texte("ATLAS_VOIX_STT_DUREE_FORCEE", "285"))
+"""Au-delà, le tour en cours est clos et la session renouvelée, même si Camille parle."""
 STT_TEMPERATURE = _flottant("ATLAS_VOIX_STT_TEMPERATURE", None)
 STT_BOOST = float(_texte("ATLAS_VOIX_STT_BOOST", "3"))
 MOTS_CLES = [

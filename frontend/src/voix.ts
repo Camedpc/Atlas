@@ -21,7 +21,6 @@ const VOIX_GRADIUM: [string, string][] = [
 
 const CLE_VOIX = 'atlas.voix'
 const CLE_CASQUE = 'atlas.voix.casque'
-const CLE_WEBRTC = 'atlas.voix.webrtc'
 
 /** Boucle WebRTC locale : la voix d'Atlas sort par un appel WebRTC, le chemin le mieux couvert par l'annulation
  * d'écho de Chrome (celui des visios), au lieu de sortir directement du moteur audio de la page. */
@@ -61,6 +60,8 @@ export class Appel {
   private flux: MediaStream | null = null
   private lecteur: AudioWorkletNode | null = null
   private boucle: BoucleWebRTC | null = null
+  /** webrtc, sauf si la boucle n'a pas pu s'établir (repli : sortie directe du moteur audio). */
+  private modeLecture: 'webrtc' | 'webaudio' = 'webrtc'
   private muet = false
   private etatServeur = 'demarrage'
   private enLecture = false
@@ -81,8 +82,6 @@ export class Appel {
         <select class="appel-voix" title="Voix d’Atlas">${VOIX_GRADIUM.map(([id, nom]) => `<option value="${id}">${nom}</option>`).join('')}</select>
         <label class="appel-casque" title="Couper Atlas dès que tu parles. Décoche sur haut-parleurs s’il se coupe tout seul.">
           <input type="checkbox" checked> Coupure immédiate</label>
-        <label class="appel-webrtc" title="Faire sortir la voix d’Atlas par WebRTC, comme une visio, pour que l’annulation d’écho de Chrome la prenne en compte.">
-          <input type="checkbox"> Lecture WebRTC</label>
         <button type="button" class="appel-interrompre" title="Faire taire Atlas voix (Échap)">Interrompre</button>
         <button type="button" class="appel-micro" title="Couper le micro">Micro</button>
         <button type="button" class="appel-raccrocher">Raccrocher</button>
@@ -90,13 +89,6 @@ export class Appel {
       <div class="appel-texte"><span class="appel-camille"></span><span class="appel-atlas"></span></div>`
     const voix = barre.querySelector<HTMLSelectElement>('.appel-voix')!
     const casque = barre.querySelector<HTMLInputElement>('.appel-casque input')!
-    const webrtc = barre.querySelector<HTMLInputElement>('.appel-webrtc input')!
-    webrtc.checked = lire(CLE_WEBRTC) === 'true'
-    webrtc.addEventListener('change', () => {
-      garder(CLE_WEBRTC, String(webrtc.checked))
-      void this.brancherSortie()
-      this.envoyerReglages()
-    })
     voix.value = lire(CLE_VOIX) ?? VOIX_GRADIUM[0][0]
     casque.checked = lire(CLE_CASQUE) !== 'false'
     voix.addEventListener('change', () => {
@@ -175,14 +167,10 @@ export class Appel {
       type: 'reglages',
       voix: this.barre.querySelector<HTMLSelectElement>('.appel-voix')!.value,
       casque: this.barre.querySelector<HTMLInputElement>('.appel-casque input')!.checked,
-      lecture: this.lectureWebRTC ? 'webrtc' : 'webaudio',
+      lecture: this.modeLecture,
       modele_orchestrateur: r.modele ?? null,
       effort_orchestrateur: r.effort ?? null,
     })
-  }
-
-  private get lectureWebRTC(): boolean {
-    return this.barre.querySelector<HTMLInputElement>('.appel-webrtc input')!.checked
   }
 
   private envoyer(message: Record<string, unknown>) {
@@ -220,17 +208,28 @@ export class Appel {
     await this.contexte.resume()
   }
 
-  /** Relie le lecteur aux haut-parleurs : directement, ou par une boucle WebRTC locale (option de la barre). */
+  /** Relie le lecteur aux haut-parleurs par une boucle WebRTC locale. En sortie directe du moteur audio de la
+   * page, l'annulation d'écho de Chrome décrochait après quelques interruptions (Atlas s'entendait et bouclait) ;
+   * par WebRTC, comme une visio, elle tient. Repli sur la sortie directe si la boucle ne s'établit pas. */
   private async brancherSortie() {
     const contexte = this.contexte
     const lecteur = this.lecteur
     if (!contexte || !lecteur) return
+    try {
+      await this.brancherWebRTC(contexte, lecteur)
+      this.modeLecture = 'webrtc'
+    } catch (e) {
+      console.warn('Lecture WebRTC impossible, sortie directe', e)
+      this.fermerBoucle()
+      lecteur.disconnect()
+      lecteur.connect(contexte.destination)
+      this.modeLecture = 'webaudio'
+    }
+  }
+
+  private async brancherWebRTC(contexte: AudioContext, lecteur: AudioWorkletNode) {
     lecteur.disconnect()
     this.fermerBoucle()
-    if (!this.lectureWebRTC) {
-      lecteur.connect(contexte.destination)
-      return
-    }
     const destination = contexte.createMediaStreamDestination()
     lecteur.connect(destination)
     const emetteur = new RTCPeerConnection()

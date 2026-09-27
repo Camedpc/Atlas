@@ -45,8 +45,8 @@ from .texte import est_echo
 
 log = logging.getLogger(__name__)
 
-DUREE_MAX_STT = 2700.0
-"""Gradium limite une session STT à 3000 s : on la renouvelle avant, entre deux tours."""
+ATTENTE_MAX_STT = 10 * 48000
+"""Micro gardé pendant qu'une session STT se rouvre (10 s en PCM 24 kHz 16 bits), rejoué dans la nouvelle."""
 
 PREFIXE_CONFIE = "[Transmis par Atlas voix, pendant un appel avec Camille]"
 
@@ -71,6 +71,7 @@ class Session:
         self.taches = Taches(self.cerveau, self._tache_changee)
         self.prechauffe = Prechauffe()
         self.stt: Transcripteur | None = None
+        self._attente_stt = bytearray()
         self.casque = True
         self.reglages_orchestrateur = Reglages()
         self._envoi = asyncio.Lock()
@@ -275,9 +276,13 @@ class Session:
     async def _audio_micro(self, pcm: bytes) -> None:
         if self._micro is not None:
             self._micro += pcm
-        if self.stt is not None:
-            with contextlib.suppress(Exception):
-                await self.stt.envoyer(pcm)
+        if self.stt is None:
+            # Session STT en train de se rouvrir : on garde le micro pour ne rien perdre de ce que dit Camille.
+            self._attente_stt += pcm
+            del self._attente_stt[: max(0, len(self._attente_stt) - ATTENTE_MAX_STT)]
+            return
+        with contextlib.suppress(Exception):
+            await self.stt.envoyer(pcm)
 
     async def _commande(self, message: dict[str, Any]) -> None:
         match message.get("type"):
@@ -324,20 +329,32 @@ class Session:
     # ── Transcription et tours de parole ──
 
     async def _boucle_stt(self) -> None:
+        """Session STT continue. Gradium en limite la durée (300 s constatées avec l'offre gratuite) : on la
+        renouvelle avant, pendant un silence, et le micro reçu pendant la réouverture y est rejoué."""
         while True:
             stt = Transcripteur()
             try:
                 await stt.ouvrir()
+                attente, self._attente_stt = bytes(self._attente_stt), bytearray()
+                for i in range(0, len(attente), 3840):
+                    await stt.envoyer(attente[i : i + 3840])
                 self.stt = stt
                 ouverture = time.monotonic()
                 async for message in stt.messages():
                     await self._sur_stt(message)
-                    if time.monotonic() - ouverture > DUREE_MAX_STT and not self.tampon:
+                    age = time.monotonic() - ouverture
+                    if age > config.STT_DUREE_FORCEE and self.tampon and self.flush_attendu is None:
+                        # Camille parle encore à l'approche de la limite : on clôt son tour pour ne pas le perdre.
+                        self.debut_fin_tour = time.perf_counter()
+                        self.flush_attendu = await stt.vider()
+                    silence = not self.tampon and self.pas_parole == 0 and self.flush_attendu is None
+                    if (age > config.STT_DUREE and silence) or (age > config.STT_DUREE_FORCEE and not self.tampon):
+                        log.info("appel %s : session STT renouvelée après %.0f s", self.id, age)
                         break
             except (websockets.ConnectionClosed, RuntimeError, OSError) as erreur:
                 log.warning("STT interrompu : %s", erreur)
                 await self.envoyer({"type": "info", "message": f"Transcription relancée ({erreur})."})
-                await asyncio.sleep(0.5)
+                await asyncio.sleep(0.2)
             finally:
                 self.stt = None
                 self.flush_attendu = None

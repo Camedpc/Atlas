@@ -130,6 +130,12 @@ donne des consignes), cerveau Codex rapide (`gpt-6-sol`, effort bas, mode fast),
 - Dans l'arbre et l'agent graph, Atlas voix est un sommet (`/voix`) ; l'orchestrateur devient son enfant s'il
   lui a confié du travail. Elle y reste jusqu'à la prochaine relance écrite de l'orchestrateur.
 
+- La voix d'Atlas sort par une boucle WebRTC locale (comme une visio) : en sortie directe du moteur audio de la
+  page, l'annulation d'écho de Chrome décrochait après quelques interruptions et Atlas s'entendait en boucle.
+- Gradium coupe une session de transcription à 300 s (offre gratuite) : elle est renouvelée au premier silence,
+  sans perdre le micro reçu pendant la réouverture. `ATLAS_VOIX_ENREGISTRER=1` enregistre le micro reçu et les
+  tours transcrits dans le `.tmp` de la session, pour diagnostiquer une mauvaise transcription.
+
 Prompts : `atlas/orchestrateur/prompts/voix.md` et `tache_vocale.md`. Réglages : `GRADIUM_API_KEY` et
 `ATLAS_VOIX_*` dans `.env.example`. Prototype autonome d'origine et ses bancs d'essai : `voix-live/`.
 

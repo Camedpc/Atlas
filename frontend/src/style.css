@@ -859,8 +859,7 @@ body.sessions-repliees .deplier-sessions {
   background: var(--fond-2);
 }
 
-.appel-casque,
-.appel-webrtc {
+.appel-casque {
   display: inline-flex;
   align-items: center;
   gap: 4px;
