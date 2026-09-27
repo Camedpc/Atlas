@@ -264,6 +264,7 @@ export class PanneauConversation {
       reglagesOrchestrateur: () => this.selecteur.reglages,
     })
     this.micro.addEventListener('click', () => void this.appeler())
+    this.micro.addEventListener('pointerenter', () => this.preparerVoix())
     this.stop.addEventListener('click', () => this.appel.raccrocher())
     this.boutonOptions.addEventListener('click', () => this.basculerMenuVoix())
     this.menuVoix.addEventListener('click', (e) => {
@@ -482,6 +483,7 @@ export class PanneauConversation {
     etat.vider()
     this.majSessions()
     this.surChangement(id)
+    this.preparerVoix()
     await this.rechargerFil()
   }
 
@@ -655,6 +657,7 @@ export class PanneauConversation {
     this.majCible()
     // Le fil se recharge sur celui de l'orchestrateur : la raison (« Atlas voix a raccroché ») s'y affiche ensuite.
     this.avisFin = raison ?? ''
+    if (!ouvert) this.preparerVoix() // prêt pour le prochain appel
     window.clearTimeout(this.suivi)
     void this.rafraichir()
   }
@@ -715,6 +718,11 @@ export class PanneauConversation {
       ).join('') +
       `<hr><button type="button" role="menuitemcheckbox" aria-checked="${optionsVoix.casque}" class="menu-ligne" data-option="casque">
         <span class="menu-texte"><b>Coupure immédiate</b><span>Atlas se tait dès que tu parles</span></span>${coche(optionsVoix.casque)}</button>`
+  }
+
+  /** Prépare Atlas voix à l'avance pour la conversation ouverte (sans effet si c'est déjà fait). */
+  private preparerVoix() {
+    if (this.courante && !this.appel.ouvert) void api.preparerVoix(this.courante).catch(() => {})
   }
 
   private async appeler() {

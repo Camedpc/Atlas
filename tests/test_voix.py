@@ -401,3 +401,84 @@ def test_l_appel_continue_si_camille_reprend_la_parole(monkeypatch, tmp_path):
     asyncio.run(scenario())
     assert s.ws.ferme is None and enregistres == []
     assert "l'appel continue" in s.note_fin
+
+
+# ── Atlas voix préparé à l'avance ──
+
+
+class FauxCerveau:
+    instances: list = []
+
+    def __init__(self, conversation_id, appel_id, dossier, projet_id):
+        self.appel_id = appel_id
+        self.tours: list[str] = []
+        self.ferme = False
+        FauxCerveau.instances.append(self)
+
+    async def demarrer(self):
+        pass
+
+    async def tour(self, texte):
+        self.tours.append(texte)
+        yield None
+
+    async def fermer(self):
+        self.ferme = True
+
+
+def _prechauffages(monkeypatch, tmp_path, messages):
+    from atlas import projets
+    from atlas.orchestrateur import bunker
+    from atlas.voix import config as config_voix
+    from atlas.voix import prechauffage
+
+    FauxCerveau.instances = []
+    monkeypatch.setattr(config_voix, "PRECHAUFFAGE_S", 600)
+    monkeypatch.setattr(projets, "dossier_de", lambda pid: "defaut")
+    monkeypatch.setattr(projets, "id_ou_defaut", lambda pid: "p1")
+    monkeypatch.setattr(bunker, "preparer_session", lambda cid, projet: tmp_path)
+    monkeypatch.setattr(
+        conversations,
+        "lister_messages",
+        lambda cid, apres_id=None, limite=500, agent=None, derniers=False: [
+            m for m in messages if m.agent == agent and (apres_id is None or m.id > apres_id)
+        ],
+    )
+    return prechauffage.Prechauffages(fabrique=FauxCerveau)
+
+
+def test_prechauffage_puis_appel_reprend_le_cerveau_pret(monkeypatch, tmp_path):
+    messages = [_message(1, "utilisateur", "Étudie les hydrures."), _message(2, "assistant", "Rapport : Tc 250 K.")]
+    p = _prechauffages(monkeypatch, tmp_path, messages)
+
+    async def scenario():
+        assert await p.demander(CONVERSATION) == "lance"
+        assert await p.demander(CONVERSATION) == "deja"  # une seule préparation par conversation
+        pret = p.prendre("c1")
+        assert pret is not None and await pret.attendre()
+        assert p.prendre("c1") is None  # retiré de la réserve
+        # Un message écrit après la préparation est ajouté au premier tour de l'appel.
+        messages.append(_message(3, "utilisateur", "Et à 200 GPa ?"))
+        return pret, await pret.complement()
+
+    pret, complement = asyncio.run(scenario())
+    [cerveau] = FauxCerveau.instances
+    assert pret.appel_id == cerveau.appel_id
+    assert "Rapport : Tc 250 K." in cerveau.tours[0] and "prêt" in cerveau.tours[0]
+    assert "Camille : Et à 200 GPa ?" in complement and "Étudie" not in complement
+
+
+def test_un_seul_cerveau_prepare_a_la_fois(monkeypatch, tmp_path):
+    p = _prechauffages(monkeypatch, tmp_path, [])
+    autre = CONVERSATION.model_copy(update={"id": "c2"})
+
+    async def scenario():
+        await p.demander(CONVERSATION)
+        await p.courant.attendre()
+        await p.demander(autre)
+        await p.courant.attendre()
+
+    asyncio.run(scenario())
+    premier, second = FauxCerveau.instances
+    assert premier.ferme and not second.ferme
+    assert p.prendre("c1") is None and p.prendre("c2") is not None

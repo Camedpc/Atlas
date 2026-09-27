@@ -355,6 +355,8 @@ export const api = {
     }),
   modeles: () => appel<Modeles>('/api/orchestrateur/modeles'),
   /** Tout arrêter, ou seulement le sous-agent `agent`. */
+  /** Prépare Atlas voix pour le prochain appel dans cette conversation (le clic n'attend plus que le son). */
+  preparerVoix: (id: string) => appel<{ etat: string }>(`/api/conversations/${id}/voix/preparer`, { method: 'POST' }),
   arreter: (id: string, agent?: string | null) =>
     appel<unknown>(`/api/conversations/${id}/arreter`, {
       method: 'POST',

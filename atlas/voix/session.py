@@ -42,6 +42,7 @@ from .cerveau import Cerveau, Tache, Taches
 from .contexte import VOIX, annonce, contexte_decroche, pont
 from .gradium import Transcripteur
 from .parleur import Parleur, Prechauffe
+from .prechauffage import CerveauPret, echauffement, messages_recents
 from .texte import est_echo
 
 log = logging.getLogger(__name__)
@@ -63,19 +64,26 @@ def consigne(texte: str) -> str:
     return f"[Consignes de Camille, à appliquer désormais pour toute la suite de l'appel : {texte}]"
 
 
-def echauffement(contexte: str) -> str:
-    return (
-        f"[Contexte : fin de la conversation au moment où Camille t'appelle]\n{contexte}\n[Fin du contexte]\n\n"
-        "[Système] Appel ouvert. Réponds uniquement « prêt », sans rien faire d'autre."
-    )
-
-
 class Session:
-    def __init__(self, ws: WebSocket, conversation: Conversation, dossier: Path, projet_id: str | None):
-        self.id = uuid.uuid4().hex[:12]
+    def __init__(
+        self,
+        ws: WebSocket,
+        conversation: Conversation,
+        dossier: Path,
+        projet_id: str | None,
+        prepare: CerveauPret | None = None,
+    ):
         self.ws = ws
         self.conversation = conversation
-        self.cerveau = Cerveau(conversation.id, self.id, dossier, projet_id)
+        # Cerveau préparé à l'avance (prechauffage.py) : déjà démarré et échauffé, l'appel est prêt tout de suite.
+        self.prepare = prepare if prepare is not None and prepare.cerveau is not None else None
+        if self.prepare is not None:
+            self.id = self.prepare.appel_id
+            self.cerveau = self.prepare.cerveau
+        else:
+            self.id = uuid.uuid4().hex[:12]
+            self.cerveau = Cerveau(conversation.id, self.id, dossier, projet_id)
+        self.complement_contexte = ""
         self.taches = Taches(self.cerveau, self._tache_changee)
         self.affichages = Affichages(self.annoncer, client_par_defaut())
         self.prechauffe = Prechauffe()
@@ -191,13 +199,14 @@ class Session:
         self.prechauffe.lancer()
         file = gestionnaire.abonner(self.conversation.id)
         try:
-            await self.cerveau.demarrer()
+            if self.prepare is None:
+                await self.cerveau.demarrer()
             self._fond = [
                 asyncio.create_task(self._boucle_stt()),
                 asyncio.create_task(self._boucle_annonces()),
                 asyncio.create_task(self._ecouter_orchestrateur(file)),
                 asyncio.create_task(self.prechauffe.entretenir()),
-                asyncio.create_task(self._echauffer()),
+                asyncio.create_task(self._echauffer() if self.prepare is None else self._reprendre()),
             ]
             while True:
                 message = await self.ws.receive()
@@ -218,7 +227,7 @@ class Session:
         """Tour muet qui charge le contexte : le premier tour de Codex est le plus lent, il passe au décroché."""
         debut = time.perf_counter()
         try:
-            precedents = await asyncio.to_thread(self._messages_recents)
+            precedents = await asyncio.to_thread(messages_recents, self.conversation.id)
             texte = echauffement(contexte_decroche(precedents, config.CONTEXTE_MESSAGES))
             async for _ in self.cerveau.tour(texte):
                 pass
@@ -228,12 +237,17 @@ class Session:
         await self.mesurer("echauffement", debut)
         await self.etat("ecoute")
 
-    def _messages_recents(self) -> list[Message]:
-        n = config.CONTEXTE_MESSAGES
-        cid = self.conversation.id
-        return conversations.lister_messages(cid, limite=n, derniers=True) + conversations.lister_messages(
-            cid, limite=n, agent=VOIX, derniers=True
-        )
+    async def _reprendre(self) -> None:
+        """Cerveau préparé à l'avance : seulement les messages écrits depuis, ajoutés au premier tour."""
+        debut = time.perf_counter()
+        try:
+            assert self.prepare is not None
+            self.complement_contexte = await self.prepare.complement()
+        except Exception:
+            log.warning("messages récents pour la voix préparée", exc_info=True)
+        self.pret = True
+        await self.mesurer("echauffement", debut)
+        await self.etat("ecoute")
 
     async def fermer(self) -> None:
         for tache in self._fond:
@@ -459,6 +473,9 @@ class Session:
         if self.note_fin:
             entetes.append(self.note_fin)
             self.note_fin = ""
+        if self.complement_contexte:
+            entetes.insert(0, self.complement_contexte)
+            self.complement_contexte = ""
         return "\n".join([*entetes, texte])
 
     async def couper(self) -> None:
