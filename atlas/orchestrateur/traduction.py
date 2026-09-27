@@ -18,8 +18,9 @@ class LigneMessage(NamedTuple):
     donnees: dict[str, Any] | None
 
 
-def traduire(item: Any) -> list[LigneMessage]:
-    """Lignes à enregistrer pour un item terminé (`item/completed`) : modèle du SDK ou dict brut (sous-agents)."""
+def traduire(item: Any, bilan: dict[str, Any] | None = None) -> list[LigneMessage]:
+    """Lignes à enregistrer pour un item terminé (`item/completed`) : modèle du SDK ou dict brut (sous-agents).
+    `bilan` : mesures d'un sous-agent qui vient de finir, jointes à l'événement (`donnees.bilan`)."""
     element = getattr(item, "root", item)
     if not isinstance(element, dict):
         element = element.model_dump(mode="json", by_alias=True, exclude_none=True)
@@ -30,6 +31,8 @@ def traduire(item: Any) -> list[LigneMessage]:
     if type_ in IGNORES:
         return []
     donnees = _tronquer(element)
+    if bilan:
+        donnees["bilan"] = bilan
     return [LigneMessage("outil", _resume(type_, donnees), donnees)]
 
 

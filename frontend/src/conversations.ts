@@ -4,7 +4,7 @@
 // Pendant une exécution, un message s'injecte dans le tour en cours au lieu d'attendre la fin : l'orchestrateur le
 // lit à sa prochaine étape (même s'il attend ses sous-agents). Les sous-agents peuvent travailler après la fin du
 // tour : le fil se suit tant que quelqu'un travaille, et le texte en cours d'écriture s'affiche au fil de l'eau.
-import { RACINE, etat, formatTokens, nomAgent } from './agents'
+import { RACINE, etat, formatDuree, formatTokens, nomAgent } from './agents'
 import { ArbreAgents } from './arbre'
 import {
   api,
@@ -31,8 +31,17 @@ function rendreOutil(m: Message): string {
       completed: 'a terminé',
     }
     const nom = d.agentPath.slice(d.agentPath.lastIndexOf('/') + 1).replace(/[_-]+/g, ' ')
+    // Comme « Done (N tool uses · X tokens · durée) » de Claude Code : le bilan de cette exécution, joint par le
+    // serveur ; à défaut (messages plus anciens), celui de l'arbre, rempli par majResumesAgents.
+    const fin = d.kind === 'completed' || d.kind === 'interrupted'
+    const bilan = d.bilan as Bilan | undefined
+    const resume = !fin
+      ? ''
+      : bilan
+        ? `<span class="resume-agent">${echapper(texteBilan(bilan.nb_outils, bilan.tokens, bilan.duree))}</span>`
+        : `<span class="resume-agent" data-chemin="${echapper(d.agentPath)}"></span>`
     return `<div class="msg evenement-agent"><button type="button" class="lien-agent" data-chemin="${echapper(d.agentPath)}">
-      ↳ Sous-agent <b>${echapper(nom)}</b> ${genres[String(d.kind)] ?? String(d.kind)}</button></div>`
+      ↳ Sous-agent <b>${echapper(nom)}</b> ${genres[String(d.kind)] ?? String(d.kind)}</button>${resume}</div>`
   }
   const type = typeof d.type === 'string' ? d.type : 'outil'
   const etiquettes: Record<string, string> = {
@@ -57,6 +66,25 @@ function rendreMessage(m: Message): string {
       return rendreOutil(m)
     case 'systeme':
       return `<div class="msg systeme">${echapper(m.contenu)}</div>`
+  }
+}
+
+interface Bilan {
+  nb_outils: number
+  tokens: number
+  duree: number
+}
+
+function texteBilan(nbOutils: number, tokens: number, duree: number): string {
+  const outils = nbOutils ? `${nbOutils} outil${nbOutils > 1 ? 's' : ''} · ` : ''
+  return `${outils}${formatTokens(tokens)} tok · ${formatDuree(duree)}`
+}
+
+/** Mesures des sous-agents terminés dans le fil sans bilan enregistré (anciens messages), d'après l'arbre. */
+function majResumesAgents(racine: HTMLElement) {
+  for (const el of racine.querySelectorAll<HTMLElement>('.resume-agent[data-chemin]')) {
+    const a = etat.get(el.dataset.chemin)
+    if (a?.fin) el.textContent = texteBilan(a.nb_outils, a.tokens, a.fin - a.debut)
   }
 }
 
@@ -531,6 +559,7 @@ export class PanneauConversation {
     if (c && c.titre !== conv.titre) c.titre = conv.titre
     this.etatTexte.textContent = decrireEtat(conv)
     etat.mettreAJour(agents, this.actif)
+    majResumesAgents(this.contenu)
     this.majArreter()
     this.majBrouillon(conv.brouillons ?? {})
     if (enBas) this.fil.scrollTop = this.fil.scrollHeight

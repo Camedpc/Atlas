@@ -58,6 +58,9 @@ class Agent:
     resultat: str | None = None
     tour: str | None = None
     """Tour Codex en cours de l'agent (pour l'interrompre), None s'il ne travaille pas."""
+    tokens_debut: int = 0
+    """Jetons du thread au début de l'exécution en cours : `tokens`, `nb_outils` et `debut` valent pour elle seule
+    (un sous-agent relancé repart de zéro, comme dans Claude Code)."""
 
 
 @dataclass
@@ -126,6 +129,20 @@ class SuiviAgents:
             if a.etat in ("actif", "attend") and not (sous_agents_seuls and a.chemin == RACINE)
         ]
 
+    def bilan(self, item: Any) -> dict[str, Any] | None:
+        """Mesures de l'exécution d'un sous-agent, à joindre à l'événement « a terminé » du fil (figées là, alors
+        que l'arbre, lui, suit l'agent s'il est relancé)."""
+        element = item if isinstance(item, dict) else getattr(item, "root", item)
+        if not isinstance(element, dict):
+            element = element.model_dump(mode="json", by_alias=True, exclude_none=True)
+        if element.get("type") != "subAgentActivity" or element.get("kind") not in ("completed", "interrupted"):
+            return None
+        agent = self.agents.get(element.get("agentPath"))
+        if agent is None:
+            return None
+        duree = (agent.fin or self._horloge()) - agent.debut
+        return {"nb_outils": agent.nb_outils, "tokens": agent.tokens, "duree": round(duree, 1)}
+
     def possede(self, thread_id: Any) -> bool:
         return isinstance(thread_id, str) and thread_id in self._par_thread
 
@@ -152,6 +169,11 @@ class SuiviAgents:
 
         match methode:
             case "turn/started":
+                if agent.fin is not None and agent.chemin != RACINE:
+                    # Relancé après avoir fini : nouvelle exécution, nouveaux compteurs.
+                    agent.debut, agent.nb_outils = maintenant, 0
+                    agent.tokens_debut += agent.tokens
+                    agent.tokens = 0
                 agent.etat, agent.fin, agent.outil, agent.activite = "actif", None, None, "Réfléchit"
                 agent.tour = (params.get("turn") or {}).get("id") or agent.tour
             case "turn/completed":
@@ -167,7 +189,7 @@ class SuiviAgents:
             case "thread/tokenUsage/updated":
                 total = ((params.get("tokenUsage") or {}).get("total") or {}).get("totalTokens")
                 if isinstance(total, int):
-                    agent.tokens = total
+                    agent.tokens = max(0, total - agent.tokens_debut)
             case "item/started" if item is not None:
                 self._debut_item(agent, item)
             case "item/completed" if item is not None:

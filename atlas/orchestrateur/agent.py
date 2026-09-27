@@ -149,7 +149,7 @@ async def tour(
         await asyncio.to_thread(conversations.modifier_conversation, conversation.id, session_agent=thread.id)
         conversation.session_agent = thread.id
     suivi.demarrer_racine(thread.id, modele or config.MODELE)
-    return await _derouler(thread, texte, conversation.id, execution_id, sur_tour, effort, modele)
+    return await _derouler(thread, texte, conversation.id, execution_id, sur_tour, effort, modele, suivi)
 
 
 async def _derouler(
@@ -160,6 +160,7 @@ async def _derouler(
     sur_tour: Callable[[AsyncTurnHandle], None],
     effort: str | None,
     modele: str | None,
+    suivi: SuiviAgents,
 ) -> ResultatTour:
     handle = await thread.turn(texte, effort=ReasoningEffort(effort or config.EFFORT), model=modele or None)
     sur_tour(handle)
@@ -169,7 +170,7 @@ async def _derouler(
     async for evenement in handle.stream():
         charge = evenement.payload
         if isinstance(charge, ItemCompletedNotification):
-            for ligne in traduire(charge.item):
+            for ligne in traduire(charge.item, suivi.bilan(charge.item)):
                 await asyncio.to_thread(
                     conversations.ajouter_message,
                     conversation_id,

@@ -103,3 +103,21 @@ def test_un_arbre_relu_d_un_ancien_processus_ne_travaille_plus():
     repris = SuiviAgents.depuis(suivi.instantane())
     assert repris.agents["/root/hydrures"].etat == "interrompu"
     assert repris.au_travail() == []
+
+
+def test_un_sous_agent_relance_repart_de_zero_et_son_bilan_est_fige():
+    suivi = _suivi()
+    _lancement(suivi, RACINE_ID, "/root/hydrures", DIR_ID)
+    dir_ = suivi.agents["/root/hydrures"]
+    suivi.recevoir("turn/started", {"threadId": DIR_ID, "turn": {"id": "u1"}})
+    suivi.recevoir("item/started", {"threadId": DIR_ID, "item": {"type": "webSearch", "query": "LaH10"}})
+    suivi.recevoir("thread/tokenUsage/updated", {"threadId": DIR_ID, "tokenUsage": {"total": {"totalTokens": 1000}}})
+    suivi.recevoir("turn/completed", {"threadId": DIR_ID, "turn": {"status": "completed"}})
+    fin = {"type": "subAgentActivity", "agentPath": "/root/hydrures", "agentThreadId": DIR_ID, "kind": "completed"}
+    premier = suivi.bilan(fin)
+    assert (premier["nb_outils"], premier["tokens"]) == (1, 1000)
+
+    suivi.recevoir("turn/started", {"threadId": DIR_ID, "turn": {"id": "u2"}})
+    suivi.recevoir("thread/tokenUsage/updated", {"threadId": DIR_ID, "tokenUsage": {"total": {"totalTokens": 1300}}})
+    assert (dir_.nb_outils, dir_.tokens, dir_.fin) == (0, 300, None)
+    assert suivi.bilan({"type": "subAgentActivity", "agentPath": "/root/hydrures", "kind": "started"}) is None

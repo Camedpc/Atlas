@@ -296,7 +296,7 @@ class Gestionnaire:
             tache.add_done_callback(self._taches.discard)
         execution_id = self._derniere.get(cid)
         for chemin, item in evenements.a_enregistrer:
-            for ligne in traduire(item):
+            for ligne in traduire(item, suivi.bilan(item)):
                 await asyncio.to_thread(
                     conversations.ajouter_message,
                     cid,

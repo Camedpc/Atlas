@@ -1,4 +1,6 @@
-// Arbre des agents au-dessus de la saisie, comme la liste des sous-agents de Claude Code dans le terminal.
+// Arbre des agents au-dessus de la saisie, comme la liste des sous-agents de Claude Code dans le terminal : il ne
+// montre que l'activité en cours (les sous-agents au travail, et ceux qui ont fini pendant le tour en cours) et
+// disparaît quand plus personne ne travaille ; il reste alors dans le fil un résumé par sous-agent terminé.
 // Clavier (l'arbre a le focus) : ↑ ↓ naviguer · ← → replier, déplier · Entrée écrire à l'agent · Échap revenir
 // à l'orchestrateur. Depuis la saisie vide, ↑ entre dans l'arbre.
 import type { Agent } from './api'
@@ -94,7 +96,7 @@ export class ArbreAgents {
 
   /** Donne le focus à l'arbre (depuis la saisie), sur la dernière ligne. */
   entrer(): boolean {
-    if (!this.lignes.length || !this.ouvert) return false
+    if (!this.lignes.length || !this.ouvert || this.racine.hidden) return false
     this.curseur = this.lignes[this.lignes.length - 1].agent.chemin
     this.liste.focus()
     return true
@@ -109,7 +111,25 @@ export class ArbreAgents {
   }
 
   private descendants(a: Agent): Agent[] {
-    return etat.enfants(a).flatMap((e) => [e, ...this.descendants(e)])
+    return this.enfants(a).flatMap((e) => [e, ...this.descendants(e)])
+  }
+
+  /** Sous-agents à montrer : au travail, ou finis depuis le début du tour en cours (et leurs parents). */
+  private visibles = new Set<string>()
+
+  private calculerVisibles() {
+    this.visibles.clear()
+    if (!etat.enCours) return
+    const debutTour = etat.racine?.debut ?? 0
+    for (const a of etat.sousAgents) {
+      if (!estFini(a) || (a.fin ?? 0) >= debutTour) {
+        for (let x: Agent | undefined = a; x && x.chemin !== RACINE; x = etat.get(x.parent)) this.visibles.add(x.chemin)
+      }
+    }
+  }
+
+  private enfants(a: Agent): Agent[] {
+    return etat.enfants(a).filter((e) => this.visibles.has(e.chemin))
   }
 
   private basculerRepli(chemin: string) {
@@ -124,7 +144,7 @@ export class ArbreAgents {
     const racine = etat.racine
     if (!racine) return lignes
     const parcourir = (a: Agent, prefixe: string, suite: string) => {
-      const enfants = etat.enfants(a)
+      const enfants = this.enfants(a)
       const replie = enfants.length > 0 && this.estReplie(a)
       lignes.push({ agent: a, prefixe, enfants: this.descendants(a).length, replie })
       if (replie) return
@@ -138,7 +158,8 @@ export class ArbreAgents {
   }
 
   private dessiner() {
-    const sous = etat.sousAgents
+    this.calculerVisibles()
+    const sous = etat.sousAgents.filter((a) => this.visibles.has(a.chemin))
     this.racine.hidden = sous.length === 0
     const actifs = sous.filter((a) => !estFini(a)).length
     this.resume.textContent = `${sous.length} · ${actifs ? `${actifs} au travail` : 'tous terminés'}`

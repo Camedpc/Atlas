@@ -475,6 +475,13 @@ body.sessions-repliees .deplier-sessions {
   color: var(--accent);
 }
 
+.resume-agent {
+  margin-left: 8px;
+  color: #71717a;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
 .msg.systeme {
   color: var(--echec);
   font-size: 13px;
