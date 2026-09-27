@@ -14,6 +14,7 @@ import {
   VOIX,
   couleurRole,
   estFini,
+  estJuge,
   estVivant,
   etat,
   formatDuree,
@@ -344,8 +345,11 @@ export class AgentGraph {
       for (const e of etat.enfants(a)) d.push({ k: `l:${e.chemin}`, genre: 'exec', lab: `Lance → ${mission(e)}` })
       if (n.replieManuel) d.push({ k: 'replier', genre: 'action', lab: 'Réduire le sous-graphe', bouton: 'replier', pic: '−' })
     }
-    if (etat.enfants(a).length) d.push({ k: 'contexte', genre: 'texte', lab: 'contexte' })
-    if (!compact) d.push({ k: 'tokens', genre: 'entier', lab: 'tokens' }, { k: 'outils', genre: 'entier', lab: 'outils' })
+    const juge = estJuge(a)
+    if (etat.enfants(a).length && !juge) d.push({ k: 'contexte', genre: 'texte', lab: 'contexte' })
+    // Un juge du vérificateur n'a ni outils ni jetons suivis : son verdict à la place.
+    if (a.verdict) d.push({ k: 'verdict', genre: 'texte', lab: 'verdict' })
+    if (!compact && !juge) d.push({ k: 'tokens', genre: 'entier', lab: 'tokens' }, { k: 'outils', genre: 'entier', lab: 'outils' })
     d.push({ k: 'resultat', genre: 'texte', lab: 'résultat' })
     const rangs = Math.max(g.length, d.length)
     return { g, d, pied: !compact, rangs, h: 2 + TETE + 2 * MARGE + rangs * RANG + (compact ? 0 : PIED) }
@@ -450,6 +454,7 @@ export class AgentGraph {
       tokens: r.colD.querySelector('[data-k="tokens"] .val'),
       outils: r.colD.querySelector('[data-k="outils"] .val'),
       resultat: r.colD.querySelector('[data-k="resultat"] .val'),
+      verdict: r.colD.querySelector('[data-k="verdict"] .val'),
       fin: r.colD.querySelector('[data-k="fin"] .pin'),
     }
     if (r.v.resultat) r.v.resultat.classList.add('v-resultat')
@@ -458,6 +463,7 @@ export class AgentGraph {
 
   private etiquettePied(a: Agent): [string, string] {
     if (a.etat === 'actif' && a.chemin === VOIX) return [a.outil ?? 'En appel', a.activite]
+    if (a.verdict) return [a.verdict.validite === 'valide' ? 'Valide' : 'Invalide', a.resultat ?? '']
     if (a.etat === 'actif') return [a.outil ?? 'Réfléchit', a.activite]
     if (a.etat === 'attend') {
       const enfants = etat.enfants(a)
@@ -470,7 +476,8 @@ export class AgentGraph {
     const a = n.agent
     this.rangee(r, n)
     const choisi = etat.selection === a.chemin && a.chemin !== RACINE
-    basculerClasse(r, `noeud e-${a.etat}${estVivant(a) ? ' vivant' : ''}${choisi ? ' choisi' : ''}`)
+    const invalide = a.verdict?.validite === 'invalide' ? ' invalide' : ''
+    basculerClasse(r, `noeud e-${a.etat}${estVivant(a) ? ' vivant' : ''}${choisi ? ' choisi' : ''}${invalide}`)
     r.el.style.setProperty('--c', couleurRole(a.role))
     texte(r.ico, iconeRole(a.role))
     texte(r.role, a.chemin === RACINE ? 'Orchestrateur' : libelleRole(a.role))
@@ -480,6 +487,10 @@ export class AgentGraph {
     if (r.v.tokens) texte(r.v.tokens, formatTokens(a.tokens))
     if (r.v.outils) texte(r.v.outils, String(a.nb_outils))
     if (r.v.resultat) texte(r.v.resultat, a.resultat ?? '—')
+    if (r.v.verdict && a.verdict) {
+      const confiance = a.verdict.confiance.toFixed(2).replace('.', ',')
+      texte(r.v.verdict, `${a.verdict.validite} · ${confiance}`)
+    }
     const finPlein = a.etat === 'termine'
     if (r.finPlein !== finPlein) {
       r.finPlein = finPlein

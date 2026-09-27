@@ -57,11 +57,14 @@ export const libelleRole = (role: string) => LIBELLES[role] ?? role
 export const iconeRole = (role: string) => ICONES[role] ?? '•'
 export const estFini = (a: Agent) => a.etat === 'termine' || a.etat === 'echec' || a.etat === 'interrompu'
 export const estVivant = (a: Agent) => a.etat === 'actif'
+/** Le vérificateur et ses juges (outil `verifier`) : des threads éphémères, à qui l'on ne peut pas écrire. */
+export const estJuge = (a: Agent | undefined) => !!a && (a.role === 'verificateur' || a.role === 'recours')
 
 /** Nom de la tâche donné par l'agent parent : dernier segment du chemin (`/root/hydrures_pression`). */
 export function mission(a: Agent): string {
   if (a.chemin === RACINE) return 'Orchestrateur'
   if (a.chemin === VOIX) return 'Appel vocal'
+  if (a.titre) return a.titre
   return a.chemin.slice(a.chemin.lastIndexOf('/') + 1).replace(/[_-]+/g, ' ')
 }
 

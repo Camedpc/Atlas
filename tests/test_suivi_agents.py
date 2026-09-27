@@ -144,3 +144,83 @@ def test_titre_de_reflexion_en_direct_et_etape_datee():
     assert suivi.recevoir("item/completed", {"threadId": DIR_ID, "item": reflexion}).a_enregistrer == [
         ("/root/hydrures", reflexion)
     ]
+
+
+# ── Vérificateur ─────────────────────────────────────────────────────────────
+
+VERIFIER = {"type": "mcpToolCall", "server": "verificateur", "tool": "verifier", "id": "v"}
+
+
+def _verdict(cle, etape, validite, confiance, final=True):
+    return {
+        "appel": "a1", "type": "verdict", "cle": cle, "etape": etape, "modele": etape, "validite": validite,
+        "confiance": confiance, "justification": f"{cle} jugée", "final": final,
+    }
+
+
+def test_verification_sous_son_appelant_avec_un_juge_par_demonstration_et_le_recours():
+    suivi = _suivi()
+    _lancement(suivi, RACINE_ID, "/root/hydrures", DIR_ID)
+    suivi.recevoir("item/started", {"threadId": DIR_ID, "item": VERIFIER})
+    assert suivi.verification({"appel": "a1", "type": "debut", "total": 2}) == []
+    v = suivi.agents["/root/hydrures/verification"]
+    assert (v.parent, v.role, v.etat, v.titre, v.activite) == (
+        "/root/hydrures", "verificateur", "actif", "2 démonstrations", "0/2 jugée",
+    )
+
+    suivi.verification({"appel": "a1", "type": "juge", "cle": "l7/p", "titre": "Lemme 7 · p", "etape": "juge"})
+    suivi.verification({"appel": "a1", "type": "juge", "cle": "t3/r", "titre": "Théorème 3 · r", "etape": "juge"})
+    lemme, theoreme = suivi.agents["/root/hydrures/verification/1"], suivi.agents["/root/hydrures/verification/2"]
+    assert (lemme.titre, lemme.etat, lemme.parent) == ("Lemme 7 · p", "actif", v.chemin)
+
+    messages = suivi.verification(_verdict("l7/p", "juge", "valide", 0.92))
+    assert [c for c, _ in messages] == [lemme.chemin, v.chemin]
+    assert messages[0][1].startswith("**Lemme 7 · p** : valide, confiance 0,92 (juge)")
+    assert (lemme.etat, lemme.verdict, v.activite) == (
+        "termine", {"validite": "valide", "confiance": 0.92}, "1/2 jugée · 1 valide",
+    )
+
+    # Le juge doute : seul son fil reçoit le verdict, le recours rejuge et fait foi.
+    assert [c for c, _ in suivi.verification(_verdict("t3/r", "juge", "invalide", 0.41, final=False))] == [
+        theoreme.chemin
+    ]
+    suivi.verification({"appel": "a1", "type": "juge", "cle": "t3/r", "etape": "recours", "modele": "sol"})
+    recours = suivi.agents[f"{theoreme.chemin}/recours"]
+    assert (recours.role, recours.parent, recours.etat, recours.titre) == (
+        "recours", theoreme.chemin, "actif", "Théorème 3 · r",
+    )
+    messages = suivi.verification(_verdict("t3/r", "recours", "invalide", 0.88))
+    assert [c for c, _ in messages] == [recours.chemin, v.chemin] and "recours)" in messages[0][1]
+
+    suivi.verification({"appel": "a1", "type": "fin"})
+    assert (v.etat, v.resultat) == ("termine", "2/2 jugées · 1 valide · 1 invalide")
+    assert suivi.verification(_verdict("l7/p", "juge", "valide", 0.1)) == []  # appel clos
+    assert {a["chemin"] for a in suivi.instantane()} >= {v.chemin, recours.chemin}
+
+
+def test_verification_sans_fin_close_a_la_fin_de_l_outil():
+    suivi = _suivi()
+    suivi.recevoir("item/started", {"threadId": RACINE_ID, "item": VERIFIER})
+    suivi.verification({"appel": "a1", "type": "debut", "total": 2})
+    suivi.verification({"appel": "a1", "type": "juge", "cle": "l7/p", "titre": "Lemme 7 · p", "etape": "juge"})
+    suivi.verification({"appel": "a2", "type": "debut", "total": 1})
+    assert "/root/verification_2" in suivi.agents
+
+    suivi.recevoir("item/completed", {"threadId": RACINE_ID, "item": VERIFIER})
+    v, juge = suivi.agents["/root/verification"], suivi.agents["/root/verification/1"]
+    assert (v.etat, juge.etat, v.resultat) == ("echec", "interrompu", "0/2 jugée")
+    assert suivi.au_travail(sous_agents_seuls=True) == []
+
+
+def test_verification_erreur_d_une_demonstration():
+    suivi = _suivi()
+    suivi.verification({"appel": "a1", "type": "debut", "total": 1})
+    suivi.verification({"appel": "a1", "type": "juge", "cle": "l7/p", "titre": "Lemme 7 · p", "etape": "juge"})
+    messages = suivi.verification({"appel": "a1", "type": "erreur", "cle": "l7/p", "message": "panne"})
+    assert messages == [
+        ("/root/verification/1", "**Lemme 7 · p** : non jugée (panne)"),
+        ("/root/verification", "**Lemme 7 · p** : non jugée (panne)"),
+    ]
+    assert (suivi.agents["/root/verification/1"].etat, suivi.agents["/root/verification"].activite) == (
+        "echec", "1/1 jugée · 1 erreur",
+    )
