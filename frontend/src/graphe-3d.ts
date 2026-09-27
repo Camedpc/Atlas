@@ -1,10 +1,8 @@
 // Mode 3D d'une figure (scène Plotly animée, atlas/figures3d.py), ouvert au double-clic sur sa case.
 //
-// Entrée : la vue 2D cadre la case, puis devient le plancher de la scène : pendant que la caméra de la scène descend de
-// la verticale jusqu'à une vue plongeante (environ 30°), la vue 2D bascule en perspective CSS autour de la case, recule
-// et se voile jusqu'à ne laisser qu'un disque estompé autour de la case ; la scène apparaît par-dessus, puis
-// l'animation tourne en boucle. Le plancher suit ensuite la caméra (inclinaison, rotation, recul) : c'est un effet de
-// style, pas la projection exacte de Plotly. Caméra fixe, que l'on peut tourner en glissant à la souris (et zoomer à la molette).
+// Entrée : la vue 2D cadre la case ; la scène apparaît par-dessus et, pendant que sa caméra descend de la verticale
+// jusqu'à une vue plongeante (environ 30°) en tournant de 45° (de face, puis à trois-quarts), la vue 2D s'efface ; puis
+// l'animation tourne en boucle. Caméra fixe, que l'on peut tourner en glissant à la souris (et zoomer à la molette).
 // Commandes : lecture / pause (Espace), vitesse ×0,5 / ×1 / ×2 (retenue), fermer (Échap, ×, double-clic).
 // Appliquer une image redessine la scène avec la caméra de la mise en page, que Plotly ne met à jour qu'à la fin d'un
 // geste : pendant qu'on tient la souris (ou qu'on tourne la molette), l'animation attend donc, puis la caméra laissée
@@ -13,6 +11,7 @@
 // Le graphe est figé pendant ce temps : la couche prend tous les événements et ne les laisse pas remonter à la vue.
 // plotly.js (build gl3d, ~1,7 Mo) n'est chargé qu'à la première ouverture. Les images ne sont pas jouées par Plotly
 // mais par une horloge commune, qui applique chaque image quand elle change (une seule en cours à la fois).
+// (Une version où la vue 2D restait en plancher sous la scène est sur la branche visu/figures-3d-plancher.)
 
 import './graphe-3d.css'
 import type { FigureVue, SceneFigure } from './api'
@@ -21,24 +20,12 @@ import { htmlTitreFigure } from './graphe-figures'
 
 export const VITESSES = [0.5, 1, 2] as const
 const CLE_VITESSE = 'atlas.vitesse3d'
-/** Retour du plancher à plat, à la fermeture (ms). */
-const DUREE_BASCULE = 450
+/** Retour de la vue 2D, à la fermeture (ms). */
+const DUREE_RETOUR = 450
 const DUREE_CAMERA = 1200
-const PERSPECTIVE = 1000
-/** Plancher final : recul, opacité, et fondu en ellipse autour de la case, en fractions de l'ellipse qui touche les
- * bords de la vue (1 : le fondu s'éteint juste au bord, sans arête visible). */
-const ECHELLE_PLANCHER = 0.85
-const OPACITE_PLANCHER = 1
-const FONDU_DEBUT = 0.55
-const FONDU_FIN = 0.99
-/** Champ vertical de la caméra de Plotly (gl-plot3d : π/4). */
-const CHAMP_PLOTLY = Math.PI / 4
-/** Case de la figure sur le plancher, rapportée à la base de la boîte : plus grande, pour que la scène tienne dans sa
- * case (le bandeau du titre et la marge compris). */
-const CASE_SUR_BASE = 3
 
 // Caméra (unités de la scène Plotly, centre en 0) : descente de la verticale jusqu'à 30°, en tournant de 45° (de face,
-// l'axe x parallèle à l'horizontale de la case, à trois-quarts).
+// puis à trois-quarts).
 const AZIMUT_DEPART = -Math.PI / 2
 const AZIMUT = -Math.PI / 4
 const ELEVATION_DEPART = (86 * Math.PI) / 180
@@ -53,78 +40,12 @@ export function imageA(t: number, fps: number, n: number): number {
   return i < 0 ? i + n : i
 }
 
-/** Œil de la caméra à l'avancement `u` (0 : presque à la verticale, 1 : vue plongeante). */
+/** Œil de la caméra à l'avancement `u` (0 : presque à la verticale, de face ; 1 : vue plongeante, à trois-quarts). */
 export function oeil(u: number): { x: number; y: number; z: number } {
   const el = ELEVATION_DEPART + (ELEVATION_FIN - ELEVATION_DEPART) * u
   const d = DISTANCE_DEPART + (DISTANCE_FIN - DISTANCE_DEPART) * u
   const az = AZIMUT_DEPART + (AZIMUT - AZIMUT_DEPART) * u
   return { x: d * Math.cos(el) * Math.cos(az), y: d * Math.cos(el) * Math.sin(az), z: d * Math.sin(el) }
-}
-
-type Oeil = { x: number; y: number; z: number }
-
-/** Plancher : la vue 2D inclinée sous la scène (degrés, facteurs), `voile` de 0 (net partout) à 1 (disque estompé), et
- * `abaissement` (px d'écran) qui le descend du centre de la boîte de Plotly jusque sous sa face du bas. */
-export interface Plancher {
-  inclinaison: number
-  rotation: number
-  echelle: number
-  opacite: number
-  voile: number
-  abaissement: number
-}
-
-export const PLANCHER_NEUTRE: Plancher = { inclinaison: 0, rotation: 0, echelle: 1, opacite: 1, voile: 0, abaissement: 0 }
-
-/** Où tombe à l'écran, sous le centre de la boîte, le centre de sa face du bas (px) : Plotly centre sa boîte sur le point
- * visé, avec une demi-hauteur de aspectratio.z / 2 ; caméra en perspective de champ vertical π/4 sur `hauteurPx`. */
-export function sousLaBoite(e: Oeil, demiHauteur: number, hauteurPx: number): number {
-  const distance = Math.hypot(e.x, e.y, e.z)
-  const elevation = Math.atan2(e.z, Math.hypot(e.x, e.y))
-  const focale = hauteurPx / 2 / Math.tan(CHAMP_PLOTLY / 2)
-  return (focale * demiHauteur * Math.cos(elevation)) / (distance + demiHauteur * Math.sin(elevation))
-}
-
-/** Largeur à l'écran (px) du bas de la boîte de Plotly, vu de l'œil `e` : sa base (aspectratio x × y, centrée, à
- * `demiHauteur` sous le centre) vue de travers selon l'azimut de l'œil. Sert à agrandir le plancher pour que la case de
- * la figure ait la taille de la base de la boîte. */
-export function largeurBase(e: Oeil, largeurX: number, demiHauteur: number, hauteurPx: number): number {
-  const distance = Math.hypot(e.x, e.y, e.z)
-  const elevation = Math.atan2(e.z, Math.hypot(e.x, e.y))
-  const focale = hauteurPx / 2 / Math.tan(CHAMP_PLOTLY / 2)
-  // Le plancher tourne avec la caméra : l'horizontale de la case reste parallèle à l'axe x de la boîte, dont la
-  // longueur se compare donc dans le plan du plancher, sans raccourci de biais.
-  return (focale * largeurX) / (distance + demiHauteur * Math.sin(elevation))
-}
-
-/** Plancher pour un œil de caméra, à l'avancement `u` de l'entrée : incliné de 90° moins l'élévation de l'œil, tourné
- * comme l'œil autour de la verticale, reculé quand l'œil s'éloigne (molette). */
-export function plancher(e: Oeil, u: number): Plancher {
-  const horizontal = Math.hypot(e.x, e.y)
-  const distance = Math.hypot(horizontal, e.z)
-  const reference = DISTANCE_DEPART + (DISTANCE_FIN - DISTANCE_DEPART) * u
-  return {
-    inclinaison: 90 - (Math.atan2(e.z, horizontal) * 180) / Math.PI,
-    // Rotation nulle vue de face (œil vers −y) : l'axe x de la boîte suit alors l'horizontale de la case.
-    rotation: ((Math.atan2(e.y, e.x) - AZIMUT_DEPART) * 180) / Math.PI,
-    echelle: (1 + (ECHELLE_PLANCHER - 1) * u) * (reference / distance),
-    opacite: 1 + (OPACITE_PLANCHER - 1) * u,
-    voile: u,
-    abaissement: 0,
-  }
-}
-
-/** Mélange de deux planchers (k = 0 : `a`, k = 1 : `b`). */
-export function melanger(a: Plancher, b: Plancher, k: number): Plancher {
-  const m = (x: number, y: number) => x + (y - x) * k
-  return {
-    inclinaison: m(a.inclinaison, b.inclinaison),
-    rotation: m(a.rotation, b.rotation),
-    echelle: m(a.echelle, b.echelle),
-    opacite: m(a.opacite, b.opacite),
-    voile: m(a.voile, b.voile),
-    abaissement: m(a.abaissement, b.abaissement),
-  }
 }
 
 function vitesseRetenue(): number {
@@ -147,14 +68,13 @@ function retenirVitesse(v: number): void {
 export interface OptionsMode3D {
   /** La scène de la vue du graphe : la couche 3D s'y ajoute. */
   scene: HTMLElement
-  /** Ce qui devient le plancher (canevas et couche HTML de la vue). */
+  /** Ce qui s'efface derrière la scène (canevas et couche HTML de la vue). */
   calques: HTMLElement[]
   figure: FigureVue
   numero: string
   charger: () => Promise<SceneFigure>
-  /** Cadre la case de la figure ; renvoie son centre et sa largeur à l'écran (px de la scène), null si elle n'est pas
-   * visible. */
-  cadrer: () => Promise<{ x: number; y: number; largeur: number } | null>
+  /** Cadre la case de la figure dans la vue 2D. */
+  cadrer: () => Promise<unknown>
   surFermer: () => void
 }
 
@@ -187,36 +107,13 @@ export function ouvrir3d(o: OptionsMode3D): () => void {
   let plotly: Plotly | null = null
   let boucle = 0
   let camera: ReturnType<typeof animer> | null = null
-  /** Descente de la caméra en cours : c'est elle qui pose le plancher. */
-  let animation = false
   let pause = false
   let vitesse = vitesseRetenue()
-  // Plancher : centre de la case (px de la scène), décalage vers le centre de la scène 3D, état posé.
-  let centre = { x: 0, y: 0 }
-  let decalage = { x: 0, y: 0 }
-  let pose: Plancher = PLANCHER_NEUTRE
-  const poser = (p: Plancher) => {
-    pose = p
-    // Ellipse qui touche, depuis la case, le bord le plus proche dans chaque direction (closest-side) : le fondu va
-    // aussi loin que le canevas le permet. Voile nul : tout est net ; voile 1 : net jusqu'à FONDU_DEBUT, effacé à
-    // FONDU_FIN.
-    const debut = 100 * FONDU_DEBUT + 1000 * (1 - p.voile)
-    const fin = 100 * FONDU_FIN + 1500 * (1 - p.voile)
-    const masque = `radial-gradient(closest-side at ${centre.x}px ${centre.y}px, #000 ${debut}%, transparent ${fin}%)`
-    const transformation = `translate(${decalage.x * p.voile}px, ${decalage.y * p.voile + p.abaissement}px) `
-      + `perspective(${PERSPECTIVE}px) rotateX(${p.inclinaison}deg) rotateZ(${p.rotation}deg) scale(${p.echelle})`
-    for (const c of o.calques) {
-      c.style.transformOrigin = `${centre.x}px ${centre.y}px`
-      c.style.transform = transformation
-      c.style.opacity = String(p.opacite)
-      c.style.maskImage = c.style.webkitMaskImage = masque
-    }
-  }
-  const nettoyerPlancher = () => {
-    for (const c of o.calques) {
-      c.style.transformOrigin = c.style.transform = c.style.opacity = ''
-      c.style.maskImage = c.style.webkitMaskImage = ''
-    }
+  /** Opacité de la vue 2D derrière la scène (1 : visible, 0 : effacée). */
+  let presence = 1
+  const effacer = (x: number) => {
+    presence = x
+    for (const c of o.calques) c.style.opacity = x >= 1 ? '' : String(x)
   }
   const observateur = new ResizeObserver(() => {
     if (plotly && trace.isConnected) void plotly.Plots.resize(trace)
@@ -254,17 +151,12 @@ export function ouvrir3d(o: OptionsMode3D): () => void {
     document.removeEventListener('pointercancel', relacher, true)
     couche.classList.remove('gr-3d-visible')
     o.scene.classList.remove('gr-scene-3d')
-    // Le plancher revient à plat pendant que la scène s'efface.
-    const depart = pose
-    const retour = animer(
-      (k) => poser(melanger(depart, PLANCHER_NEUTRE, k)),
-      () => poser(PLANCHER_NEUTRE),
-      reduit ? 0 : DUREE_BASCULE,
-    )
+    // La vue 2D revient pendant que la scène s'efface.
+    const depart = presence
+    const retour = animer((k) => effacer(depart + (1 - depart) * k), () => effacer(1), reduit ? 0 : DUREE_RETOUR)
     void retour.promesse.then(() => {
       if (plotly) plotly.purge(trace)
       couche.remove()
-      nettoyerPlancher()
     })
     o.surFermer()
   }
@@ -329,15 +221,9 @@ export function ouvrir3d(o: OptionsMode3D): () => void {
     const module = import('plotly.js-gl3d-dist-min')
     o.scene.append(couche)
     lecture.focus({ preventScroll: true })
-    const case_ = await o.cadrer()
+    await o.cadrer()
     if (!ouvert) return
-    // Case hors de la vue (cadrage interrompu, vue qui se recadre) : le plancher tourne autour du milieu, sans être
-    // mis à la taille de la boîte.
-    const [w, h] = [o.scene.clientWidth, o.scene.clientHeight]
-    const visible = case_ && case_.x >= 0 && case_.x <= w && case_.y >= 0 && case_.y <= h ? case_ : null
-    centre = visible ?? { x: w / 2, y: h / 2 }
     o.scene.classList.add('gr-scene-3d')
-    poser(PLANCHER_NEUTRE)
     couche.classList.add('gr-3d-visible')
 
     let donnees: SceneFigure
@@ -352,60 +238,29 @@ export function ouvrir3d(o: OptionsMode3D): () => void {
     const { figure, atlas } = donnees
     const layout: Record<string, unknown> = { ...figure.layout }
     delete layout.title // le titre est celui de la figure, dans l'en-tête
-    // Fond de scène transparent (le plancher se voit autour de la boîte) ; les parois et la grille restent celles de
-    // l'agent.
+    // Fond de scène transparent (la vue 2D s'efface derrière) ; les parois et la grille restent celles de l'agent.
     layout.scene = {
       ...(layout.scene as Record<string, unknown> | undefined),
       bgcolor: 'rgba(0,0,0,0)',
       camera: { eye: oeil(reduit ? 1 : 0), up: { x: 0, y: 0, z: 1 } },
     }
-    // Marges : le titre en haut, la barre de commandes en bas (les graphiques 2D ne passent pas dessous).
-    const marges = { l: 12, r: 12, t: 44, b: 64 }
     Object.assign(layout, {
       paper_bgcolor: 'rgba(0,0,0,0)',
       plot_bgcolor: 'rgba(0,0,0,0)',
       autosize: true,
-      margin: marges,
+      // Marges : le titre en haut, la barre de commandes en bas (les graphiques 2D ne passent pas dessous).
+      margin: { l: 12, r: 12, t: 44, b: 64 },
       // Garde la caméra tournée par l'utilisateur d'une image à l'autre.
       uirevision: 'atlas',
     })
     const config = { displayModeBar: false, displaylogo: false, responsive: true, doubleClick: false, scrollZoom: true }
     const graphique = await p.newPlot(trace, figure.data, layout, config)
     if (!ouvert) return p.purge(trace)
-    // Le plancher glisse sous le centre de la scène 3D (qui n'est pas au milieu si l'agent a mis des graphiques 2D).
-    const domaine = (layout.scene as { domain?: { x?: number[]; y?: number[] } }).domain ?? {}
-    const [x0 = 0, x1 = 1] = domaine.x ?? []
-    const [y0 = 0, y1 = 1] = domaine.y ?? []
-    const largeur = couche.clientWidth - marges.l - marges.r
-    const hauteur = couche.clientHeight - marges.t - marges.b
-    decalage = {
-      x: marges.l + largeur * ((x0 + x1) / 2) - centre.x,
-      y: marges.t + hauteur * (1 - (y0 + y1) / 2) - centre.y,
-    }
-    // Plotly réécrit dans la mise en page les proportions de la boîte qu'il a retenues.
-    const lues = (graphique.layout.scene as { aspectratio?: { x?: number; y?: number; z?: number } } | undefined)
-      ?.aspectratio
-    const largeurX = lues?.x ?? 1
-    const demiHauteur = (lues?.z ?? 1) / 2
-    const hauteurScene = hauteur * (y1 - y0)
-    // La case de la figure, sur le plancher, prend la taille de la base de la boîte : la scène couvre sa case, et les
-    // nœuds voisins restent visibles autour (à la molette, le plancher suit le zoom).
-    const plancherPour = (e: Oeil, u: number): Plancher => {
-      const p = plancher(e, u)
-      const cible = visible
-        ? (CASE_SUR_BASE * largeurBase(e, largeurX, demiHauteur, hauteurScene)) / visible.largeur
-        : p.echelle
-      return { ...p, echelle: 1 + (cible - 1) * u, abaissement: sousLaBoite(e, demiHauteur, hauteurScene) }
-    }
-    const suivreCamera = (e: Record<string, unknown>, fin: boolean) => {
-      const camera = e['scene.camera'] as { eye?: Oeil } | undefined
+    graphique.on('plotly_relayout', (e) => {
+      const camera = e['scene.camera']
       const reglages = graphique.layout.scene as Record<string, unknown> | undefined
-      if (fin && camera && reglages) reglages.camera = camera
-      if (camera?.eye && !animation) poser(plancherPour(camera.eye, 1))
-    }
-    graphique.on('plotly_relayout', (e) => suivreCamera(e, true))
-    // Pendant le geste : le plancher suit, sans toucher à la mise en page (Plotly l'écrit à la fin).
-    graphique.on('plotly_relayouting', (e) => suivreCamera(e, false))
+      if (camera && reglages) reglages.camera = camera
+    })
     const images = figure.frames.map((f, i) => {
       const image: Record<string, unknown> = { ...f, name: String(i) }
       // Une caméra dans une image la ferait sauter à chaque tour de boucle.
@@ -418,17 +273,15 @@ export function ouvrir3d(o: OptionsMode3D): () => void {
     etat.textContent = ''
     observateur.observe(couche)
     if (!ouvert) return
-    if (reduit) poser(plancherPour(oeil(1), 1))
+    if (reduit) effacer(0)
     else {
-      animation = true
       const pas = (u: number) => {
         void p.relayout(trace, { 'scene.camera.eye': oeil(u) })
-        poser(plancherPour(oeil(u), u))
+        effacer(1 - u)
       }
       camera = animer(pas, () => pas(1), DUREE_CAMERA)
       await camera.promesse
       camera = null
-      animation = false
     }
     if (ouvert) jouer(p, atlas.fps, images.length)
   }
