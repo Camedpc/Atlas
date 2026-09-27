@@ -79,10 +79,11 @@ def arreter_tache(id: int) -> str:
 @serveur.tool()
 def afficher(demande: str, extrait: str = "", titre: str = "") -> str:
     """Change ce que Camille voit à l'écran du graphe : montrer, cadrer, zoomer, sélectionner ou filtrer des nœuds,
-    passer en 2D ou en 3D, revenir à l'affichage précédent. L'agent navigateur d'AtlasVoice s'en charge ; il ne
-    modifie jamais le graphe. `demande` : ce que Camille veut voir, dans ses mots. `extrait` : les mots exacts de sa
-    phrase qui concernent l'affichage, s'il n'y en a qu'une partie. `titre` : quelques mots. Rend la main tout de
-    suite ; le résultat ou une question de l'agent arrive dans un message [Affichage]."""
+    les écarter ou les déplacer sur son écran seulement, enchaîner avec des pauses, revenir à l'affichage précédent.
+    L'agent navigateur d'AtlasVoice s'en charge ; il ne modifie jamais le graphe. `demande` : ce que Camille veut
+    voir, dans ses mots, avec tout l'enchaînement. `extrait` : les mots exacts de sa phrase qui concernent
+    l'affichage, s'il n'y en a qu'une partie. `titre` : quelques mots. Rend la main tout de suite ; le résultat ou
+    une question de l'agent arrive dans un message [Affichage]."""
     return _appel("/affichage", {"demande": demande, "extrait": extrait, "titre": titre})
 
 

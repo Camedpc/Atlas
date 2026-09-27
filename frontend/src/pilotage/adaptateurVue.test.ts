@@ -28,7 +28,8 @@ function fausseVue() {
   const v = {
     noeuds: NOEUDS, projet: PROJET, noeudSelectionne: null as string | null, noeudSurvole: null as string | null,
     camera: { x: 100, y: 50, z: 1 }, surlignes: [] as string[], filtre: null as ((x: Noeud) => boolean) | null,
-    cadres: [] as string[][], toutCadre: 0,
+    cadres: [] as string[][], toutCadre: 0, disposition: null as Map<string, { colonne: number; ligne: number }> | null,
+    definirDisposition: vi.fn((d: Map<string, { colonne: number; ligne: number }> | null) => (v.disposition = d?.size ? d : null)),
     selectionner: vi.fn((id: string | null) => (v.noeudSelectionne = id)),
     surligner: vi.fn((ids: string[]) => (v.surlignes = [...ids].sort())),
     definirFiltre: vi.fn((f: ((x: Noeud) => boolean) | null) => (v.filtre = f)),
@@ -83,6 +84,38 @@ describe('filtres et portée', () => {
   it('la portée suit les conséquences', () => {
     expect(portee(NOEUDS, 'lem')).toEqual(['cor', 'lem', 'thm'])
     expect(portee(NOEUDS, 'isole')).toEqual(['isole'])
+  })
+})
+
+describe('déplacements provisoires et attente', () => {
+  it('deplacer pose des positions dans la vue (fusionnées), retablir_disposition les retire, restaurer les ramène', async () => {
+    const { vue, pilote } = installer()
+    const avant = pilote.etat()
+    let cr = await pilote.commander({ op: 'deplacer', deplacements: [{ noeud: 'thm', colonne: 5, ligne: 2 }] },
+      { op: 'deplacer', deplacements: [{ figure: 'portrait', colonne: 6, ligne: 2 }, { noeud: 'thm', colonne: 4, ligne: 2 }] })
+    expect(cr.ok).toBe(true)
+    expect([...vue.disposition!]).toEqual([['fig:portrait', { colonne: 6, ligne: 2 }], ['thm', { colonne: 4, ligne: 2 }]])
+    expect(validerEtatAffichage(cr.etat)).toMatchObject({ ok: true })
+    expect(cr.etat!.deplacements).toEqual([{ figure: 'portrait', colonne: 6, ligne: 2 }, { noeud: 'thm', colonne: 4, ligne: 2 }])
+    const deplace = pilote.etat()
+    await pilote.commander({ op: 'retablir_disposition' })
+    expect(vue.disposition).toBe(null)
+    await pilote.commander({ op: 'restaurer', etat: deplace })
+    expect(vue.disposition?.get('thm')).toEqual({ colonne: 4, ligne: 2 })
+    await pilote.commander({ op: 'restaurer', etat: avant })
+    expect(vue.disposition).toBe(null)
+    cr = await pilote.commander({ op: 'deplacer', deplacements: [{ noeud: 'inconnu', colonne: 0, ligne: 0 }] })
+    expect(cr.resultats[0]).toMatchObject({ ok: false, erreur: { code: 'introuvable' } })
+  })
+
+  it('attendre fait une pause entre deux commandes', async () => {
+    const { vue, pilote } = installer()
+    const debut = performance.now()
+    const cr = await pilote.commander({ op: 'cadrer', cibles: [{ noeud: 'thm' }] }, { op: 'attendre', secondes: 0.2 },
+      { op: 'selectionner', cible: { noeud: 'lem' } })
+    expect(cr.ok).toBe(true)
+    expect(performance.now() - debut).toBeGreaterThanOrEqual(190)
+    expect(vue.noeudSelectionne).toBe('lem')
   })
 })
 

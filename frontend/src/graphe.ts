@@ -127,6 +127,8 @@ export class VueGraphe {
   /** Filtre du pilotage (agent navigateur) : un nœud qui ne passe pas est estompé. */
   private filtrePilotage: ((n: Noeud) => boolean) | null = null
   private surlignes: Set<string> | null = null
+  /** Disposition du pilotage : positions provisoires (cases) sur cet écran, sans toucher à la vue enregistrée. */
+  private disposition: Map<string, Surcharge> | null = null
   private projetId: string | null = null
   private lectureSeule: string | null = null
   private cam: Camera = { x: 40, y: 40, z: 1 }
@@ -398,15 +400,28 @@ export class VueGraphe {
     this.zoomVers(this.cam.z * facteur, this.largeur / 2, this.hauteur / 2)
   }
 
-  /** Cadre des nœuds (ceux d'un cadre réduit : le cadre) ; false si aucun n'est dans la vue. */
+  /** Cadre des nœuds (ceux d'un cadre réduit : le cadre) ; false si aucun n'est dans la vue. Des figures seules
+   * sont cadrées au-delà de 1:1, jusqu'à remplir l'écran : une figure n'occupe qu'une case. */
   cadrerNoeuds(ids: readonly string[]): boolean {
     let r: Rect | null = null
     for (const id of ids) {
       const x = this.rectRepresentant(this.modele.representant.get(id) ?? id)
       if (x) r = r ? union(r, x) : x
     }
-    if (r) this.cadrer(r)
+    const figures = ids.length > 0 && ids.every((id) => id.startsWith(PREFIXE_FIGURE))
+    if (r) this.cadrer(r, figures ? ZOOMS[ZOOMS.length - 1]![0] : 1)
     return r !== null
+  }
+
+  /** Disposition du pilotage : positions provisoires (clé : id de nœud ou « fig:<id> ») ; null : vue enregistrée.
+   * Le cadre de chaque élément ne change pas, ni la numérotation, ni le graphe. */
+  definirDisposition(positions: ReadonlyMap<string, { colonne: number; ligne: number }> | null): void {
+    if (!positions?.size) this.disposition = null
+    else {
+      const groupes = new Map(this.vue.placements.map((p) => [p.noeud_id, p.groupe_id]))
+      this.disposition = new Map([...positions].map(([id, p]) => [id, { ...p, groupe: groupes.get(id) ?? null }]))
+    }
+    this.reconstruire()
   }
 
   cadrerGraphe(): void {
@@ -427,9 +442,14 @@ export class VueGraphe {
   }
 
   private reconstruire(): void {
-    this.base = construireModele(this.graphe, this.vue)
-    this.modele = this.surcharges ? construireModele(this.graphe, this.vue, this.surcharges) : this.base
+    this.base = construireModele(this.graphe, this.vue, this.disposition ?? undefined)
+    this.modele = this.surcharges ? construireModele(this.graphe, this.vue, this.avecDisposition(this.surcharges)) : this.base
     this.demander()
+  }
+
+  /** Surcharges d'un glisser par-dessus la disposition du pilotage. */
+  private avecDisposition(surcharges: Map<string, Surcharge>): Map<string, Surcharge> {
+    return this.disposition ? new Map([...this.disposition, ...surcharges]) : surcharges
   }
 
   // ─── Caméra ────────────────────────────────────────────────────────────────
@@ -451,13 +471,13 @@ export class VueGraphe {
     this.dessinerMaintenant()
   }
 
-  private cadrer(r: Rect): void {
+  private cadrer(r: Rect, zoomMax = 1): void {
     if (!this.largeur) return
     const w = Math.max(1, r.x1 - r.x0), h = Math.max(1, r.y1 - r.y0)
     const z = Math.min((this.largeur - 80) / w, (this.hauteur - 80) / h)
-    // Comme UE : le plus grand palier qui fait tout tenir, sans dépasser 1:1.
+    // Comme UE : le plus grand palier qui fait tout tenir, sans dépasser 1:1 (au-delà seulement pour une figure seule).
     let i = 0
-    for (let k = 0; k <= INDEX_1_1; k++) if (ZOOMS[k]![0] <= z) i = k
+    for (let k = 0; k < ZOOMS.length; k++) if (ZOOMS[k]![0] <= z && ZOOMS[k]![0] <= zoomMax) i = k
     this.iZoom = i
     this.cam.z = ZOOMS[i]![0]
     this.centrerSur((r.x0 + r.x1) / 2, (r.y0 + r.y1) / 2)
@@ -756,7 +776,7 @@ export class VueGraphe {
       this.cadreCible = cible
       this.surcharges = new Map([...g.origines].map(([id, o]) => [id, { colonne: o.colonne + dc, ligne: o.ligne + dl, groupe: o.groupe }]))
       this.conflits = this.casesOccupees(this.surcharges)
-      this.modele = construireModele(this.graphe, this.vue, this.surcharges)
+      this.modele = construireModele(this.graphe, this.vue, this.avecDisposition(this.surcharges))
       this.demander()
     } else if (g.genre === 'rectangle') {
       const x0 = Math.min(g.x0, sx), y0 = Math.min(g.y0, sy)
@@ -1091,7 +1111,7 @@ export class VueGraphe {
     if (!ops.length) return this.finirGlisser()
     // Pendant l'envoi, les nœuds restent où on les a posés.
     this.surcharges = new Map([...g.origines].map(([id, o]) => [id, { colonne: o.colonne + g.dc, ligne: o.ligne + g.dl, groupe: cible ?? o.groupe }]))
-    this.modele = construireModele(this.graphe, this.vue, this.surcharges)
+    this.modele = construireModele(this.graphe, this.vue, this.avecDisposition(this.surcharges))
     this.cadreCible = null
     const seul = ops.length === 1 && String(ops[0]!.noeud).startsWith(PREFIXE_FIGURE) ? 'Déplacer la figure' : 'Déplacer le nœud'
     await this.executer(ops, ops.length > 1 ? `Déplacer ${ops.length} blocs` : seul)

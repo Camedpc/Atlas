@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "lot_id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+  "ecran": "ecran_principal",
+  "origine": "navigateur",
+  "tache_id": 17,
+  "commandes": [
+    {
+      "op": "cadrer",
+      "cibles": [
+        {
+          "noeud": "lemme_compacite"
+        }
+      ]
+    },
+    {
+      "op": "attendre",
+      "secondes": 3
+    },
+    {
+      "op": "deplacer",
+      "deplacements": [
+        {
+          "noeud": "lemme_compacite",
+          "colonne": 4,
+          "ligne": 2
+        },
+        {
+          "figure": "portrait_phase",
+          "colonne": 5,
+          "ligne": 2
+        }
+      ]
+    },
+    {
+      "op": "retablir_disposition"
+    }
+  ]
+}

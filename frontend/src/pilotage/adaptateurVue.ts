@@ -3,15 +3,16 @@
 // caméra ou de données, `exporter()` lit l'état réel de l'écran.
 //
 // La vue n'a ni 3D ni niveaux de détail : ces commandes sont refusées (`refuser`), et l'état exporté garde
-// leurs valeurs par défaut. Les filtres estompent (la disposition en cases ne bouge jamais : masquer un nœud
+// leurs valeurs par défaut. `deplacer` pose des positions provisoires dans la grille, sur cet écran seulement
+// (la vue enregistrée, la numérotation et le graphe ne changent pas) ; `attendre` fait une pause dans le lot. Les filtres estompent (la disposition en cases ne bouge jamais : masquer un nœud
 // laisserait un trou) ; `filtres.mode` est gardé tel que demandé. La portée d'un nœud (tout ce qui en dépend)
 // est surlignée. Rien ici n'écrit la vue enregistrée (cases, cadres) : seulement ce qu'on regarde.
 
 import type { Noeud } from '../api'
 import type { VueGraphe } from '../graphe'
-import { construireIndex, filtresVides, type Effet, type IndexDonnees } from './etat'
+import { cleDeplacement, construireIndex, filtresVides, type Effet, type IndexDonnees } from './etat'
 import type { Ecran } from './pilote'
-import type { CommandeBas, EtatAffichage, EtatFiltres, ErreurProtocole, IdNoeud, RefNoeud } from './protocole'
+import type { CommandeBas, Deplacement, EtatAffichage, EtatFiltres, ErreurProtocole, IdNoeud, RefNoeud } from './protocole'
 
 /** Ce que l'application (hors vue) expose au pilotage. */
 export interface InterfaceApp {
@@ -118,6 +119,7 @@ export class AdaptateurVue implements Ecran {
   private filtres: EtatFiltres = filtresVides()
   private surlignes: IdNoeud[] = []
   private porteeDe: IdNoeud | null = null
+  private deplacements: Deplacement[] = []
   private ecouteurs: (() => void)[] = []
   private signature = ''
 
@@ -167,6 +169,11 @@ export class AdaptateurVue implements Ecran {
     this.porteeDe = e.portee?.noeud ?? null
     this.surlignes = [...e.surlignes]
     this.vue.surligner([...new Set([...this.surlignes, ...(this.porteeDe ? portee(this.vue.noeuds, this.porteeDe) : [])])])
+    const deplacements = e.deplacements ?? []
+    if (!egaux(this.deplacements, deplacements)) {
+      this.deplacements = structuredClone(deplacements)
+      this.vue.definirDisposition(new Map(deplacements.map((d) => [cleDeplacement(d), { colonne: d.colonne, ligne: d.ligne }])))
+    }
     if (this.app.fiche() !== (e.fiche?.noeud ?? null)) this.app.definirFiche(e.fiche?.noeud ?? null)
     if (this.app.panneauOuvert() !== e.panneau_ouvert) this.app.definirPanneau(e.panneau_ouvert)
   }
@@ -193,6 +200,9 @@ export class AdaptateurVue implements Ecran {
         break
       case 'recharger':
         await this.app.recharger()
+        break
+      case 'attendre':
+        await new Promise((r) => setTimeout(r, effet.ms))
         break
       case 'vue': // face, seule vue acceptée : c'est déjà celle de l'écran
       case 'orbiter': // refusé avant (refuserCommande)
@@ -230,6 +240,7 @@ export class AdaptateurVue implements Ecran {
       survol: ref(this.vue.noeudSurvole),
       conversation_affichee: this.app.conversationAffichee(),
       projet: this.vue.projet,
+      deplacements: structuredClone(this.deplacements),
     }
   }
 }

@@ -40,7 +40,9 @@
         { "$ref": "#/$defs/Fiche" },
         { "$ref": "#/$defs/Panneau" },
         { "$ref": "#/$defs/Theme" },
-        { "$ref": "#/$defs/Restaurer" }
+        { "$ref": "#/$defs/Restaurer" },
+        { "$ref": "#/$defs/Deplacer" },
+        { "$ref": "#/$defs/Attendre" }
       ]
     },
     "Strategie": {
@@ -143,7 +145,7 @@
     },
     "SansArgument": {
       "type": "object",
-      "properties": { "op": { "enum": ["effacer_filtres", "recharger_donnees"] } },
+      "properties": { "op": { "enum": ["effacer_filtres", "recharger_donnees", "retablir_disposition"] } },
       "required": ["op"],
       "additionalProperties": false
     },
@@ -174,6 +176,23 @@
       "type": "object",
       "properties": { "op": { "const": "restaurer" }, "etat": { "$ref": "p4-etat-affichage.schema.json" } },
       "required": ["op", "etat"],
+      "additionalProperties": false
+    },
+    "Deplacer": {
+      "description": "Vue 2D : déplace provisoirement des nœuds ou des figures dans la grille (sur cet écran seulement, sans toucher au graphe ni à la vue enregistrée). retablir_disposition revient à la vue enregistrée.",
+      "type": "object",
+      "properties": {
+        "op": { "const": "deplacer" },
+        "deplacements": { "type": "array", "items": { "$ref": "commun.schema.json#/$defs/Deplacement" }, "minItems": 1, "maxItems": 200 }
+      },
+      "required": ["op", "deplacements"],
+      "additionalProperties": false
+    },
+    "Attendre": {
+      "description": "Attend avant la commande suivante (enchaînements : « zoome, attends 3 s, puis montre… »).",
+      "type": "object",
+      "properties": { "op": { "const": "attendre" }, "secondes": { "type": "number", "exclusiveMinimum": 0, "maximum": 10 } },
+      "required": ["op", "secondes"],
       "additionalProperties": false
     }
   }
