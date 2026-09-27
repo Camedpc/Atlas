@@ -28,7 +28,9 @@ export interface ErreurProtocole {
 export type RefNoeud = { noeud: IdNoeud }
 /** Les nœuds créés par cette conversation (noeuds.conversation_id). */
 export type RefConversation = { conversation: string }
-export type Cible = RefNoeud | RefConversation
+/** Une figure de la vue, par son id sans le préfixe « fig: » (pour cadrer seulement). */
+export type RefFigure = { figure: string }
+export type Cible = RefNoeud | RefConversation | RefFigure
 
 export interface Periode { debut: string | null; fin: string | null }
 

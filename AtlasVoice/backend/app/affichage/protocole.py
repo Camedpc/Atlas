@@ -73,7 +73,13 @@ class RefConversation(Strict):
     conversation: Uuid
 
 
-Cible = RefNoeud | RefConversation
+class RefFigure(Strict):
+    """Une figure de la vue, par son id sans le préfixe « fig: » (pour cadrer seulement)."""
+
+    figure: IdNoeud
+
+
+Cible = RefNoeud | RefConversation | RefFigure
 
 
 class ErreurProtocole(Strict):

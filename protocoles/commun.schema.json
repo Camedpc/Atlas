@@ -96,6 +96,19 @@
       ],
       "additionalProperties": false
     },
+    "RefFigure": {
+      "description": "Une figure de la vue (graphique ou image), par son id sans le préfixe « fig: ». Pour cadrer seulement.",
+      "type": "object",
+      "properties": {
+        "figure": {
+          "$ref": "#/$defs/IdNoeud"
+        }
+      },
+      "required": [
+        "figure"
+      ],
+      "additionalProperties": false
+    },
     "Cible": {
       "oneOf": [
         {
@@ -103,6 +116,9 @@
         },
         {
           "$ref": "#/$defs/RefConversation"
+        },
+        {
+          "$ref": "#/$defs/RefFigure"
         }
       ]
     },

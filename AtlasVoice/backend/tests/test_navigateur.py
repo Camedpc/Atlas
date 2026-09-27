@@ -136,10 +136,12 @@ class RegistreFactice:
 class Serveurs:
     """Relais (écran) et API Atlas simulés."""
 
-    def __init__(self, avec_ecran=True, ecran_ok=True, conversations=None, **ecran):
+    def __init__(self, avec_ecran=True, ecran_ok=True, conversations=None, noeuds=None, vue=None, **ecran):
         self.avec_ecran, self.ecran_ok = avec_ecran, ecran_ok
         self.ecran = ecran
         self.conversations = conversations if conversations is not None else [{"id": CONV, "titre": "Énergie"}]
+        self.noeuds = noeuds if noeuds is not None else NOEUDS
+        self.vue = vue  # vue 2D de l'application Atlas (GET /vue) ; None : pas de vue (500)
         self.lots: list[dict] = []
         self.lectures_graphe: list[dict] = []
 
@@ -150,7 +152,9 @@ class Serveurs:
                 if self.avec_ecran else httpx.Response(404)
         if chemin == "/api/graphe":
             self.lectures_graphe.append(dict(requete.url.params))
-            return httpx.Response(200, json={"noeuds": NOEUDS, "aretes": []})
+            return httpx.Response(200, json={"noeuds": self.noeuds, "aretes": []})
+        if chemin == "/api/vue" and self.vue is not None:
+            return httpx.Response(200, json=self.vue)
         if chemin == "/api/conversations":
             return httpx.Response(200, json=self.conversations)
         if chemin == "/api/affichage/commandes":
@@ -167,12 +171,15 @@ def modele(*reponses):
     """Faux modèle : renvoie les réponses prévues dans l'ordre et garde les messages reçus."""
     suite = list(reponses)
     recus: list[list[dict]] = []
+    outils: list = []
 
-    async def appeler(messages):
+    async def appeler(messages, outils_=None):
         recus.append(messages)
+        outils.append(outils_)
         return suite.pop(0)
 
     appeler.recus = recus  # type: ignore[attr-defined]
+    appeler.outils = outils  # type: ignore[attr-defined]
     return appeler
 
 
@@ -340,3 +347,100 @@ async def test_graphe_et_conversations_de_l_espace_affiche():
     await a.mener(tache("montre la preuve du théorème"))
     assert s.lectures_graphe == [{}]
     await a.fermer()
+
+
+# ── vue 2D de l'application Atlas : numérotation, cadres, figures ──
+
+PROJET = "67900866-5415-4cf4-9262-4cd1cd16e06c"
+TYPES = {"def_compacite": "definition", "lemme_compacite_faible": "lemme", "lemme_compacite_forte": "lemme",
+         "choix_jauge": "choix_modelisation", "thm_principal": "theoreme", "cor_final": "proposition"}
+NOEUDS_TYPES = [{**x, "type": TYPES.get(x["id"])} for x in NOEUDS]
+
+
+def place(noeud, colonne, ligne, groupe=None):
+    return {"noeud_id": noeud, "groupe_id": groupe, "colonne": colonne, "ligne": ligne, "largeur": 1, "hauteur": 1,
+            "fixe": False}
+
+
+VUE = {
+    "groupes": [{"id": "g_compacite", "nom": "Compacité", "parent_id": None, "genre": "sous_probleme", "replie": False,
+                 "ordre": 0},
+                {"id": "g_theoreme", "nom": "Le théorème", "parent_id": None, "genre": "etape", "replie": True, "ordre": 1}],
+    "placements": [place("def_compacite", 0, 0, "g_compacite"), place("lemme_compacite_faible", 1, 0, "g_compacite"),
+                   place("lemme_compacite_forte", 1, 1), place("choix_jauge", 0, 1),
+                   place("thm_principal", 2, 0, "g_theoreme"), place("cor_final", 3, 0, "g_theoreme"),
+                   place("fig:courbe", 2, 1, "g_theoreme")],
+    "etiquettes": [], "marques": [],
+    "figures": [{"id": "courbe", "noeud_id": "thm_principal", "titre": "Courbe de convergence"}],
+}
+
+
+def test_vue_numerotation_cadres_et_figures_comme_le_front():
+    from app.agents.navigation.vue_atlas import construire, zoom
+
+    v = construire(NOEUDS_TYPES, VUE)
+    # Ordre des cases (colonne, ligne, id) ; hypothèses à part ; `isole`, non placé, sous le reste (0, 3).
+    assert {i: v.refs[i] for i in TYPES | {"isole": None}} == {
+        "def_compacite": "Définition 1", "choix_jauge": "Hypothèse (i)", "lemme_compacite_faible": "Lemme 3",
+        "lemme_compacite_forte": "Lemme 4", "thm_principal": "Théorème 5", "cor_final": "Proposition 6",
+        "isole": "Énoncé 2"}
+    cadres, figures = v.pour_le_modele()
+    assert cadres == [
+        {"id": "g_compacite", "numero": "§1", "nom": "Compacité", "genre": "sous_probleme",
+         "noeuds": ["def_compacite", "lemme_compacite_faible"]},
+        {"id": "g_theoreme", "numero": "§2", "nom": "Le théorème", "genre": "etape", "reduit": True,
+         "noeuds": ["cor_final", "thm_principal"]}]
+    assert figures == [{"id": "courbe", "ref": "Figure 1", "titre": "Courbe de convergence", "illustre": "thm_principal",
+                        "cadre": "§2"}]
+    assert zoom(0.08) == {"palier": "−13", "niveau": "points"} and zoom(0.5)["niveau"] == "titres"
+    assert zoom(1.0) == {"palier": "1:1", "niveau": "contenu"}
+
+
+def test_vue_2d_prompt_entree_et_cibles_developpees():
+    appeler = modele(("commander", {"commandes": [
+        {"op": "filtres", "patch": {"cadres": ["§1"], "mode": "estomper"}},
+        {"op": "cadrer", "cibles": [{"cadre": "g_theoreme"}, {"figure": "fig:courbe"}, "fig:courbe"]},
+        {"op": "surligner", "cibles": [{"cadre": "§1"}]}]}))
+    s = Serveurs(noeuds=NOEUDS_TYPES, vue=VUE, projet=PROJET)
+    a = agent(s, appeler)
+    asyncio.run(a.mener(tache("montre le paragraphe 1 et la figure du théorème")))
+    messages, outils = appeler.recus[0], appeler.outils[0]
+    assert messages[0]["content"].startswith("Tu es l'agent navigateur d'Atlas. L'utilisateur regarde la vue")
+    assert "orbiter" not in json.dumps(outils)
+    entree = json.loads(messages[-1]["content"])
+    thm = next(x for x in entree["noeuds"] if x["id"] == "thm_principal")
+    assert (thm["ref"], thm["type"], thm["cadre"]) == ("Théorème 5", "theoreme", "§2")
+    assert [c["numero"] for c in entree["cadres"]] == ["§1", "§2"] and entree["figures"][0]["ref"] == "Figure 1"
+    assert set(entree["ecran"]) >= {"zoom", "visibles", "selection", "filtres"} and "camera" not in entree["ecran"]
+    commandes = s.lots[0]["commandes"]
+    assert commandes[0]["patch"]["noeuds"] == ["def_compacite", "lemme_compacite_faible"]
+    assert commandes[1]["cibles"] == [{"noeud": "cor_final"}, {"noeud": "thm_principal"}, {"figure": "courbe"}]
+    assert commandes[2]["cibles"] == [{"noeud": "def_compacite"}, {"noeud": "lemme_compacite_faible"}]
+    asyncio.run(a.fermer())
+
+
+def test_vue_2d_refuse_cadre_et_figure_inconnus():
+    from app.agents.navigation.navigateur import Graphe as G
+    from app.agents.navigation.vue_atlas import construire
+
+    g = G(NOEUDS_TYPES, construire(NOEUDS_TYPES, VUE))
+    e = etat(projet=PROJET)
+    with pytest.raises(ValueError, match="cadre inconnu"):
+        construire_lot([{"op": "cadrer", "cibles": [{"cadre": "§9"}]}], 1, e, [], g)
+    with pytest.raises(ValueError, match="figure inconnue"):
+        construire_lot([{"op": "cadrer", "cibles": [{"figure": "absente"}]}], 1, e, [], g)
+    with pytest.raises(ValueError, match="ne peut qu'être cadrée"):
+        construire_lot([{"op": "surligner", "cibles": [{"figure": "courbe"}]}], 1, e, [], g)
+
+
+def test_prompt_ancien_force_ou_sans_espace(monkeypatch):
+    """La sauvegarde : l'ancien prompt et ses outils, sans vue (écran sans espace, ou ATLAS_NAVIGATEUR_PROMPT=ancien)."""
+    monkeypatch.setattr(navigateur, "PROMPT", "ancien")
+    appeler = modele(ISOLER)
+    s = Serveurs(noeuds=NOEUDS_TYPES, vue=VUE, projet=PROJET)
+    asyncio.run(agent(s, appeler).mener(tache("montre la preuve du théorème")))
+    assert appeler.recus[0][0]["content"] == navigateur.SYSTEME and appeler.outils == [None]
+    entree = json.loads(appeler.recus[0][-1]["content"])
+    assert "cadres" not in entree and "ref" not in entree["noeuds"][0] and "camera" in entree["ecran"]
+    # Le type vient de la base, même avec l'ancien prompt (la déduction par préfixe ne sert que sans type).
+    assert next(x for x in entree["noeuds"] if x["id"] == "cor_final")["type"] == "proposition"
