@@ -336,3 +336,68 @@ def test_affichage_sans_atlasvoice():
         assert (await affichages.lancer("zoome")) == {"erreur": "AtlasVoice injoignable"}
 
     asyncio.run(scenario())
+
+
+# ── Fin d'appel demandée par Atlas voix ──
+
+
+class FauxWS:
+    def __init__(self):
+        self.ferme = None
+
+    async def send_text(self, texte):
+        pass
+
+    async def close(self, code=1000, reason=""):
+        self.ferme = (code, reason)
+
+
+def _session_fin(monkeypatch, tmp_path):
+    from atlas.voix import session as module
+
+    monkeypatch.setattr(module, "GRACE_FIN", 0.1)
+    enregistres = []
+
+    async def enregistrer(self, role, contenu, donnees=None, agent=VOIX):
+        enregistres.append((role, contenu))
+
+    monkeypatch.setattr(module.Session, "enregistrer", enregistrer)
+    s = module.Session(FauxWS(), CONVERSATION, tmp_path, None)
+    return s, enregistres
+
+
+def test_pas_de_fin_d_appel_sans_au_revoir(monkeypatch, tmp_path):
+    s, _ = _session_fin(monkeypatch, tmp_path)
+
+    async def scenario():
+        return await s.demander_fin("demandé par Camille")
+
+    reponse = asyncio.run(scenario())
+    assert reponse["accepte"] is False and s.fin is None
+
+
+def test_raccroche_apres_l_au_revoir(monkeypatch, tmp_path):
+    s, enregistres = _session_fin(monkeypatch, tmp_path)
+    s.dit_dans_tour = True
+
+    async def scenario():
+        assert (await s.demander_fin("demandé par Camille"))["accepte"]
+        await s.fin
+
+    asyncio.run(scenario())
+    assert s.ws.ferme == (4000, "Atlas voix a raccroché.")
+    assert enregistres == [("systeme", "Atlas voix a raccroché (demandé par Camille).")]
+
+
+def test_l_appel_continue_si_camille_reprend_la_parole(monkeypatch, tmp_path):
+    s, enregistres = _session_fin(monkeypatch, tmp_path)
+    s.dit_dans_tour = True
+
+    async def scenario():
+        await s.demander_fin("conversation terminée")
+        s.tampon.append("attends")  # Camille parle pendant le délai de grâce
+        await s.fin
+
+    asyncio.run(scenario())
+    assert s.ws.ferme is None and enregistres == []
+    assert "l'appel continue" in s.note_fin

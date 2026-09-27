@@ -131,6 +131,15 @@ class Reponse(BaseModel):
     reponse: str = Field(min_length=1)
 
 
+class Fin(BaseModel):
+    raison: str = ""
+
+
+@routeur_outils.post("/terminer")
+async def terminer(appel_id: str, corps: Fin) -> dict:
+    return await _session(appel_id).demander_fin(corps.raison)
+
+
 @routeur_outils.post("/affichage")
 async def afficher(appel_id: str, corps: Affichage) -> dict:
     return await _session(appel_id).affichages.lancer(corps.demande, corps.extrait, corps.titre)

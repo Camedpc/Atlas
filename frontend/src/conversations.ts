@@ -151,6 +151,8 @@ export class PanneauConversation {
   /** Fil de la voix chargé au début de l'appel ; ensuite il se remplit en direct, sans relire la base. */
   private filVoixCharge = false
   private elementsVoix = new Map<string, HTMLElement>()
+  /** Raison de la fin d'appel, à afficher dans le fil de l'orchestrateur une fois rechargé. */
+  private avisFin = ''
   private racine: HTMLElement
   private projets: Projet[] = []
   private projet: Projet | null = null
@@ -643,7 +645,8 @@ export class PanneauConversation {
     this.filVoixCharge = false
     etat.selectionner(ouvert ? VOIX : RACINE)
     this.majCible()
-    if (raison) this.contenu.insertAdjacentHTML('beforeend', `<div class="msg systeme">${echapper(raison)}</div>`)
+    // Le fil se recharge sur celui de l'orchestrateur : la raison (« Atlas voix a raccroché ») s'y affiche ensuite.
+    this.avisFin = raison ?? ''
     window.clearTimeout(this.suivi)
     void this.rafraichir()
   }
@@ -779,6 +782,13 @@ export class PanneauConversation {
         agent
           ? `<p class="vide">${echapper(nomAgent(etat.get(agent), agent))} n’a encore rien produit.</p>`
           : '<p class="vide">Session vide.</p>'
+    }
+
+    // Fil de l'orchestrateur chargé (messages ou « Session vide ») : la raison de la fin d'appel s'y ajoute.
+    const filCharge = this.dernierId !== undefined || this.contenu.querySelector(':scope > .vide')
+    if (this.avisFin && !estVoix(etat.selection) && filCharge) {
+      this.contenu.insertAdjacentHTML('beforeend', `<div class="msg systeme">${echapper(this.avisFin)}</div>`)
+      this.avisFin = ''
     }
 
     const changement = conv.en_cours !== this.enCours

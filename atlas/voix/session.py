@@ -49,6 +49,13 @@ log = logging.getLogger(__name__)
 ATTENTE_MAX_STT = 10 * 48000
 """Micro gardé pendant qu'une session STT se rouvre (10 s en PCM 24 kHz 16 bits), rejoué dans la nouvelle."""
 
+ATTENTE_MAX_FIN = 30.0
+"""Au-delà (s), l'appel se ferme même si la fin de l'au revoir n'a pas été signalée par le navigateur."""
+GRACE_FIN = 1.2
+"""Délai (s) après l'au revoir pendant lequel Camille peut reprendre la parole et garder l'appel ouvert."""
+CODE_RACCROCHE = 4000
+"""Code de fermeture du WebSocket quand c'est Atlas voix qui raccroche."""
+
 PREFIXE_CONFIE = "[Transmis par Atlas voix, pendant un appel avec Camille]"
 
 
@@ -101,6 +108,11 @@ class Session:
         self.annonces: list[str] = []
         self.evenements_orchestrateur: list[dict[str, Any]] = []
         self.pret = False
+        self.dit_dans_tour = False
+        """Atlas voix a déjà parlé dans le tour en cours : il peut raccrocher (jamais sans un au revoir)."""
+        self.fin: asyncio.Task[None] | None = None
+        self.raison_fin = ""
+        self.note_fin = ""
         self.dossier = dossier
         self._micro = bytearray() if config.ENREGISTRER else None
         self._tours: list[dict[str, Any]] = []
@@ -420,6 +432,8 @@ class Session:
         if source == "voix" and not self.casque and self.agent_parle() and est_echo(texte, self.dit_recemment):
             await self.envoyer({"type": "info", "message": f"Écho ignoré : « {texte} »"})
             return
+        if self.annuler_fin():
+            self.note_fin = "(Tu avais raccroché, mais Camille a repris la parole : l'appel continue.)"
         await self.envoyer({"type": "utilisateur", "texte": texte, "source": source})
         self.affichages.derniere_demande = texte
         asyncio.create_task(self.enregistrer("utilisateur", texte, {"source": source}))
@@ -442,6 +456,9 @@ class Session:
         if self.note_interruption:
             entetes.append(self.note_interruption)
             self.note_interruption = ""
+        if self.note_fin:
+            entetes.append(self.note_fin)
+            self.note_fin = ""
         return "\n".join([*entetes, texte])
 
     async def couper(self) -> None:
@@ -478,6 +495,7 @@ class Session:
         self.parleur = parleur
         await self.etat("reflexion")
         premier_texte = True
+        self.dit_dans_tour = False
         try:
             async for ev in self.cerveau.tour(message):
                 if gen != self.gen:
@@ -494,6 +512,7 @@ class Session:
                         self.dit_recemment = (self.dit_recemment + " " + ev.texte)[-800:]
                         await self.envoyer({"type": "agent_fin", "id": ev.id, "texte": ev.texte})
                         if ev.texte.strip():
+                            self.dit_dans_tour = True
                             asyncio.create_task(self.enregistrer("assistant", ev.texte))
                     case "outil_debut":
                         self._activite(ev.texte, "Outil")
@@ -515,6 +534,54 @@ class Session:
         finally:
             if gen == self.gen:
                 await self.etat("ecoute")
+
+    # ── Fin de l'appel (outil `terminer_appel`) ──
+
+    async def demander_fin(self, raison: str) -> dict[str, Any]:
+        """Atlas voix raccroche : après son au revoir, joué en entier, et un court délai de grâce.
+
+        Comme les agents vocaux qui raccrochent eux-mêmes (ElevenLabs, LiveKit, Pipecat) : jamais sans avoir dit
+        au revoir, jamais en coupant sa propre phrase, et Camille garde l'appel ouvert en reprenant la parole.
+        """
+        if not self.dit_dans_tour:
+            return {
+                "accepte": False,
+                "note": "Dis d'abord au revoir à Camille en une courte phrase, puis rappelle terminer_appel.",
+            }
+        if self.fin is None or self.fin.done():
+            self.raison_fin = raison.strip()
+            self.fin = asyncio.create_task(self._raccrocher_apres_au_revoir())
+        return {
+            "accepte": True,
+            "note": "L'appel se ferme une fois ton au revoir joué, sauf si Camille reprend la parole. N'ajoute rien.",
+        }
+
+    def annuler_fin(self) -> bool:
+        if self.fin is None or self.fin.done():
+            return False
+        self.fin.cancel()
+        self.fin = None
+        return True
+
+    def _camille_parle(self) -> bool:
+        return bool(self.tampon) or self.pas_parole >= config.COUPURE_PAS
+
+    async def _raccrocher_apres_au_revoir(self) -> None:
+        limite = time.monotonic() + ATTENTE_MAX_FIN
+        # Le tour qui a demandé la fin se termine, puis la voix finit d'être jouée chez Camille.
+        while time.monotonic() < limite and ((self.tour is not None and not self.tour.done()) or self.agent_parle()):
+            await asyncio.sleep(0.1)
+        fin_grace = time.monotonic() + GRACE_FIN
+        while time.monotonic() < fin_grace:
+            if self._camille_parle():
+                self.note_fin = "(Tu avais raccroché, mais Camille a repris la parole : l'appel continue.)"
+                return
+            await asyncio.sleep(0.05)
+        texte = "Atlas voix a raccroché" + (f" ({self.raison_fin})" if self.raison_fin else "") + "."
+        await self.enregistrer("systeme", texte)
+        log.info("appel %s : %s", self.id, texte)
+        with contextlib.suppress(Exception):
+            await self.ws.close(code=CODE_RACCROCHE, reason="Atlas voix a raccroché.")
 
     # ── Orchestrateur (appelé par le serveur MCP `voix`) ──
 

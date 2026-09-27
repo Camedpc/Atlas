@@ -92,5 +92,15 @@ def repondre_affichage(id: int, reponse: str) -> str:
     return _appel(f"/affichage/{id}/reponse", {"reponse": reponse})
 
 
+@serveur.tool()
+def terminer_appel(raison: str = "") -> str:
+    """Raccroche l'appel. Quand Camille le demande (« raccroche », « ferme la conversation », « on arrête là »,
+    « au revoir »), ou quand l'échange est clairement conclu (Camille remercie ou dit au revoir, et rien n'est en
+    attente de sa part). Dis d'abord au revoir en une courte phrase, dans ce même tour : l'appel se ferme une fois
+    ta phrase jouée, et reste ouvert si Camille reprend la parole. `raison` : quelques mots (« demandé par Camille »,
+    « conversation terminée »). Dans le doute, demande plutôt s'il reste autre chose."""
+    return _appel("/terminer", {"raison": raison})
+
+
 if __name__ == "__main__":
     serveur.run("stdio")
