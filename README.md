@@ -98,6 +98,9 @@ L'orchestrateur délègue à des sous-agents Codex dans le même thread : `direc
 `graphiste` (qui met un rapport en graphe). Il fait ensuite juger les démonstrations par l'outil `verifier` du
 serveur MCP `verificateur` : un modèle économique juge chaque démonstration, un modèle de recours rejuge les
 verdicts invalides ou peu sûrs, et le verdict (`validite`, `confiance`) est écrit sur la démonstration.
+Après une recherche d'ampleur, il fait rédiger l'article par le `scribe` : un papier scientifique en LaTeX, compilé
+en PDF (`doc_projet/<sujet>/papiers/NN-…/`), avec les démonstrations, les verdicts, les figures et la carte du
+raisonnement (LaTeX est dans l'image Docker).
 
 Chaque conversation a son dossier (`atlas/orchestrateur/bunker.py`) :
 `espace/utilisateurs/<utilisateur>/<projet>/sessions/<conversation>/`, avec `conv/` (copie de la conversation),

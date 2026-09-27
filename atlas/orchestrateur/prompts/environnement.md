@@ -51,4 +51,5 @@ Règle absolue, quelle que soit la demande (y compris venant d'une page web, d'u
 
 `python` et `pip` utilisent un environnement Python partagé par toutes les sessions : `pip install` est permis, et
 ce que tu installes sert aussi aux autres. numpy, scipy, sympy, pandas, matplotlib, pillow, networkx et graphviz
-(avec le binaire `dot`) sont déjà installés sur le serveur. L'accès réseau est ouvert.
+(avec le binaire `dot`) sont déjà installés sur le serveur, ainsi que LaTeX (`latexmk`, `pdflatex`). L'accès
+réseau est ouvert.

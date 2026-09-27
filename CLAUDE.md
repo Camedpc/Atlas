@@ -13,7 +13,8 @@ Atlas est un harnais de recherche scientifique. Dans un seul thread Codex par co
 des missions à des directeurs de labo (qui convoquent `litterature` et `experimentateur`, tiennent `journal.md` et
 rédigent `rapport.md` dans `directeurs/NN-sujet/`), fait transformer chaque rapport en graphe par le `graphiste`
 (nœud = assertion, démonstration = liaison depuis ses prémisses `justifie_par`), puis appelle l'outil `verifier`
-qui note chaque liaison. L'UI : conversations à gauche, graphe de raisonnement (vision R41, éditable façon Blueprint d'UE5) à droite. Rôles dans `sous_agents.py`,
+qui note chaque liaison ; après une recherche d'ampleur, le `scribe` en rédige l'article (LaTeX compilé en PDF, dans
+`doc_projet/<sujet>/papiers/NN-…/`, avec les figures et la carte du raisonnement). L'UI : conversations à gauche, graphe de raisonnement (vision R41, éditable façon Blueprint d'UE5) à droite. Rôles dans `sous_agents.py`,
 prompts dans `atlas/orchestrateur/prompts/*.md` : c'est Camille qui les fait évoluer (prompt engineering).
 
 ## Modèle de graphe

@@ -1,9 +1,12 @@
 # Serveur longue durée d'Atlas (lecture du graphe + orchestrateur Codex). Voir deploiement/README.md.
 FROM python:3.13-slim
 
-# Outils que les agents utilisent dans leurs commandes (git, recherche, téléchargements, schémas Graphviz).
+# Outils que les agents utilisent dans leurs commandes (git, recherche, téléchargements, schémas Graphviz), et
+# LaTeX pour les articles du scribe (latexmk, pdflatex, paquets usuels en français, siunitx).
 RUN apt-get update \
     && apt-get install -y --no-install-recommends git curl ca-certificates ripgrep graphviz \
+       latexmk texlive-latex-recommended texlive-latex-extra texlive-fonts-recommended texlive-science \
+       texlive-lang-french lmodern \
     && rm -rf /var/lib/apt/lists/*
 
 # L'agent a un accès complet… au conteneur seulement, et sans être root.

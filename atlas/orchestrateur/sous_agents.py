@@ -59,6 +59,16 @@ ROLES = (
         "medium",
         {"web_search": "disabled", "service_tier": "fast"},
     ),
+    Role(
+        "scribe",
+        "Rédige l'article scientifique d'une recherche (LaTeX compilé en PDF, format papier) à partir des rapports "
+        "des directeurs de labo, du graphe de raisonnement, des verdicts du vérificateur et des figures. N'invente "
+        "rien : il met en forme ce qui a été établi. Lancé par l'orchestrateur après une recherche d'ampleur.",
+        "gpt-6-astra",
+        "medium",
+        # Il met en forme, il ne cherche pas : les sources sont dans les rapports.
+        {"web_search": "disabled"},
+    ),
 )
 
 

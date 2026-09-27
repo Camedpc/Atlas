@@ -61,7 +61,7 @@ def test_surcharges_declarent_le_serveur_mcp_et_coupent_les_hooks(monkeypatch, t
     assert surcharges["mcp_servers"]["verificateur"]["env"]["ATLAS_CODEX_HOME"] == str(tmp_path)
     assert surcharges["features"] == {"hooks": False, "image_generation": True}
     assert surcharges["project_root_markers"] == []
-    assert set(surcharges["agents"]) >= {"directeur_de_labo", "litterature", "experimentateur", "graphiste"}
+    assert set(surcharges["agents"]) >= {"directeur_de_labo", "litterature", "experimentateur", "graphiste", "scribe"}
 
 
 def test_codex_isole_de_la_machine():
