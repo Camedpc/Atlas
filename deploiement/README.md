@@ -32,6 +32,7 @@ avec `ATLAS_DOMAINE=<ip>.sslip.io` et un `ATLAS_JETON_ACCES` aléatoire.
 | `ATLAS_CORS_ORIGINES` | `https://atlas-nine-bay.vercel.app` |
 | `OPENAI_API_KEY` | vide avec un compte ChatGPT, sinon la clé API |
 | `ATLAS_MAX_SOUS_AGENTS` | optionnel, plafond de sous-agents simultanés |
+| `GRADIUM_API_KEY` | comme en local : appel vocal avec Atlas voix (sans elle, l'appel est refusé) |
 
 ## 4. Lancer
 
