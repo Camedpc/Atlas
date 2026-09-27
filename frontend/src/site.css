@@ -1,0 +1,181 @@
+/* Pages du site (accueil, admin) : l'identité du film de présentation — papier, encre, CMU Serif pour les titres,
+   Inter pour le texte, le carré ∎ en signature. Thème clair uniquement, comme l'application. */
+
+@font-face {
+  font-family: 'CMU Serif Atlas';
+  src: url('https://cdn.jsdelivr.net/gh/bitmaks/cm-web-fonts@latest/font/Serif/cmunrm.woff') format('woff');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'CMU Serif Atlas';
+  src: url('https://cdn.jsdelivr.net/gh/bitmaks/cm-web-fonts@latest/font/Serif/cmunbx.woff') format('woff');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'CMU Serif Atlas';
+  src: url('https://cdn.jsdelivr.net/gh/bitmaks/cm-web-fonts@latest/font/Serif/cmunti.woff') format('woff');
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+:root {
+  color-scheme: light;
+  --papier: #f6f5f1;
+  --papier-2: #ebe9e3;
+  --blanc: #ffffff;
+  --encre: #16161d;
+  --encre-2: #3f3f46;
+  --gris: #6b6b72;
+  --trait: #d9d7cf;
+  --bleu: #2563eb;
+  --rouge: #dc2626;
+  --vert: #15803d;
+  --serif: 'CMU Serif Atlas', 'CMU Serif', Georgia, serif;
+  --sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-family: var(--sans);
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--papier);
+  color: var(--encre);
+}
+
+a {
+  color: inherit;
+}
+
+.site-tete {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 22px 24px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.marque {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  font-family: var(--serif);
+  font-weight: 700;
+  font-size: 30px;
+  letter-spacing: -0.5px;
+  text-decoration: none;
+}
+
+.marque::after {
+  content: '';
+  width: 9px;
+  height: 9px;
+  background: var(--encre);
+}
+
+.site-tete nav {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lien-discret {
+  padding: 8px 12px;
+  color: var(--encre-2);
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+  border-radius: 8px;
+}
+
+.lien-discret:hover {
+  background: var(--papier-2);
+  color: var(--encre);
+}
+
+.bouton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid var(--encre);
+  border-radius: 10px;
+  background: var(--encre);
+  color: var(--papier);
+  padding: 11px 18px;
+  font: 500 15px var(--sans);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.bouton:hover {
+  background: #2a2a33;
+}
+
+.bouton.secondaire {
+  background: transparent;
+  color: var(--encre);
+  border-color: var(--trait);
+}
+
+.bouton.secondaire:hover {
+  background: var(--blanc);
+  border-color: var(--gris);
+}
+
+.bouton.petit {
+  padding: 8px 14px;
+  font-size: 14px;
+}
+
+.bouton:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.bouton:focus-visible,
+.lien-discret:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--bleu);
+  outline-offset: 2px;
+}
+
+.site-pied {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 32px 24px 40px;
+  border-top: 1px solid var(--trait);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  color: var(--gris);
+  font-size: 13px;
+}
+
+.site-pied .marque {
+  font-size: 18px;
+}
+
+.site-pied .marque::after {
+  width: 6px;
+  height: 6px;
+}
+
+[hidden] {
+  display: none !important;
+}

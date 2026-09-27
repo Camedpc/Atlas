@@ -10,7 +10,9 @@
 import { RACINE, VOIX, estJuge, estVoix, etat, formatDuree, formatTokens, nomAgent } from './agents'
 import { ArbreAgents } from './arbre'
 import {
+  admin,
   api,
+  DEMO,
   enregistrerJeton,
   JetonRequis,
   type Conversation,
@@ -362,6 +364,17 @@ export class PanneauConversation {
       const liste = await api.projets()
       this.projets = liste.projets
       this.utilisateur = liste.utilisateur
+      // Page de démo : l'espace de démo seulement, avec de quoi le réinitialiser.
+      if (DEMO) {
+        const demo = (await api.site()).demo
+        this.projets = this.projets.filter((p) => p.id === demo)
+        if (!this.projets.length) {
+          this.contenu.innerHTML = `<div class="msg systeme">Aucune démo n’est définie pour l’instant.
+            <a href="/app">Ouvrir Atlas</a></div>`
+          return
+        }
+        this.sessions.afficherDemo((mdp) => admin.reinitialiserDemo(mdp).then(() => location.reload()))
+      }
       // Après la liste : le jeton d'accès est alors connu.
       void this.selecteur.charger()
       let garde: string | null = null

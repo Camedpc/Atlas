@@ -1507,3 +1507,76 @@ button.menu-ligne:focus-visible,
 .menu-etat.erreur {
   color: var(--echec);
 }
+
+/* ── Page de démo (/demo) : l'espace est imposé, un bandeau propose de le réinitialiser ── */
+
+body.demo .selecteur-espace {
+  pointer-events: none;
+}
+
+body.demo .selecteur-espace > svg:last-child {
+  display: none;
+}
+
+.demo-sessions {
+  margin: 0 10px 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--trait);
+  border-radius: 10px;
+  background: var(--fond);
+  font-size: 12px;
+}
+
+.demo-ligne {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.demo-etiquette {
+  color: var(--texte-2);
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+}
+
+.demo-sessions button {
+  border: 1px solid var(--trait-fort);
+  border-radius: 6px;
+  background: var(--fond);
+  padding: 3px 8px;
+  font: 500 12px var(--police);
+  color: var(--texte);
+  cursor: pointer;
+}
+
+.demo-sessions button:hover {
+  background: var(--fond-2);
+}
+
+.demo-sessions button[type='submit'] {
+  border-color: var(--texte);
+  background: var(--texte);
+  color: #fff;
+}
+
+.demo-formulaire p {
+  margin: 8px 0;
+  color: var(--texte-2);
+  line-height: 1.45;
+}
+
+.demo-formulaire input {
+  width: 100%;
+  margin-bottom: 8px;
+  border: 1px solid var(--trait-fort);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font: 13px var(--police);
+}
+
+.demo-formulaire .demo-erreur {
+  margin-bottom: 0;
+  color: var(--echec);
+}

@@ -6,7 +6,7 @@ Chaque espace de travail a son graphe : `projet_id` le choisit (absent = le proj
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse, PlainTextResponse, Response
 
-from . import lecture, projets, vue
+from . import lecture, projets, site, vue
 from .modeles import DetailNoeud, EntreeJournal, Graphe, Vue
 
 routeur = APIRouter(prefix="/api")
@@ -19,6 +19,12 @@ def health() -> JSONResponse:
     except Exception as e:
         return JSONResponse({"ok": False, "supabase": f"erreur : {e}"}, status_code=503)
     return JSONResponse({"ok": True, "supabase": "ok"})
+
+
+@routeur.get("/site")
+def reglages_du_site() -> dict:
+    """Page d'accueil et page de démo : URL de la vidéo et de son affiche, id de l'espace de démo (null si aucun)."""
+    return site.etat_public()
 
 
 @routeur.get("/graphe")

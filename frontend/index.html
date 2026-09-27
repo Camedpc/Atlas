@@ -5,16 +5,84 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="light" />
+    <meta name="description" content="Atlas confie une question de recherche à une équipe d’agents IA et en fait un graphe de raisonnement où chaque étape est vérifiée." />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
-    />
-    <title>Atlas</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" />
+    <title>Atlas · chaque idée, démontrée</title>
   </head>
   <body>
-    <main id="app"></main>
-    <script type="module" src="/src/main.ts"></script>
+    <header class="site-tete">
+      <a class="marque" href="/">Atlas</a>
+      <nav>
+        <a class="lien-discret" href="#fonctionnement">Comment ça marche</a>
+        <a class="lien-discret" href="/app">Ouvrir Atlas</a>
+        <a class="bouton petit" href="/demo">Essayer la démo</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="accroche">
+        <p class="surtitre">Harnais de recherche scientifique</p>
+        <h1>Chaque idée, <i>démontrée.</i></h1>
+        <p class="chapeau">
+          Atlas confie une question de recherche à une équipe d’agents IA, puis transforme leurs raisonnements en un
+          graphe où chaque étape est reliée à ses prémisses et vérifiée.
+        </p>
+        <div class="actions">
+          <a class="bouton" href="/demo">Essayer la démo</a>
+          <a class="bouton secondaire" href="#film">Voir le film · 2 min</a>
+        </div>
+      </section>
+
+      <section class="film" id="film">
+        <div class="cadre-film">
+          <video controls playsinline preload="metadata" hidden></video>
+          <p class="film-absent" hidden>Le film arrive bientôt.</p>
+        </div>
+      </section>
+
+      <section class="fonctionnement" id="fonctionnement">
+        <h2>Du problème à l’article, <i>tout est tracé.</i></h2>
+        <ol class="etapes">
+          <li>
+            <span class="numero">1</span>
+            <h3>Une question</h3>
+            <p>Vous posez une question de recherche, par écrit ou à voix haute. L’orchestrateur la découpe en missions.</p>
+          </li>
+          <li>
+            <span class="numero">2</span>
+            <h3>Des laboratoires d’agents</h3>
+            <p>Des directeurs de labo lancent revues de littérature et expériences numériques, et rédigent leur rapport.</p>
+          </li>
+          <li>
+            <span class="numero">3</span>
+            <h3>Un graphe vérifié</h3>
+            <p>Chaque rapport devient un graphe d’énoncés. Un vérificateur juge chaque démonstration et lui donne une note.</p>
+          </li>
+          <li>
+            <span class="numero">4</span>
+            <h3>Un article</h3>
+            <p>Le scribe rédige l’article en LaTeX, avec les figures, les verdicts et la carte du raisonnement.</p>
+          </li>
+        </ol>
+      </section>
+
+      <section class="invitation">
+        <h2>Essayez-le sur une vraie recherche.</h2>
+        <p>
+          La démo s’ouvre sur une recherche déjà menée par Atlas : parcourez le graphe, lisez le fil de chaque agent,
+          puis posez vos propres questions. Un code d’accès vous est demandé à l’entrée.
+        </p>
+        <a class="bouton" href="/demo">Ouvrir la démo</a>
+      </section>
+    </main>
+
+    <footer class="site-pied">
+      <a class="marque" href="/">Atlas</a>
+      <span>Graphes de raisonnement vérifiés par des agents IA.</span>
+    </footer>
+
+    <script type="module" src="/src/accueil.ts"></script>
   </body>
 </html>

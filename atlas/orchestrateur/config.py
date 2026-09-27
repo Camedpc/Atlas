@@ -68,6 +68,9 @@ DELAI_FIGURE3D = int(os.environ.get("ATLAS_DELAI_FIGURE3D") or 120)
 # Obligatoire dès que le serveur est joignable depuis Internet : l'orchestrateur exécute des commandes.
 JETON_ACCES = _optionnel("ATLAS_JETON_ACCES")
 
+# Mot de passe de la page admin du site (/admin : démo, vidéo de l'accueil). Vide = page admin désactivée.
+MDP_ADMIN = _optionnel("ATLAS_MDP_ADMIN")
+
 # Adresse à laquelle les serveurs MCP (voix, vérificateur) rappellent atlas.serveur (même machine, même conteneur).
 URL_INTERNE = os.environ.get("ATLAS_URL_INTERNE") or "http://127.0.0.1:8000"
 

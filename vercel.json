@@ -7,5 +7,10 @@
   "functions": {
     "api/index.py": { "excludeFiles": "{frontend,supabase,tests,node_modules,prototypes,espace,AtlasVoice,.venv,.claude}/**" }
   },
-  "rewrites": [{ "source": "/api/(.*)", "destination": "/api/index" }]
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/index" },
+    { "source": "/app", "destination": "/app.html" },
+    { "source": "/demo", "destination": "/app.html" },
+    { "source": "/admin", "destination": "/admin.html" }
+  ]
 }

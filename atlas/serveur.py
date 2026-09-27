@@ -13,7 +13,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from . import conversations, routes_lecture
-from .orchestrateur import config, routes, routes_projets
+from .orchestrateur import config, routes, routes_admin, routes_projets
 from .orchestrateur.codex_vivant import codex_vivant
 from .voix import routes as routes_voix
 
@@ -38,6 +38,7 @@ app.include_router(routes_lecture.routeur)
 app.include_router(routes.routeur)
 app.include_router(routes.routeur_modeles)
 app.include_router(routes_projets.routeur)
+app.include_router(routes_admin.routeur)
 app.include_router(routes_voix.routeur_appel)
 app.include_router(routes_voix.routeur_preparation)
 app.include_router(routes_voix.routeur_outils)

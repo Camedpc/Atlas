@@ -3,7 +3,7 @@
 import './style.css'
 import './espaces.css'
 import { AgentGraph } from './agentgraph'
-import { api, type Graphe, type Noeud, type RolePremisse, type Statut, type Vue } from './api'
+import { api, DEMO, type Graphe, type Noeud, type RolePremisse, type Statut, type Vue } from './api'
 import { PanneauConversation } from './conversations'
 import { VueDocuments } from './documents'
 import { cheminProjet, ressembleAUnChemin } from './liens-fichiers'
@@ -33,6 +33,7 @@ const LIBELLES_VALIDITE = { valide: 'vérifiée', a_verifier: 'à vérifier', in
 
 // Développement : `?synthetique=1000` remplace le graphe par un jeu synthétique (lecture seule) pour éprouver la vue.
 const SYNTHETIQUE = import.meta.env.DEV ? Number(new URLSearchParams(location.search).get('synthetique')) || 0 : 0
+document.body.classList.toggle('demo', DEMO)
 
 document.querySelector<HTMLElement>('#app')!.innerHTML = `
   <aside class="panneau-sessions"></aside>
