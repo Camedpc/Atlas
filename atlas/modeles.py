@@ -263,7 +263,7 @@ class LienDocumentVue(BaseModel):
 
     de: str
     vers: str
-    relation: Literal["source", "implemente", "produit", "ecrit_dans", "entree"]
+    relation: Literal["source", "implemente", "produit", "ecrit_dans", "entree", "redige_dans"]
 
 
 class Vue(BaseModel):

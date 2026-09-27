@@ -191,7 +191,7 @@ export interface DocumentVue {
   modifie_le: string
 }
 
-export type RelationDocument = 'source' | 'implemente' | 'produit' | 'ecrit_dans' | 'entree'
+export type RelationDocument = 'source' | 'implemente' | 'produit' | 'ecrit_dans' | 'entree' | 'redige_dans'
 
 export interface LienDocumentVue {
   /** Id de nœud, « fig:<id> » ou « doc:<id> ». */

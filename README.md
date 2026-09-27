@@ -101,7 +101,9 @@ serveur MCP `verificateur` : un modèle économique juge chaque démonstration, 
 verdicts invalides ou peu sûrs, et le verdict (`validite`, `confiance`) est écrit sur la démonstration.
 Après une recherche d'ampleur, il fait rédiger l'article par le `scribe` : un papier scientifique en LaTeX, compilé
 en PDF (`doc_projet/<sujet>/papiers/NN-…/`), avec les démonstrations, les verdicts, les figures et la carte du
-raisonnement (LaTeX est dans l'image Docker).
+raisonnement (LaTeX est dans l'image Docker). Chaque fois qu'un scribe termine, Atlas repère les PDF d'article qu'il
+vient de compiler (`atlas/orchestrateur/article.py`) et demande à l'orchestrateur (`prompts/article.md`) d'en faire
+placer chacun par un graphiste : un document relié par « rédigé dans » aux résultats qu'il expose.
 
 Chaque conversation a son dossier (`atlas/orchestrateur/bunker.py`) :
 `espace/utilisateurs/<utilisateur>/<projet>/sessions/<conversation>/`, avec `conv/` (copie de la conversation),
