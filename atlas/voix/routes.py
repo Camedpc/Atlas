@@ -176,6 +176,11 @@ async def jouer_etape(appel_id: str, corps: Etape) -> dict:
     return await _session(appel_id).ecran.jouer_etape(corps.parcours, corps.etape)
 
 
+@routeur_outils.post("/ecran/parcours/derouler")
+async def derouler_parcours(appel_id: str, corps: Etape) -> dict:
+    return await _session(appel_id).derouler(corps.parcours, corps.etape)
+
+
 @routeur_outils.post("/ecran/deplacer")
 async def deplacer(appel_id: str, corps: Deplacements) -> dict:
     return await _session(appel_id).ecran.deplacer(corps.deplacements)

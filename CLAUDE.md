@@ -151,8 +151,10 @@ Sous `ATLAS_BUNKER=1`, un outil MCP sans `default_tools_approval_mode = "approve
 (`navigation.py`), et les lots de commandes (P3) comme l'état de l'écran (P4) passent par la WebSocket de l'appel
 (messages `commandes`, `compte_rendu`, `ecran`), exécutés par `pilotage/` (contrat dans `protocoles/`, origine
 `voix`). Parcours : l'agent navigateur (rôle `navigateur` de l'orchestrateur, ou tâche de la voix
-`preparer_parcours`, prompt `prompts/navigateur.md`) les pose par `poser_parcours` ; la voix les joue par
-`jouer_etape`, le front par la carte « Parcours » du fil (`parcours.ts`). Le registre et le relais d'AtlasVoice ne
+`preparer_parcours`, prompt `prompts/navigateur.md`) les pose par `poser_parcours` ; la voix les déroule tout
+seuls (`derouler_parcours`, `deroulement.py` : phrases dites telles quelles, sans le modèle, pause dès que Camille
+parle), le front par la carte « Parcours » du fil (`parcours.ts`, dont le lecteur réserve sa hauteur aux cadrages :
+`margeBas`). Le registre et le relais d'AtlasVoice ne
 servent plus à Atlas. Lecture de la voix par boucle WebRTC locale
 (`voix.ts`) : en sortie Web Audio directe, l'annulation d'écho de Chrome décroche après des interruptions et la
 voix s'entend en boucle. Gradium : 300 s max par session STT (renouvelée au silence, `ATLAS_VOIX_STT_DUREE`).

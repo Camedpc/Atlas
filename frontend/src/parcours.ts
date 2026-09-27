@@ -40,11 +40,14 @@ export class LecteurParcours {
   private avant: () => Promise<void>
   private parcours: Parcours | null = null
   private etape = 0
+  private surHauteur: (px: number) => void
 
-  /** `conteneur` : la vue du graphe ; `avant` rend l'onglet du graphe visible avant chaque étape. */
-  constructor(conteneur: HTMLElement, pilote: Pilote, avant: () => Promise<void>) {
+  /** `conteneur` : la vue du graphe ; `avant` rend l'onglet du graphe visible avant chaque étape ; `surHauteur`
+   * reçoit la place que le lecteur prend en bas (0 fermé), pour que les cadrages ne passent pas dessous. */
+  constructor(conteneur: HTMLElement, pilote: Pilote, avant: () => Promise<void>, surHauteur: (px: number) => void) {
     this.pilote = pilote
     this.avant = avant
+    this.surHauteur = surHauteur
     this.racine = document.createElement('section')
     this.racine.className = 'lecteur-parcours'
     this.racine.hidden = true
@@ -72,6 +75,7 @@ export class LecteurParcours {
     if (!this.parcours) return
     this.parcours = null
     this.racine.hidden = true
+    this.surHauteur(0)
     await this.pilote.commander(...EFFACER)
   }
 
@@ -81,6 +85,8 @@ export class LecteurParcours {
     this.etape = i
     this.dessiner()
     await this.avant()
+    // Le lecteur est posé en bas (à 12 px du bord) : sa hauteur plus une marge est retirée de la zone cadrée.
+    this.surHauteur(this.racine.offsetHeight + 24)
     const cr = await this.pilote.commander(...p.etapes[i]!.commandes)
     if (!cr.ok && this.parcours === p && this.etape === i) {
       const refus = cr.erreur ?? cr.resultats.find((r) => !r.ok)?.erreur

@@ -70,9 +70,17 @@ def preparer_parcours(titre: str, consigne: str) -> str:
 
 
 @serveur.tool()
+def derouler_parcours(parcours: str, depuis: int = 1) -> str:
+    """Déroule un parcours tout seul, à partir de l'étape `depuis` : chaque étape s'affiche, sa phrase est dite
+    telle quelle, puis la suivante enchaîne. Ne dis rien de plus après l'appel. Si Camille parle, il se met en
+    pause, et un message te dit où il en est. `parcours` : son chemin (…/parcours/<fichier>.json)."""
+    return _appel("/ecran/parcours/derouler", {"parcours": parcours, "etape": depuis})
+
+
+@serveur.tool()
 def jouer_etape(parcours: str, etape: int = 1) -> str:
-    """Montre à l'écran l'étape `etape` (à partir de 1) d'un parcours, et renvoie sa `phrase` : dis-la à Camille
-    (avec tes mots), puis attends qu'il demande la suite. `parcours` : son chemin (…/parcours/<fichier>.json)."""
+    """Montre une seule étape d'un parcours (à partir de 1), sans enchaîner, et renvoie sa `phrase` à dire avec
+    tes mots : pour revenir sur une étape précise."""
     return _appel("/ecran/parcours", {"parcours": parcours, "etape": etape})
 
 

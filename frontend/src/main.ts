@@ -247,7 +247,8 @@ async function montrerGraphe() {
   montrer('raisonnement')
   for (let i = 0; i < 2; i++) await new Promise((r) => requestAnimationFrame(r))
 }
-const lecteurParcours = new LecteurParcours(document.querySelector<HTMLElement>('.vue-raisonnement')!, pilote, montrerGraphe)
+const lecteurParcours = new LecteurParcours(document.querySelector<HTMLElement>('.vue-raisonnement')!, pilote, montrerGraphe,
+  (px) => (vueGraphe.margeBas = px))
 conversation.brancherEcran(pilote, montrerGraphe, (chemin) => {
   if (!projetId) return
   chargerParcours(projetId, chemin)
