@@ -55,7 +55,7 @@ export const AIDE_COMMANDES: [string, string][] = [
   ['Double-clic sur une barre de titre', 'Renommer le cadre'],
   ['Double-clic sur un nœud, ou Entrée', 'Ouvrir sa fiche'],
   ['Double-clic sur une figure, ou Entrée', 'L’ouvrir en grand, ou en 3D pour une scène animée (Échap pour fermer)'],
-  ['Clic droit', 'Menu contextuel (nœud, cadre ou fond)'],
+  ['Clic droit', 'Écrire à l’agent du chat à propos de ce qui est sous le clic (ou de la case), et menu contextuel'],
   ['F2', 'Renommer le nœud ou la figure sélectionnés'],
   ['C', 'Créer un cadre autour de la sélection'],
   ['Échap', 'Désélectionner'],
@@ -107,6 +107,10 @@ export interface OptionsVueGraphe {
   surChangement?: () => void
   /** Scène 3D d'une figure ; par défaut, lue sur le serveur (le jeu synthétique fournit la sienne). */
   chargerScene?: (figure: FigureVue) => Promise<SceneFigure>
+  /** Clic droit → message à l'agent du chat (avec ce qui est sous le clic) ; false s'il n'est pas parti. */
+  surDemander?: (message: string) => Promise<boolean>
+  /** Destinataire de ce message (« l’orchestrateur »…) ; null : pas d'écriture possible (fil en lecture seule). */
+  destinataire?: () => string | null
 }
 
 /** Un nœud à l'écran, en pixels de la scène (pilotage, P4 `visibles`). */
@@ -1353,6 +1357,7 @@ export class VueGraphe {
       articles.push({ libelle: 'Cadrer tout', raccourci: 'Origine', action: () => this.cadrerTout() })
     }
     this.menu.innerHTML = `<div class="gr-menu-titre">${echapper(titre)}</div>`
+    const champ = this.champDemande(c, sx, sy)
     for (const a of articles) {
       if (a === 'sep') {
         this.menu.append(element(null, 'hr', 'gr-menu-sep'))
@@ -1410,7 +1415,77 @@ export class VueGraphe {
     const w = this.menu.offsetWidth, h = this.menu.offsetHeight
     this.menu.style.left = `${Math.min(sx, this.largeur - w - 6)}px`
     this.menu.style.top = `${Math.min(sy, this.hauteur - h - 6)}px`
+    // Au doigt, pas de focus automatique : le clavier virtuel masquerait le menu.
+    if (champ && Date.now() - this.dernierDoigt > 800) champ.focus({ preventScroll: true })
     this.demander()
+  }
+
+  /**
+   * Champ du menu contextuel : un message à l'agent du chat, envoyé avec ce qui est sous le clic (Entrée), ou
+   * null si aucun agent ne peut le recevoir.
+   */
+  private champDemande(c: Cible, sx: number, sy: number): HTMLTextAreaElement | null {
+    const destinataire = this.options.destinataire?.() ?? null
+    if (!this.options.surDemander || !destinataire) return null
+    const bloc = element(this.menu, 'div', 'gr-menu-demande')
+    const champ = element(bloc, 'textarea', 'gr-demande') as HTMLTextAreaElement
+    champ.rows = 2
+    champ.placeholder = `Écrire à ${destinataire} à propos de ${c.genre === 'fond' ? 'cet endroit' : 'ceci'}…`
+    champ.setAttribute('aria-label', `Message à ${destinataire}`)
+    element(bloc, 'div', 'gr-demande-aide').textContent = 'Entrée : envoyer · Maj + Entrée : à la ligne'
+    this.menu.append(element(null, 'hr', 'gr-menu-sep'))
+    const contexte = this.designation(c, sx, sy)
+    const envoyer = async () => {
+      const texte = champ.value.trim()
+      if (!texte || champ.disabled) return
+      champ.disabled = true
+      const ok = await this.options.surDemander!(`[Graphe de raisonnement, clic droit : ${contexte}]\n\n${texte}`)
+      if (ok) {
+        this.fermerMenu()
+        this.scene.focus({ preventScroll: true })
+        this.avis(`Envoyé à ${destinataire}.`)
+      } else {
+        champ.disabled = false
+        champ.focus()
+        this.avis('Message non envoyé : voir la conversation.')
+      }
+    }
+    champ.addEventListener('keydown', (e) => {
+      e.stopPropagation()
+      if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+        e.preventDefault()
+        void envoyer()
+      } else if (e.key === 'Escape') {
+        this.fermerMenu()
+        this.scene.focus({ preventScroll: true })
+      }
+    })
+    return champ
+  }
+
+  /** Ce qui est sous un point de l'écran, décrit pour un agent (ids et cases de la vue) ; à défaut, la case visée. */
+  private designation(c: Cible, sx: number, sy: number): string {
+    const m = this.versMonde(sx, sy)
+    const cas = `case colonne ${Math.floor(m.x / GRILLE.pasX)}, ligne ${Math.floor(m.y / GRILLE.pasY)}`
+    const cadre = (id: string) => {
+      const g = this.base.cadres.get(id)
+      return g ? `cadre ${g.numero} « ${g.nom} » (id \`${id}\`)` : `cadre \`${id}\``
+    }
+    const bloc = (id: string) => {
+      const b = this.base.blocs.get(id)
+      if (!b) return `nœud \`${id}\``
+      const ou = [b.place ? `case colonne ${b.colonne}, ligne ${b.ligne}` : 'pas encore placé', b.groupe ? `dans le ${cadre(b.groupe)}` : '']
+        .filter(Boolean).join(', ')
+      if (b.figure) return `${b.libelle} ${b.numero} « ${b.figure.titre} » (id \`${id}\`, illustre le nœud \`${b.figure.noeud_id}\` ; ${ou})`
+      if (b.document) return `${b.libelle} ${b.numero} « ${b.document.titre} » (id \`${id}\`, fichier \`${b.document.chemin}\` ; ${ou})`
+      return `${b.libelle} ${b.numero} « ${b.noeud.nom} » (id \`${id}\` ; ${ou})`
+    }
+    if (c.genre === 'bloc') return bloc(c.id)
+    if (c.genre === 'renvoi') return `renvoi « cf. » vers ${bloc(c.id)}`
+    if (c.genre === 'titre') return `barre de titre du ${cadre(c.cadre)}`
+    if (c.genre === 'fonction') return `${cadre(c.cadre)}, réduit en nœud-fonction`
+    if (c.genre === 'cadre') return `emplacement vide dans le ${cadre(c.cadre)}, ${cas}`
+    return `aucun objet sous le clic : emplacement vide, ${cas}`
   }
 
   private fermerMenu(): void {
