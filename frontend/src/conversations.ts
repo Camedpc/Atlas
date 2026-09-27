@@ -204,6 +204,9 @@ export class PanneauConversation {
           <nav class="ariane" hidden></nav>
         </div>
         <span class="conv-etat"></span>
+        <button type="button" class="icone ranger-conversation" title="Masquer la conversation" aria-label="Masquer la conversation">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2.5" y="3" width="13" height="12" rx="2"/><path d="M7 3v12"/></svg>
+        </button>
       </header>
       <div class="fil"><div class="fil-contenu"></div></div>
       <div class="bas">

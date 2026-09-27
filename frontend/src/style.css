@@ -331,6 +331,11 @@ body.sessions-repliees .deplier-sessions {
   color: var(--texte-3);
 }
 
+.ranger-conversation {
+  flex: none;
+  margin-right: -6px;
+}
+
 .fil {
   flex: 1;
   min-height: 0;
@@ -1217,6 +1222,7 @@ body.sessions-repliees .deplier-sessions {
   }
 
   .poignee,
+  .ranger-conversation,
   body.conversation-rangee .deplier-conversation {
     display: none !important;
   }

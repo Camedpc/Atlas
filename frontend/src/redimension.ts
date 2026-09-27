@@ -1,5 +1,5 @@
 // Poignées entre les colonnes : on glisse pour régler la largeur des sessions et de la conversation.
-// Glisser une colonne en deçà de SEUIL_RANGEMENT la range (bouton en haut à gauche de la colonne suivante
+// Glisser une colonne en deçà de SEUIL_RANGEMENT, ou l'icône de sa tête, la range (bouton en haut à gauche de la colonne suivante
 // pour la rouvrir) ; double-clic sur une poignée : largeur par défaut. Les largeurs sont gardées dans ce navigateur.
 
 const CLE = 'atlas.largeurs'
@@ -65,6 +65,7 @@ export function installerPoignees(replierSessions: (replie: boolean) => void): P
     window.dispatchEvent(new Event('resize'))
   }
   document.querySelector('.deplier-conversation')!.addEventListener('click', () => ouvrirConversation(true))
+  document.querySelector('.ranger-conversation')!.addEventListener('click', () => ouvrirConversation(false))
 
   const poignee = (parent: HTMLElement, cible: 'sessions' | 'conversation') => {
     const el = document.createElement('div')
