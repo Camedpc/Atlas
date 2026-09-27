@@ -25,7 +25,7 @@ from openai_codex.types import ReasoningEffort
 from .. import conversations, projets
 from ..modeles import Conversation
 from . import bunker, config
-from .codex_vivant import codex_vivant
+from .codex_vivant import CodexVivant, codex_vivant
 from .consignes import consigne_complete
 from .sous_agents import sous_agents
 from .suivi_agents import SuiviAgents
@@ -53,16 +53,28 @@ class ConnexionManquante(RuntimeError):
     pass
 
 
-def config_codex() -> CodexConfig:
-    """Codex isolé de la machine : son propre CODEX_HOME, donc ni ~/.codex, ni sa connexion, ni ses réglages."""
-    config.CODEX_HOME.mkdir(parents=True, exist_ok=True)
-    return CodexConfig(codex_bin=config.CODEX_BIN, env={"CODEX_HOME": str(config.CODEX_HOME)})
+def config_codex(codex_home: Path | None = None) -> CodexConfig:
+    """Codex isolé de la machine : son propre CODEX_HOME, donc ni ~/.codex, ni sa connexion, ni ses réglages.
+    `codex_home` : celui d'une clé OpenAI fournie par l'utilisateur (codex_vivant.pour_cle) ; None : le serveur."""
+    home = codex_home or config.CODEX_HOME
+    home.mkdir(parents=True, exist_ok=True)
+    return CodexConfig(codex_bin=config.CODEX_BIN, env={"CODEX_HOME": str(home)})
 
 
-def surcharges_thread(conversation_id: str, projet: str | None = None, projet_id: str | None = None) -> dict[str, Any]:
+def surcharges_thread(
+    conversation_id: str, projet: str | None = None, projet_id: str | None = None, codex_home: Path | None = None
+) -> dict[str, Any]:
     """Réglages Codex d'Atlas, appliqués à chaque thread. `projet` est le dossier de l'espace dans le bunker,
-    `projet_id` l'espace dont les serveurs MCP lisent et écrivent le graphe."""
+    `projet_id` l'espace dont les serveurs MCP lisent et écrivent le graphe, `codex_home` la connexion d'une clé
+    fournie par l'utilisateur (le vérificateur la reprend, pour que ses jugements soient payés par la même clé)."""
     graphe = {"ATLAS_PROJET_ID": projet_id} if projet_id else {}
+    # Avec une clé de l'utilisateur, le vérificateur ne reçoit pas celle du serveur : il la préférerait sinon.
+    transmises = [
+        n
+        for n in os.environ
+        if (n.startswith(("ATLAS_", "SUPABASE_")) or (n == "OPENAI_API_KEY" and codex_home is None))
+        and n != "ATLAS_CODEX_HOME"
+    ]
     session = bunker.dossier_session(conversation_id, projet)
     surcharges: dict[str, Any] = {
         "web_search": "live",
@@ -88,9 +100,9 @@ def surcharges_thread(conversation_id: str, projet: str | None = None, projet_id
                 "args": ["-m", "atlas.orchestrateur.mcp_verificateur"],
                 "cwd": str(config.RACINE),
                 # Il lance son propre Codex : il lui faut Supabase, la connexion et les réglages du vérificateur.
-                "env_vars": [n for n in os.environ if n.startswith(("ATLAS_", "SUPABASE_")) or n == "OPENAI_API_KEY"],
+                "env_vars": transmises,
                 "env": {
-                    "ATLAS_CODEX_HOME": str(config.CODEX_HOME),
+                    "ATLAS_CODEX_HOME": str(codex_home or config.CODEX_HOME),
                     "ATLAS_ESPACE_TRAVAIL": str(config.ESPACE_TRAVAIL),
                     **graphe,
                 },
@@ -110,7 +122,11 @@ def surcharges_thread(conversation_id: str, projet: str | None = None, projet_id
 
 
 def parametres_thread(
-    dossier: Path, conversation_id: str, projet: str | None = None, projet_id: str | None = None
+    dossier: Path,
+    conversation_id: str,
+    projet: str | None = None,
+    projet_id: str | None = None,
+    codex_home: Path | None = None,
 ) -> dict[str, Any]:
     parametres: dict[str, Any] = {
         # Rien à faire approuver : une commande refusée par le sandbox n'est jamais relancée hors du sandbox.
@@ -118,7 +134,7 @@ def parametres_thread(
         "cwd": str(dossier),
         "model": config.MODELE,
         "developer_instructions": consigne_complete("orchestrateur"),
-        "config": surcharges_thread(conversation_id, projet, projet_id),
+        "config": surcharges_thread(conversation_id, projet, projet_id, codex_home),
     }
     if not config.BUNKER:
         # Le profil de permissions du bunker ne se combine pas avec un mode de sandbox : l'un ou l'autre.
@@ -135,6 +151,7 @@ async def tour(
     effort: str | None = None,
     modele: str | None = None,
     occupe: bool = False,
+    vivant: CodexVivant = codex_vivant,
 ) -> ResultatTour:
     """Fait travailler l'orchestrateur sur `texte` jusqu'à sa réponse finale.
 
@@ -142,14 +159,17 @@ async def tour(
     `Arret`. `suivi` (l'arbre des agents, tenu à jour par le gestionnaire) voit l'orchestrateur repartir.
     `effort` et `modele` valent pour ce tour de l'orchestrateur (par défaut ATLAS_EFFORT_ORCHESTRATEUR et le
     modèle du thread) ; les sous-agents gardent ceux de leur rôle. `occupe` : des sous-agents travaillent encore
-    dans ce thread, qu'il ne faut pas recharger même si les consignes ont changé.
+    dans ce thread, qu'il ne faut pas recharger même si les consignes ont changé. `vivant` : le processus Codex
+    qui paie le tour (celui du serveur, ou celui d'une clé fournie par l'utilisateur).
     """
     suivi = suivi if suivi is not None else SuiviAgents()
     projet = await asyncio.to_thread(projets.dossier_de, conversation.projet_id)
     projet_id = await asyncio.to_thread(projets.id_ou_defaut, conversation.projet_id)
     dossier = await asyncio.to_thread(bunker.preparer_session, conversation.id, projet)
 
-    thread, texte = await _ouvrir_thread(conversation, execution_id, texte, dossier, projet, projet_id, occupe)
+    thread, texte = await _ouvrir_thread(
+        conversation, execution_id, texte, dossier, projet, projet_id, occupe, vivant
+    )
     if thread.id != conversation.session_agent:
         await asyncio.to_thread(conversations.modifier_conversation, conversation.id, session_agent=thread.id)
         conversation.session_agent = thread.id
@@ -209,11 +229,11 @@ def en_dict(charge: Any) -> dict[str, Any]:
     return charge.model_dump(mode="json", by_alias=True, exclude_none=True)
 
 
-async def enrichir(suivi: SuiviAgents, thread_id: str) -> None:
+async def enrichir(suivi: SuiviAgents, thread_id: str, vivant: CodexVivant = codex_vivant) -> None:
     """Rôle, surnom et modèle d'un sous-agent, lus dans son thread (réessaie le temps qu'il soit écrit)."""
     for essai in range(3):
         try:
-            thread = await codex_vivant.lire_thread(thread_id)
+            thread = await vivant.lire_thread(thread_id)
         except Exception:
             await asyncio.sleep(1 + essai)
             continue
@@ -221,17 +241,18 @@ async def enrichir(suivi: SuiviAgents, thread_id: str) -> None:
         return
 
 
-# Modèles proposés par Codex, relus au plus toutes les DUREE_CACHE_MODELES secondes.
+# Modèles proposés par Codex, relus au plus toutes les DUREE_CACHE_MODELES secondes (par compte).
 DUREE_CACHE_MODELES = 600
-_cache_modeles: tuple[float, list[dict[str, Any]]] | None = None
+_cache_modeles: dict[str, tuple[float, list[dict[str, Any]]]] = {}
 
 
-async def modeles_disponibles() -> list[dict[str, Any]]:
+async def modeles_disponibles(vivant: CodexVivant = codex_vivant) -> list[dict[str, Any]]:
     """Modèles visibles du compte Codex, avec les niveaux d'effort que chacun accepte."""
-    global _cache_modeles
-    if _cache_modeles is not None and time.monotonic() - _cache_modeles[0] < DUREE_CACHE_MODELES:
-        return _cache_modeles[1]
-    reponse = await (await codex_vivant.client()).models()
+    compte = str(vivant.codex_home)
+    cache = _cache_modeles.get(compte)
+    if cache is not None and time.monotonic() - cache[0] < DUREE_CACHE_MODELES:
+        return cache[1]
+    reponse = await (await vivant.client()).models()
     modeles = [
         {
             "id": m.model,
@@ -244,20 +265,21 @@ async def modeles_disponibles() -> list[dict[str, Any]]:
         for m in reponse.data
         if not m.hidden
     ]
-    _cache_modeles = (time.monotonic(), modeles)
+    _cache_modeles[compte] = (time.monotonic(), modeles)
     return modeles
 
 
-async def _connecter(codex: AsyncCodex) -> None:
-    """Clé API si OPENAI_API_KEY est renseignée, sinon la connexion ChatGPT faite avec `connexion.py`.
+async def _connecter(codex: AsyncCodex, cle_api: str | None = None) -> None:
+    """`cle_api` (clé fournie par l'utilisateur, dans le CODEX_HOME qui lui est propre), sinon la clé API du serveur
+    si OPENAI_API_KEY est renseignée, sinon la connexion ChatGPT faite avec `connexion.py`.
 
     Renseigner la clé suffit à basculer : elle remplace une connexion ChatGPT existante au tour suivant.
     """
     reponse = await codex.account()
     type_compte = reponse.account.root.type if reponse.account is not None else None
-    if config.OPENAI_API_KEY:
+    if cle := cle_api or config.OPENAI_API_KEY:
         if type_compte != "apiKey":
-            await codex.login_api_key(config.OPENAI_API_KEY)
+            await codex.login_api_key(cle)
         return
     if type_compte is None and reponse.requires_openai_auth:
         raise ConnexionManquante(
@@ -274,20 +296,22 @@ async def _ouvrir_thread(
     projet: str,
     projet_id: str,
     occupe: bool,
+    vivant: CodexVivant = codex_vivant,
 ) -> tuple[AsyncThread, str]:
-    """Thread de la conversation : déjà chargé, repris, ou nouveau (avec l'historique si la reprise échoue)."""
-    parametres = parametres_thread(dossier, conversation.id, projet, projet_id)
+    """Thread de la conversation : déjà chargé, repris, ou nouveau (avec l'historique si la reprise échoue, par
+    exemple quand la conversation change de compte : les threads d'un CODEX_HOME n'existent pas dans un autre)."""
+    parametres = parametres_thread(dossier, conversation.id, projet, projet_id, vivant.codex_home)
     try:
-        return await codex_vivant.thread(conversation.id, conversation.session_agent, parametres, occupe), texte
+        return await vivant.thread(conversation.id, conversation.session_agent, parametres, occupe), texte
     except ConnexionManquante:
         raise
     except Exception:
         if not conversation.session_agent:
             raise
         log.warning("Thread %s introuvable, reprise par l'historique", conversation.session_agent, exc_info=True)
-        codex_vivant.oublier(conversation.id)
+        vivant.oublier(conversation.id)
         texte = await asyncio.to_thread(_avec_historique, conversation.id, execution_id, texte)
-    return await codex_vivant.thread(conversation.id, None, parametres, occupe), texte
+    return await vivant.thread(conversation.id, None, parametres, occupe), texte
 
 
 def _avec_historique(conversation_id: str, execution_id: str, texte: str) -> str:

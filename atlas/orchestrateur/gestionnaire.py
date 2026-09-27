@@ -8,6 +8,10 @@ soit prêt ; s'il vient de finir, il lance le tour suivant.
 Le processus Codex reste ouvert entre les tours (`codex_vivant`) : les sous-agents continuent après la fin du tour
 de l'orchestrateur. Une écoute permanente tient leur arbre à jour et enregistre leurs messages, tour ou pas.
 
+Une clé OpenAI fournie par l'utilisateur (`cle`) fait passer ses tours par un processus Codex à elle
+(`codex_vivant.pour_cle`) : chaque conversation retient le processus de son dernier tour, pour y interrompre
+et y suivre ses sous-agents.
+
 La voix (atlas/voix) s'abonne aux événements d'une conversation (`abonner`) : étapes clés des sous-agents et fin
 du tour. Au raccrochage, elle dépose un « pont » (ce que l'orchestrateur n'a pas vu de l'appel), ajouté en tête
 du prochain message qu'il reçoit.
@@ -24,7 +28,7 @@ from openai_codex import AsyncTurnHandle
 from .. import conversations
 from ..modeles import Conversation, Execution, StatutExecution
 from . import agent, config, pipeline
-from .codex_vivant import codex_vivant
+from .codex_vivant import CodexVivant, codex_vivant, empreinte_cle, pour_cle, tous
 from .consignes import interruption, relais
 from .suivi_agents import METHODES_SUIVIES, RACINE, SuiviAgents
 from .traduction import traduire
@@ -56,6 +60,15 @@ class TourIndisponible(Exception):
     """Une exécution est en cours mais son tour Codex ne prend pas de message (il ne démarre pas)."""
 
 
+class CompteDifferent(Exception):
+    """Le tour en cours est payé par un autre compte (clé OpenAI ou serveur) que le message qui voudrait s'y
+    injecter : il n'y est pas ajouté."""
+
+
+def _compte(cle: str | None) -> str | None:
+    return empreinte_cle(cle) if cle else None
+
+
 def titre_depuis(texte: str) -> str:
     ligne = texte.strip().splitlines()[0].strip() if texte.strip() else conversations.TITRE_PAR_DEFAUT
     return ligne if len(ligne) <= LONGUEUR_MAX_TITRE else ligne[: LONGUEUR_MAX_TITRE - 1].rstrip() + "…"
@@ -74,6 +87,9 @@ class Gestionnaire:
         self._suivis: dict[str, SuiviAgents] = {}
         # Dernière exécution de chaque conversation suivie : les messages hors tour s'y rattachent.
         self._derniere: dict[str, str] = {}
+        # Processus Codex de chaque conversation (celui de son dernier tour), et compte du tour en cours.
+        self._vivants: dict[str, CodexVivant] = {}
+        self._comptes: dict[str, str | None] = {}
         self._file: asyncio.Queue | None = None
         self._ecoute: asyncio.Task | None = None
         self._menage_tache: asyncio.Task | None = None
@@ -130,18 +146,24 @@ class Gestionnaire:
         agent_cible: str | None = None,
         reglages: Reglages | None = None,
         origine: Origine = "texte",
+        cle: str | None = None,
     ) -> Execution:
         """Message de Camille à l'orchestrateur (`agent_cible` None) ou à l'un de ses sous-agents.
 
-        Pendant une exécution, il est injecté dans le tour en cours (dont le modèle et l'effort ne changent plus) ;
-        sinon il lance un nouveau tour avec `reglages`.
+        Pendant une exécution, il est injecté dans le tour en cours (dont le modèle et l'effort ne changent plus),
+        s'il est payé par le même compte (`cle`, sinon CompteDifferent) ; sinon il lance un nouveau tour avec
+        `reglages`, payé par `cle` (None : le compte du serveur).
         """
         cible = None if agent_cible in (None, "", RACINE) else agent_cible
         cid = conversation.id
         limite = time.monotonic() + DELAI_DEMARRAGE_TOUR
         while True:
             if cid not in self._tours:
-                return await self.lancer(conversation, texte, agent_cible=cible, reglages=reglages, origine=origine)
+                return await self.lancer(
+                    conversation, texte, agent_cible=cible, reglages=reglages, origine=origine, cle=cle
+                )
+            if self._comptes.get(cid) != _compte(cle):
+                raise CompteDifferent(cid)
             tour, execution = self._tours[cid], self._executions.get(cid)
             if tour is None or execution is None:
                 # Le tour démarre : attendre qu'il prenne des messages plutôt que refuser.
@@ -168,11 +190,14 @@ class Gestionnaire:
         agent_cible: str | None = None,
         reglages: Reglages | None = None,
         origine: Origine = "texte",
+        cle: str | None = None,
     ) -> Execution:
         cid = conversation.id
         if cid in self._tours:
             raise DejaEnCours(cid)
         self._tours[cid] = None  # réservé avant tout await
+        self._comptes[cid] = _compte(cle)
+        vivant = self._vivants[cid] = pour_cle(cle)
         self.derniers_lancements[cid] = (origine, time.time())
         self._ecouter()
         try:
@@ -190,11 +215,14 @@ class Gestionnaire:
             await asyncio.to_thread(conversations.modifier_conversation, cid, titre=titre)
         except Exception:
             del self._tours[cid]
+            self._comptes.pop(cid, None)
             self._executions.pop(cid, None)
             raise
 
         consigne = relais(agent_cible, texte) if agent_cible else self._avec_pont(cid, texte)
-        tache = asyncio.create_task(self._executer(conversation, consigne, execution.id, reglages or Reglages()))
+        tache = asyncio.create_task(
+            self._executer(conversation, consigne, execution.id, reglages or Reglages(), vivant, cle)
+        )
         self._taches.add(tache)
         self._execution_par_conv[cid] = tache
         tache.add_done_callback(self._taches.discard)
@@ -208,7 +236,7 @@ class Gestionnaire:
             cible = suivi.agents.get(agent_cible) if suivi else None
             if cible is None or cible.tour is None:
                 return False
-            await self._interrompre(cible.thread_id, cible.tour)
+            await self._interrompre(conversation_id, cible.thread_id, cible.tour)
             # Son parent l'attendrait jusqu'au bout du délai de `wait_agent` : prévenir l'orchestrateur.
             tour = self._tours.get(conversation_id)
             if tour is not None:
@@ -227,13 +255,13 @@ class Gestionnaire:
         # Interrompre l'orchestrateur ne les arrête pas : Codex les laisse travailler.
         for a in suivi.au_travail(sous_agents_seuls=True) if suivi else []:
             if a.tour is not None:
-                await self._interrompre(a.thread_id, a.tour)
+                await self._interrompre(conversation_id, a.thread_id, a.tour)
                 arrete = True
         return arrete
 
-    async def _interrompre(self, thread_id: str, tour_id: str) -> None:
+    async def _interrompre(self, conversation_id: str, thread_id: str, tour_id: str) -> None:
         try:
-            await codex_vivant.interrompre(thread_id, tour_id)
+            await self._vivants.get(conversation_id, codex_vivant).interrompre(thread_id, tour_id)
         except Exception:
             log.warning("Interruption du tour %s refusée", tour_id, exc_info=True)
 
@@ -249,7 +277,15 @@ class Gestionnaire:
             raise agent.Arret
         self._tours[conversation_id] = tour
 
-    async def _executer(self, conversation: Conversation, texte: str, execution_id: str, reglages: Reglages) -> None:
+    async def _executer(
+        self,
+        conversation: Conversation,
+        texte: str,
+        execution_id: str,
+        reglages: Reglages,
+        vivant: CodexVivant = codex_vivant,
+        cle: str | None = None,
+    ) -> None:
         cid = conversation.id
         statut: StatutExecution = "erreur"
         erreur: str | None = None
@@ -267,6 +303,7 @@ class Gestionnaire:
                 effort=reglages.effort,
                 modele=reglages.modele,
                 occupe=bool(suivi.au_travail(sous_agents_seuls=True)),
+                vivant=vivant,
             )
             usage = resultat.usage
             if cid in self._arrets:
@@ -282,7 +319,10 @@ class Gestionnaire:
             log.exception("Exécution %s en échec", execution_id)
             erreur = str(e) or type(e).__name__
         finally:
+            if erreur and cle:
+                erreur = erreur.replace(cle, "sk-…")  # la clé ne s'écrit jamais dans la conversation
             self._tours.pop(cid, None)
+            self._comptes.pop(cid, None)
             self._arrets.discard(cid)
             self._executions.pop(cid, None)
             agents = _clore(suivi, statut)
@@ -332,7 +372,7 @@ class Gestionnaire:
         for etape in evenements.etapes:
             self._publier(cid, {"type": "etape", **asdict(etape)})
         for nouveau in evenements.nouveaux:
-            tache = asyncio.create_task(agent.enrichir(suivi, nouveau))
+            tache = asyncio.create_task(agent.enrichir(suivi, nouveau, self._vivants.get(cid, codex_vivant)))
             self._taches.add(tache)
             tache.add_done_callback(self._taches.discard)
         execution_id = self._derniere.get(cid)
@@ -356,8 +396,11 @@ class Gestionnaire:
         while True:
             await asyncio.sleep(INTERVALLE_MENAGE)
             try:
-                for cid in await codex_vivant.liberer_inactifs(config.DUREE_THREAD_CHAUD, self.actif):
-                    self._suivis.pop(cid, None)
+                for vivant in tous():
+                    for cid in await vivant.liberer_inactifs(config.DUREE_THREAD_CHAUD, self.actif):
+                        if self._vivants.get(cid, codex_vivant) is vivant:
+                            self._suivis.pop(cid, None)
+                            self._vivants.pop(cid, None)
             except Exception:
                 log.warning("Ménage des threads Codex", exc_info=True)
 

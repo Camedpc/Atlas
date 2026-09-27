@@ -11,12 +11,14 @@ import { RACINE, VOIX, estVoix, etat, formatDuree, formatTokens, nomAgent } from
 import { ArbreAgents } from './arbre'
 import {
   api,
+  cleOpenAI,
   enregistrerJeton,
   JetonRequis,
   type Conversation,
   type EtatConversation,
   type Message,
   type Projet,
+  surChangementCle,
 } from './api'
 import { echapper, rendre } from './rendu'
 import { SelecteurModele } from './reglages'
@@ -261,6 +263,8 @@ export class PanneauConversation {
       reglagesOrchestrateur: () => this.selecteur.reglages,
     })
     this.micro.addEventListener('click', () => void this.appeler())
+    this.majMicro()
+    surChangementCle(() => this.majMicro())
     this.stop.addEventListener('click', () => this.appel.raccrocher())
     this.boutonOptions.addEventListener('click', () => this.basculerMenuVoix())
     this.menuVoix.addEventListener('click', (e) => {
@@ -637,6 +641,7 @@ export class PanneauConversation {
     this.envoyer.hidden = ouvert
     this.micro.classList.toggle('actif', ouvert)
     this.micro.title = ouvert ? 'Raccrocher' : 'Parler avec Atlas voix'
+    if (!ouvert) this.majMicro()
     this.tape = false
     this.afficherDictee('')
     this.elementsVoix.clear()
@@ -699,6 +704,15 @@ export class PanneauConversation {
       ).join('') +
       `<hr><button type="button" role="menuitemcheckbox" aria-checked="${optionsVoix.casque}" class="menu-ligne" data-option="casque">
         <span class="menu-texte"><b>Coupure immédiate</b><span>Atlas se tait dès que tu parles</span></span>${coche(optionsVoix.casque)}</button>`
+  }
+
+  /** L'appel vocal passe par les comptes d'Atlas (Codex, Gradium) : indisponible avec une clé OpenAI de l'utilisateur
+   * (un appel en cours se termine normalement). */
+  private majMicro() {
+    if (this.appel.ouvert) return
+    const cle = cleOpenAI() !== null
+    this.micro.disabled = cle
+    this.micro.title = cle ? 'Appel vocal indisponible avec ta clé OpenAI (il passe par le compte d’Atlas)' : 'Parler avec Atlas voix'
   }
 
   private async appeler() {

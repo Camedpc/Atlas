@@ -48,7 +48,9 @@ Servies seulement par `atlas.serveur` (pas sur Vercel) :
 | `POST /api/conversations/{id}/arreter` | `{"agent"?}` : arrête tout (orchestrateur et sous-agents), ou un seul sous-agent |
 | `WS /api/conversations/{id}/voix` | Appel vocal avec Atlas voix (premier message : `{"type": "auth", "jeton"}`) |
 | `/api/voix/appels/{appel}/…` | Outils du serveur MCP `voix` : confier à l'orchestrateur, son état, petites tâches |
-| `GET /api/orchestrateur/modeles` | Modèles Codex proposés à l'orchestrateur, leurs efforts, et les réglages par défaut |
+| `GET /api/orchestrateur/modeles` | Modèles Codex proposés à l'orchestrateur, leurs efforts, et les réglages par défaut (avec `X-Atlas-Cle-OpenAI` : ceux de la clé) |
+| `POST /api/orchestrateur/compte` | Vérifie la clé OpenAI de l'en-tête `X-Atlas-Cle-OpenAI` et y connecte Codex ; agents dont le modèle manque |
+| `DELETE /api/orchestrateur/compte` | Oublie la clé de l'en-tête : supprime sa connexion et ses threads du serveur |
 
 Chaque nœud porte aussi `parents` (ses prémisses) et `enfants` (les nœuds qui le citent), maintenus par
 trigger à partir des démonstrations, et `conversation_id` (la conversation qui l'a créé).
