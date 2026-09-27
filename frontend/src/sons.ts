@@ -1,7 +1,9 @@
 // Petits sons de l'appel vocal : ouverture (Atlas voix est prêt à écouter) et fermeture (raccroché). Synthétisés
 // avec Web Audio, sans fichier. Plusieurs familles à essayer : le choix se fait dans le menu du micro et reste
-// dans ce navigateur. Chaque son a son propre contexte audio (joué par la boucle WebRTC de la voix d'Atlas,
-// le son d'ouverture ne s'entendait pas) ; l'annulation d'écho de Chrome couvre tout ce que joue la page.
+// dans ce navigateur.
+// Pendant l'appel, ils passent par le chemin de la voix d'Atlas (contexte de l'appel, sortie WebRTC) : Windows
+// baisse de 80 % par défaut les autres sons pendant une communication, et un contexte audio neuf perd le début
+// de sa sortie ; seul l'aperçu du menu, hors appel, a son propre contexte.
 
 export type Sens = 'ouverture' | 'fermeture'
 
@@ -111,6 +113,9 @@ const RECETTES: Record<string, (ctx: AudioContext, sortie: AudioNode, t: number,
   },
 }
 
+/** Durée maximale d'un son (s) : l'appel attend au moins ça avant de fermer sa sortie audio. */
+export const DUREE_SON_S = 1.0
+
 /** Joue le son choisi (ou `id`). Sans contexte fourni, un contexte audio éphémère est créé puis fermé. */
 export function jouerSon(sens: Sens, id = sonChoisi(), ctx?: AudioContext, sortie?: AudioNode) {
   const recette = RECETTES[id]
@@ -118,7 +123,8 @@ export function jouerSon(sens: Sens, id = sonChoisi(), ctx?: AudioContext, sorti
   const propre = !ctx
   const c = ctx ?? new AudioContext()
   void c.resume()
-  recette(c, sortie ?? c.destination, c.currentTime + 0.02, sens)
+  // Un peu d'avance : un contexte qui vient d'ouvrir sa sortie en perd le tout début.
+  recette(c, sortie ?? c.destination, c.currentTime + (propre ? 0.12 : 0.03), sens)
   if (propre) window.setTimeout(() => void c.close(), 1500)
 }
 

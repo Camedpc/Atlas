@@ -5,7 +5,7 @@
 import { jetonAcces, urlAppel } from './api'
 import { analyseur, type SourcesPastille } from './pastille'
 import { Generations } from './generations'
-import { jouerSon } from './sons'
+import { DUREE_SON_S, jouerSon } from './sons'
 
 export const VOIX_GRADIUM: [string, string][] = [
   ['iEu63s1rhn_kegTr', 'Gaspard'],
@@ -102,6 +102,8 @@ export class Appel {
   private flux: MediaStream | null = null
   private lecteur: AudioWorkletNode | null = null
   private boucle: BoucleWebRTC | null = null
+  /** Sortie de la voix d'Atlas (boucle WebRTC, ou sortie directe en repli) : les sons de l'appel y passent aussi. */
+  private sortieSons: AudioNode | null = null
   private sonOuvertureJoue = false
   /** webrtc, sauf si la boucle n'a pas pu s'établir (repli : sortie directe du moteur audio). */
   private modeLecture: 'webrtc' | 'webaudio' = 'webrtc'
@@ -150,8 +152,9 @@ export class Appel {
       if (this.ws !== ws) return
       this.ws = null
       this.couperLecture(this.generations.courante)
-      this.fermerAudio()
-      jouerSon('fermeture')
+      // Le son de fin passe encore par la sortie de l'appel, qui ne se ferme qu'une fois le son joué.
+      if (this.contexte) jouerSon('fermeture', undefined, this.contexte, this.sortieSons ?? undefined)
+      this.fermerAudio(DUREE_SON_S * 1000)
       cancelAnimationFrame(this.image)
       this.rappels.surSources(null)
       this.rappels.surPartiel('')
@@ -242,6 +245,7 @@ export class Appel {
       console.warn('Lecture WebRTC impossible, sortie directe', e)
       this.fermerBoucle()
       lecteur.connect(contexte.destination)
+      this.sortieSons = contexte.destination
       this.modeLecture = 'webaudio'
     }
   }
@@ -249,6 +253,16 @@ export class Appel {
   private async brancherWebRTC(contexte: AudioContext, lecteur: AudioWorkletNode) {
     const destination = contexte.createMediaStreamDestination()
     lecteur.connect(destination)
+    this.sortieSons = destination
+    // Souffle inaudible (−80 dB) : sans lui, la sortie est en silence numérique parfait entre deux phrases et
+    // WebRTC y perd le début du son suivant (mesuré : ~0,5 s, un « déclic » disparaissait en entier).
+    const souffle = contexte.createBufferSource()
+    souffle.buffer = contexte.createBuffer(1, contexte.sampleRate, contexte.sampleRate)
+    const bruit = souffle.buffer.getChannelData(0)
+    for (let i = 0; i < bruit.length; i++) bruit[i] = (Math.random() * 2 - 1) * 1e-4
+    souffle.loop = true
+    souffle.connect(destination)
+    souffle.start()
     const emetteur = new RTCPeerConnection()
     const recepteur = new RTCPeerConnection()
     emetteur.onicecandidate = (e) => e.candidate && void recepteur.addIceCandidate(e.candidate)
@@ -277,13 +291,26 @@ export class Appel {
     this.boucle = null
   }
 
-  private fermerAudio() {
-    this.fermerBoucle()
-    for (const piste of this.flux?.getTracks() ?? []) piste.stop()
-    void this.contexte?.close()
-    this.contexte = null
+  /** Relâche le micro, la boucle WebRTC et le contexte audio de l'appel, après `delai` ms (le son de fin). */
+  private fermerAudio(delai = 0) {
+    const boucle = this.boucle
+    const flux = this.flux
+    const contexte = this.contexte
+    this.boucle = null
     this.flux = null
+    this.contexte = null
     this.lecteur = null
+    this.sortieSons = null
+    for (const piste of flux?.getAudioTracks() ?? []) piste.enabled = false // plus rien ne part vers Atlas
+    window.setTimeout(() => {
+      if (boucle) {
+        boucle.emetteur.close()
+        boucle.recepteur.close()
+        boucle.sortie.srcObject = null
+      }
+      for (const piste of flux?.getTracks() ?? []) piste.stop()
+      void contexte?.close()
+    }, delai)
   }
 
   private jouer(tampon: ArrayBuffer) {
@@ -416,10 +443,10 @@ export class Appel {
   private afficherEtat(etat?: EtatAppel) {
     if (etat) this.etatServeur = etat
     // Première écoute : Atlas voix est prêt, on peut parler.
-    // Son propre contexte, comme la fermeture : joué par la boucle WebRTC de la voix, il ne s'entendait pas.
+    // Par la sortie de la voix d'Atlas : un son à part serait baissé par Windows pendant la communication.
     if (etat === 'ecoute' && !this.sonOuvertureJoue && this.contexte) {
       this.sonOuvertureJoue = true
-      jouerSon('ouverture')
+      jouerSon('ouverture', undefined, this.contexte, this.sortieSons ?? undefined)
     }
     const affiche = this.enLecture && this.etatServeur !== 'demarrage' ? 'parle' : this.etatServeur
     this.rappels.surEtatVoix(affiche)
