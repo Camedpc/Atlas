@@ -1,0 +1,160 @@
+{
+  "version": 1,
+  "lot_id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+  "ecran": "ecran_principal",
+  "origine": "test",
+  "tache_id": 17,
+  "commandes": [
+    {
+      "op": "strategie",
+      "id": "roles_aux"
+    },
+    {
+      "op": "parametres_lecture",
+      "patch": {
+        "demonstrations": "principale",
+        "longueur_max_chaine": 4
+      }
+    },
+    {
+      "op": "liens_complets",
+      "oui": true
+    },
+    {
+      "op": "mode",
+      "mode": "3d"
+    },
+    {
+      "op": "vue",
+      "nom": "iso"
+    },
+    {
+      "op": "orbiter",
+      "d_azimut_deg": 30,
+      "d_elevation_deg": -10.5
+    },
+    {
+      "op": "zoomer",
+      "facteur": 1.5
+    },
+    {
+      "op": "cadrer",
+      "cibles": [
+        {
+          "conversation": "3f2b8c1e-6a4d-4e2f-9b7a-1c2d3e4f5a6b"
+        },
+        {
+          "noeud": "theoreme_principal"
+        }
+      ]
+    },
+    {
+      "op": "portee",
+      "cible": {
+        "noeud": "choix_jauge"
+      }
+    },
+    {
+      "op": "surligner",
+      "cibles": []
+    },
+    {
+      "op": "filtres",
+      "patch": {
+        "statuts": [
+          "suspendu"
+        ],
+        "mode": "masquer"
+      }
+    },
+    {
+      "op": "filtres",
+      "patch": {}
+    },
+    {
+      "op": "fiche",
+      "cible": {
+        "noeud": "lemme_compacite"
+      }
+    },
+    {
+      "op": "fiche",
+      "cible": null
+    },
+    {
+      "op": "panneau",
+      "ouvert": false
+    },
+    {
+      "op": "theme",
+      "theme": "clair"
+    },
+    {
+      "op": "restaurer",
+      "etat": {
+        "version": 1,
+        "ecran": "ecran_principal",
+        "utilisateur_id": "u1",
+        "version_donnees": "2026-09-26T10:12:00Z#42",
+        "strategie": "defaut",
+        "parametres_lecture": {},
+        "liens_complets": false,
+        "camera": {
+          "mode": "2d",
+          "vue": "face",
+          "orientation": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "cible": [
+            0,
+            0,
+            0
+          ],
+          "distance": 1.5
+        },
+        "selection": null,
+        "portee": null,
+        "surlignes": [],
+        "filtres": {
+          "conversation": null,
+          "noeuds": [],
+          "statuts": [],
+          "types": [],
+          "periode": {
+            "debut": null,
+            "fin": null
+          },
+          "texte": "",
+          "mode": "estomper"
+        },
+        "fiche": null,
+        "panneau_ouvert": true,
+        "theme": "sombre",
+        "visibles": [
+          {
+            "noeud": "theoreme_principal",
+            "libelle": "Théorème principal",
+            "x": 640,
+            "y": 360
+          },
+          {
+            "noeud": "lemme_compacite",
+            "libelle": "Lemme de compacité",
+            "x": 320.5,
+            "y": 180
+          }
+        ],
+        "survol": null,
+        "conversation_affichee": "3f2b8c1e-6a4d-4e2f-9b7a-1c2d3e4f5a6b"
+      }
+    },
+    {
+      "op": "recharger_donnees"
+    }
+  ],
+  "atomique": false,
+  "emis_le": "2026-09-26T10:12:03Z"
+}

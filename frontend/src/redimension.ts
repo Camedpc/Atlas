@@ -32,7 +32,13 @@ function ecrire(l: Largeurs) {
   }
 }
 
-export function installerPoignees(replierSessions: (replie: boolean) => void) {
+/** Colonne de la conversation, pour le pilotage (P3 `panneau`) : ouverte ou rangée. */
+export interface PanneauConversation {
+  ouvert(): boolean
+  ouvrir(ouvert: boolean): void
+}
+
+export function installerPoignees(replierSessions: (replie: boolean) => void): PanneauConversation {
   const app = document.querySelector<HTMLElement>('#app')!
   const conversation = document.querySelector<HTMLElement>('.panneau-conversation')!
   const droite = document.querySelector<HTMLElement>('.panneau-droit')!
@@ -52,12 +58,13 @@ export function installerPoignees(replierSessions: (replie: boolean) => void) {
     else delete largeurs.conversationRangee
   }
 
-  document.querySelector('.deplier-conversation')!.addEventListener('click', () => {
-    rangerConversation(false)
+  const ouvrirConversation = (ouvert: boolean) => {
+    rangerConversation(!ouvert)
     appliquer()
     ecrire(largeurs)
     window.dispatchEvent(new Event('resize'))
-  })
+  }
+  document.querySelector('.deplier-conversation')!.addEventListener('click', () => ouvrirConversation(true))
 
   const poignee = (parent: HTMLElement, cible: 'sessions' | 'conversation') => {
     const el = document.createElement('div')
@@ -124,4 +131,5 @@ export function installerPoignees(replierSessions: (replie: boolean) => void) {
   // Chaque poignée est posée sur le bord gauche de la colonne qu'elle précède.
   poignee(conversation, 'sessions')
   poignee(droite, 'conversation')
+  return { ouvert: () => !largeurs.conversationRangee, ouvrir: ouvrirConversation }
 }

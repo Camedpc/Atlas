@@ -10,6 +10,7 @@ from atlas.modeles import Conversation, Execution, Message
 from atlas.orchestrateur import agent, pipeline
 from atlas.orchestrateur.gestionnaire import Gestionnaire
 from atlas.orchestrateur.suivi_agents import RACINE, SuiviAgents
+from atlas.voix.affichage import Affichages, ErreurAffichage, annonce_affichage, corps_tache
 from atlas.voix.appels import Appels, DernierAppel, fusionner
 from atlas.voix.contexte import VOIX, annonce, contexte_decroche, pont
 from atlas.voix.texte import Decoupeur, est_echo, nettoyer
@@ -233,3 +234,105 @@ def test_decoupe_et_nettoyage_pour_la_synthese():
     assert " ".join(morceaux) == texte and morceaux[0] == "Oui, je regarde ça."
     assert nettoyer("**Trois** commits :\n- `d4a50c2` voir https://x.y") == "Trois commits : d4a50c2 voir le lien"
     assert est_echo("trois commits récents", texte) and not est_echo("attends arrête", texte)
+
+
+# ── Affichage : tâches de l'agent navigateur d'AtlasVoice ──
+
+
+def test_corps_de_la_tache_navigateur():
+    corps = corps_tache(
+        "montrer la lignée du lemme 3",
+        "euh montre-moi la lignée du lemme 3 et lance la vérif",
+        "montre-moi la lignée du lemme 3",
+        "lignée du lemme 3",
+    )
+    assert corps == {
+        "type_agent": "navigateur",
+        "titre": "lignée du lemme 3",
+        "demande_brute": "euh montre-moi la lignée du lemme 3 et lance la vérif",
+        "reformulation": "montrer la lignée du lemme 3",
+        "canal": "vocal",
+        "extrait": "montre-moi la lignée du lemme 3",
+    }
+    # Sans phrase transcrite (message tapé par l'outil seul) : la demande sert de demande brute, pas d'extrait vide.
+    assert corps_tache("zoome", titre="  ") == {
+        "type_agent": "navigateur",
+        "titre": "zoome",
+        "demande_brute": "zoome",
+        "reformulation": "zoome",
+        "canal": "vocal",
+    }
+
+
+def test_annonces_de_l_affichage():
+    assert "C'est affiché." in annonce_affichage(
+        {"statut": "terminee", "titre": "t", "resultat_oral": "C'est affiché."}
+    )
+    question = annonce_affichage({"id": 7, "statut": "besoin_precision", "question": "Quel lemme ?"})
+    assert "Quel lemme ?" in question and "repondre_affichage" in question and "id 7" in question
+    assert "pas d'écran" in annonce_affichage({"statut": "echouee", "titre": "t", "erreur": "pas d'écran"})
+    for statut in ("en_attente", "en_cours", "annulee"):
+        assert annonce_affichage({"statut": statut}) is None
+
+
+class _FauxAtlasVoice:
+    """Registre d'AtlasVoice simulé : la tâche suit les états donnés, un par lecture."""
+
+    def __init__(self, etats):
+        self.etats = list(etats)
+        self.crees: list[dict] = []
+        self.reponses: list[tuple[int, str]] = []
+
+    async def creer(self, corps):
+        self.crees.append(corps)
+        return {"id": 1, "statut": "en_attente", **corps}
+
+    async def lire(self, tache_id):
+        return self.etats.pop(0) if len(self.etats) > 1 else self.etats[0]
+
+    async def repondre(self, tache_id, reponse):
+        self.reponses.append((tache_id, reponse))
+        return {"id": tache_id, "statut": "en_cours"}
+
+
+def test_affichage_suivi_question_puis_resultat():
+    async def scenario():
+        base = {"id": 1, "titre": "lignée"}
+        faux = _FauxAtlasVoice(
+            [
+                {**base, "statut": "en_attente"},
+                {**base, "statut": "en_cours"},
+                {**base, "statut": "besoin_precision", "question": "Lequel des deux lemmes ?"},
+            ]
+        )
+        annonces: list[str] = []
+        affichages = Affichages(annonces.append, faux, intervalle=0)
+        affichages.derniere_demande = "montre la lignée du lemme"
+        assert (await affichages.lancer("montrer la lignée du lemme"))["id"] == 1
+        assert faux.crees[0]["demande_brute"] == "montre la lignée du lemme"
+        await asyncio.gather(*affichages._suivis.values())
+        assert len(annonces) == 1 and "Lequel des deux lemmes ?" in annonces[0]  # le suivi s'arrête sur la question
+
+        faux.etats = [{**base, "statut": "en_cours"}, {**base, "statut": "terminee", "resultat_oral": "C'est affiché."}]
+        assert (await affichages.repondre(1, "le premier"))["transmis"]
+        await asyncio.gather(*affichages._suivis.values())
+        assert faux.reponses == [(1, "le premier")]
+        assert len(annonces) == 2 and "C'est affiché." in annonces[1]
+        assert affichages._suivis == {}
+
+    asyncio.run(scenario())
+
+
+def test_affichage_sans_atlasvoice():
+    async def scenario():
+        affichages = Affichages(lambda _: None, None)
+        assert "ATLAS_AFFICHAGE_URL" in (await affichages.lancer("zoome"))["erreur"]
+
+        class Injoignable(_FauxAtlasVoice):
+            async def creer(self, corps):
+                raise ErreurAffichage("AtlasVoice injoignable")
+
+        affichages = Affichages(lambda _: None, Injoignable([]))
+        assert (await affichages.lancer("zoome")) == {"erreur": "AtlasVoice injoignable"}
+
+    asyncio.run(scenario())

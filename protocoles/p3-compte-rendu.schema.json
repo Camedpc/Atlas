@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://atlas.local/protocoles/p3-compte-rendu.schema.json",
+  "title": "P3 — CompteRendu : écran → émetteur d'un LotCommandes",
+  "type": "object",
+  "properties": {
+    "version": { "$ref": "commun.schema.json#/$defs/Version" },
+    "lot_id": { "$ref": "commun.schema.json#/$defs/Uuid" },
+    "ok": { "type": "boolean" },
+    "resultats": {
+      "description": "Un résultat par commande, dans l'ordre du lot.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "index": { "type": "integer", "minimum": 0 },
+          "ok": { "type": "boolean" },
+          "erreur": { "$ref": "commun.schema.json#/$defs/ErreurProtocole" }
+        },
+        "required": ["index", "ok"],
+        "additionalProperties": false
+      }
+    },
+    "erreur": {
+      "description": "Erreur du lot entier (lot invalide, écran introuvable, délai dépassé).",
+      "$ref": "commun.schema.json#/$defs/ErreurProtocole"
+    },
+    "etat": {
+      "description": "Après exécution, ou inchangé si refus atomique. Absent seulement si l'écran n'a jamais répondu (erreur delai ou introuvable).",
+      "$ref": "p4-etat-affichage.schema.json"
+    },
+    "emis_le": { "$ref": "commun.schema.json#/$defs/DateHeure" }
+  },
+  "required": ["version", "lot_id", "ok", "resultats"],
+  "additionalProperties": false
+}

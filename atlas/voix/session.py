@@ -37,6 +37,7 @@ from ..orchestrateur.gestionnaire import Reglages, gestionnaire, titre_depuis
 from ..orchestrateur.suivi_agents import Agent
 from ..orchestrateur.traduction import traduire
 from . import config
+from .affichage import Affichages, client_par_defaut
 from .cerveau import Cerveau, Tache, Taches
 from .contexte import VOIX, annonce, contexte_decroche, pont
 from .gradium import Transcripteur
@@ -69,6 +70,7 @@ class Session:
         self.conversation = conversation
         self.cerveau = Cerveau(conversation.id, self.id, dossier, projet_id)
         self.taches = Taches(self.cerveau, self._tache_changee)
+        self.affichages = Affichages(self.annoncer, client_par_defaut())
         self.prechauffe = Prechauffe()
         self.stt: Transcripteur | None = None
         self._attente_stt = bytearray()
@@ -224,6 +226,7 @@ class Session:
     async def fermer(self) -> None:
         for tache in self._fond:
             tache.cancel()
+        self.affichages.fermer()
         if self.parleur is not None:
             await self.parleur.arreter()
         if self.tour is not None:
@@ -418,6 +421,7 @@ class Session:
             await self.envoyer({"type": "info", "message": f"Écho ignoré : « {texte} »"})
             return
         await self.envoyer({"type": "utilisateur", "texte": texte, "source": source})
+        self.affichages.derniere_demande = texte
         asyncio.create_task(self.enregistrer("utilisateur", texte, {"source": source}))
         if self.tour is not None and not self.tour.done():
             if self.cerveau.outil_actif and await self.cerveau.orienter(f"(Camille ajoute : « {texte} »)"):
@@ -568,6 +572,10 @@ class Session:
                 f"[Système] Tâche #{tache.id} « {tache.titre} » {etat}. Réponse du sous-agent :\n"
                 f"{tache.resultat[:3000]}\n\nAnnonce-le à Camille en une ou deux phrases."
             )
+
+    def annoncer(self, texte: str) -> None:
+        """Message annoncé au prochain blanc (affichage : question de l'agent navigateur, résultat, échec)."""
+        self.annonces.append(texte)
 
     async def _boucle_annonces(self) -> None:
         """Annonce ce qui arrive (orchestrateur, tâches) dès que la conversation laisse un blanc."""

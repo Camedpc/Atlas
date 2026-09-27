@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://atlas.local/protocoles/p4-etat-affichage.schema.json",
+  "title": "P4 — EtatAffichage : écran → relais",
+  "description": "Envoyé après chaque lot et après chaque action de l'utilisateur (au plus 4 par seconde). restaurer(etat) puis exporter doit redonner le même état, hors visibles et survol.",
+  "type": "object",
+  "properties": {
+    "version": { "$ref": "commun.schema.json#/$defs/Version" },
+    "ecran": { "$ref": "commun.schema.json#/$defs/IdEcran" },
+    "utilisateur_id": { "type": "string", "minLength": 1 },
+    "version_donnees": { "type": "string", "description": "Empreinte du graphe chargé : max(modifie_le) + nombre de nœuds." },
+    "strategie": { "$ref": "commun.schema.json#/$defs/Strategie" },
+    "parametres_lecture": { "$ref": "commun.schema.json#/$defs/ParametresLecture", "description": "Seulement les surcharges." },
+    "liens_complets": { "type": "boolean" },
+    "camera": { "$ref": "#/$defs/Camera" },
+    "selection": { "$ref": "#/$defs/RefNoeudOuNull" },
+    "portee": { "$ref": "#/$defs/RefNoeudOuNull" },
+    "surlignes": { "type": "array", "items": { "$ref": "commun.schema.json#/$defs/IdNoeud" }, "uniqueItems": true },
+    "filtres": { "$ref": "commun.schema.json#/$defs/EtatFiltres" },
+    "fiche": { "$ref": "#/$defs/RefNoeudOuNull" },
+    "panneau_ouvert": { "type": "boolean" },
+    "theme": { "$ref": "commun.schema.json#/$defs/Theme" },
+    "visibles": {
+      "description": "Au plus 50 nœuds, les plus importants, en pixels écran.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "noeud": { "$ref": "commun.schema.json#/$defs/IdNoeud" },
+          "libelle": { "type": "string" },
+          "x": { "type": "number" },
+          "y": { "type": "number" }
+        },
+        "required": ["noeud", "libelle", "x", "y"],
+        "additionalProperties": false
+      },
+      "maxItems": 50
+    },
+    "survol": { "$ref": "#/$defs/RefNoeudOuNull" },
+    "conversation_affichee": {
+      "description": "Conversation ouverte dans le panneau gauche du front.",
+      "oneOf": [{ "$ref": "commun.schema.json#/$defs/Uuid" }, { "type": "null" }]
+    },
+    "projet": {
+      "description": "Facultatif : espace de travail dont le graphe est affiché (un graphe par espace). Absent : graphe unique ou espace par défaut.",
+      "oneOf": [{ "$ref": "commun.schema.json#/$defs/Uuid" }, { "type": "null" }]
+    },
+    "deplacements": {
+      "description": "Facultatif (vue 2D) : positions provisoires en cours sur cet écran ; absent ou vide = vue enregistrée.",
+      "type": "array",
+      "items": { "$ref": "commun.schema.json#/$defs/Deplacement" },
+      "maxItems": 500
+    }
+  },
+  "required": [
+    "version", "ecran", "utilisateur_id", "version_donnees", "strategie", "parametres_lecture", "liens_complets",
+    "camera", "selection", "portee", "surlignes", "filtres", "fiche", "panneau_ouvert", "theme", "visibles",
+    "survol", "conversation_affichee"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "RefNoeudOuNull": { "oneOf": [{ "$ref": "commun.schema.json#/$defs/RefNoeud" }, { "type": "null" }] },
+    "Camera": {
+      "type": "object",
+      "properties": {
+        "mode": { "$ref": "commun.schema.json#/$defs/Mode" },
+        "vue": { "oneOf": [{ "$ref": "commun.schema.json#/$defs/NomVue" }, { "type": "null" }] },
+        "orientation": {
+          "description": "Quaternion [x, y, z, w].",
+          "type": "array",
+          "items": { "type": "number" },
+          "minItems": 4,
+          "maxItems": 4
+        },
+        "cible": { "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3 },
+        "distance": { "type": "number", "exclusiveMinimum": 0 }
+      },
+      "required": ["mode", "vue", "orientation", "cible", "distance"],
+      "additionalProperties": false
+    },
+    "EtatResume": {
+      "description": "Résumé de l'écran pour Atlas (P1, contexte des tâches et ligne « À l'écran » du prompt).",
+      "type": "object",
+      "properties": {
+        "ecran": { "$ref": "commun.schema.json#/$defs/IdEcran" },
+        "strategie": { "$ref": "commun.schema.json#/$defs/Strategie" },
+        "selection": { "$ref": "#/$defs/RefNoeudOuNull" },
+        "filtres": { "$ref": "commun.schema.json#/$defs/EtatFiltres" },
+        "conversation_affichee": { "oneOf": [{ "$ref": "commun.schema.json#/$defs/Uuid" }, { "type": "null" }] },
+        "mode": { "$ref": "commun.schema.json#/$defs/Mode" },
+        "visibles": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": { "libelle": { "type": "string" } },
+            "required": ["libelle"],
+            "additionalProperties": false
+          },
+          "maxItems": 15
+        }
+      },
+      "required": ["ecran", "strategie", "selection", "filtres", "conversation_affichee", "mode", "visibles"],
+      "additionalProperties": false
+    }
+  }
+}
