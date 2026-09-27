@@ -80,6 +80,7 @@ class Consigne(BaseModel):
 class NouvelleTache(BaseModel):
     titre: str = ""
     consigne: str = Field(min_length=1)
+    genre: Literal["tache_vocale", "navigateur"] = "tache_vocale"
 
 
 class Message(BaseModel):
@@ -113,7 +114,7 @@ def lister_taches(appel_id: str) -> list[dict]:
 
 @routeur_outils.post("/taches")
 async def lancer_tache(appel_id: str, corps: NouvelleTache) -> dict:
-    tache = _session(appel_id).taches.lancer(corps.titre, corps.consigne)
+    tache = _session(appel_id).taches.lancer(corps.titre, corps.consigne, corps.genre)
     return {"id": tache.id, "statut": "lancée", "note": "Le résultat arrivera dans un message [Système]."}
 
 
@@ -163,6 +164,16 @@ async def effacer_ecran(appel_id: str) -> dict:
 @routeur_outils.post("/ecran/zoomer")
 async def zoomer(appel_id: str, corps: Zoom) -> dict:
     return await _session(appel_id).ecran.zoomer(corps.facteur)
+
+
+class Etape(BaseModel):
+    parcours: str = Field(min_length=1)
+    etape: int = 1
+
+
+@routeur_outils.post("/ecran/parcours")
+async def jouer_etape(appel_id: str, corps: Etape) -> dict:
+    return await _session(appel_id).ecran.jouer_etape(corps.parcours, corps.etape)
 
 
 @routeur_outils.post("/ecran/deplacer")

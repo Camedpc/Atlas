@@ -38,7 +38,7 @@ from ..orchestrateur.gestionnaire import Reglages, gestionnaire, titre_depuis
 from ..orchestrateur.suivi_agents import Agent
 from ..orchestrateur.traduction import traduire
 from . import config
-from .cerveau import Cerveau, Tache, Taches
+from .cerveau import Cerveau, Tache, Taches, modele_tache
 from .contexte import VOIX, annonce, contexte_decroche, pont
 from .ecran import Ecran
 from .gradium import Transcripteur
@@ -71,7 +71,7 @@ class Session:
         self.conversation = conversation
         self.cerveau = Cerveau(conversation.id, self.id, dossier, projet_id)
         self.taches = Taches(self.cerveau, self._tache_changee)
-        self.ecran = Ecran(self.envoyer, projet_id or "defaut")
+        self.ecran = Ecran(self.envoyer, projet_id or "defaut", dossier.parent.parent)
         self.prechauffe = Prechauffe()
         self.stt: Transcripteur | None = None
         self._attente_stt = bytearray()
@@ -122,9 +122,9 @@ class Session:
                     t.chemin,
                     t.thread_id,
                     VOIX,
-                    "tache_vocale",
+                    t.genre,
                     t.debut,
-                    modele=config.MODELE_TACHES,
+                    modele=modele_tache(t.genre)[0],
                     etat=etat,  # type: ignore[arg-type]
                     activite=t.etapes[-1] if t.etapes else "Démarre",
                     tokens=t.tokens,

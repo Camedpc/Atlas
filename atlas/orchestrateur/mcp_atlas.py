@@ -14,7 +14,7 @@ from typing import Any, Literal
 from mcp.server.mcpserver import Image, MCPServer
 from pydantic import BaseModel, Field
 
-from .. import ecriture, figures, lecture, vue
+from .. import ecriture, figures, lecture, navigation, parcours, vue
 from ..modeles import TypeNoeud
 
 LONGUEUR_MAX_ENONCE = 300
@@ -328,6 +328,40 @@ def lire_figure(id: str) -> list[str | Image]:
         format_image = figure["image_type"].removeprefix("image/")
         contenu.append(Image(data=lecture.lire_image_figure(figure["image_chemin"]), format=format_image))
     return contenu
+
+
+# ── Parcours (agent navigateur) : une suite d'écrans, sans rien changer à la vue enregistrée ──
+
+
+@serveur.tool()
+def lire_reperes() -> str:
+    """Les repères de la vue tels que Camille les voit à l'écran : « Lemme 7 = id : nom [§1.2] », les cadres
+    « §1.2 » et les figures « Figure 2 ». Un parcours peut désigner un nœud par son repère ou par son id."""
+    etat = lecture.charger_etat_vue(_projet())
+    return navigation.texte_reperes(etat, navigation.reperer(etat))
+
+
+@serveur.tool()
+def poser_parcours(titre: str, etapes: list[dict[str, Any]]) -> str:
+    """Enregistre un parcours : une suite d'écrans que Camille déroule étape par étape (à la voix pendant un appel,
+    ou aux boutons suivant / précédent). Il ne déplace rien et ne change pas la vue enregistrée.
+
+    Chaque étape : {"phrase": ce qu'on dit à Camille pendant cet écran (une à trois phrases, les nœuds nommés
+    comme à l'écran, « Lemme 7 »), "montrer": [références : repère, id, « §2 », « Figure 1 »], "etendue": "seul" |
+    "premisses" | "consequences" | "lignee", "garder_seulement": estompe le reste, "fiche": ouvre la fiche du
+    premier nœud, "statuts": [etabli, suspendu, a_verifier, invalide, ouvert], "vue_d_ensemble": true (tout le
+    graphe, à la place de montrer), "zoomer": facteur (1.5 rapproche, 0.6 éloigne)}. Une étape repart d'un écran
+    sans filtre. Tout ou rien : une référence introuvable ou ambiguë refuse le parcours (rien n'est écrit)."""
+    etat = lecture.charger_etat_vue(_projet())
+    try:
+        pret = navigation.compiler_parcours(etat, navigation.reperer(etat), titre, etapes)
+    except navigation.ErreurNavigation as e:
+        refus = {"ok": False, "erreur": str(e), "rien_n_a_ete_ecrit": True}
+        return json.dumps(refus | ({"candidats": e.candidats} if e.candidats else {}), ensure_ascii=False)
+    session = Path(os.environ.get("ATLAS_DOSSIER_SESSION") or ".").resolve()
+    chemin = parcours.enregistrer(session, os.environ.get("ATLAS_CONVERSATION_ID"), pret)
+    etapes_comprises = [f"{i}. {', '.join(e['compris']) or '—'}" for i, e in enumerate(pret["etapes"], 1)]
+    return json.dumps({"ok": True, "chemin": chemin, "etapes": etapes_comprises}, ensure_ascii=False)
 
 
 if __name__ == "__main__":

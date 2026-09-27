@@ -12,9 +12,10 @@ de l'espace (ecriture.organiser_vue, journalisé), puis l'écran relit ses donn�
 import asyncio
 import logging
 from collections.abc import Awaitable, Callable
+from pathlib import Path
 from typing import Any
 
-from .. import ecriture, lecture, navigation
+from .. import ecriture, lecture, navigation, parcours
 from ..navigation import ErreurNavigation, Reperes
 from ..vue import EtatVue
 
@@ -31,9 +32,11 @@ def erreur(message: str, candidats: list[str] | None = None) -> dict[str, Any]:
 
 
 class Ecran:
-    def __init__(self, envoyer: Callable[[dict[str, Any]], Awaitable[None]], projet_id: str):
+    def __init__(self, envoyer: Callable[[dict[str, Any]], Awaitable[None]], projet_id: str, dossier_projet: Path):
         self.envoyer = envoyer
         self.projet_id = projet_id
+        self.dossier_projet = dossier_projet
+        """Dossier de l'espace dans le bunker, où sont les parcours (sessions/<id>/docs_session/parcours/)."""
         self.etat: dict[str, Any] | None = None
         """Dernier état de l'écran (P4) reçu du navigateur ; None tant qu'il ne s'est pas annoncé."""
         self._attentes: dict[str, asyncio.Future[dict[str, Any]]] = {}
@@ -148,6 +151,29 @@ class Ecran:
         ]
         affiche = await self.executer(commandes) if self._indisponible() is None else {"ok": False}
         return {"ok": True, "enregistre": faits, "affiche": affiche["ok"]}
+
+    async def jouer_etape(self, chemin: str, etape: int) -> dict[str, Any]:
+        """Montre l'étape `etape` (à partir de 1) d'un parcours, et renvoie la phrase qui l'accompagne."""
+        try:
+            p = await asyncio.to_thread(parcours.lire, self.dossier_projet, chemin)
+        except parcours.ErreurParcours as e:
+            return erreur(str(e))
+        total = len(p["etapes"])
+        if not 1 <= etape <= total:
+            return erreur(f"Ce parcours a {total} étape(s).")
+        e = p["etapes"][etape - 1]
+        resultat = await self.executer(e.get("commandes") or [])
+        if not resultat["ok"]:
+            return resultat
+        suite = "dernière étape" if etape == total else f"étape suivante : {etape + 1}"
+        return {
+            "ok": True,
+            "titre": p.get("titre"),
+            "etape": etape,
+            "total": total,
+            "phrase": e["phrase"],
+            "suite": suite,
+        }
 
     async def lire(self) -> dict[str, Any]:
         """Ce que Camille voit : zoom, sélection, fiche, filtres, et les nœuds au centre de l'écran."""

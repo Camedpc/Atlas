@@ -61,6 +61,22 @@ def lancer_tache(titre: str, consigne: str) -> str:
 
 
 @serveur.tool()
+def preparer_parcours(titre: str, consigne: str) -> str:
+    """Confie à l'agent navigateur la préparation d'un parcours du graphe : une suite d'écrans commentés que Camille
+    déroulera étape par étape (dérouler une preuve, visite guidée d'un cadre, suivre une lignée). Prend une ou deux
+    minutes et rend la main tout de suite ; le résultat (le chemin du parcours) arrive dans un message [Système].
+    `consigne` : ce que Camille veut voir et dans quel ordre, dans ses mots, avec les repères qu'il a cités."""
+    return _appel("/taches", {"titre": titre, "consigne": consigne, "genre": "navigateur"})
+
+
+@serveur.tool()
+def jouer_etape(parcours: str, etape: int = 1) -> str:
+    """Montre à l'écran l'étape `etape` (à partir de 1) d'un parcours, et renvoie sa `phrase` : dis-la à Camille
+    (avec tes mots), puis attends qu'il demande la suite. `parcours` : son chemin (…/parcours/<fichier>.json)."""
+    return _appel("/ecran/parcours", {"parcours": parcours, "etape": etape})
+
+
+@serveur.tool()
 def etat_taches() -> str:
     """Les petites tâches de l'appel : statut, dernières étapes, résultat si terminée."""
     return _appel("/taches")

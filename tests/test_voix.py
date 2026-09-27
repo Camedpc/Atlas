@@ -3,6 +3,7 @@ et abonnement au gestionnaire. Sans réseau : ni Gradium, ni Codex, ni Supabase.
 
 import asyncio
 from datetime import datetime
+from pathlib import Path
 from types import SimpleNamespace
 
 from atlas import conversations
@@ -276,11 +277,11 @@ class _Navigateur:
         asyncio.get_running_loop().call_soon(self.ecran.recevoir_compte_rendu, cr)
 
 
-def _ecran(monkeypatch, navigateur: _Navigateur, projet: str = "p1") -> Ecran:
+def _ecran(monkeypatch, navigateur: _Navigateur, projet: str = "p1", dossier: Path = Path(".")) -> Ecran:
     from atlas import lecture
 
     monkeypatch.setattr(lecture, "charger_etat_vue", lambda projet_id: _vue_ecran())
-    ecran = Ecran(navigateur.envoyer, "p1")
+    ecran = Ecran(navigateur.envoyer, "p1", dossier)
     navigateur.ecran = ecran
     ecran.recevoir_etat({"ecran": "ecran_1a2b3c4d", "projet": projet, "camera": {"distance": 2.0}})
     return ecran
@@ -321,7 +322,7 @@ def test_ecran_absent_ou_autre_espace(monkeypatch):
     async def scenario():
         nav = _Navigateur()
         assert "autre espace" in (await _ecran(monkeypatch, nav, projet="p2").effacer())["erreur"]
-        sans = Ecran(nav.envoyer, "p1")
+        sans = Ecran(nav.envoyer, "p1", Path("."))
         assert "pas annoncé" in (await sans.montrer(["Lemme 1"]))["erreur"]
         assert nav.lots == []
 
@@ -382,5 +383,48 @@ def test_ecran_lire(monkeypatch):
             "filtre_actif": False,
             "au_centre": ["Lemme 1", "Hypothèse (i)"],
         }
+
+    asyncio.run(scenario())
+
+
+def test_parcours_enregistre_annonce_puis_joue_a_la_voix(monkeypatch, tmp_path):
+    from atlas import navigation, parcours
+
+    messages: list[tuple] = []
+    monkeypatch.setattr(conversations, "ajouter_message", lambda *a, **kw: messages.append((a, kw)))
+    etat = _vue_ecran()
+    pret = navigation.compiler_parcours(
+        etat,
+        navigation.reperer(etat),
+        "Preuve de la loi",
+        [
+            {"phrase": "On part du régime stationnaire.", "montrer": ["Hypothèse (i)"]},
+            {"phrase": "Puis la loi.", "montrer": ["t_1"]},
+        ],
+    )
+    session = tmp_path / "sessions" / "c1"
+    chemin = parcours.enregistrer(session, "c1", pret)
+    assert chemin.startswith("sessions/c1/docs_session/parcours/preuve-de-la-loi-") and chemin.endswith(".json")
+    ((args, kw),) = messages
+    assert args[:2] == ("c1", "systeme") and kw["donnees"]["type"] == "parcours" and kw["donnees"]["etapes"] == 2
+    assert parcours.lire(tmp_path, chemin)["titre"] == "Preuve de la loi"
+    assert parcours.lire(tmp_path, Path(chemin).name)["titre"] == "Preuve de la loi"  # le nom du fichier suffit
+
+    async def scenario():
+        nav = _Navigateur()
+        ecran = _ecran(monkeypatch, nav, dossier=tmp_path)
+        r = await ecran.jouer_etape(chemin, 2)
+        assert r == {
+            "ok": True,
+            "titre": "Preuve de la loi",
+            "etape": 2,
+            "total": 2,
+            "phrase": "Puis la loi.",
+            "suite": "dernière étape",
+        }
+        assert {"op": "selectionner", "cible": {"noeud": "t_1"}} in nav.lots[0]["commandes"]
+        assert (await ecran.jouer_etape(chemin, 3))["ok"] is False
+        assert (await ecran.jouer_etape("../../ailleurs.json", 1))["ok"] is False
+        assert len(nav.lots) == 1
 
     asyncio.run(scenario())

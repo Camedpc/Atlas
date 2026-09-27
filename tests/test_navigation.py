@@ -225,3 +225,60 @@ def test_deplacements_refuses(vue):
     ):
         with pytest.raises(ErreurNavigation):
             navigation.operations_deplacement(etat, r, demandes)
+
+
+# ── Parcours ──
+
+
+def test_compiler_un_parcours(vue):
+    etat, r = vue
+    p = navigation.compiler_parcours(
+        etat,
+        r,
+        " Preuve de la loi ",
+        [
+            {"phrase": "Tout le raisonnement.", "vue_d_ensemble": True},
+            {"phrase": "Le lemme et ses prémisses.", "montrer": ["Lemme 3"], "etendue": "premisses", "fiche": True},
+            {
+                "phrase": "Seulement l'étape intermédiaire.",
+                "montrer": ["§1.1"],
+                "garder_seulement": True,
+                "zoomer": 0.8,
+            },
+            {"phrase": "Une remarque, sans changer l'écran."},
+        ],
+    )
+    assert p["titre"] == "Preuve de la loi" and len(p["etapes"]) == 4
+    e1, e2, e3, e4 = p["etapes"]
+    assert e1["compris"] == ["vue d'ensemble"] and e1["commandes"][-1] == {"op": "cadrer", "cibles": "tout"}
+    assert e2["commandes"][0] == {"op": "effacer_filtres"}
+    assert e2["commandes"][-1] == {"op": "fiche", "cible": {"noeud": "l_1"}}
+    assert {"op": "filtres", "patch": {"noeuds": ["h_b", "l_1"]}} in e3["commandes"]
+    assert e3["commandes"][-1] == {"op": "zoomer", "facteur": 0.8}
+    assert e4["commandes"] == []
+    for e in p["etapes"]:
+        _valider_lot(e["commandes"])
+
+
+def test_parcours_refuses(vue):
+    etat, r = vue
+    for titre, etapes in (
+        ("", [{"phrase": "a"}]),
+        ("t", []),
+        ("t", [{"montrer": ["Lemme 3"]}]),  # sans phrase
+        ("t", [{"phrase": "a", "montrer": ["Lemme 3"], "deplacer": [{"quoi": "Lemme 3"}]}]),  # jamais de déplacement
+        ("t", [{"phrase": "a"}, {"phrase": "b", "montrer": ["Lemme 42"]}]),
+    ):
+        with pytest.raises(ErreurNavigation):
+            navigation.compiler_parcours(etat, r, titre, etapes)
+    with pytest.raises(ErreurNavigation, match="Étape 2"):
+        navigation.compiler_parcours(etat, r, "t", [{"phrase": "a"}, {"phrase": "b", "montrer": ["tension"]}])
+
+
+def test_texte_des_reperes(vue):
+    etat, r = vue
+    texte = navigation.texte_reperes(etat, r)
+    assert "§1.1 Étape intermédiaire (cadre g2) : 2 nœud(s)" in texte
+    assert "Lemme 3 = l_1 : Tension au point de prise [§1.1]" in texte
+    assert "Conjecture 4 = c_z : Tension au sol" in texte
+    assert "Figure 2 = f_plot : Profil du jet" in texte
