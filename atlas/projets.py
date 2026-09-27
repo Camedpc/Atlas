@@ -2,6 +2,7 @@
 
 import re
 import unicodedata
+from datetime import UTC, datetime
 
 from .client import supabase
 from .modeles import Projet
@@ -21,14 +22,29 @@ def nom_de_dossier(nom: str, existants: set[str]) -> str:
     return dossier
 
 
+class ProjetNonSupprimable(Exception):
+    pass
+
+
 def lister_projets() -> list[Projet]:
-    lignes = supabase().table("projets").select("*").order("modifie_le", desc=True).execute().data
-    return [Projet.model_validate(ligne) for ligne in lignes]
+    q = supabase().table("projets").select("*").is_("supprime_le", "null")
+    return [Projet.model_validate(ligne) for ligne in q.order("modifie_le", desc=True).execute().data]
 
 
-def lire_projet(projet_id: str) -> Projet | None:
-    lignes = supabase().table("projets").select("*").eq("id", projet_id).execute().data
+def lire_projet(projet_id: str, *, avec_supprimes: bool = False) -> Projet | None:
+    q = supabase().table("projets").select("*").eq("id", projet_id)
+    if not avec_supprimes:
+        q = q.is_("supprime_le", "null")
+    lignes = q.execute().data
     return Projet.model_validate(lignes[0]) if lignes else None
+
+
+def supprimer_projet(projet: Projet) -> None:
+    """Retire l'espace des listes. Rien n'est effacé : le journal (append-only) garde son graphe."""
+    if projet.dossier == DOSSIER_PAR_DEFAUT:
+        raise ProjetNonSupprimable("L’espace par défaut accueille les sessions sans espace : il ne se supprime pas.")
+    maintenant = datetime.now(UTC).isoformat()
+    supabase().table("projets").update({"supprime_le": maintenant}).eq("id", projet.id).execute()
 
 
 def projet_par_defaut() -> Projet | None:
@@ -54,5 +70,5 @@ def id_ou_defaut(projet_id: str | None) -> str:
 
 def dossier_de(projet_id: str | None) -> str:
     """Dossier du projet d'une conversation (celui par défaut si elle n'en a pas)."""
-    projet = lire_projet(projet_id) if projet_id else None
+    projet = lire_projet(projet_id, avec_supprimes=True) if projet_id else None
     return projet.dossier if projet else DOSSIER_PAR_DEFAUT

@@ -112,6 +112,77 @@
   color: var(--texte-2);
 }
 
+.ligne-espace {
+  display: flex;
+  align-items: center;
+}
+
+.menu-espaces .supprimer-espace {
+  flex: none;
+  width: auto;
+  padding: 5px;
+  color: var(--texte-3);
+  opacity: 0;
+}
+
+.ligne-espace:hover .supprimer-espace,
+.menu-espaces .supprimer-espace:focus-visible {
+  opacity: 1;
+}
+
+.menu-espaces .supprimer-espace:hover {
+  color: var(--texte);
+}
+
+@media (hover: none) {
+  .menu-espaces .supprimer-espace {
+    opacity: 1;
+  }
+}
+
+.ligne-espace.confirmation {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--fond-2);
+}
+
+.ligne-espace.confirmation p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.ligne-espace.confirmation p.erreur {
+  color: #b42318;
+}
+
+.ligne-espace.confirmation .actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.menu-espaces .ligne-espace.confirmation button {
+  width: auto;
+  padding: 4px 10px;
+  border: 1px solid var(--trait-fort);
+  background: var(--fond);
+  font-size: 13px;
+}
+
+.menu-espaces .ligne-espace.confirmation .confirmer-suppression {
+  border-color: #b42318;
+  background: #b42318;
+  color: #fff;
+}
+
+.menu-espaces .ligne-espace.confirmation .confirmer-suppression:hover {
+  background: #912018;
+}
+
 .menu-espaces hr {
   margin: 4px 0;
   border: 0;

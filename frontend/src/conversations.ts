@@ -192,6 +192,7 @@ export class PanneauConversation {
       surNouvelle: () => void this.nouvelle(),
       surProjet: (id) => void this.entrerProjet(id),
       surCreerProjet: (nom) => this.creerProjet(nom),
+      surSupprimerProjet: (id) => this.supprimerProjet(id),
     })
     racine.innerHTML = `
       <header class="conv-tete">
@@ -199,7 +200,7 @@ export class PanneauConversation {
           <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2.5" y="3" width="13" height="12" rx="2"/><path d="M7 3v12"/></svg>
         </button>
         <div class="conv-titres">
-          <h1 class="conv-titre">Nouvelle recherche</h1>
+          <h1 class="conv-titre">Nouvelle session</h1>
           <nav class="ariane" hidden></nav>
         </div>
         <span class="conv-etat"></span>
@@ -417,6 +418,13 @@ export class PanneauConversation {
     await this.entrerProjet(projet.id)
   }
 
+  private async supprimerProjet(id: string) {
+    await api.supprimerProjet(id)
+    this.projets = this.projets.filter((p) => p.id !== id)
+    if (this.projet?.id === id) await this.entrerProjet(this.projets[0]?.id ?? null)
+    else this.sessions.afficherProjets(this.projets, this.projet?.id ?? null, this.utilisateur)
+  }
+
   private majSessions() {
     this.sessions.afficher(this.conversations, this.courante, this.enCours ? this.courante : null)
   }
@@ -441,7 +449,7 @@ export class PanneauConversation {
     this.courante = null
     this.generation++
     this.enCours = this.actif = false
-    this.titre.textContent = this.projet?.nom ?? 'Nouvelle recherche'
+    this.titre.textContent = this.projet?.nom ?? 'Nouvelle session'
     this.racine.classList.add('accueil-projet')
     this.contenu.innerHTML = this.accueil()
     this.etatTexte.textContent = ''
@@ -457,7 +465,7 @@ export class PanneauConversation {
     const p = this.projet
     if (!p) {
       return `<div class="accueil"><h2>Quelle question veux-tu explorer ?</h2>
-        <p>Crée un espace depuis le menu en haut à gauche pour ranger tes recherches.</p></div>`
+        <p>Crée un espace depuis le menu en haut à gauche pour ranger tes sessions.</p></div>`
     }
     const recentes = this.conversations.slice(0, 4)
     const description = p.description
@@ -556,7 +564,7 @@ export class PanneauConversation {
       : this.enCours
         ? 'Ajouter une consigne : il la lira à sa prochaine étape…'
         : !this.courante && this.projet
-          ? `Nouvelle recherche dans « ${this.projet.nom} »…`
+          ? `Nouvelle session dans « ${this.projet.nom} »…`
           : 'Pose une question de recherche…'
     this.majAriane()
   }
