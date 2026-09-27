@@ -82,7 +82,8 @@ def surcharges_thread(
         "model_reasoning_summary": "detailed",
         # Ne pas remonter jusqu'au dépôt Atlas (espace/ est dedans) chercher un .codex/ ou un AGENTS.md.
         "project_root_markers": [],
-        "features": {"hooks": False},
+        # Génération d'images native de Codex : les illustrations du problème et des résultats (graphiste).
+        "features": {"hooks": False, "image_generation": True},
         "mcp_servers": {
             "atlas": {
                 "command": sys.executable,

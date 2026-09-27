@@ -8,6 +8,7 @@ import { PanneauConversation } from './conversations'
 import { VueDocuments } from './documents'
 import { enLigne, formulesAffichees, nombre, rendreTex } from './formules'
 import { VueGraphe } from './graphe'
+import { lireDecision, type DetailsDecision } from './graphe-decision'
 import { jeuSynthetique } from './graphe-synthetique'
 import { AdaptateurVue } from './pilotage/adaptateurVue'
 import { nouvelId, Pilote } from './pilotage/pilote'
@@ -95,6 +96,24 @@ function reference(id: string): string {
   return r ? `${r.libelle} ${r.numero}` : id
 }
 
+/** Fiche d'une décision : la question, chaque option (✓ retenue, × écartée) avec sa raison et ce vers quoi elle pointe
+ * (nœuds, cadres), puis la raison du choix. */
+function ficheDecision(d: DetailsDecision, liens: (ids: string[]) => string): string {
+  const cadres = (ids: string[]) => ids.map((id) => {
+    const c = vueGraphe.cadre(id)
+    return `<span class="fiche-cadre" title="${echapper(id)}">${c ? `${echapper(c.numero)} ${enLigne(c.nom)}` : echapper(id)}</span>`
+  }).join(' ')
+  const options = d.alternatives.map((a) => {
+    const vers = [a.noeuds.length ? liens(a.noeuds) : '', cadres(a.groupes)].filter(Boolean).join(' ')
+    return `<li class="${a.retenue ? 'retenue' : 'ecartee'}"><span class="puce">${a.retenue ? '✓' : '×'}</span>`
+      + `<div>${a.retenue ? enLigne(a.libelle) : `<s>${enLigne(a.libelle)}</s>`}`
+      + (a.raison ? ` — <i>${enLigne(a.raison)}</i>` : '')
+      + (vers ? `<div class="meta">→ ${vers}</div>` : '') + '</div></li>'
+  }).join('')
+  return `<p class="fiche-question"><i>${enLigne(d.question)}</i></p><ul class="fiche-options">${options}</ul>`
+    + (d.raison ? `<p><strong>Raison du choix :</strong> ${enLigne(d.raison)}</p>` : '')
+}
+
 /** Fiche d'un nœud (double-clic), composée comme un énoncé d'article (R41). */
 function afficherDetail(n: Noeud | null) {
   ficheId = n?.id ?? null
@@ -110,7 +129,8 @@ function afficherDetail(n: Noeud | null) {
   const ref = vueGraphe.reference(n.id)
   const tex = formulesAffichees(n.enonce)
   const texte = (v: unknown) => echapper(typeof v === 'string' ? v : JSON.stringify(v))
-  const champs = n.details && typeof n.details === 'object'
+  const decision = n.type === 'decision' ? lireDecision(n.details) : null
+  const champs = decision ? '' : n.details && typeof n.details === 'object'
     ? Object.entries(n.details)
       .filter(([, v]) => v !== null && v !== '' && !(Array.isArray(v) && !v.length))
       .map(([k, v]) => `<dt>${echapper(k)}</dt><dd>${Array.isArray(v) ? v.map(texte).join(' ; ') : texte(v)}</dd>`)
@@ -120,11 +140,11 @@ function afficherDetail(n: Noeud | null) {
     <button type="button" class="fermer" aria-label="Fermer">×</button>
     <h2 class="fiche-titre"><b>${echapper(ref ? `${ref.libelle} ${ref.numero}` : 'Énoncé')}</b> (${enLigne(n.nom)}).</h2>
     <p class="meta"><em>${LIBELLES_STATUT[n.statut]}</em> · <code>${echapper(n.id)}</code>${n.admis ? ' · admis' : ''}</p>
-    ${tex ? `<div class="fiche-formule">${rendreTex(tex, n.enonce, true)}</div>` : ''}
+    ${decision ? ficheDecision(decision, liens) : `${tex ? `<div class="fiche-formule">${rendreTex(tex, n.enonce, true)}</div>` : ''}
     <div class="enonce">${rendre(n.enonce)}</div>
     ${champs ? `<dl class="fiche-details">${champs}</dl>` : ''}
     <p><strong>Prémisses :</strong> ${liens(n.parents)}</p>
-    <p><strong>Utilisé par :</strong> ${liens(n.enfants)}</p>
+    <p><strong>Utilisé par :</strong> ${liens(n.enfants)}</p>`}
     ${n.demonstrations
       .map(
         (d) => `<details class="demo" open>

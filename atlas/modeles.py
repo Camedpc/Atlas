@@ -107,6 +107,8 @@ class Projet(BaseModel):
     """Dossier du projet dans le bunker : espace/utilisateurs/<utilisateur>/<dossier>/."""
     cree_le: datetime
     modifie_le: datetime
+    supprime_le: datetime | None = None
+    """Espace supprimé : retiré des listes, mais son graphe, son journal et son dossier restent."""
 
 
 class Conversation(BaseModel):

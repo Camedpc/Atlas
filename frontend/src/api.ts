@@ -415,6 +415,17 @@ export const api = {
   projets: () => appel<ListeProjets>('/api/projets'),
   creerProjet: (nom: string) =>
     appel<Projet>('/api/projets', { method: 'POST', body: JSON.stringify({ nom }) }),
+  /** Retire l'espace des listes (rien n'est effacé) ; l'erreur porte le message du serveur (409). */
+  supprimerProjet: async (projetId: string) => {
+    const entetes: Record<string, string> = {}
+    if (jetonEnMemoire) entetes.Authorization = `Bearer ${jetonEnMemoire}`
+    const r = await fetch(`${BASE}/api/projets/${encodeURIComponent(projetId)}`, { method: 'DELETE', headers: entetes })
+    if (r.status === 401) throw new JetonRequis()
+    if (!r.ok) {
+      const corps = await r.json().catch(() => null)
+      throw new Error(typeof corps?.detail === 'string' ? corps.detail : `Suppression refusée (${r.status})`)
+    }
+  },
   conversations: (projetId: string) =>
     appel<Conversation[]>(`/api/conversations?projet_id=${encodeURIComponent(projetId)}`),
   creerConversation: (projetId: string) =>

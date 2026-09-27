@@ -1,6 +1,6 @@
 // Barre latérale : l'espace de travail (projet) en tête, puis ses sessions groupées par date, comme sur
 // claude.ai. Le nom de l'espace ouvre un menu pour en changer ou en créer un (« + Nouvel espace » devient un
-// champ : Entrée crée l'espace et y entre). Repliable ; l'état replié est gardé dans ce navigateur.
+// champ : Entrée crée l'espace et y entre ; la corbeille d'un espace demande confirmation dans la ligne). Repliable ; l'état replié est gardé dans ce navigateur.
 import type { Conversation, Projet } from './api'
 import { echapper } from './rendu'
 
@@ -8,6 +8,8 @@ const CLE_REPLIE = 'atlas.sessions.replie'
 
 const PLUS =
   '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 3v10M3 8h10"/></svg>'
+const CORBEILLE =
+  '<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M2.5 4h9M5.5 4V2.5h3V4M3.8 4l.6 7.5h5.2l.6-7.5M5.8 6.2v3.3M8.2 6.2v3.3"/></svg>'
 const CHOIX =
   '<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><path d="m4.5 5.5 2.5-2.5 2.5 2.5M4.5 8.5 7 11l2.5-2.5"/></svg>'
 
@@ -36,7 +38,11 @@ export interface RappelsSessions {
   surNouvelle: () => void
   surProjet: (id: string) => void
   surCreerProjet: (nom: string) => Promise<void>
+  surSupprimerProjet: (id: string) => Promise<void>
 }
+
+// Espace qui accueille les sessions sans espace : il ne se supprime pas (atlas/projets.py).
+const DOSSIER_PAR_DEFAUT = 'defaut'
 
 export class PanneauSessions {
   private liste: HTMLElement
@@ -60,7 +66,7 @@ export class PanneauSessions {
         </button>
         <div class="menu-espaces" role="menu" hidden></div>
       </div>
-      <button type="button" class="nouvelle-session">${PLUS} Nouvelle recherche</button>
+      <button type="button" class="nouvelle-session">${PLUS} Nouvelle session</button>
       <nav class="sessions-liste" aria-label="Sessions"></nav>
       <div class="sessions-pied"></div>`
     this.liste = racine.querySelector('.sessions-liste')!
@@ -83,7 +89,13 @@ export class PanneauSessions {
     })
     this.selecteur.addEventListener('click', () => (this.menu.hidden ? this.ouvrirMenu() : this.fermerMenu()))
     this.menu.addEventListener('click', (e) => {
-      const el = (e.target as HTMLElement).closest<HTMLElement>('[data-projet], .nouvel-espace')
+      const cible = e.target as HTMLElement
+      const corbeille = cible.closest<HTMLElement>('[data-supprimer]')
+      if (corbeille) return this.confirmerSuppression(corbeille.dataset.supprimer!)
+      if (cible.closest('.annuler-suppression')) return this.dessinerMenu()
+      const confirmer = cible.closest<HTMLButtonElement>('[data-confirmer]')
+      if (confirmer) return void this.supprimer(confirmer)
+      const el = cible.closest<HTMLElement>('[data-projet], .nouvel-espace')
       if (!el) return
       if (el.classList.contains('nouvel-espace')) return this.saisirNouvelEspace()
       this.fermerMenu()
@@ -172,13 +184,41 @@ export class PanneauSessions {
       <div class="menu-titre">Espaces</div>
       ${this.projets
         .map(
-          (p) => `<button type="button" role="menuitemradio" aria-checked="${p.id === this.projet}" data-projet="${p.id}">
+          (p) => `<div class="ligne-espace" data-ligne="${p.id}"><button type="button" role="menuitemradio" aria-checked="${p.id === this.projet}" data-projet="${p.id}">
             <span class="monogramme">${echapper(monogramme(p.nom))}</span><span class="nom">${echapper(p.nom)}</span>
-            ${p.id === this.projet ? '<span class="coche">✓</span>' : ''}</button>`,
+            ${p.id === this.projet ? '<span class="coche">✓</span>' : ''}</button>${
+              p.dossier === DOSSIER_PAR_DEFAUT
+                ? ''
+                : `<button type="button" class="supprimer-espace" data-supprimer="${p.id}" title="Supprimer l’espace" aria-label="Supprimer l’espace ${echapper(p.nom)}">${CORBEILLE}</button>`
+            }</div>`,
         )
         .join('')}
       <hr />
       <button type="button" class="nouvel-espace">${PLUS}<span>Nouvel espace</span></button>`
+  }
+
+  // La ligne de l'espace devient une confirmation : Supprimer / Annuler.
+  private confirmerSuppression(id: string) {
+    const p = this.projets.find((x) => x.id === id)
+    const ligne = this.menu.querySelector<HTMLElement>(`[data-ligne="${id}"]`)
+    if (!p || !ligne) return
+    ligne.classList.add('confirmation')
+    ligne.innerHTML = `<p>Supprimer « ${echapper(p.nom)} » ? Ses sessions et son graphe ne seront plus listés.</p>
+      <div class="actions"><button type="button" class="annuler-suppression">Annuler</button>
+      <button type="button" class="confirmer-suppression" data-confirmer="${id}">Supprimer</button></div>`
+    ligne.querySelector<HTMLElement>('.annuler-suppression')!.focus()
+  }
+
+  private async supprimer(bouton: HTMLButtonElement) {
+    const ligne = bouton.closest<HTMLElement>('.ligne-espace')!
+    ligne.querySelectorAll('button').forEach((b) => (b.disabled = true))
+    try {
+      await this.rappels.surSupprimerProjet(bouton.dataset.confirmer!)
+    } catch (erreur) {
+      ligne.querySelector('p')!.textContent = erreur instanceof Error ? erreur.message : String(erreur)
+      ligne.querySelector('p')!.classList.add('erreur')
+      ligne.querySelector<HTMLButtonElement>('.annuler-suppression')!.disabled = false
+    }
   }
 
   // « + Nouvel espace » devient un champ dans le menu : Entrée crée l'espace, Échap annule.

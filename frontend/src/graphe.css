@@ -836,3 +836,20 @@
 .gr-doc-perdu .gr-doc-chemin {
   color: #b42318;
 }
+
+/* ─── Décisions (losanges, graphe-decision.ts) : tête et nom dans le rectangle inscrit du losange ─── */
+
+.gr-dec-corps {
+  inset: 18% 22%;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  line-height: 1.2;
+  hyphens: auto;
+}
+
+.gr-dec-corps .gr-corps-int {
+  transform-origin: 50% 50%;
+}

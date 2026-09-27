@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Literal
 
-from .vue import PREFIXE_FIGURE, TAILLE_FIGURE, ErreurVue, EtatVue, appliquer, est_figure, est_pseudo
+from .vue import PREFIXE_FIGURE, TAILLE_FIGURE, ErreurVue, EtatVue, appliquer, est_figure, est_pseudo, taille_defaut
 
 LIBELLES_TYPE = {
     "hypothese": "Hypothèse",
@@ -480,7 +480,7 @@ def _a_cote(etat: EtatVue, avant: list[dict], id_: str, voisin: str, cote: str) 
     if p is None:
         raise ErreurNavigation("Le voisin n'est pas encore placé dans la vue : donne une case.")
     moi = etat.placements.get(id_)
-    largeur, hauteur = (moi.largeur, moi.hauteur) if moi else (TAILLE_FIGURE if est_figure(id_) else (1, 1))
+    largeur, hauteur = (moi.largeur, moi.hauteur) if moi else taille_defaut(etat.noeuds.get(id_))
     dc, dl, c, lg = {
         "droite": (1, 0, p.colonne + p.largeur, p.ligne),
         "gauche": (-1, 0, p.colonne - largeur, p.ligne),

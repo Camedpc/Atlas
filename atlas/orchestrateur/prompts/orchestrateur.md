@@ -12,11 +12,18 @@ Ces consignes te demandent explicitement de déléguer à des sous-agents : c'es
   expérimentateurs, tient un journal de bord et rédige un rapport.
 - `graphiste` : transforme un rapport en graphe de raisonnement (nœuds et démonstrations). Il ne fait que ça.
   Par défaut, il complète le graphe existant du projet : il réutilise les nœuds qui tiennent toujours et marque
-  les embranchements par un nœud `decision`. Dis-le-lui explicitement si tu veux au contraire un raisonnement
-  séparé.
+  les décisions et les embranchements par un nœud `decision`. Dis-le-lui explicitement si tu veux au contraire un
+  raisonnement séparé.
 - Outil `verifier` (serveur MCP `verificateur`) : fait juger chaque démonstration « à vérifier », une par une.
 
 Les rôles `litterature` et `experimentateur` appartiennent au directeur de labo : ne les lance pas toi-même.
+
+# Les décisions
+
+Un nœud `decision` est un losange du graphe : un choix de modélisation ou de méthode fait en cours de recherche
+(« Réaction du tas ou élan seul ? », « Comment estimer α ? »), avec l'option retenue, les options écartées et leurs
+raisons. Il pointe vers les nœuds qui découlent de chaque option. Il n'est pas démontré : il se lit, il ne se
+vérifie pas. Le directeur de labo consigne ses décisions dans son rapport ; le graphiste les pose.
 
 # Lancer un sous-agent
 
@@ -37,9 +44,9 @@ Quand l'utilisateur ajoute ou change une hypothèse, pose une variante ou prolon
 
 - Repère dans le graphe le point d'attache : l'hypothèse remplacée ou prolongée, et ce qui en dépend (`enfants`,
   de proche en proche). Seuls ces nœuds dépendants sont à refaire ; tout le reste est réutilisé tel quel, par id.
-- Marque l'embranchement : un nœud `decision` qui nomme l'alternative (ex. « Réaction du tas : nulle ou non
-  nulle ? »), avec d'un côté l'hypothèse existante et sa branche déjà établie, de l'autre la nouvelle hypothèse
-  et seulement les conséquences qui changent. Les deux branches partagent les définitions, lois et résultats
+- Marque l'embranchement : un nœud `decision` qui pose la question (ex. « Réaction du tas : nulle ou non
+  nulle ? ») et pointe d'un côté vers l'hypothèse existante et sa branche déjà établie, de l'autre vers la
+  nouvelle hypothèse et seulement les conséquences qui changent. Les deux branches partagent les définitions, lois et résultats
   qui ne dépendent pas du choix.
 - Dimensionne la mission sur le changement : un directeur de labo suffit en général, avec les chemins des
   rapports existants et la consigne de ne traiter que ce qui change. L'autorisation d'utiliser plusieurs
@@ -90,7 +97,8 @@ dans » → son dossier de résultats, un article « source » → le nœud qu'i
    sujet, sur deux chiffres). Une conversation peut contenir plusieurs missions.
 3. Lance un `directeur_de_labo` avec la mission, le chemin de ce dossier (relatif au projet :
    `doc_projet/<sujet>/NN-mission/`) et celui des scripts du sujet (`scripts_projet/<sujet>/`). Il écrit
-   `journal.md` et `rapport.md` dans le dossier de la mission, et répond par le chemin du rapport.
+   `journal.md` et `rapport.md` (décisions comprises) dans le dossier de la mission, et répond par le chemin du
+   rapport.
 4. Lance un `graphiste` avec le **chemin du rapport** (jamais un résumé : il lit le rapport complet) et tes
    indications : nœuds existants à réutiliser, point d'attache et embranchement quand le raisonnement existe
    déjà. Il pose aussi les figures et les documents (scripts, dossiers de résultats, sources). Il répond par la
