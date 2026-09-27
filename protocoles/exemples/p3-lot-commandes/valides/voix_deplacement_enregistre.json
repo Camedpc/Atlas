@@ -7,6 +7,6 @@
   "commandes": [
     { "op": "recharger_donnees" },
     { "op": "surligner", "cibles": [{ "noeud": "lemme_compacite" }] },
-    { "op": "cadrer", "cibles": [{ "noeud": "lemme_compacite" }, { "figure": "profil_du_jet" }] }
+    { "op": "cadrer", "cibles": [{ "noeud": "lemme_compacite" }] }
   ]
 }
