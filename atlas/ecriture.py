@@ -362,10 +362,8 @@ def creer_figure(
     try:
         trace = figures.valider_trace(trace) if trace is not None else None
         examen = figures.examiner_image(image) if image is not None else None
-        if largeur is not None:
-            vue._taille(largeur, "Largeur")
-        if hauteur is not None:
-            vue._taille(hauteur, "Hauteur")
+        if (largeur, hauteur) != (None, None):
+            vue.verifier_format(largeur or vue.TAILLE_FIGURE[0], hauteur or vue.TAILLE_FIGURE[1])
     except (figures.ErreurFigure, vue.ErreurVue) as e:
         raise ErreurGraphe(str(e)) from None
     cites = figures.noeuds_cites(trace) if trace else set()

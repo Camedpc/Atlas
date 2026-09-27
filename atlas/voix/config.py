@@ -57,6 +57,9 @@ TIER = _texte("ATLAS_VOIX_TIER", "fast")
 """Niveau de service Codex : « fast » ≈ 0,9 s au premier mot avec gpt-6-sol, mais consomme plus de quota."""
 MODELE_TACHES = config_orchestrateur.modele_agent("tache_vocale", "gpt-6-luna")
 EFFORT_TACHES = config_orchestrateur.effort_agent("tache_vocale", "medium")
+# Agent navigateur lancé par la voix : même modèle et même effort que le rôle `navigateur` de l'orchestrateur.
+MODELE_NAVIGATEUR = config_orchestrateur.modele_agent("navigateur", "gpt-6-astra")
+EFFORT_NAVIGATEUR = config_orchestrateur.effort_agent("navigateur", "medium")
 
 ENREGISTRER = os.environ.get("ATLAS_VOIX_ENREGISTRER") == "1"
 """Diagnostic : écrit le micro reçu et les tours transcrits dans le .tmp de la session (appel-<id>.wav/.json)."""
@@ -66,12 +69,6 @@ PRECHAUFFAGE_S = float(_texte("ATLAS_VOIX_PRECHAUFFAGE_S", "600"))
 
 # Contexte donné à la voix au décroché : derniers messages de la conversation.
 CONTEXTE_MESSAGES = int(_texte("ATLAS_VOIX_CONTEXTE_MESSAGES", "30"))
-
-# Affichage : registre d'AtlasVoice, où la voix crée les tâches de l'agent navigateur (atlas/voix/affichage.py).
-AFFICHAGE_URL = os.environ.get("ATLAS_AFFICHAGE_URL", "")
-"""Adresse d'AtlasVoice (ex. http://127.0.0.1:8001). Vide : l'outil `afficher` répond qu'il est indisponible."""
-AFFICHAGE_JETON = os.environ.get("ATLAS_AFFICHAGE_JETON", "")
-"""JWT Supabase de l'utilisateur dont l'écran est piloté. Vide : « anonyme » (AtlasVoice sans SUPABASE_JWT_SECRET)."""
 
 # Adresse à laquelle le serveur MCP de la voix rappelle atlas.serveur (même machine, même conteneur).
 URL_INTERNE = _texte("ATLAS_URL_INTERNE", "http://127.0.0.1:8000")

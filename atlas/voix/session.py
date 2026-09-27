@@ -1,10 +1,11 @@
 """Un appel vocal avec Atlas voix, relié au navigateur par WebSocket, dans une conversation d'Atlas.
 
 Navigateur → serveur : trames binaires = micro en PCM 24 kHz 16 bits mono (80 ms) ; messages JSON `texte`,
-`interrompre`, `consignes`, `reglages`, `lecture` (avancement de la lecture audio).
+`interrompre`, `consignes`, `reglages`, `lecture` (avancement de la lecture audio), `ecran` (état de l'écran du
+graphe, P4) et `compte_rendu` (P3).
 Serveur → navigateur : trames binaires = 4 octets de génération + PCM 48 kHz 16 bits mono ; messages JSON
 `etat`, `partiel`, `utilisateur`, `agent_delta`, `agent_fin`, `outil`, `couper`, `taches`, `mesure`, `info`,
-`erreur`.
+`erreur`, `commandes` (lot de commandes pour l'écran du graphe, P3 : voir ecran.py).
 
 Tours de parole : le VAD sémantique de Gradium dit quand Camille a fini (on vide le STT et le texte part à
 Codex) et quand Camille parle pendant que la voix parle (on la coupe, et le tour Codex s'il écrit encore).
@@ -37,9 +38,10 @@ from ..orchestrateur.gestionnaire import Reglages, gestionnaire, titre_depuis
 from ..orchestrateur.suivi_agents import Agent
 from ..orchestrateur.traduction import traduire
 from . import config
-from .affichage import Affichages, client_par_defaut
-from .cerveau import Cerveau, Tache, Taches
+from .cerveau import Cerveau, Tache, Taches, modele_tache
 from .contexte import VOIX, annonce, contexte_decroche, pont
+from .deroulement import Deroulement
+from .ecran import Ecran, ParcoursIntrouvable
 from .gradium import Transcripteur
 from .parleur import Parleur, Prechauffe
 from .prechauffage import CerveauPret, echauffement, messages_recents
@@ -58,6 +60,8 @@ CODE_RACCROCHE = 4000
 """Code de fermeture du WebSocket quand c'est Atlas voix qui raccroche."""
 
 PREFIXE_CONFIE = "[Transmis par Atlas voix, pendant un appel avec Camille]"
+DUREE_MAX_PHRASE_S = 90.0
+"""Au-delà, on n'attend plus la fin de la lecture d'une phrase de parcours (navigateur muet, onglet fermé)."""
 
 
 def consigne(texte: str) -> str:
@@ -85,7 +89,7 @@ class Session:
             self.cerveau = Cerveau(conversation.id, self.id, dossier, projet_id)
         self.complement_contexte = ""
         self.taches = Taches(self.cerveau, self._tache_changee)
-        self.affichages = Affichages(self.annoncer, client_par_defaut())
+        self.ecran = Ecran(self.envoyer, projet_id or "defaut", dossier.parent.parent)
         self.prechauffe = Prechauffe()
         self.stt: Transcripteur | None = None
         self._attente_stt = bytearray()
@@ -111,6 +115,10 @@ class Session:
         self.gen = 0
         self.lecture = {"gen": 0, "joue_s": 0.0, "fini": True, "t": 0.0}
         self.note_interruption = ""
+        self.deroulement: Deroulement | None = None
+        """Parcours qui s'enchaîne tout seul (outil `derouler_parcours`)."""
+        self.note_parcours = ""
+        self.parle_parcours = False
         self.consignes = ""
         self.dit_recemment = ""
         self.annonces: list[str] = []
@@ -141,9 +149,9 @@ class Session:
                     t.chemin,
                     t.thread_id,
                     VOIX,
-                    "tache_vocale",
+                    t.genre,
                     t.debut,
-                    modele=config.MODELE_TACHES,
+                    modele=modele_tache(t.genre)[0],
                     etat=etat,  # type: ignore[arg-type]
                     activite=t.etapes[-1] if t.etapes else "Démarre",
                     tokens=t.tokens,
@@ -252,7 +260,9 @@ class Session:
     async def fermer(self) -> None:
         for tache in self._fond:
             tache.cancel()
-        self.affichages.fermer()
+        if self.deroulement is not None:
+            self.deroulement.suspendre()
+        self.ecran.fermer()
         if self.parleur is not None:
             await self.parleur.arreter()
         if self.tour is not None:
@@ -330,6 +340,10 @@ class Session:
                 }
             case "reglages":
                 await self._reglages(message)
+            case "ecran":
+                self.ecran.recevoir_etat(message.get("etat"))
+            case "compte_rendu":
+                self.ecran.recevoir_compte_rendu(message.get("compte_rendu"))
             case "auth":
                 pass  # déjà vérifié à l'ouverture (ou pas de jeton sur ce serveur)
 
@@ -449,7 +463,12 @@ class Session:
         if self.annuler_fin():
             self.note_fin = "(Tu avais raccroché, mais Camille a repris la parole : l'appel continue.)"
         await self.envoyer({"type": "utilisateur", "texte": texte, "source": source})
-        self.affichages.derniere_demande = texte
+        if self.deroulement is not None:
+            # Camille parle : le parcours s'arrête là, et la voix apprend où il en est.
+            d, self.deroulement = self.deroulement, None
+            note = d.suspendre() if d.actif else d.note() if d.en_pause else None
+            if note:
+                self.note_parcours = note
         asyncio.create_task(self.enregistrer("utilisateur", texte, {"source": source}))
         if self.tour is not None and not self.tour.done():
             if self.cerveau.outil_actif and await self.cerveau.orienter(f"(Camille ajoute : « {texte} »)"):
@@ -476,6 +495,9 @@ class Session:
         if self.complement_contexte:
             entetes.insert(0, self.complement_contexte)
             self.complement_contexte = ""
+        if self.note_parcours:
+            entetes.append(self.note_parcours)
+            self.note_parcours = ""
         return "\n".join([*entetes, texte])
 
     async def couper(self) -> None:
@@ -600,6 +622,72 @@ class Session:
         with contextlib.suppress(Exception):
             await self.ws.close(code=CODE_RACCROCHE, reason="Atlas voix a raccroché.")
 
+    # ── Parcours qui s'enchaîne tout seul ──
+
+    def libre(self) -> bool:
+        """Un blanc : personne ne parle et la voix n'a pas de tour en cours."""
+        repos = (self.tour is None or self.tour.done()) and not self.agent_parle()
+        return repos and not self.tampon and self.pas_parole == 0 and self.pret and not self.parle_parcours
+
+    async def dire(self, texte: str) -> bool:
+        """Dit un texte tel quel, sans passer par le modèle, et attend que Camille l'ait entendu en entier ;
+        False si elle a coupé la parole."""
+        self.gen += 1
+        gen = self.gen
+        id_ = f"parcours-{uuid.uuid4().hex[:8]}"
+
+        async def premier_audio() -> None:
+            self._activite("Parle")
+
+        async def segment(sid: str, debut_s: float, t: str) -> None:
+            await self.envoyer({"type": "segment", "gen": gen, "id": sid, "debut_s": round(debut_s, 3), "texte": t})
+
+        parleur = Parleur(gen, self.prechauffe, self.envoyer_audio, premier_audio, segment)
+        self.parleur = parleur
+        self.parle_parcours = True
+        try:
+            await self.envoyer({"type": "agent_delta", "id": id_, "texte": texte})
+            await self.envoyer({"type": "agent_fin", "id": id_, "texte": texte})
+            self.dit_recemment = (self.dit_recemment + " " + texte)[-800:]
+            asyncio.create_task(self.enregistrer("assistant", texte))
+            parleur.texte(id_, texte)
+            parleur.fin_message(id_)
+            await parleur.terminer()
+            # Tout l'audio est parti : on attend que le navigateur ait fini de le jouer.
+            limite = time.monotonic() + DUREE_MAX_PHRASE_S
+            while gen == self.gen and time.monotonic() < limite:
+                if self.lecture["gen"] == gen and self.lecture["fini"]:
+                    break
+                await asyncio.sleep(0.1)
+            return gen == self.gen
+        finally:
+            self.parle_parcours = False
+            if gen == self.gen:
+                await self.etat("ecoute")
+
+    async def derouler(self, chemin: str, depuis: int) -> dict[str, Any]:
+        try:
+            p = await self.ecran.charger_parcours(chemin)
+        except ParcoursIntrouvable as e:
+            return {"ok": False, "erreur": str(e)}
+        total = len(p["etapes"])
+        if not 1 <= depuis <= total:
+            return {"ok": False, "erreur": f"Ce parcours a {total} étape(s)."}
+        if self.deroulement is not None:
+            self.deroulement.suspendre()
+        self.deroulement = Deroulement(
+            chemin, p, depuis, self.ecran.executer, self.dire, self.libre, self.annonces.append
+        )
+        self.deroulement.lancer()
+        return {
+            "ok": True,
+            "titre": p.get("titre"),
+            "depuis": depuis,
+            "total": total,
+            "note": "Les étapes s'enchaînent dès que tu te tais, leurs phrases dites telles quelles : ne dis rien de "
+            "plus maintenant.",
+        }
+
     # ── Orchestrateur (appelé par le serveur MCP `voix`) ──
 
     async def confier(self, consigne_: str) -> dict[str, Any]:
@@ -657,15 +745,11 @@ class Session:
                 f"{tache.resultat[:3000]}\n\nAnnonce-le à Camille en une ou deux phrases."
             )
 
-    def annoncer(self, texte: str) -> None:
-        """Message annoncé au prochain blanc (affichage : question de l'agent navigateur, résultat, échec)."""
-        self.annonces.append(texte)
-
     async def _boucle_annonces(self) -> None:
         """Annonce ce qui arrive (orchestrateur, tâches) dès que la conversation laisse un blanc."""
         while True:
             await asyncio.sleep(0.4)
-            libre = (self.tour is None or self.tour.done()) and not self.agent_parle()
+            libre = (self.tour is None or self.tour.done()) and not self.agent_parle() and not self.parle_parcours
             if not (libre and not self.tampon and self.pas_parole == 0 and self.pret):
                 continue
             # Les événements s'accumulent jusqu'au blanc : la fin du tour rend alors les étapes inutiles.

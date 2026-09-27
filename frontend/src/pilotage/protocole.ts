@@ -88,7 +88,7 @@ export interface LotCommandes {
   version: 1
   lot_id: string
   ecran: string
-  origine: 'navigateur' | 'interface' | 'test'
+  origine: 'navigateur' | 'voix' | 'interface' | 'test'
   tache_id?: number
   /** Défaut true : tout ou rien, validation avant exécution. */
   atomique?: boolean

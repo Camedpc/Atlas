@@ -13,7 +13,7 @@ import {
   validerLotCommandes, type CommandeBas, type CompteRendu, type EtatAffichage, type ErreurProtocole, type LotCommandes,
 } from './protocole'
 
-/** Au plus 4 états par seconde vers les abonnés (relais). */
+/** Au plus 4 états par seconde vers les abonnés (l'appel vocal). */
 const INTERVALLE_ETAT_MS = 250
 const MEMOIRE_LOTS = 50
 

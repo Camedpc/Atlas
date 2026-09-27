@@ -4,7 +4,7 @@
 //
 // La vue n'a ni 3D ni niveaux de détail : ces commandes sont refusées (`refuser`), et l'état exporté garde
 // leurs valeurs par défaut. Pas de positions provisoires : `deplacer` et `retablir_disposition` sont refusés
-// (un déplacement s'enregistrera dans la vue de l'espace). `attendre` fait une pause dans le lot. Les filtres
+// (un déplacement demandé à la voix est enregistré dans la vue de l'espace, puis l'écran relit ses données). `attendre` fait une pause dans le lot. Les filtres
 // estompent (la disposition en cases ne bouge jamais : masquer un nœud laisserait un trou) ; `filtres.mode` est
 // gardé tel que demandé. La portée d'un nœud (tout ce qui en dépend) est surlignée. Rien ici n'écrit la vue
 // enregistrée (cases, cadres) : seulement ce qu'on regarde.

@@ -1,6 +1,16 @@
-"""Routes des conversations avec l'orchestrateur."""
+"""Routes des conversations avec l'orchestrateur.
 
+En-tête `X-Atlas-Cle-OpenAI` (facultatif) : clé OpenAI de l'utilisateur, gardée dans son navigateur. Ses tours et la
+liste des modèles passent alors par un processus Codex connecté à cette clé (ses crédits), jamais par le compte du
+serveur. La clé n'est écrite ni en base ni dans les journaux.
+"""
+
+import asyncio
+import json
+import re
 import secrets
+import urllib.error
+import urllib.request
 from dataclasses import asdict
 from typing import Literal
 
@@ -11,8 +21,9 @@ from .. import conversations, projets
 from ..modeles import Conversation, Execution, Message
 from ..voix.appels import appels, fusionner
 from ..voix.contexte import VOIX
-from . import agent, config
-from .gestionnaire import Reglages, TourIndisponible, gestionnaire
+from . import agent, config, sous_agents, verificateur
+from .codex_vivant import oublier_cle, pour_cle
+from .gestionnaire import CompteDifferent, Reglages, TourIndisponible, gestionnaire
 from .suivi_agents import agents_figes
 
 
@@ -21,6 +32,20 @@ def verifier_jeton(authorization: str | None = Header(default=None)) -> None:
         return
     if authorization is None or not secrets.compare_digest(authorization, f"Bearer {config.JETON_ACCES}"):
         raise HTTPException(401, "Jeton d'accès manquant ou invalide.", headers={"WWW-Authenticate": "Bearer"})
+
+
+# Forme d'une clé OpenAI : « sk-… » (clés de projet « sk-proj-… » comprises), sans espace.
+FORME_CLE = re.compile(r"sk-[A-Za-z0-9_-]{20,300}")
+
+
+def cle_openai(x_atlas_cle_openai: str | None = Header(default=None)) -> str | None:
+    """Clé OpenAI fournie par l'utilisateur (en-tête X-Atlas-Cle-OpenAI), ou None : le compte du serveur."""
+    cle = (x_atlas_cle_openai or "").strip()
+    if not cle:
+        return None
+    if not FORME_CLE.fullmatch(cle):
+        raise HTTPException(400, "Clé OpenAI mal formée : elle commence par « sk- ».")
+    return cle
 
 
 routeur = APIRouter(prefix="/api/conversations", tags=["conversations"], dependencies=[Depends(verifier_jeton)])
@@ -127,7 +152,7 @@ def agents(conversation_id: str) -> list[dict]:
 
 
 @routeur.post("/{conversation_id}/messages", status_code=202)
-async def envoyer(conversation_id: str, corps: NouveauMessage) -> Execution:
+async def envoyer(conversation_id: str, corps: NouveauMessage, cle: str | None = Depends(cle_openai)) -> Execution:
     """Message à l'orchestrateur ou à un sous-agent (`agent`) : lance un tour, ou s'injecte dans le tour en cours.
 
     Les réponses arrivent ensuite dans /messages.
@@ -137,9 +162,13 @@ async def envoyer(conversation_id: str, corps: NouveauMessage) -> Execution:
     cible = None if corps.agent == VOIX or (corps.agent or "").startswith(f"{VOIX}/") else corps.agent
     try:
         reglages = Reglages(effort=corps.effort, modele=corps.modele)
-        return await gestionnaire.envoyer(conversation, corps.contenu, cible, reglages)
+        return await gestionnaire.envoyer(conversation, corps.contenu, cible, reglages, cle=cle)
     except TourIndisponible:
         raise HTTPException(409, "L'orchestrateur ne démarre pas son tour : réessaie dans un instant.") from None
+    except CompteDifferent:
+        raise HTTPException(
+            409, "Un tour payé par un autre compte OpenAI travaille dans cette conversation : attends sa fin."
+        ) from None
 
 
 @routeur.post("/{conversation_id}/arreter", status_code=202)
@@ -151,11 +180,85 @@ async def arreter(conversation_id: str, corps: Arret | None = None) -> dict:
 
 
 @routeur_modeles.get("/modeles")
-async def modeles() -> dict:
-    """Modèles proposés pour l'orchestrateur, avec leurs efforts, et les réglages par défaut du serveur."""
+async def modeles(cle: str | None = Depends(cle_openai)) -> dict:
+    """Modèles proposés pour l'orchestrateur (ceux du compte de la clé, s'il y en a une), avec leurs efforts, et les
+    réglages par défaut du serveur."""
     try:
-        disponibles = await agent.modeles_disponibles()
+        # Avec une clé : vérifiée auprès d'OpenAI avant d'ouvrir un processus Codex, puis seulement ses modèles.
+        accessibles = await asyncio.to_thread(modeles_openai, cle) if cle else None
+        disponibles = await agent.modeles_disponibles(pour_cle(cle))
+        if accessibles is not None:
+            disponibles = [m for m in disponibles if m["id"] in accessibles]
+    except CleRefusee as e:
+        raise HTTPException(400, str(e)) from None
     except Exception as e:
-        raise HTTPException(503, f"Liste des modèles indisponible : {e}") from None
+        message = str(e).replace(cle, "sk-…") if cle else str(e)
+        raise HTTPException(503, f"Liste des modèles indisponible : {message}") from None
     defaut = config.MODELE or next((m["id"] for m in disponibles if m["par_defaut"]), None)
+    if cle and defaut not in (ids := [m["id"] for m in disponibles]):
+        defaut = ids[0] if ids else None  # le modèle par défaut d'Atlas n'est pas accessible avec cette clé
     return {"modele_defaut": defaut, "effort_defaut": config.EFFORT, "modeles": disponibles}
+
+
+URL_MODELES_OPENAI = "https://api.openai.com/v1/models"
+
+
+class CleRefusee(Exception):
+    pass
+
+
+def modeles_openai(cle: str) -> set[str]:
+    """Modèles que la clé voit sur l'API OpenAI : vérifie la clé sans consommer de crédits (Codex, lui, accepte
+    n'importe quelle clé jusqu'au premier tour)."""
+    requete = urllib.request.Request(URL_MODELES_OPENAI, headers={"Authorization": f"Bearer {cle}"})
+    try:
+        with urllib.request.urlopen(requete, timeout=15) as reponse:
+            return {m["id"] for m in json.loads(reponse.read())["data"]}
+    except urllib.error.HTTPError as e:
+        if e.code == 401:
+            raise CleRefusee("OpenAI refuse cette clé (invalide ou révoquée).") from None
+        raise CleRefusee(f"OpenAI a répondu {e.code} à la vérification de la clé.") from None
+    except (urllib.error.URLError, TimeoutError) as e:
+        raise CleRefusee(f"OpenAI injoignable pour vérifier la clé : {getattr(e, 'reason', e)}") from None
+
+
+def modeles_d_atlas() -> dict[str, str]:
+    """Qui utilise quel modèle : chaque rôle de sous-agent, le vérificateur et son recours, et l'orchestrateur s'il
+    est fixé par ATLAS_MODELE_ORCHESTRATEUR (sinon il suit le sélecteur)."""
+    utilises = {r.nom: config.modele_agent(r.nom, r.modele) for r in sous_agents.ROLES}
+    utilises["verificateur"], utilises["verificateur_recours"] = verificateur.modeles_juges()
+    if config.MODELE:
+        utilises["orchestrateur"] = config.MODELE
+    return utilises
+
+
+@routeur_modeles.post("/compte")
+async def verifier_compte(cle: str | None = Depends(cle_openai)) -> dict:
+    """Vérifie la clé de l'en-tête auprès d'OpenAI, puis y connecte un processus Codex. Renvoie les agents d'Atlas
+    dont le modèle n'est pas accessible avec cette clé (ils échoueraient)."""
+    if cle is None:
+        raise HTTPException(400, "Aucune clé OpenAI dans la requête.")
+    try:
+        accessibles = await asyncio.to_thread(modeles_openai, cle)
+    except CleRefusee as e:
+        raise HTTPException(400, str(e)) from None
+    try:
+        disponibles = await agent.modeles_disponibles(pour_cle(cle))
+    except Exception as e:
+        await oublier_cle(cle)
+        raise HTTPException(400, f"Clé refusée par Codex : {str(e).replace(cle, 'sk-…')}") from None
+    manquants = {qui: m for qui, m in modeles_d_atlas().items() if m not in accessibles}
+    return {
+        "ok": True,
+        "modeles": [m["id"] for m in disponibles if m["id"] in accessibles],
+        "manquants": manquants,
+    }
+
+
+@routeur_modeles.delete("/compte")
+async def oublier_compte(cle: str | None = Depends(cle_openai)) -> dict:
+    """Ferme le processus de la clé et supprime sa connexion et ses threads du serveur."""
+    if cle is None:
+        raise HTTPException(400, "Aucune clé OpenAI dans la requête.")
+    await oublier_cle(cle)
+    return {"ok": True}

@@ -28,6 +28,38 @@ export function enregistrerJeton(jeton: string) {
 
 let jetonEnMemoire = lireJeton()
 
+// Clé OpenAI de l'utilisateur (facultative), gardée dans ce navigateur seulement : ses tours de l'orchestrateur
+// passent alors par ses crédits. Envoyée seulement aux routes qui font travailler Codex (en-tête X-Atlas-Cle-OpenAI).
+const CLE_OPENAI = 'atlas.cle-openai'
+
+let cleEnMemoire: string | null = (() => {
+  try {
+    return localStorage.getItem(CLE_OPENAI)
+  } catch {
+    return null
+  }
+})()
+
+export function cleOpenAI(): string | null {
+  return cleEnMemoire
+}
+
+/** Enregistre (ou efface, avec null) la clé OpenAI de ce navigateur. */
+export function enregistrerCleOpenAI(cle: string | null) {
+  cleEnMemoire = cle
+  try {
+    if (cle) localStorage.setItem(CLE_OPENAI, cle)
+    else localStorage.removeItem(CLE_OPENAI)
+  } catch {
+    // navigation privée : la clé ne tiendra que le temps de la page
+  }
+}
+
+/** « sk-proj-…abcd » : de quoi reconnaître sa clé sans l'afficher. */
+export function cleMasquee(cle: string): string {
+  return `${cle.slice(0, cle.startsWith('sk-proj-') ? 8 : 3)}…${cle.slice(-4)}`
+}
+
 /** Le serveur a refusé le jeton (401) : l'interface doit en demander un. */
 export class JetonRequis extends Error {}
 
@@ -288,18 +320,21 @@ export interface Message {
   cree_le: string
 }
 
-async function requete(chemin: string, init?: RequestInit): Promise<Response> {
+/** `cle` : clé OpenAI à joindre (routes qui font travailler Codex) ; undefined : celle de ce navigateur, s'il en a une. */
+async function requete(chemin: string, init?: RequestInit, avecCle = false, cle?: string | null): Promise<Response> {
   const entetes: Record<string, string> = {}
   if (init?.body) entetes['Content-Type'] = 'application/json'
   if (jetonEnMemoire) entetes.Authorization = `Bearer ${jetonEnMemoire}`
+  const cleJointe = cle === undefined ? cleEnMemoire : cle
+  if (avecCle && cleJointe) entetes['X-Atlas-Cle-OpenAI'] = cleJointe
   const r = await fetch(BASE + chemin, { ...init, headers: entetes })
   if (r.status === 401) throw new JetonRequis()
   if (!r.ok) throw new Error(`${chemin} : ${r.status} ${await r.text()}`)
   return r
 }
 
-async function appel<T>(chemin: string, init?: RequestInit): Promise<T> {
-  return (await requete(chemin, init)).json() as Promise<T>
+async function appel<T>(chemin: string, init?: RequestInit, avecCle = false, cle?: string | null): Promise<T> {
+  return (await requete(chemin, init, avecCle, cle)).json() as Promise<T>
 }
 
 export const api = {
@@ -352,8 +387,15 @@ export const api = {
     appel<Execution>(`/api/conversations/${id}/messages`, {
       method: 'POST',
       body: JSON.stringify({ contenu, ...(agent ? { agent } : {}), ...reglages }),
-    }),
-  modeles: () => appel<Modeles>('/api/orchestrateur/modeles'),
+    }, true),
+  modeles: () => appel<Modeles>('/api/orchestrateur/modeles', undefined, true),
+  /** Connecte la clé sur le serveur (processus Codex à elle) ; lève avec la raison si elle est refusée. */
+  verifierCle: (cle: string) =>
+    appel<{ ok: boolean; modeles: string[]; manquants: Record<string, string> }>(
+      '/api/orchestrateur/compte', { method: 'POST' }, true, cle,
+    ),
+  /** Supprime du serveur la connexion et les threads de la clé. */
+  oublierCle: (cle: string) => appel<{ ok: boolean }>('/api/orchestrateur/compte', { method: 'DELETE' }, true, cle),
   /** Tout arrêter, ou seulement le sous-agent `agent`. */
   /** Prépare Atlas voix pour le prochain appel dans cette conversation (le clic n'attend plus que le son). */
   preparerVoix: (id: string) => appel<{ etat: string }>(`/api/conversations/${id}/voix/preparer`, { method: 'POST' }),
