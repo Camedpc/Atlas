@@ -38,7 +38,9 @@ ses conditions), chaque démonstration un argument complet, aussi détaillés qu
   intermédiaire que le rapport démontre, pour que chaque flèche soit un pas court et vérifiable.
 - **Expérience** : les mesures et simulations dans leur propre cadre (« Mesures », « Simulations ») : un nœud
   `experience` (le protocole, les données) et des nœuds `observation` (ce qu'on en tire, avec incertitudes),
-  qui alimentent la confrontation avec la théorie (nœud `calcul` ou `resultat`).
+  qui alimentent la confrontation avec la théorie (nœud `calcul` ou `resultat`). `observation` est réservé à ce
+  qui a été mesuré : un exemple chiffré ou un résultat de simulation est un nœud `calcul`, démontré à partir de
+  la formule qu'il applique (le vérificateur refait le calcul).
 - **Pistes abandonnées**, seulement si le rapport en décrit une (n'en fabrique jamais pour remplir le cadre) : un
   cadre `piste_abandonnee` avec l'hypothèse écartée et ce qu'elle prédisait ; le nœud
   qui la réfute (une observation, une contradiction) est une prémisse de la démonstration qui la réfute, et le
