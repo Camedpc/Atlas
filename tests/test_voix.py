@@ -3,7 +3,6 @@ et abonnement au gestionnaire. Sans réseau : ni Gradium, ni Codex, ni Supabase.
 
 import asyncio
 from datetime import datetime
-from pathlib import Path
 from types import SimpleNamespace
 
 from atlas import conversations
@@ -277,11 +276,11 @@ class _Navigateur:
         asyncio.get_running_loop().call_soon(self.ecran.recevoir_compte_rendu, cr)
 
 
-def _ecran(monkeypatch, navigateur: _Navigateur, projet: str = "p1", dossier: Path = Path(".")) -> Ecran:
+def _ecran(monkeypatch, navigateur: _Navigateur, projet: str = "p1") -> Ecran:
     from atlas import lecture
 
     monkeypatch.setattr(lecture, "charger_etat_vue", lambda projet_id: _vue_ecran())
-    ecran = Ecran(navigateur.envoyer, "p1", dossier)
+    ecran = Ecran(navigateur.envoyer, "p1")
     navigateur.ecran = ecran
     ecran.recevoir_etat({"ecran": "ecran_1a2b3c4d", "projet": projet, "camera": {"distance": 2.0}})
     return ecran
@@ -322,7 +321,7 @@ def test_ecran_absent_ou_autre_espace(monkeypatch):
     async def scenario():
         nav = _Navigateur()
         assert "autre espace" in (await _ecran(monkeypatch, nav, projet="p2").effacer())["erreur"]
-        sans = Ecran(nav.envoyer, "p1", Path("."))
+        sans = Ecran(nav.envoyer, "p1")
         assert "pas annoncé" in (await sans.montrer(["Lemme 1"]))["erreur"]
         assert nav.lots == []
 
@@ -383,126 +382,6 @@ def test_ecran_lire(monkeypatch):
             "filtre_actif": False,
             "au_centre": ["Lemme 1", "Hypothèse (i)"],
         }
-
-    asyncio.run(scenario())
-
-
-def test_parcours_enregistre_annonce_puis_joue_a_la_voix(monkeypatch, tmp_path):
-    from atlas import navigation, parcours
-
-    messages: list[tuple] = []
-    monkeypatch.setattr(conversations, "ajouter_message", lambda *a, **kw: messages.append((a, kw)))
-    etat = _vue_ecran()
-    pret = navigation.compiler_parcours(
-        etat,
-        navigation.reperer(etat),
-        "Preuve de la loi",
-        [
-            {"phrase": "On part du régime stationnaire.", "montrer": ["Hypothèse (i)"]},
-            {"phrase": "Puis la loi.", "montrer": ["t_1"]},
-        ],
-    )
-    session = tmp_path / "sessions" / "c1"
-    chemin = parcours.enregistrer(session, "c1", pret)
-    assert chemin.startswith("sessions/c1/docs_session/parcours/preuve-de-la-loi-") and chemin.endswith(".json")
-    ((args, kw),) = messages
-    assert args[:2] == ("c1", "systeme") and kw["donnees"]["type"] == "parcours" and kw["donnees"]["etapes"] == 2
-    assert parcours.lire(tmp_path, chemin)["titre"] == "Preuve de la loi"
-    assert parcours.lire(tmp_path, Path(chemin).name)["titre"] == "Preuve de la loi"  # le nom du fichier suffit
-
-    async def scenario():
-        nav = _Navigateur()
-        ecran = _ecran(monkeypatch, nav, dossier=tmp_path)
-        r = await ecran.jouer_etape(chemin, 2)
-        assert r == {
-            "ok": True,
-            "titre": "Preuve de la loi",
-            "etape": 2,
-            "total": 2,
-            "phrase": "Puis la loi.",
-            "suite": "dernière étape",
-        }
-        assert {"op": "selectionner", "cible": {"noeud": "t_1"}} in nav.lots[0]["commandes"]
-        assert (await ecran.jouer_etape(chemin, 3))["ok"] is False
-        assert (await ecran.jouer_etape("../../ailleurs.json", 1))["ok"] is False
-        assert len(nav.lots) == 1
-
-    asyncio.run(scenario())
-
-
-# ── Parcours déroulé tout seul pendant l'appel ──
-
-
-def _parcours_3():
-    return {
-        "titre": "Preuve",
-        "etapes": [{"phrase": f"Phrase {i}.", "commandes": [{"op": "zoomer", "facteur": 1.5}]} for i in (1, 2, 3)],
-    }
-
-
-def _deroulement(monkeypatch, coupe_a: int | None = None, refus: bool = False):
-    from atlas.voix import deroulement
-
-    monkeypatch.setattr(deroulement, "PAUSE_ENTRE_ETAPES_S", 0)
-    journal: list[str] = []
-    annonces: list[str] = []
-
-    async def executer(commandes):
-        journal.append("ecran")
-        return {"ok": False, "erreur": "écran fermé"} if refus else {"ok": True}
-
-    async def dire(phrase):
-        journal.append(phrase)
-        return phrase != f"Phrase {coupe_a}."
-
-    d = deroulement.Deroulement("p.json", _parcours_3(), 1, executer, dire, lambda: True, annonces.append)
-    return d, journal, annonces
-
-
-def test_deroulement_enchaine_les_etapes(monkeypatch):
-    async def scenario():
-        d, journal, annonces = _deroulement(monkeypatch)
-        d.lancer()
-        await d.tache
-        assert journal == ["ecran", "Phrase 1.", "ecran", "Phrase 2.", "ecran", "Phrase 3."]
-        assert len(annonces) == 1 and "terminé" in annonces[0]
-        assert not d.en_pause
-
-    asyncio.run(scenario())
-
-
-def test_deroulement_en_pause_quand_camille_coupe(monkeypatch):
-    async def scenario():
-        d, journal, annonces = _deroulement(monkeypatch, coupe_a=2)
-        d.lancer()
-        await d.tache
-        assert journal == ["ecran", "Phrase 1.", "ecran", "Phrase 2."]
-        assert d.en_pause and annonces == []
-        assert "étape 2/3" in d.note() and "depuis=3" in d.note()
-
-    asyncio.run(scenario())
-
-
-def test_deroulement_suspendu_pendant_un_blanc_et_ecran_refuse(monkeypatch):
-    from atlas.voix import deroulement
-
-    async def scenario():
-        async def executer(_):
-            return {"ok": True}
-
-        async def dire(_):
-            return True
-
-        attente = deroulement.Deroulement("p.json", _parcours_3(), 2, executer, dire, lambda: False, lambda _: None)
-        attente.lancer()
-        await asyncio.sleep(0.05)
-        assert "étape 2/3" in attente.suspendre()
-        assert not attente.actif and attente.suspendre() is None
-
-        d, journal, annonces = _deroulement(monkeypatch, refus=True)
-        d.lancer()
-        await d.tache
-        assert journal == ["ecran"] and "écran fermé" in annonces[0]
 
     asyncio.run(scenario())
 

@@ -81,7 +81,7 @@ export interface EtatDessin {
   titreSurvole: string | null
   /** Nœuds estompés (filtre « Cette conversation », filtres du pilotage). */
   estompes: Set<string> | null
-  /** Nœuds surlignés par le pilotage (voix, parcours) : même accent que la sélection, sans leur lignée. */
+  /** Nœuds surlignés par le pilotage (voix) : même accent que la sélection, sans leur lignée. */
   surlignes?: Set<string> | null
   /** Nœuds glissés posés sur une case occupée. */
   conflits: Set<string> | null

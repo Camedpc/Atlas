@@ -58,15 +58,6 @@ ROLES = (
         "medium",
         {"web_search": "disabled", "service_tier": "fast"},
     ),
-    Role(
-        "navigateur",
-        "Prépare un parcours du graphe de raisonnement (dérouler une preuve étape par étape, visite guidée d'un "
-        "cadre, lignée d'un résultat) que Camille déroule à la voix ou aux boutons ; ne modifie ni le graphe ni la "
-        "vue. Lancé par l'orchestrateur quand Camille demande à voir un raisonnement pas à pas.",
-        "gpt-6-astra",
-        "medium",
-        {"web_search": "disabled"},
-    ),
 )
 
 

@@ -61,30 +61,6 @@ def lancer_tache(titre: str, consigne: str) -> str:
 
 
 @serveur.tool()
-def preparer_parcours(titre: str, consigne: str) -> str:
-    """Confie à l'agent navigateur la préparation d'un parcours du graphe : une suite d'écrans commentés que Camille
-    déroulera étape par étape (dérouler une preuve, visite guidée d'un cadre, suivre une lignée). Prend une ou deux
-    minutes et rend la main tout de suite ; le résultat (le chemin du parcours) arrive dans un message [Système].
-    `consigne` : ce que Camille veut voir et dans quel ordre, dans ses mots, avec les repères qu'il a cités."""
-    return _appel("/taches", {"titre": titre, "consigne": consigne, "genre": "navigateur"})
-
-
-@serveur.tool()
-def derouler_parcours(parcours: str, depuis: int = 1) -> str:
-    """Déroule un parcours tout seul, à partir de l'étape `depuis` : chaque étape s'affiche, sa phrase est dite
-    telle quelle, puis la suivante enchaîne. Ne dis rien de plus après l'appel. Si Camille parle, il se met en
-    pause, et un message te dit où il en est. `parcours` : son chemin (…/parcours/<fichier>.json)."""
-    return _appel("/ecran/parcours/derouler", {"parcours": parcours, "etape": depuis})
-
-
-@serveur.tool()
-def jouer_etape(parcours: str, etape: int = 1) -> str:
-    """Montre une seule étape d'un parcours (à partir de 1), sans enchaîner, et renvoie sa `phrase` à dire avec
-    tes mots : pour revenir sur une étape précise."""
-    return _appel("/ecran/parcours", {"parcours": parcours, "etape": etape})
-
-
-@serveur.tool()
 def etat_taches() -> str:
     """Les petites tâches de l'appel : statut, dernières étapes, résultat si terminée."""
     return _appel("/taches")

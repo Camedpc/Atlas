@@ -127,14 +127,12 @@ export class VueGraphe {
   private estompes: Set<string> | null = null
   /** Conversation du filtre « Cette conversation » (null : pas de filtre). */
   private conversationFiltre: string | null = null
-  /** Filtre du pilotage (voix, parcours) : un nœud qui ne passe pas est estompé. */
+  /** Filtre du pilotage (voix) : un nœud qui ne passe pas est estompé. */
   private filtrePilotage: ((n: Noeud) => boolean) | null = null
   private surlignes: Set<string> | null = null
   private animCamera: Animation | null = null
   /** Largeur (px) couverte à droite par la fiche : les cadrages et le centre de l'écran l'évitent. */
   margeDroite = 0
-  /** Hauteur (px) couverte en bas par le lecteur de parcours : les cadrages et le centre de l'écran l'évitent. */
-  margeBas = 0
   private projetId: string | null = null
   private lectureSeule: string | null = null
   private cam: Camera = { x: 40, y: 40, z: 1 }
@@ -353,7 +351,7 @@ export class VueGraphe {
     this.aide.hidden = !this.aide.hidden
   }
 
-  // ─── Pilotage (voix et parcours, pilotage/adaptateurVue.ts) ───────────────
+  // ─── Pilotage (voix, pilotage/adaptateurVue.ts) ─────────────────────────
   // Tout passe par les ids de nœud ; la vue (cases, cadres) n'est jamais modifiée.
 
   get noeuds(): readonly Noeud[] {
@@ -401,7 +399,7 @@ export class VueGraphe {
 
   /** Centre de la partie visible de l'écran (coordonnées du monde, fiche exclue) et zoom. */
   get camera(): { x: number; y: number; z: number } {
-    const { x, y } = this.versMonde(this.largeurUtile / 2, this.hauteurUtile / 2)
+    const { x, y } = this.versMonde(this.largeurUtile / 2, this.hauteur / 2)
     return { x, y, z: this.cam.z }
   }
 
@@ -470,10 +468,6 @@ export class VueGraphe {
     return Math.max(80, this.largeur - this.margeDroite)
   }
 
-  private get hauteurUtile(): number {
-    return Math.max(80, this.hauteur - this.margeBas)
-  }
-
   private borneZoom(z: number): number {
     return Math.max(ZOOMS[0]![0], Math.min(ZOOMS[ZOOMS.length - 1]![0], z))
   }
@@ -484,8 +478,8 @@ export class VueGraphe {
     for (const b of this.modele.blocs.values()) {
       if (b.cache || b.figure || !b.noeud) continue
       const x = (b.x + b.w / 2) * this.cam.z + this.cam.x, y = (b.y + b.h / 2) * this.cam.z + this.cam.y
-      if (x < 0 || y < 0 || x > this.largeurUtile || y > this.hauteurUtile) continue
-      r.push({ id: b.id, nom: b.noeud.nom, x, y, d: Math.hypot(x - this.largeurUtile / 2, y - this.hauteurUtile / 2) })
+      if (x < 0 || y < 0 || x > this.largeurUtile || y > this.hauteur) continue
+      r.push({ id: b.id, nom: b.noeud.nom, x, y, d: Math.hypot(x - this.largeurUtile / 2, y - this.hauteur / 2) })
     }
     r.sort((a, b) => a.d - b.d || a.id.localeCompare(b.id))
     return r.slice(0, max).map(({ id, nom, x, y }) => ({ id, nom, x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 }))
@@ -555,17 +549,16 @@ export class VueGraphe {
   /** Comme UE : le plus grand palier qui fait tout tenir, sans dépasser `zoomMax` (1:1, sauf une figure seule). */
   private zoomPour(r: Rect, zoomMax = 1): number {
     const w = Math.max(1, r.x1 - r.x0), h = Math.max(1, r.y1 - r.y0)
-    const z = Math.min((this.largeurUtile - 80) / w, (this.hauteurUtile - 80) / h)
+    const z = Math.min((this.largeurUtile - 80) / w, (this.hauteur - 80) / h)
     let i = 0
     for (let k = 0; k < ZOOMS.length; k++) if (ZOOMS[k]![0] <= z && ZOOMS[k]![0] <= zoomMax) i = k
     return ZOOMS[i]![0]
   }
 
-  /** Centre (x, y) au milieu de la partie visible de l'écran (la fiche à droite et le lecteur de parcours en bas
-   * en sont exclus). */
+  /** Centre (x, y) au milieu de la partie visible de l'écran (la fiche, à droite, en est exclue). */
   private centrerSur(x: number, y: number): void {
     this.cam.x = this.largeurUtile / 2 - x * this.cam.z
-    this.cam.y = this.hauteurUtile / 2 - y * this.cam.z
+    this.cam.y = this.hauteur / 2 - y * this.cam.z
     this.demander()
   }
 
