@@ -151,8 +151,9 @@ class Gestionnaire:
         """Message de Camille à l'orchestrateur (`agent_cible` None) ou à l'un de ses sous-agents.
 
         Pendant une exécution, il est injecté dans le tour en cours (dont le modèle et l'effort ne changent plus),
-        s'il est payé par le même compte (`cle`, sinon CompteDifferent) ; sinon il lance un nouveau tour avec
-        `reglages`, payé par `cle` (None : le compte du serveur).
+        s'il est payé par le même compte (`cle`, sinon CompteDifferent ; la voix, relais d'Atlas sur le compte du
+        serveur, s'injecte dans tout tour) ; sinon il lance un nouveau tour avec `reglages`, payé par `cle` (None :
+        le compte du serveur).
         """
         cible = None if agent_cible in (None, "", RACINE) else agent_cible
         cid = conversation.id
@@ -162,7 +163,7 @@ class Gestionnaire:
                 return await self.lancer(
                     conversation, texte, agent_cible=cible, reglages=reglages, origine=origine, cle=cle
                 )
-            if self._comptes.get(cid) != _compte(cle):
+            if origine != "voix" and self._comptes.get(cid) != _compte(cle):
                 raise CompteDifferent(cid)
             tour, execution = self._tours[cid], self._executions.get(cid)
             if tour is None or execution is None:

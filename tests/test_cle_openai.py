@@ -165,3 +165,31 @@ def test_avec_une_cle_seuls_ses_modeles_sont_proposes(monkeypatch):
     assert [m["id"] for m in avec["modeles"]] == ["gpt-6-luna"] and avec["modele_defaut"] == "gpt-6-luna"
     sans = asyncio.run(routes.modeles(None))
     assert len(sans["modeles"]) == 3 and sans["modele_defaut"] == "gpt-6-astra"
+
+
+def test_la_voix_s_injecte_dans_un_tour_paye_par_une_cle(monkeypatch):
+    _faux_supabase(monkeypatch)
+    liberer = asyncio.Event()
+    injectes: list[str] = []
+
+    async def steer(texte):
+        injectes.append(texte)
+
+    async def faux_tour(conversation, texte, execution_id, sur_tour, **_):
+        sur_tour(SimpleNamespace(steer=steer))
+        await liberer.wait()
+        return agent.ResultatTour("terminee")
+
+    monkeypatch.setattr(agent, "tour", faux_tour)
+
+    async def scenario():
+        g = Gestionnaire()
+        await g.envoyer(CONVERSATION.model_copy(), "question", cle=CLE)
+        while g._tours.get("c1") is None:
+            await asyncio.sleep(0)
+        await g.envoyer(CONVERSATION.model_copy(), "confié par la voix", origine="voix")
+        liberer.set()
+        await _attendre(g)
+
+    asyncio.run(scenario())
+    assert injectes == ["confié par la voix"]
