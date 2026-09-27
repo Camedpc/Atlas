@@ -1,0 +1,14 @@
+{
+  "id": "r42-synthese-c",
+  "titre": "R42 · Synthèse (essai C)",
+  "resume": "La figure LaTeX classique de R36 (Computer Modern, énoncés « Lemme 7 (nom). » et formule KaTeX centrée, statut par le trait, confiance en pied, axe des rangs, accolades, légende « Figure 1 ») organisée en boîtes de sous-problèmes comme R18 (rectangles teintés, barres de titre colorées, boîtes imbriquées, mise en page par boîte sans chevauchement), réductibles comme R19 (clic sur la barre de titre : nœud-fonction à broches, statut agrégé, maillon le plus faible ; onglet avec fil d'Ariane). Hypothèses présentées comme R37 (« Hypothèse (ii) (nom). » en italique, portée). Graphiques de R35 limités aux figures clés. Trois niveaux de détail selon le zoom, HTML et KaTeX construits à la demande.",
+  "idees": [
+    "Base R36 : noir sur blanc, Computer Modern, formules KaTeX, statut par le trait, confiance c = 0,82 avec ses bornes",
+    "Hypothèses de modélisation composées comme R37 : « Hypothèse (ii) (nom). » puis l'énoncé en italique et la portée ; « sous (i), (iii) » sur les blocs dépendants",
+    "Boîtes de R18 telles quelles (couleur, forme, boîtes imbriquées, placement par boîte sans chevauchement)",
+    "Réduction de R19 : clic sur la barre de titre pour réduire une boîte en sous-graphe à broches, nouveau clic pour la déployer, « ouvrir ↗ » pour un onglet avec fil d'Ariane",
+    "Graphiques de R35 limités aux figures clés par une règle générique (loi d'un résultat confrontée aux mesures, 2 au plus), les autres à la demande",
+    "Niveaux de détail : loin, un carré de la couleur de la boîte ; moyen, le titre au canevas ; près, l'énoncé complet en HTML et KaTeX, construit seulement pour les blocs visibles"
+  ],
+  "ordre": 42
+}

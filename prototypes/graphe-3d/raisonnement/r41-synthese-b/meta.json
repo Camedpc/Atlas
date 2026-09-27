@@ -1,0 +1,14 @@
+{
+  "id": "r41-synthese-b",
+  "titre": "R41 · Synthèse (essai B)",
+  "resume": "La figure LaTeX classique de R36 (Computer Modern, énoncés « Lemme 7 (nom). » et formule KaTeX, statut par le trait, axe des rangs, accolades, légende « Figure 1 ») organisée en boîtes de sous-problèmes comme R18 (boîtes imbriquées, teinte translucide, barre de titre colorée, placement sans chevauchement), réductibles en nœud-fonction comme R19 (clic sur la barre de titre, onglet avec fil d'Ariane), hypothèses présentées comme R37 et graphiques clés de R35. Trois niveaux de détail selon le zoom : points colorés, titres, contenu complet composé à la demande.",
+  "idees": [
+    "Base R36 : noir sur blanc, Computer Modern, formules KaTeX centrées, confiance c = 0,82 avec bornes en exposant et en indice, un seul bleu pour l'interaction",
+    "Hypothèses comme R37 : « Hypothèse (ii) (nom). » puis l'énoncé en italique, portée en pied, « sous (i), (iii) » sur les blocs dépendants",
+    "Boîtes de R18 : sous-problèmes et boîtes imbriquées, rectangle teinté translucide et barre de titre colorée, chaque boîte posée comme une pièce rigide sans chevauchement",
+    "Réduction de R19 : clic sur la barre de titre, nœud-fonction à broches (entrées, sorties), statut le plus faible et maillon le plus faible ; « ouvrir » dans un onglet avec fil d'Ariane",
+    "Graphiques de R35 limités aux figures clés (loi confrontée à des mesures, résultat majeur, poids dans le raisonnement ; 2 par défaut), les autres à la demande",
+    "Niveaux de détail : loin, un petit carré de la couleur de la boîte ; à mi-distance, le titre seul ; de près, le contenu complet, composé paresseusement pour les seuls blocs visibles"
+  ],
+  "ordre": 41
+}

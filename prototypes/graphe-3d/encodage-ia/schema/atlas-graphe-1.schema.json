@@ -1,0 +1,140 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://atlas.example/schema/atlas-graphe-1.schema.json",
+  "title": "Graphe de raisonnement Atlas (format canonique atlas.graphe/1)",
+  "description": "Format d'échange et d'export du graphe d'un espace de travail. Ne contient que des données saisies : statut, parents/enfants, intervalle de confiance d'un nœud et dates sont calculés ou journalisés ailleurs. Les règles transverses (ids connus, cycles, une alternative retenue…) sont vérifiées par encodage.py / atlas/ecriture.py, pas par ce schéma.",
+  "type": "object",
+  "required": ["format", "noeuds"],
+  "additionalProperties": false,
+  "properties": {
+    "@context": { "description": "Seulement pour la variante JSON-LD." },
+    "format": { "const": "atlas.graphe/1" },
+    "titre": { "type": "string" },
+    "resume": { "type": "string" },
+    "sous_problemes": { "type": "array", "items": { "$ref": "#/$defs/sous_probleme" } },
+    "noeuds": { "type": "array", "items": { "$ref": "#/$defs/noeud" } },
+    "liens": { "type": "array", "items": { "$ref": "#/$defs/lien" } }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "maxLength": 64,
+      "description": "Slug snake_case, préfixe conseillé selon le type (def_, ax_, h_, ch_, d_, lem_, prop_, thm_, exp_, obs_, calc_, res_, conj_)."
+    },
+    "type_noeud": {
+      "enum": ["hypothese", "definition", "axiome", "choix_modelisation", "decision", "lemme", "proposition", "theoreme",
+               "assertion", "experience", "calcul", "observation", "resultat", "conjecture"]
+    },
+    "liste_ids": { "type": "array", "items": { "$ref": "#/$defs/id" }, "minItems": 1, "uniqueItems": true },
+    "sous_probleme": {
+      "type": "object",
+      "required": ["id", "nom"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "nom": { "type": "string", "minLength": 1 },
+        "resume": { "type": "string" },
+        "parent": { "$ref": "#/$defs/id", "description": "Sous-problème englobant (boîtes imbriquées de R18)." },
+        "abandonne": { "type": "boolean" }
+      }
+    },
+    "noeud": {
+      "type": "object",
+      "required": ["id", "type", "nom", "enonce"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "type": { "$ref": "#/$defs/type_noeud" },
+        "nom": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "enonce": { "type": "string", "minLength": 1, "description": "Assertion autonome, Markdown + LaTeX ($…$) ; les formules entre $…$ sont celles qu'affichent les vues « équations »." },
+        "utilise": { "$ref": "#/$defs/liste_ids", "description": "Dépendances de l'énoncé (notations, définitions nécessaires pour le lire), comme \\uses dans l'énoncé d'un blueprint. N'entre pas dans la validité." },
+        "sous_probleme": { "$ref": "#/$defs/id" },
+        "origine": { "enum": ["humain", "ia", "ordinateur"] },
+        "admis": { "type": "boolean" },
+        "source": { "type": "string", "description": "Obligatoire (non vide) si admis : référence, axiome, définition." },
+        "abandonne": { "type": "boolean", "description": "Piste abandonnée, gardée pour mémoire." },
+        "choix": { "$ref": "#/$defs/choix" },
+        "decision": { "$ref": "#/$defs/decision" },
+        "demonstrations": { "type": "array", "items": { "$ref": "#/$defs/demonstration" } }
+      },
+      "allOf": [
+        { "if": { "properties": { "admis": { "const": true } }, "required": ["admis"] },
+          "then": { "required": ["source"], "properties": { "source": { "minLength": 1 } } } },
+        { "if": { "properties": { "type": { "const": "decision" } } }, "then": { "required": ["decision"] }, "else": { "not": { "required": ["decision"] } } },
+        { "if": { "properties": { "type": { "const": "choix_modelisation" } } }, "then": { "required": ["choix"] }, "else": { "not": { "required": ["choix"] } } }
+      ]
+    },
+    "demonstration": {
+      "type": "object",
+      "required": ["nom", "premisses"],
+      "additionalProperties": false,
+      "properties": {
+        "nom": { "type": "string", "minLength": 1 },
+        "premisses": {
+          "type": "object",
+          "description": "Prémisses groupées par rôle ; l'ordre dans un rôle est celui de l'argument.",
+          "additionalProperties": false,
+          "properties": {
+            "principale": { "$ref": "#/$defs/liste_ids" },
+            "auxiliaire": { "$ref": "#/$defs/liste_ids" },
+            "technique": { "$ref": "#/$defs/liste_ids" },
+            "contexte": { "$ref": "#/$defs/liste_ids" }
+          }
+        },
+        "texte": { "type": "string", "description": "Argument complet, Markdown + LaTeX." },
+        "validite": { "enum": ["a_verifier", "valide", "invalide"], "default": "a_verifier" },
+        "confiance": { "type": "number", "minimum": 0, "maximum": 1 },
+        "verifie_par": { "type": "array", "items": { "enum": ["ia", "humain"] }, "uniqueItems": true },
+        "auteur": { "type": "string" }
+      }
+    },
+    "choix": {
+      "type": "object",
+      "required": ["hypothese", "portee"],
+      "additionalProperties": false,
+      "properties": {
+        "hypothese": { "type": "string", "minLength": 1 },
+        "portee": { "type": "string", "minLength": 1, "description": "Portée déclarée ; la portée réelle est calculée (dépendants transitifs)." },
+        "alternatives": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "required": ["question", "alternatives", "raison"],
+      "additionalProperties": false,
+      "properties": {
+        "question": { "type": "string", "minLength": 1 },
+        "alternatives": {
+          "type": "array",
+          "minItems": 2,
+          "contains": { "type": "object", "properties": { "retenue": { "const": true } }, "required": ["retenue"] },
+          "items": {
+            "type": "object",
+            "required": ["libelle", "retenue"],
+            "additionalProperties": false,
+            "properties": {
+              "libelle": { "type": "string", "minLength": 1 },
+              "retenue": { "type": "boolean" },
+              "raison": { "type": "string" },
+              "mene_a": { "$ref": "#/$defs/id", "description": "Nœud qui met en œuvre l'alternative (facultatif)." }
+            }
+          }
+        },
+        "raison": { "type": "string", "minLength": 1 }
+      }
+    },
+    "lien": {
+      "type": "object",
+      "required": ["source", "genre", "cible"],
+      "additionalProperties": false,
+      "description": "Relation hors justification : ne participe pas à la validité.",
+      "properties": {
+        "source": { "$ref": "#/$defs/id" },
+        "genre": { "enum": ["contredit", "resout", "remplace", "abandonne"] },
+        "cible": { "$ref": "#/$defs/id" },
+        "note": { "type": "string" }
+      }
+    }
+  }
+}

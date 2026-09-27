@@ -1,0 +1,484 @@
+/* R41 · Synthèse (essai B) : base R36 (noir sur blanc, Computer Modern, traits fins, un seul bleu) ;
+   hypothèses de R37 ; nœuds-fonctions, onglet et fil d’Ariane de R19 en typographie LaTeX. */
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: #ffffff;
+}
+#app {
+  position: fixed;
+  inset: 0;
+}
+.retour {
+  position: fixed;
+  top: 18px;
+  left: 56px;
+  font: 13px KaTeX_Main, 'Latin Modern Roman', 'CMU Serif', Georgia, serif;
+  color: #555;
+  text-decoration: none;
+  z-index: 5;
+}
+.retour:hover {
+  color: #1c4fa0;
+}
+body:has(.rsn-vue.panneau-ouvert) .retour {
+  display: none;
+}
+
+/* Palette : l'information passe par le trait et la composition, pas par la couleur. */
+.rsn-vue {
+  --r41-serif: KaTeX_Main, 'Latin Modern Roman', 'CMU Serif', 'Computer Modern', 'Times New Roman', serif;
+  --police: var(--r41-serif);
+  --fond: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f2f2f2;
+  --bord: #cfcfcf;
+  --ombre: none;
+  --texte: #000000;
+  --texte-doux: #666666;
+  --accent: #1c4fa0;
+  --arete: #000000;
+  --arete-complete: #bdbdbd;
+  --ancetre: #000000;
+  --descendant: #1c4fa0;
+  --contredit: #000000;
+  --statut-valide: #262626;
+  --statut-incertain: #7a7a7a;
+  --statut-refute: #000000;
+  --validation-aucune: #b3b3b3;
+  --validation-ia: #666666;
+  --validation-humain: #262626;
+  --validation-ia-humain: #000000;
+  --origine-humain: #262626;
+  --origine-ia: #666666;
+  --origine-ordinateur: #8c8c8c;
+  --role-principale: #000000;
+  --role-auxiliaire: #666666;
+  --role-technique: #8c8c8c;
+  --role-contexte: #bdbdbd;
+  --couche-0: #4d4d4d;
+  --couche-1: #7a7a7a;
+  --couche-2: #262626;
+  --couche-3: #3d3d3d;
+  --couche-4: #5c5c5c;
+  --couche-5: #6b6b6b;
+  --couche-6: #000000;
+  --sp-0: #4d4d4d;
+  --sp-1: #666666;
+  --sp-2: #7a7a7a;
+  --sp-3: #262626;
+  --sp-4: #8c8c8c;
+}
+
+/* Interface commune : angles vifs, filets fins, pas d'ombre. */
+.rsn-vue .rsn-fiche,
+.rsn-vue .rsn-barre,
+.rsn-vue .rsn-compteur,
+.rsn-vue .rsn-bouton,
+.rsn-vue .rsn-barre button {
+  border-radius: 0;
+  box-shadow: none;
+}
+.rsn-vue .rsn-fiche {
+  border: 0.8px solid #000;
+  font-size: 13.5px;
+  line-height: 1.35;
+}
+.rsn-vue .rsn-compteur-texte {
+  font-size: 12px;
+}
+
+/* ─── Couche de composition (au-dessus des calques, sous l'interface) ─── */
+
+.r41-couche {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.r41-bloc,
+.r41-dec,
+.r41-legende {
+  /* Contenu composé à la demande (composition.ts) ; masqué tant qu'il n'est pas placé. */
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  box-sizing: border-box;
+  font-family: var(--r41-serif);
+  color: #000;
+  line-height: 1.25;
+  font-kerning: normal;
+  text-rendering: optimizeLegibility;
+}
+.r41-couche .katex {
+  /* Même corps que le texte : les deux sont en Computer Modern. */
+  font-size: 1em;
+}
+.r41-bloc {
+  padding: 5px 8px 4px;
+}
+.r41-tete {
+  text-align: left;
+  hyphens: auto;
+}
+.r41-type {
+  font-weight: 700;
+}
+.r41-cite .r41-num {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.r41-formule {
+  margin: 5px 0 3px;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.r41-f {
+  display: inline-block;
+}
+.r41-pied {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 6px;
+  margin-top: 3px;
+  font-size: 0.82em;
+  color: #444;
+}
+.r41-valid {
+  letter-spacing: 0.04em;
+  font-size: 0.92em;
+}
+/* Hypothèse de modélisation, comme R37 (
+ewtheorem) : tête grasse, nom entre parenthèses, corps italique.
+   R36 donnait au bloc la classe du panneau (.r36-hyp, display: flex) : le texte était écrasé en colonnes. */
+.r41-hyp-corps {
+  margin: 0;
+  text-align: justify;
+  hyphens: auto;
+}
+.r41-hyp-tete {
+  font-weight: 700;
+}
+.r41-hyp-texte {
+  font-style: italic;
+}
+.r41-actif .r41-hyp-tete {
+  color: var(--accent);
+}
+.r41-hyp-pied {
+  margin-top: 3px;
+  font-size: 0.75em;
+  color: #666;
+  text-align: right;
+}
+.r41-abandon,
+.r41-abandon .r41-pied {
+  color: #6b6b6b;
+}
+.r41-doux {
+  color: #666;
+  font-weight: 400;
+}
+.r41-dec {
+  text-align: center;
+}
+.r41-dec-titre {
+  padding: 0 2px;
+}
+.r41-dec-vide {
+  height: 42px;
+}
+.r41-dec-nc {
+  padding-top: 13px;
+  line-height: 16px;
+  font-size: 0.85em;
+  color: #666;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.r41-sans-impasses .r41-dec-nc {
+  display: none;
+}
+.r41-secours {
+  font-style: italic;
+}
+
+/* Légende de figure (babel-french : « Figure » en petites capitales, tiret demi-cadratin). */
+.r41-legende {
+  font-size: 13px;
+  line-height: 1.4;
+  text-align: justify;
+  hyphens: auto;
+}
+.r41-sc {
+  font-variant: small-caps;
+}
+
+/* ─── Fiche de survol ─── */
+
+.r41-fiche .rsn-fiche-titre {
+  font-weight: 700;
+}
+.r41-fiche .katex {
+  font-size: 1.05em;
+}
+.r41-fiche-bandeau {
+  margin: -2px 0 6px;
+  padding-bottom: 3px;
+  border-bottom: 0.6px solid #000;
+  font-style: italic;
+  font-size: 12.5px;
+}
+.r41-fiche-formule {
+  margin: 2px 0 8px;
+  text-align: center;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+/* ─── Panneau ☰ ─── */
+
+.r41-panneau {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13px;
+}
+.r41-niveaux {
+  display: flex;
+  gap: 4px;
+}
+.r41-niveaux .rsn-bouton {
+  margin: 0;
+  flex: 1;
+}
+.r41-niveaux .rsn-bouton.actif {
+  background: #000;
+  border-color: #000;
+  color: #fff;
+}
+/* Tableau façon booktabs : \toprule, \midrule, \bottomrule, pas de filet vertical. */
+.r41-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+.r41-table thead tr {
+  border-top: 1.2px solid #000;
+  border-bottom: 0.6px solid #000;
+}
+.r41-table tbody tr:last-child {
+  border-bottom: 1.2px solid #000;
+}
+.r41-table th {
+  font-weight: 400;
+  text-align: left;
+  padding: 3px 0;
+}
+.r41-table td {
+  padding: 2px 0;
+  color: #333;
+}
+.r41-table .r41-valeur {
+  text-align: right;
+}
+.r41-valeur {
+  font-variant-numeric: tabular-nums;
+  color: #000;
+  white-space: nowrap;
+}
+.r41-liste-hyp {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.r41-hyp-liste {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  cursor: pointer;
+}
+.r41-ref {
+  font-weight: 700;
+  min-width: 22px;
+}
+.r41-hyp-liste-nom {
+  flex: 1;
+  min-width: 0;
+}
+.r41-legende-panneau {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: #444;
+  line-height: 1.4;
+}
+
+/* Sélecteur de jeu, sous le lien « catalogue ». */
+.r41-jeu {
+  position: fixed;
+  top: 56px;
+  left: 12px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px 2px 8px;
+  border: 0.8px solid #000;
+  background: #fff;
+  font: 12.5px KaTeX_Main, 'Latin Modern Roman', 'CMU Serif', Georgia, serif;
+  font-style: italic;
+  color: #000;
+}
+.r41-jeu select {
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-style: normal;
+  color: inherit;
+  cursor: pointer;
+}
+
+/* ─── Nœud-fonction (sous-problème réduit, R19) ─── */
+
+.r41-fonction {
+  padding: 0;
+}
+.r41-tete-f {
+  padding: 5px 8px 0;
+  box-sizing: border-box;
+}
+.r41-broches {
+  font-size: 0.86em;
+}
+.r41-rangee {
+  padding: 0 10px 0 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.r41-rangee.r41-droite {
+  text-align: right;
+  padding: 0 12px 0 10px;
+}
+.r41-separation {
+  height: 6px;
+}
+.r41-fonction .r41-pied {
+  box-sizing: border-box;
+  align-items: center;
+  margin-top: 4px;
+  padding: 0 8px;
+}
+.r41-externe {
+  font-size: 0.8em;
+  font-style: italic;
+  color: #666;
+}
+
+/* ─── Onglet et fil d'Ariane (R19), en typographie d'article ─── */
+
+.r41-onglets {
+  position: absolute;
+  top: 52px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: calc(100% - 32px);
+  z-index: 4;
+}
+.r41-onglets[hidden] {
+  display: none;
+}
+.r41-ariane {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 2px 4px 2px 10px;
+  border: 0.8px solid #000;
+  background: #fff;
+  font: 13px var(--r41-serif);
+  color: #000;
+  white-space: nowrap;
+}
+.r41-ariane a {
+  color: var(--accent);
+  text-decoration: none;
+}
+.r41-ariane a:hover {
+  text-decoration: underline;
+}
+.r41-ariane-sep {
+  color: #666;
+}
+.r41-ariane-ici {
+  font-style: italic;
+}
+.r41-onglet-fermer {
+  margin-left: 6px;
+  padding: 0 5px;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: #666;
+  cursor: pointer;
+}
+.r41-onglet-fermer:hover {
+  color: #000;
+}
+
+/* ─── Panneau : boîtes, membres d'un sous-problème réduit (fiche) ─── */
+
+.r41-groupes {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.r41-groupe {
+  display: grid;
+  grid-template-columns: 10px 1fr auto auto auto;
+  align-items: center;
+  gap: 6px;
+}
+.r41-groupe .rsn-bouton {
+  margin: 0;
+  padding: 1px 6px;
+  font-size: 11.5px;
+}
+.r41-groupe-nom {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.r41-imbrique {
+  padding-left: 12px;
+}
+.r41-teinte {
+  width: 10px;
+  height: 10px;
+  opacity: 0.55;
+}
+.r41-membres {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 6px;
+  padding-top: 4px;
+  border-top: 0.6px solid #000;
+  font-size: 12.5px;
+}
+.r41-membre {
+  display: grid;
+  grid-template-columns: 22px 1fr auto;
+  gap: 6px;
+}
+.r41-membre-statut {
+  color: #666;
+}

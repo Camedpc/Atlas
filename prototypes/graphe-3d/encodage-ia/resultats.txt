@@ -1,0 +1,65 @@
+Canonique de la fontaine : 0 erreur(s), 0 avertissement(s)
+
+Taille des encodages de la fontaine (39 nœuds, 24 démonstrations, 61 prémisses) — jetons : BPE Systran--faster-whisper-large-v3
+
+fichier                         caract.  jetons  jet.i1     c/4  struct.  /nœud  info     aller-retour
+01-api-graphe.json                31294   16410   16410    7824 14658 89%    421  base     sans perte
+02-mcp-lire-graphe.json           10220    4113    4113    2555  2472 60%    105  vue      —
+03-prototype.json                 39462   23110   13164    9866 20497 89%    593  complet  sans perte
+04-canonique.json                 23020   12023    7703    5755  9410 78%    308  complet  sans perte
+04b-canonique-indent2.json        25612   14587    8050    6403 11974 82%    374  complet  sans perte
+04c-canonique.min.json            16727    6919    6919    4182  4306 62%    177  complet  sans perte
+05-canonique.jsonl                17291    7285    7285    4323  4672 64%    187  complet  sans perte
+06-canonique.yaml                 18154    8000    5610    4538  5387 67%    205  complet  sans perte
+07-blueprint.tex                  13760    5917    5917    3440  3304 56%    152  complet  sans perte
+08-markdown.md                    13319    5212    5212    3330  2599 50%    134  complet  sans perte
+09-compact.txt                    10849    4046    3906    2712  1433 35%    104  complet  sans perte
+10-jsonld.json                    23531   12298    7943    5883  9685 79%    315  complet  sans perte
+11-turtle.ttl                     18797    7781    7581    4699  5168 66%    200  complet  —
+12-index.txt                       3606    1440    1440     902  1091 76%     37  vue      —
+
+Écart base / visualisations : types devinés justes 23/39 ; rôles devinés justes 44/65
+  types faux : ch_souple (choix_modelisation → assertion), ch_air (choix_modelisation → assertion), ch_sol (choix_modelisation → assertion), l_mouv (lemme → assertion), l_effective (lemme → assertion), l_conserv (lemme → assertion), p_forme (proposition → assertion), p_billes (proposition → assertion), d_origine (decision → assertion), ch_prise (choix_modelisation → assertion), l_prise (lemme → assertion), l_sol (lemme → assertion), l_sommet (lemme → assertion), d_alpha (decision → assertion), p_vitesse (proposition → assertion), p_hauteur (proposition → assertion)
+  rôles faux (vrai → deviné) : auxiliaire → principale × 7, contexte → principale × 10, principale → contexte × 4
+  champs sans colonne en base : type (39), decision (2), choix (4), sous_probleme (39), abandonne (2), liens (2), origine (39)
+
+Validation : erreurs sémantiques injectées
+  prémisse inconnue                  → res_explication / Démonstration : id inconnu « thm_rapor » (voulais-tu « thm_rapport » ?)
+  cycle                              → (avert.) cycle de prémisses : l_mouv → p_vitesse → l_conserv → l_effective → l_mouv
+  décision sans alternative retenue  → d_alpha : aucune alternative retenue; (avert.) d_alpha : alternative rejetée sans raison « Simulation de maillons rigides soulevés depuis un tas »
+  admis sans source                  → ax_gravite : un nœud admis doit citer sa source
+  prémisse citée sous deux rôles     → p_vitesse / Démonstration : l_prise cité deux fois (principale, contexte)
+
+Robustesse d'écriture (relecture + validation après altération) :
+  01-api-graphe.json         id mal orthographié : validation | délimiteur oublié : syntaxe | sortie tronquée (19 coupes) : syntaxe 19 | guillemet " non échappé : syntaxe
+  03-prototype.json          id mal orthographié : validation | délimiteur oublié : syntaxe | sortie tronquée (19 coupes) : syntaxe 19 | guillemet " non échappé : syntaxe
+  04-canonique.json          id mal orthographié : validation | délimiteur oublié : syntaxe | sortie tronquée (19 coupes) : syntaxe 19 | guillemet " non échappé : syntaxe
+  04c-canonique.min.json     id mal orthographié : validation | délimiteur oublié : syntaxe | sortie tronquée (19 coupes) : syntaxe 19 | guillemet " non échappé : syntaxe
+  05-canonique.jsonl         id mal orthographié : validation | délimiteur oublié : partiel+validation | sortie tronquée (19 coupes) : partiel 19 | guillemet " non échappé : partiel+validation
+  06-canonique.yaml          id mal orthographié : validation | délimiteur oublié : syntaxe | sortie tronquée (19 coupes) : validation 10, SILENCIEUX 5, syntaxe 4 | guillemet " non échappé : syntaxe
+  07-blueprint.tex           id mal orthographié : validation | délimiteur oublié : syntaxe | sortie tronquée (19 coupes) : syntaxe 18, SILENCIEUX 1 | guillemet " non échappé : correct
+  08-markdown.md             id mal orthographié : validation | délimiteur oublié : validation | sortie tronquée (19 coupes) : syntaxe 4, SILENCIEUX 13, validation 2 | guillemet " non échappé : correct
+  09-compact.txt             id mal orthographié : validation | délimiteur oublié : syntaxe | sortie tronquée (19 coupes) : syntaxe 7, validation 3, SILENCIEUX 9 | guillemet " non échappé : correct
+  10-jsonld.json             id mal orthographié : validation | délimiteur oublié : syntaxe | sortie tronquée (19 coupes) : syntaxe 19 | guillemet " non échappé : syntaxe
+
+Diff après un verdict (l_sommet : à vérifier → valide, confiance 0.83) :
+  01-api-graphe.json           2 lignes +/-,  62572 caractères dans le diff
+  02-mcp-lire-graphe.json      2 lignes +/-,  20440 caractères dans le diff
+  04-canonique.json            6 lignes +/-,    190 caractères dans le diff
+  04c-canonique.min.json       2 lignes +/-,  33490 caractères dans le diff
+  05-canonique.jsonl           2 lignes +/-,    836 caractères dans le diff
+  06-canonique.yaml            6 lignes +/-,    152 caractères dans le diff
+  07-blueprint.tex             2 lignes +/-,    242 caractères dans le diff
+  08-markdown.md               2 lignes +/-,    153 caractères dans le diff
+  09-compact.txt               2 lignes +/-,    158 caractères dans le diff
+  10-jsonld.json               6 lignes +/-,    190 caractères dans le diff
+  11-turtle.ttl                2 lignes +/-,    413 caractères dans le diff
+  12-index.txt                 2 lignes +/-,    196 caractères dans le diff
+
+Sous-graphes rendus en Markdown (graphe entier : 5212 jetons) :
+  thm_rapport  amont    prof.  1 rôles prin+auxi+tech+cont      →  3 nœuds +  5 en frontière,   620 jetons (12 %)
+  thm_rapport  amont    prof.  2 rôles prin+auxi+tech+cont      →  8 nœuds +  8 en frontière,  1401 jetons (27 %)
+  thm_rapport  amont    prof.  2 rôles prin                     →  7 nœuds +  9 en frontière,  1294 jetons (25 %)
+  thm_rapport  amont    prof. ∞  rôles prin+auxi                → 18 nœuds +  9 en frontière,  3061 jetons (59 %)
+  ch_prise     aval     prof. ∞  rôles prin+auxi+tech+cont      → 10 nœuds + 12 en frontière,  1941 jetons (37 %)
+  l_sommet     les_deux prof.  1 rôles prin+auxi+tech+cont      →  5 nœuds +  4 en frontière,   873 jetons (17 %)

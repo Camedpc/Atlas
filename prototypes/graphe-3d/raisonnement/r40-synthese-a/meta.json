@@ -1,0 +1,14 @@
+{
+  "id": "r40-synthese-a",
+  "titre": "R40 · Synthèse (essai A)",
+  "resume": "Synthèse du cahier des charges : la figure LaTeX de R36 (Computer Modern, « Lemme 7 (nom). » + formule KaTeX centrée, statut par le trait, confiance en pied, axe des rangs, accolades, légende « Figure 1 – … »), les hypothèses composées comme R37 (« Hypothèse (ii) (nom). » + énoncé en italique, portée), les boîtes teintées et imbriquées de R18 posées sans chevauchement, la réduction d'une boîte en nœud-fonction de R19 (onglet et fil d'Ariane), les graphiques clés de R35, et trois niveaux de détail selon le zoom (points colorés, titres, contenu complet créé à la demande).",
+  "idees": [
+    "Boîtes de sous-problèmes de R18 (fond teinté translucide, barre de titre colorée, boîtes imbriquées) sur une figure noir et blanc de R36",
+    "Clic sur la barre d'une boîte : réduction en nœud-fonction (broches ▶ et ●, statut le plus faible, maillon le plus faible c_min) ; « ouvrir ↗ » : onglet avec fil d'Ariane",
+    "Hypothèses de modélisation numérotées (i), (ii)… et composées comme un \newtheorem : tête grasse, énoncé en italique, « portée : n énoncés »",
+    "Graphiques clés : seule la loi d'un résultat principal confrontée aux mesures est tracée d'office ; les autres se cochent dans le panneau",
+    "Niveaux de détail : loin, un carré de la couleur de sa boîte ; à mi-distance, le titre ; de près, la formule KaTeX et la confiance",
+    "HTML et KaTeX créés à la demande, mis en cache, attachés seulement pour les blocs visibles ; hauteurs estimées puis mesurées"
+  ],
+  "ordre": 40
+}

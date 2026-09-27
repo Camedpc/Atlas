@@ -1,0 +1,40 @@
+# Fontaine de chaîne (effet Mould) — 39 nœuds. Prémisses : a principale, +a auxiliaire, #a technique, ~a contexte ; | sépare deux démonstrations.
+ax_newton · axiome · cadre · etabli · admis — Bilan de quantité de mouvement (système ouvert)
+ax_gravite · axiome · cadre · etabli · admis — Pesanteur uniforme
+lt_chainette · lemme · cadre · etabli · admis — Équilibre d’une chaîne statique (utilise ax_gravite)
+lt_buckingham · lemme · cadre · etabli · admis — Théorème de Vaschy–Buckingham
+h_inext · hypothese · cadre · ouvert — Chaîne inextensible
+h_stat · hypothese · cadre · ouvert — Régime stationnaire
+h_etroite · hypothese · cadre · ouvert — Fontaine étroite
+def_hauteurs · definition · cadre · etabli · admis — Hauteurs h₁ et h₂
+def_t_eff · definition · cadre · etabli · admis — Tension effective (utilise h_stat)
+def_alpha · definition · cadre · etabli · admis — Coefficient de prise α
+def_beta · definition · cadre · etabli · admis — Coefficient d’arrivée β
+ch_souple · choix_modelisation · cadre · ouvert — Chaîne parfaitement souple (utilise h_inext)
+ch_air · choix_modelisation · cadre · ouvert — Frottement de l’air négligé
+ch_sol · choix_modelisation · cadre · ouvert — Arrivée au sol paramétrée par β (utilise def_beta)
+obs_mould · observation · cadre · ouvert — La chaîne monte au-dessus du bécher
+conj_elan · conjecture · billes · invalide — L’élan de la chaîne suffit [abandonné] ⟵ ~obs_mould
+l_mouv · lemme · dyn · suspendu — Équation du mouvement stationnaire ⟵ ax_newton +ch_souple +ch_air ~ax_gravite ~h_inext ~h_stat
+l_effective · lemme · dyn · suspendu — Réduction à un problème statique ⟵ l_mouv ~def_t_eff
+l_conserv · lemme · dyn · suspendu — Invariant le long de la chaîne ⟵ l_effective #lt_chainette
+p_forme · proposition · dyn · suspendu — Forme : chaînette inversée ⟵ l_effective #lt_chainette
+p_billes · proposition · billes · suspendu — Avec α = 0, pas de fontaine [abandonné] ⟵ conj_elan l_conserv ~def_alpha
+d_origine · decision · cadre · suspendu — Origine de la fontaine ⟵ obs_mould p_billes
+ch_prise · choix_modelisation · cadre · suspendu — Force de prise anormale ⟵ d_origine ~def_alpha
+l_prise · lemme · bords · suspendu — Tension au point de prise ⟵ ax_newton +ch_prise ~def_alpha
+l_sol · lemme · bords · suspendu — Tension à l’arrivée au sol ⟵ ax_newton +ch_sol ~def_beta
+l_sommet · lemme · bords · a_verifier — Condition au sommet ⟵ l_effective ~h_etroite ~def_hauteurs
+d_alpha · decision · bords · suspendu — Estimer α ⟵ ch_prise
+calc_tiges · calcul · bords · a_verifier — Simulation de maillons rigides ⟵ d_alpha ax_newton ~ch_prise
+exp_sol · experience · bords · suspendu — Arrivée sur sol dur ou sur mousse ⟵ ~ch_sol
+obs_beta · observation · bords · a_verifier — β faible ⟵ exp_sol +l_sol
+p_vitesse · proposition · pred · suspendu — Vitesse de la chaîne ⟵ l_conserv l_prise l_sol ~def_hauteurs
+p_hauteur · proposition · pred · suspendu — Hauteur de la fontaine ⟵ l_conserv l_prise l_sommet ~def_hauteurs
+thm_rapport · theoreme · pred · suspendu — Loi de la fontaine ⟵ p_vitesse p_hauteur
+calc_dim · calcul · pred · suspendu — Contrôles de cohérence ⟵ thm_rapport #lt_buckingham
+exp_film · experience · pred · etabli — Films à haute vitesse ⟵ ~def_hauteurs
+obs_lineaire · observation · pred · etabli — h₁ proportionnelle à h₂ ⟵ exp_film
+obs_v · observation · pred · etabli — v² proportionnelle à h₂ ⟵ exp_film
+res_alpha · resultat · pred · a_verifier — Estimation de α ⟵ thm_rapport obs_lineaire obs_v +obs_beta +calc_tiges
+res_explication · resultat · pred · suspendu — La fontaine vient de la réaction du tas ⟵ res_alpha thm_rapport calc_dim ~d_origine ~p_forme

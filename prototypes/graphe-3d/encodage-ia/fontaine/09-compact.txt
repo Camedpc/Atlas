@@ -1,0 +1,186 @@
+@atlas.graphe/1 Fontaine de chaîne (effet Mould)
+@resume Pourquoi une chaîne tirée d’un bécher s’élève au-dessus du bord : réaction du tas au point de prise, h₁/h₂ = α/(1 − α − β). Mesures illustratives.
+@sp cadre Cadre et modélisation :: Principes, hypothèses et choix de modélisation de la chaîne.
+@sp dyn SP1 · Chaîne en mouvement stationnaire :: Équation du mouvement, tension effective, forme.
+@sp bords SP2 · Conditions aux extrémités :: Tension au point de prise (α), à l’arrivée au sol (β), au sommet.
+@sp pred SP3 · Prédictions et confrontation :: Loi h₁/h₂, vitesse, estimation de α sur les mesures.
+@sp! billes Piste abandonnée · élan seul :: Une chaîne sans réaction du tas (α = 0) ne fait pas de fontaine.
+ax_newton axiome* @cadre ^humain
+  # Bilan de quantité de mouvement (système ouvert)
+  Sur un volume de contrôle traversé par la chaîne : d𝐩/dt = Σ𝐅_ext + flux entrant de quantité de mouvement − flux sortant.
+  src: Mécanique classique : bilan sur un système ouvert.
+ax_gravite axiome* @cadre ^humain
+  # Pesanteur uniforme
+  𝐠 = −g 𝐞_y, g = 9,81 m·s⁻² ; y est l’altitude comptée depuis le haut du tas.
+  src: Mécanique classique.
+lt_chainette lemme* @cadre ^humain
+  # Équilibre d’une chaîne statique
+  utilise: ax_gravite
+  Une chaîne statique souple sous pesanteur uniforme vérifie T − λ g y = constante ; sa forme est une chaînette.
+  src: Résultat classique de statique des fils.
+lt_buckingham lemme* @cadre ^humain
+  # Théorème de Vaschy–Buckingham
+  Une loi physique s’écrit entre grandeurs sans dimension ; ici h₁/h₂ ne peut dépendre que de α et β.
+  src: Analyse dimensionnelle (Vaschy 1892, Buckingham 1914).
+h_inext hypothese @cadre ^humain
+  # Chaîne inextensible
+  Maillons de longueur fixe, masse linéique λ uniforme, section négligeable.
+h_stat hypothese @cadre ^humain
+  # Régime stationnaire
+  Dans le référentiel du laboratoire, la forme de la fontaine est fixe et la chaîne la parcourt à vitesse constante v.
+h_etroite hypothese @cadre ^humain
+  # Fontaine étroite
+  Les deux jambes sont quasi verticales et proches : au sommet, le rayon de courbure est petit devant h₁.
+def_hauteurs definition* @cadre ^humain
+  # Hauteurs h₁ et h₂
+  h₁ : hauteur du sommet au-dessus du tas ; h₂ : chute du tas jusqu’au sol.
+  src: Biggins et Warner, Proc. R. Soc. A 470 (2014).
+def_t_eff definition* @cadre ^humain
+  # Tension effective
+  utilise: h_stat
+  T′ = T − λ v² : pour une chaîne en mouvement stationnaire, tension d’une chaîne statique de même forme.
+  src: Biggins et Warner, Proc. R. Soc. A 470 (2014).
+def_alpha definition* @cadre ^humain
+  # Coefficient de prise α
+  Fraction de λ v² fournie par la réaction du tas au point de prise : T₀ = (1 − α) λ v².
+  src: Biggins et Warner, Proc. R. Soc. A 470 (2014).
+def_beta definition* @cadre ^humain
+  # Coefficient d’arrivée β
+  Tension résiduelle au sol : T_s = β λ v² (β = 0 pour un arrêt parfaitement inélastique).
+  src: Biggins et Warner, Proc. R. Soc. A 470 (2014).
+ch_souple choix_modelisation @cadre ^humain
+  # Chaîne parfaitement souple
+  utilise: h_inext
+  Courbe continue sans rigidité de flexion ni de torsion.
+  hyp: La chaîne est une courbe continue parfaitement souple.
+  portée: Équation du mouvement le long de la chaîne (SP1).
+  alt: Maillons rigides articulés discrets
+  alt: Tige élastique avec rigidité de flexion
+ch_air choix_modelisation @cadre ^ia
+  # Frottement de l’air négligé
+  Aucune force aérodynamique sur la chaîne.
+  hyp: La traînée de l’air est négligeable devant le poids et les forces de contact.
+  portée: Tout le bilan de forces (SP1, SP2).
+  alt: Traînée quadratique ∝ ρ_air C_x v²
+ch_sol choix_modelisation @cadre ^humain
+  # Arrivée au sol paramétrée par β
+  utilise: def_beta
+  Le contact avec le sol est résumé par T_s = β λ v².
+  hyp: Le sol arrête la chaîne en ne lui laissant qu’une tension β λ v².
+  portée: Condition au pied de la jambe descendante (SP2).
+  alt: Modèle de choc maillon par maillon
+obs_mould observation @cadre ^humain
+  # La chaîne monte au-dessus du bécher
+  Une chaîne de billes de 50 m tirée par-dessus le bord d’un bécher s’élève au-dessus de celui-ci avant de tomber (Mould, 2013).
+conj_elan conjecture! @billes ^ia
+  # L’élan de la chaîne suffit
+  Sans aucune réaction du tas (α = 0), l’élan acquis par la chaîne suffirait à la faire monter au-dessus du bécher.
+  = ~obs_mould «Heuristique» invalide 0.08 ia @directeur_de_labo
+l_mouv lemme @dyn ^humain
+  # Équation du mouvement stationnaire
+  ∂ₛ(T 𝐭) − λ v² κ 𝐧 + λ𝐠 = 𝟎, où s est l’abscisse curviligne, κ la courbure et 𝐧 la normale.
+  = ax_newton +ch_souple +ch_air ~ax_gravite ~h_inext ~h_stat «Démonstration» valide 0.91 humain @camille
+l_effective lemme @dyn ^humain
+  # Réduction à un problème statique
+  Avec T′ = T − λ v² : ∂ₛ(T′ 𝐭) + λ𝐠 = 𝟎. La fontaine a la forme d’une chaîne statique de tension T′.
+  = l_mouv ~def_t_eff «Démonstration» valide 0.91 ia+humain @camille
+l_conserv lemme @dyn ^ia
+  # Invariant le long de la chaîne
+  T′ − λ g y est constant le long de toute la chaîne, du tas jusqu’au sol.
+  = l_effective #lt_chainette «Démonstration» valide 0.91 humain @directeur_de_labo
+p_forme proposition @dyn ^humain
+  # Forme : chaînette inversée
+  Si les jambes s’écartent, T′ < 0 au sommet : la fontaine prend la forme d’une chaînette inversée (une arche).
+  = l_effective #lt_chainette «Démonstration» valide 0.91 ia+humain @camille
+p_billes proposition! @billes ^humain
+  # Avec α = 0, pas de fontaine
+  Si le tas n’exerce aucune réaction, T′₀ = 0 et l’invariant impose h₁ = 0 : la chaîne ne dépasse pas le bord.
+  = conj_elan l_conserv ~def_alpha «Démonstration» valide 0.91 humain @camille
+  lien: contredit obs_mould — La fontaine est pourtant observée.
+d_origine decision @cadre ^ia
+  # Origine de la fontaine
+  Quelle force fournit la quantité de mouvement verticale au point de prise ?
+  ? Pourquoi la chaîne monte-t-elle au-dessus du bécher ?
+  [x] Réaction du tas sur les maillons (α > 0)
+  [ ] Élan de la chaîne seule (α = 0) — Le bilan de quantité de mouvement donne alors h₁ = 0.
+  [ ] Rigidité de flexion de la chaîne — Aucune force verticale nette au point de prise pour une chaîne souple ; effet de second ordre.
+  ! Seule une force extérieure au point de prise peut fournir la quantité de mouvement verticale manquante.
+  = obs_mould p_billes «Délibération» valide 0.91 ia+humain @directeur_de_labo
+  lien: abandonne conj_elan
+ch_prise choix_modelisation @cadre ^humain
+  # Force de prise anormale
+  Le tas pousse les maillons vers le haut au moment où ils sont mis en mouvement.
+  hyp: Au point de prise, le tas exerce sur la chaîne une réaction verticale : T₀ = (1 − α) λ v², α > 0.
+  portée: Condition au point de prise, puis toutes les prédictions (SP2, SP3).
+  alt: α = 0 : prise classique sans réaction
+  alt: Modèle microscopique explicite des maillons
+  = d_origine ~def_alpha «Justification du choix» valide 0.91 humain @camille
+l_prise lemme @bords ^humain
+  # Tension au point de prise
+  Bilan de quantité de mouvement sur le point de prise : T₀ = (1 − α) λ v², soit T′₀ = −α λ v².
+  = ax_newton +ch_prise ~def_alpha «Démonstration» valide 0.91 ia+humain @camille
+l_sol lemme @bords ^ia
+  # Tension à l’arrivée au sol
+  Au pied de la jambe descendante : T_s = β λ v², soit T′_s = −(1 − β) λ v².
+  = ax_newton +ch_sol ~def_beta «Démonstration» valide 0.91 humain @directeur_de_labo
+l_sommet lemme @bords ^humain
+  # Condition au sommet
+  Pour une fontaine étroite, l’arche du sommet porte une tension effective négligeable : T′ ≈ 0 en y = h₁.
+  = l_effective ~h_etroite ~def_hauteurs «Démonstration» a_verifier @camille
+d_alpha decision @bords ^humain
+  # Estimer α
+  Comment estimer le coefficient de prise α ?
+  ? Comment estimer α indépendamment de la hauteur de la fontaine ?
+  [x] Simulation de maillons rigides soulevés depuis un tas
+  [ ] Capteur de force sous le bécher — Force de prise trop brève et trop faible pour le capteur disponible.
+  [ ] Ajustement sur h₁/h₂ seulement — Circulaire : on veut tester la loi, pas l’ajuster.
+  ! La simulation donne α sans utiliser la hauteur mesurée, ce qui permet une vraie confrontation.
+  = ch_prise «Délibération» valide 0.91 humain @camille
+calc_tiges calcul @bords ^ordinateur
+  # Simulation de maillons rigides
+  Dynamique de 2 000 tiges rigides articulées tirées depuis un tas désordonné : α ≈ 0,10 ± 0,04 (valeur illustrative).
+  = d_alpha ax_newton ~ch_prise «Script» a_verifier @experimentateur
+exp_sol experience @bords ^humain
+  # Arrivée sur sol dur ou sur mousse
+  Vitesse v mesurée pour deux surfaces d’arrivée, à h₂ fixé.
+  = ~ch_sol «Protocole» valide 0.91 humain @camille
+obs_beta observation @bords ^humain
+  # β faible
+  β ≈ 0,1 sur sol dur, ≈ 0 sur mousse (valeurs illustratives).
+  = exp_sol +l_sol «Mesure» a_verifier @camille
+p_vitesse proposition @pred ^ia
+  # Vitesse de la chaîne
+  En égalant l’invariant au point de prise et au sol : v² = g h₂ / (1 − α − β).
+  = l_conserv l_prise l_sol ~def_hauteurs «Démonstration» valide 0.91 humain @directeur_de_labo
+p_hauteur proposition @pred ^humain
+  # Hauteur de la fontaine
+  En égalant l’invariant au point de prise et au sommet : α v² = g h₁.
+  = l_conserv l_prise l_sommet ~def_hauteurs «Démonstration» valide 0.91 ia+humain @camille
+thm_rapport theoreme @pred ^humain
+  # Loi de la fontaine
+  h₁ / h₂ = α / (1 − α − β) : la hauteur de la fontaine est proportionnelle à la hauteur de chute.
+  = p_vitesse p_hauteur «Démonstration» valide 0.91 ia+humain @camille
+calc_dim calcul @pred ^ia
+  # Contrôles de cohérence
+  Loi sans dimension ; α → 0 donne h₁ → 0 (piste abandonnée) ; α + β → 1 fait diverger v (plus de freinage).
+  = thm_rapport #lt_buckingham «Script» valide 0.91 ia+humain @directeur_de_labo
+exp_film experience @pred ^humain
+  # Films à haute vitesse
+  Chaîne à billes de 50 m, h₂ de 0,5 à 2 m ; h₁ et v relevés image par image (illustratif).
+  = ~def_hauteurs «Protocole» valide 0.91 humain @camille
+obs_lineaire observation @pred ^humain
+  # h₁ proportionnelle à h₂
+  h₁ / h₂ = 0,13 ± 0,03 sur toute la gamme de h₂ (valeurs illustratives).
+  = exp_film «Mesure» valide 0.8 humain @camille
+obs_v observation @pred ^ia
+  # v² proportionnelle à h₂
+  Pente de v² contre h₂ : 11,4 ± 0,6 m·s⁻², soit 1 − α − β ≈ 0,86 (valeurs illustratives).
+  = exp_film «Mesure» valide 0.78 humain @directeur_de_labo
+res_alpha resultat @pred ^humain
+  # Estimation de α
+  Les mesures donnent α ≈ 0,11 ± 0,03, compatible avec la simulation de maillons (α ≈ 0,10 ± 0,04).
+  = thm_rapport obs_lineaire obs_v +obs_beta +calc_tiges «Démonstration» a_verifier @camille
+res_explication resultat @pred ^humain
+  # La fontaine vient de la réaction du tas
+  Une réaction verticale du tas sur les maillons au point de prise (α ≈ 0,1) explique à la fois la hauteur et la vitesse observées.
+  = res_alpha thm_rapport calc_dim ~d_origine ~p_forme «Démonstration» valide 0.82 ia+humain @camille
