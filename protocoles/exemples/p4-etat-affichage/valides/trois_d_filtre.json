@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "ecran": "ecran_principal",
+  "utilisateur_id": "u1",
+  "version_donnees": "2026-09-26T10:12:00Z#42",
+  "strategie": "complet",
+  "parametres_lecture": {
+    "roles_retenus": [
+      "principale",
+      "auxiliaire"
+    ]
+  },
+  "liens_complets": true,
+  "camera": {
+    "mode": "3d",
+    "vue": null,
+    "orientation": [
+      0.1,
+      0.2,
+      0.3,
+      0.927
+    ],
+    "cible": [
+      1,
+      -2,
+      0.5
+    ],
+    "distance": 3
+  },
+  "selection": {
+    "noeud": "lemme_compacite"
+  },
+  "portee": {
+    "noeud": "choix_jauge"
+  },
+  "surlignes": [
+    "lemme_compacite"
+  ],
+  "filtres": {
+    "conversation": "3f2b8c1e-6a4d-4e2f-9b7a-1c2d3e4f5a6b",
+    "noeuds": [],
+    "statuts": [
+      "etabli"
+    ],
+    "types": [
+      "lemme"
+    ],
+    "periode": {
+      "debut": "2026-09-01",
+      "fin": null
+    },
+    "texte": "compacité",
+    "mode": "masquer"
+  },
+  "fiche": {
+    "noeud": "lemme_compacite"
+  },
+  "panneau_ouvert": false,
+  "theme": "clair",
+  "visibles": [],
+  "survol": {
+    "noeud": "theoreme_principal"
+  },
+  "conversation_affichee": null
+}

@@ -1,0 +1,78 @@
+{
+  "type_agent": "navigateur",
+  "demande_brute": "zoome",
+  "extrait": "zoome",
+  "contexte": {
+    "affichage": {
+      "ecran": "ecran_principal",
+      "strategie": "defaut",
+      "selection": {
+        "noeud": "lemme_compacite"
+      },
+      "filtres": {
+        "conversation": null,
+        "noeuds": [],
+        "statuts": [],
+        "types": [],
+        "periode": {
+          "debut": null,
+          "fin": null
+        },
+        "texte": "",
+        "mode": "estomper"
+      },
+      "conversation_affichee": "3f2b8c1e-6a4d-4e2f-9b7a-1c2d3e4f5a6b",
+      "mode": "2d",
+      "visibles": [
+        {
+          "libelle": "n0"
+        },
+        {
+          "libelle": "n1"
+        },
+        {
+          "libelle": "n2"
+        },
+        {
+          "libelle": "n3"
+        },
+        {
+          "libelle": "n4"
+        },
+        {
+          "libelle": "n5"
+        },
+        {
+          "libelle": "n6"
+        },
+        {
+          "libelle": "n7"
+        },
+        {
+          "libelle": "n8"
+        },
+        {
+          "libelle": "n9"
+        },
+        {
+          "libelle": "n10"
+        },
+        {
+          "libelle": "n11"
+        },
+        {
+          "libelle": "n12"
+        },
+        {
+          "libelle": "n13"
+        },
+        {
+          "libelle": "n14"
+        },
+        {
+          "libelle": "n15"
+        }
+      ]
+    }
+  }
+}

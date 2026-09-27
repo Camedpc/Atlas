@@ -9,6 +9,11 @@ import { VueDocuments } from './documents'
 import { enLigne, formulesAffichees, nombre, rendreTex } from './formules'
 import { VueGraphe } from './graphe'
 import { jeuSynthetique } from './graphe-synthetique'
+import { AdaptateurVue } from './pilotage/adaptateurVue'
+import { ClientRelais } from './pilotage/client'
+import { CommandeTexte } from './pilotage/commandeTexte'
+import { nouvelId, Pilote } from './pilotage/pilote'
+import type { CommandeBas } from './pilotage/protocole'
 import { installerPoignees } from './redimension'
 import { echapper, rendre } from './rendu'
 
@@ -68,10 +73,15 @@ let conversationId: string | null = null
 // Espace ouvert : chaque espace a son graphe.
 let projetId: string | null = null
 let dernierChargement = 0
+// Nœud dont la fiche est ouverte (pilotage : P4 `fiche`).
+let ficheId: string | null = null
+// Adaptateur du pilotage (défini plus bas, seulement si un relais d'affichage est configuré).
+let adaptateur: AdaptateurVue | undefined
 
 const vueGraphe = new VueGraphe(document.querySelector<HTMLElement>('.graphe')!, {
   surOuvrir: afficherDetail,
   recharger: () => chargerGraphe(),
+  surChangement: () => adaptateur?.apresImage(),
 })
 // Développement : accès depuis la console (tests à la main, mesures d'images).
 if (import.meta.env.DEV) (window as unknown as { atlasGraphe: VueGraphe }).atlasGraphe = vueGraphe
@@ -84,6 +94,7 @@ function reference(id: string): string {
 
 /** Fiche d'un nœud (double-clic), composée comme un énoncé d'article (R41). */
 function afficherDetail(n: Noeud | null) {
+  ficheId = n?.id ?? null
   detail.hidden = !n
   if (!n) return
   const lien = (id: string, role?: RolePremisse) =>
@@ -216,7 +227,30 @@ const conversation = new PanneauConversation(
   },
 )
 
-installerPoignees((replie) => conversation.replierSessions(replie))
+const panneau = installerPoignees((replie) => conversation.replierSessions(replie))
+
+// ─── Pilotage de l'écran par l'agent navigateur d'AtlasVoice (P3/P4, relais VITE_AFFICHAGE_URL) ───
+// Sans relais configuré, rien ne change : la vue reste pilotée à la souris seulement.
+
+if (ClientRelais.configure()) {
+  adaptateur = new AdaptateurVue(vueGraphe, {
+    fiche: () => ficheId,
+    definirFiche: (id) => afficherDetail(id === null ? null : (graphe.noeuds.find((n) => n.id === id) ?? null)),
+    panneauOuvert: () => panneau.ouvert(),
+    definirPanneau: (ouvert) => panneau.ouvrir(ouvert),
+    conversationAffichee: () => conversationId,
+    recharger: () => chargerGraphe(),
+  }, `ecran_${nouvelId().slice(0, 8)}`, 'local')
+  const pilote = new Pilote(adaptateur)
+  new ClientRelais(pilote).demarrer()
+  const vueRaisonnement = document.querySelector<HTMLElement>('.vue-raisonnement')!
+  if (CommandeTexte.configure()) new CommandeTexte(vueRaisonnement)
+  // Développement : pilotage à la main depuis la console, ex. atlasAffichage.commander({ op: 'zoomer', facteur: 2 }).
+  if (import.meta.env.DEV) {
+    const atlasAffichage = { etat: () => pilote.etat(), commander: (...c: CommandeBas[]) => pilote.commander(...c), pilote }
+    Object.assign(window, { atlasAffichage })
+  }
+}
 
 let vueInitiale: Onglet = 'raisonnement'
 try {

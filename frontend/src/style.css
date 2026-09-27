@@ -1347,3 +1347,50 @@ button.menu-ligne:focus-visible,
   line-height: 1.4;
   color: var(--texte-3);
 }
+
+/* Demandes d'affichage à l'écrit (pilotage/commandeTexte.ts) : même chaîne que la voix, vers l'agent navigateur. */
+.commande-texte {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  width: min(30rem, calc(100% - 24px));
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  background: var(--fond);
+  border: 1px solid var(--trait);
+  border-radius: 8px;
+  padding: 6px;
+  z-index: 5;
+}
+
+.commande-texte input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  padding: 4px 8px;
+  border: 1px solid var(--trait);
+  border-radius: 6px;
+  background: var(--fond);
+  color: var(--texte);
+}
+
+.commande-texte .retour {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--texte-2);
+}
+
+.commande-texte .retour[data-genre='ok'] {
+  color: var(--ok);
+}
+
+.commande-texte .retour[data-genre='erreur'] {
+  color: var(--echec);
+}
+
+.commande-texte .retour[data-genre='question'] {
+  color: var(--texte);
+  font-weight: 600;
+}

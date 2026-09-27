@@ -59,8 +59,10 @@ export interface EtatDessin {
   renvoiSurvole: string | null
   /** Barre de titre survolée. */
   titreSurvole: string | null
-  /** Nœuds estompés (filtre « Cette conversation »). */
+  /** Nœuds estompés (filtre « Cette conversation », filtres du pilotage). */
   estompes: Set<string> | null
+  /** Nœuds surlignés par le pilotage (agent navigateur) : même accent que la sélection, sans leur lignée. */
+  surlignes?: Set<string> | null
   /** Nœuds glissés posés sur une case occupée. */
   conflits: Set<string> | null
   /** Cadre sous le point de dépôt pendant un glisser. */
@@ -204,7 +206,7 @@ export function dessiner(ctx: CanvasRenderingContext2D, e: EtatDessin, contenu: 
     for (const b of m.blocs.values()) {
       if (b.cache || b.x > vue.x1 || b.x + b.w < vue.x0 || b.y > vue.y1 || b.y + b.h < vue.y0) continue
       const cote = b.figure ? Math.max(3, Math.min(9, b.h * z * 0.3)) : Math.max(3, Math.min(7, b.w * z * 0.18))
-      const couleur = e.selection.has(b.id) || e.survol === b.id ? PALETTE.accent
+      const couleur = e.selection.has(b.id) || e.survol === b.id || e.surlignes?.has(b.id) ? PALETTE.accent
         : b.figure ? COULEURS_FIGURE.cadre : b.groupe ? m.cadres.get(b.groupe)!.teinte : PALETTE.encre
       const cle = e.estompes?.has(b.id) ? `${couleur}|e` : couleur
       const liste = parCouleur.get(cle) ?? parCouleur.set(cle, []).get(cle)!
@@ -379,7 +381,7 @@ function dessinerBloc(ctx: CanvasRenderingContext2D, e: EtatDessin, b: Bloc, X: 
   const x0 = Math.round(X(b.x)) + 0.5, y0 = Math.round(Y(b.y)) + 0.5
   const w = Math.round(b.w * z) - 1, h = Math.round(b.h * z) - 1
   const t = trait(b.noeud.statut)
-  const choisi = e.selection.has(b.id)
+  const choisi = e.selection.has(b.id) || !!e.surlignes?.has(b.id)
   const conflit = !!e.conflits?.has(b.id)
   const survole = e.survol === b.id
   ctx.save()
@@ -626,7 +628,7 @@ function dessinerFigure(ctx: CanvasRenderingContext2D, e: EtatDessin, b: Bloc, X
   const f = b.figure!
   const x0 = Math.round(X(b.x)) + 0.5, y0 = Math.round(Y(b.y)) + 0.5
   const w = Math.round(b.w * z) - 1, h = Math.round(b.h * z) - 1
-  const choisi = e.selection.has(b.id)
+  const choisi = e.selection.has(b.id) || !!e.surlignes?.has(b.id)
   const conflit = !!e.conflits?.has(b.id)
   const survole = e.survol === b.id
   ctx.save()
