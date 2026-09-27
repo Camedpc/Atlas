@@ -146,7 +146,12 @@ export interface Agent {
 }
 
 export interface EtatConversation extends Conversation {
+  /** L'orchestrateur a un tour en cours. */
   en_cours: boolean
+  /** L'orchestrateur ou un sous-agent travaille (les sous-agents continuent après le tour). */
+  actif: boolean
+  /** Messages en cours d'écriture, par chemin d'agent. */
+  brouillons: Record<string, string>
   derniere_execution: Execution | null
 }
 
@@ -204,5 +209,10 @@ export const api = {
       body: JSON.stringify({ contenu, ...(agent ? { agent } : {}), ...reglages }),
     }),
   modeles: () => appel<Modeles>('/api/orchestrateur/modeles'),
-  arreter: (id: string) => appel<unknown>(`/api/conversations/${id}/arreter`, { method: 'POST' }),
+  /** Tout arrêter, ou seulement le sous-agent `agent`. */
+  arreter: (id: string, agent?: string | null) =>
+    appel<unknown>(`/api/conversations/${id}/arreter`, {
+      method: 'POST',
+      body: JSON.stringify(agent ? { agent } : {}),
+    }),
 }

@@ -6,6 +6,10 @@ Un agent est repéré par son chemin Codex (`/root`, `/root/hydrures`, `/root/hy
 
 Pas d'I/O : `recevoir` renvoie ce qu'il faut enregistrer (items terminés des sous-agents) ou enrichir
 (rôle, surnom et modèle d'un nouveau sous-agent, lus par `thread/read`).
+
+Le processus Codex restant ouvert entre les tours, les sous-agents continuent de travailler (et de notifier)
+après la fin du tour de l'orchestrateur : l'arbre vit tant que le thread est chargé. `brouillons` garde le texte
+qu'un agent est en train d'écrire (deltas), pour l'afficher avant la fin du message.
 """
 
 import time
@@ -19,8 +23,17 @@ EtatAgent = Literal["actif", "attend", "termine", "echec", "interrompu"]
 
 # Notifications utiles au suivi : le reste (deltas de texte, quotas…) est ignoré dès le fil de lecture.
 METHODES_SUIVIES = frozenset(
-    {"item/started", "item/completed", "turn/started", "turn/completed", "thread/tokenUsage/updated"}
+    {
+        "item/started",
+        "item/completed",
+        "item/agentMessage/delta",
+        "turn/started",
+        "turn/completed",
+        "thread/tokenUsage/updated",
+    }
 )
+
+ETATS_FINIS = ("termine", "echec", "interrompu")
 
 LONGUEUR_MAX_ACTIVITE = 200
 LONGUEUR_MAX_RESULTAT = 600
@@ -43,6 +56,8 @@ class Agent:
     nb_outils: int = 0
     fin: float | None = None
     resultat: str | None = None
+    tour: str | None = None
+    """Tour Codex en cours de l'agent (pour l'interrompre), None s'il ne travaille pas."""
 
 
 @dataclass
@@ -77,16 +92,15 @@ class SuiviAgents:
         self._horloge = horloge
         self.agents: dict[str, Agent] = {}
         self._par_thread: dict[str, str] = {}
+        # Chemin -> texte du message que l'agent est en train d'écrire.
+        self.brouillons: dict[str, str] = {}
 
     @classmethod
     def depuis(cls, instantane: list[dict[str, Any]] | None, horloge: Callable[[], float] = time.time) -> "SuiviAgents":
-        """Reprend l'arbre laissé par le tour précédent : on peut encore écrire à ses sous-agents."""
+        """Reprend l'arbre laissé par un tour d'un processus Codex précédent : on peut encore écrire à ses
+        sous-agents, mais aucun ne travaille plus (le processus qui les faisait tourner est fermé)."""
         suivi = cls(horloge)
-        for ligne in instantane or []:
-            try:
-                agent = Agent(**ligne)
-            except TypeError:
-                continue
+        for agent in agents_figes(instantane):
             suivi.agents[agent.chemin] = agent
             suivi._par_thread[agent.thread_id] = agent.chemin
         return suivi
@@ -103,6 +117,17 @@ class SuiviAgents:
 
     def instantane(self) -> list[dict[str, Any]]:
         return [asdict(a) for a in self.agents.values()]
+
+    def au_travail(self, *, sous_agents_seuls: bool = False) -> list[Agent]:
+        """Agents qui travaillent (ou attendent les leurs), l'orchestrateur compris sauf `sous_agents_seuls`."""
+        return [
+            a
+            for a in self.agents.values()
+            if a.etat in ("actif", "attend") and not (sous_agents_seuls and a.chemin == RACINE)
+        ]
+
+    def possede(self, thread_id: Any) -> bool:
+        return isinstance(thread_id, str) and thread_id in self._par_thread
 
     def enrichir(self, thread_id: str, *, role: str | None, surnom: str | None, modele: str | None) -> None:
         agent = self._agent(thread_id)
@@ -128,11 +153,17 @@ class SuiviAgents:
         match methode:
             case "turn/started":
                 agent.etat, agent.fin, agent.outil, agent.activite = "actif", None, None, "Réfléchit"
+                agent.tour = (params.get("turn") or {}).get("id") or agent.tour
             case "turn/completed":
                 statut = (params.get("turn") or {}).get("status")
                 agent.etat = {"completed": "termine", "interrupted": "interrompu"}.get(statut, "echec")
-                agent.fin, agent.outil = maintenant, None
+                agent.fin, agent.outil, agent.tour = maintenant, None, None
                 agent.activite = {"termine": "Terminé", "interrompu": "Interrompu"}.get(agent.etat, "Échec")
+                self.brouillons.pop(agent.chemin, None)
+            case "item/agentMessage/delta":
+                delta = params.get("delta")
+                if isinstance(delta, str):
+                    self.brouillons[agent.chemin] = self.brouillons.get(agent.chemin, "") + delta
             case "thread/tokenUsage/updated":
                 total = ((params.get("tokenUsage") or {}).get("total") or {}).get("totalTokens")
                 if isinstance(total, int):
@@ -140,9 +171,15 @@ class SuiviAgents:
             case "item/started" if item is not None:
                 self._debut_item(agent, item)
             case "item/completed" if item is not None:
+                fini_avant = agent.etat in ETATS_FINIS
                 self._fin_item(agent, item)
+                if item.get("type") == "agentMessage":
+                    self.brouillons.pop(agent.chemin, None)
                 if agent.chemin != RACINE and item.get("type") not in ("userMessage", "reasoning"):
                     evenements.a_enregistrer.append((agent.chemin, item))
+                elif agent.chemin == RACINE and fini_avant and item.get("type") == "subAgentActivity":
+                    # Hors tour, personne d'autre n'enregistre le fil de l'orchestrateur (« X a terminé »).
+                    evenements.a_enregistrer.append((RACINE, item))
         return evenements
 
     # ── interne ──
@@ -211,3 +248,17 @@ class SuiviAgents:
         if type_ == "collabAgentToolCall" and item.get("tool") == "wait":
             agent.etat, agent.activite = "actif", "Réfléchit"
         agent.outil = None
+
+
+def agents_figes(instantane: list[dict[str, Any]] | None) -> list[Agent]:
+    """Agents d'un arbre enregistré, ceux restés au travail passant à « interrompu » : leur processus est fermé."""
+    agents = []
+    for ligne in instantane or []:
+        try:
+            agent = Agent(**ligne)
+        except TypeError:
+            continue
+        if agent.etat in ("actif", "attend"):
+            agent.etat, agent.outil, agent.tour, agent.activite = "interrompu", None, None, "Interrompu"
+        agents.append(agent)
+    return agents

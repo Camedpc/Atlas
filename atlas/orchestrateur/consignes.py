@@ -21,3 +21,8 @@ def relais(chemin: str, message: str) -> str:
     """Message de Camille à un sous-agent, confié à l'orchestrateur : Codex refuse toute entrée directe aux
     sous-agents (multi-agents v2), seul un agent peut leur écrire (`send_message`, `followup_task`)."""
     return consigne("relais").replace("{chemin}", chemin).replace("{message}", message.strip())
+
+
+def interruption(chemin: str) -> str:
+    """Prévient l'orchestrateur que Camille a arrêté l'un des sous-agents : sinon il l'attendrait encore."""
+    return consigne("interruption").replace("{chemin}", chemin)

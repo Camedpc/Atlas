@@ -1,7 +1,9 @@
 // Colonne centrale : la conversation ouverte, suivie en direct pendant une exécution.
 // Le fil montre l'agent sélectionné (l'orchestrateur par défaut) et la saisie lui écrit : un message à un
 // sous-agent est relayé par l'orchestrateur (Codex n'accepte pas d'entrée directe vers un sous-agent).
-// Pendant une exécution, un message s'injecte dans le tour en cours au lieu d'attendre la fin.
+// Pendant une exécution, un message s'injecte dans le tour en cours au lieu d'attendre la fin : l'orchestrateur le
+// lit à sa prochaine étape (même s'il attend ses sous-agents). Les sous-agents peuvent travailler après la fin du
+// tour : le fil se suit tant que quelqu'un travaille, et le texte en cours d'écriture s'affiche au fil de l'eau.
 import { RACINE, etat, formatTokens, nomAgent } from './agents'
 import { ArbreAgents } from './arbre'
 import {
@@ -17,7 +19,7 @@ import { echapper, rendre } from './rendu'
 import { SelecteurModele } from './reglages'
 import { PanneauSessions } from './sessions'
 
-const INTERVALLE_SUIVI_MS = 1500
+const INTERVALLE_SUIVI_MS = 700
 
 function rendreOutil(m: Message): string {
   const d = m.donnees ?? {}
@@ -73,6 +75,7 @@ const CLE_PROJET = 'atlas.projet'
 
 function decrireEtat(e: EtatConversation): string {
   if (e.en_cours) return 'L’orchestrateur travaille…'
+  if (e.actif) return 'Sous-agents au travail…'
   const ex = e.derniere_execution
   if (!ex) return ''
   const jetons = ex.usage?.total?.totalTokens
@@ -100,6 +103,8 @@ export class PanneauConversation {
   private conversations: Conversation[] = []
   private courante: string | null = null
   private enCours = false
+  /** L'orchestrateur ou un sous-agent travaille. */
+  private actif = false
   private dernierId: number | undefined
   private suivi: number | undefined
   private generation = 0
@@ -180,10 +185,13 @@ export class PanneauConversation {
         e.preventDefault()
       } else if (e.key === 'Escape' && etat.selection !== RACINE) {
         etat.selectionner(RACINE)
+      } else if (e.key === 'Escape' && this.actif) {
+        // Comme Échap dans Codex : interrompre.
+        void this.interrompre()
       }
     })
     this.saisie.addEventListener('input', () => this.ajusterSaisie())
-    this.arreter.addEventListener('click', () => this.courante && void api.arreter(this.courante))
+    this.arreter.addEventListener('click', () => void this.interrompre())
     this.fil.addEventListener('click', (e) => {
       const lien = (e.target as HTMLElement).closest<HTMLElement>('.lien-agent')
       if (lien) etat.selectionner(lien.dataset.chemin!)
@@ -196,7 +204,10 @@ export class PanneauConversation {
     })
 
     etat.surSelection(() => void this.changerAgent())
-    etat.surChangement(() => this.majCible())
+    etat.surChangement(() => {
+      this.majCible()
+      this.majArreter()
+    })
     this.majCible()
   }
 
@@ -281,7 +292,7 @@ export class PanneauConversation {
     window.clearTimeout(this.suivi)
     this.courante = null
     this.generation++
-    this.enCours = false
+    this.enCours = this.actif = false
     this.titre.textContent = this.projet?.nom ?? 'Nouvelle recherche'
     this.racine.classList.add('accueil-projet')
     this.contenu.innerHTML = this.accueil()
@@ -329,7 +340,7 @@ export class PanneauConversation {
     window.clearTimeout(this.suivi)
     this.courante = id
     this.generation++
-    this.enCours = false
+    this.enCours = this.actif = false
     this.racine.classList.remove('accueil-projet')
     const c = this.conversations.find((x) => x.id === id)
     this.titre.textContent = c?.titre ?? ''
@@ -379,11 +390,57 @@ export class PanneauConversation {
     this.saisie.placeholder = sous
       ? `Message à ${nom}…`
       : this.enCours
-        ? 'Ajouter une consigne pendant qu’il travaille…'
+        ? 'Ajouter une consigne : il la lira à sa prochaine étape…'
         : !this.courante && this.projet
           ? `Nouvelle recherche dans « ${this.projet.nom} »…`
           : 'Pose une question de recherche…'
     this.majAriane()
+  }
+
+  /** Le sous-agent sélectionné s'il travaille (Arrêter ne vise que lui), sinon null (Arrêter vise tout). */
+  private cibleArret(): string | null {
+    const a = etat.get(etat.selection)
+    return a && a.chemin !== RACINE && (a.etat === 'actif' || a.etat === 'attend') ? a.chemin : null
+  }
+
+  private majArreter() {
+    this.arreter.hidden = !this.actif
+    const agent = this.cibleArret()
+    this.arreter.textContent = agent ? 'Arrêter l’agent' : 'Tout arrêter'
+    this.arreter.title = agent
+      ? `Interrompre ${nomAgent(etat.get(agent), agent)} seulement`
+      : 'Interrompre l’orchestrateur et tous ses sous-agents (Échap)'
+  }
+
+  private async interrompre() {
+    if (!this.courante) return
+    try {
+      await api.arreter(this.courante, this.cibleArret())
+    } catch (e) {
+      console.warn(e)
+    }
+    window.clearTimeout(this.suivi)
+    await this.rafraichir()
+  }
+
+  /** Texte que l'agent affiché est en train d'écrire, toujours en bas du fil. */
+  private majBrouillon(brouillons: Record<string, string>) {
+    const texte = brouillons[etat.selection]
+    let bloc = this.contenu.querySelector<HTMLElement>('.brouillon')
+    if (!texte) {
+      bloc?.remove()
+      return
+    }
+    this.contenu.querySelector('.vide')?.remove()
+    if (!bloc) {
+      bloc = document.createElement('div')
+      bloc.className = 'msg assistant brouillon'
+    }
+    if (bloc !== this.contenu.lastElementChild) this.contenu.append(bloc)
+    if (bloc.dataset.texte !== texte) {
+      bloc.dataset.texte = texte
+      bloc.innerHTML = rendre(texte)
+    }
   }
 
   private ajusterSaisie() {
@@ -417,8 +474,7 @@ export class PanneauConversation {
     try {
       await api.envoyer(this.courante, contenu, agent, this.selecteur.reglages)
     } catch (e) {
-      const texte = e instanceof Error && e.message.includes(' 409 ') ? 'L’orchestrateur démarre ou termine son tour : réessaie dans un instant.' : String(e)
-      this.contenu.insertAdjacentHTML('beforeend', `<div class="msg systeme">${echapper(texte)}</div>`)
+      this.contenu.insertAdjacentHTML('beforeend', `<div class="msg systeme">${echapper(String(e))}</div>`)
       this.saisie.value = contenu
     }
     window.clearTimeout(this.suivi)
@@ -447,9 +503,11 @@ export class PanneauConversation {
     }
     if (generation !== this.generation) return
 
+    const enBas = this.fil.scrollHeight - this.fil.scrollTop - this.fil.clientHeight < 80
     if (nouveaux.length) {
-      const enBas = this.fil.scrollHeight - this.fil.scrollTop - this.fil.clientHeight < 80
       const premier = this.dernierId === undefined
+      if (premier) this.contenu.innerHTML = ''
+      this.contenu.querySelector('.brouillon')?.remove()
       this.contenu.insertAdjacentHTML('beforeend', nouveaux.map(rendreMessage).join(''))
       this.dernierId = nouveaux[nouveaux.length - 1].id
       if (enBas || premier) this.fil.scrollTop = this.fil.scrollHeight
@@ -467,15 +525,19 @@ export class PanneauConversation {
 
     const changement = conv.en_cours !== this.enCours
     this.enCours = conv.en_cours
+    this.actif = conv.actif ?? conv.en_cours
     this.titre.textContent = conv.titre
     const c = this.conversations.find((x) => x.id === id)
     if (c && c.titre !== conv.titre) c.titre = conv.titre
     this.etatTexte.textContent = decrireEtat(conv)
-    this.arreter.hidden = !conv.en_cours
-    etat.mettreAJour(agents, conv.en_cours)
+    etat.mettreAJour(agents, this.actif)
+    this.majArreter()
+    this.majBrouillon(conv.brouillons ?? {})
+    if (enBas) this.fil.scrollTop = this.fil.scrollHeight
     if (changement) this.majSessions()
 
-    if (nouveaux.length || conv.en_cours) this.surActivite()
-    if (conv.en_cours) this.suivi = window.setTimeout(() => void this.rafraichir(), INTERVALLE_SUIVI_MS)
+    if (nouveaux.length || this.actif) this.surActivite()
+    // Suivi tant que quelqu'un travaille : les sous-agents peuvent continuer après le tour de l'orchestrateur.
+    if (this.actif) this.suivi = window.setTimeout(() => void this.rafraichir(), INTERVALLE_SUIVI_MS)
   }
 }

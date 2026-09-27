@@ -14,6 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from . import conversations, routes_lecture
 from .orchestrateur import config, routes, routes_projets
+from .orchestrateur.codex_vivant import codex_vivant
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s : %(message)s")
 log = logging.getLogger(__name__)
@@ -26,6 +27,7 @@ async def cycle_de_vie(_: FastAPI):
     except Exception:
         log.exception("Impossible de solder les exécutions orphelines (Supabase injoignable ?)")
     yield
+    await codex_vivant.fermer()
 
 
 app = FastAPI(title="Atlas", docs_url="/api/docs", openapi_url="/api/openapi.json", lifespan=cycle_de_vie)
