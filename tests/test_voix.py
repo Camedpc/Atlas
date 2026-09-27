@@ -198,7 +198,7 @@ def test_gestionnaire_publie_les_etapes_et_la_fin_et_consomme_le_pont(monkeypatc
         return agent.ResultatTour("terminee")
 
     monkeypatch.setattr(agent, "tour", faux_tour)
-    monkeypatch.setattr(agent, "enrichir", lambda suivi, thread_id: asyncio.sleep(0))
+    monkeypatch.setattr(agent, "enrichir", lambda suivi, thread_id, *_: asyncio.sleep(0))
 
     async def scenario():
         file = g.abonner("c1")

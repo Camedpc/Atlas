@@ -8,19 +8,28 @@ le processus à la fin du tour de l'orchestrateur tuait les sous-agents encore a
 - les threads restent chargés : un tour suivant démarre sans `thread/resume` (sauf si les consignes ou les
   réglages du thread ont changé, et qu'aucun sous-agent ne travaille) ;
 - un espion permanent fait suivre toutes les notifications utiles, tous threads confondus, à `abonne`.
+
+Clé OpenAI fournie par l'utilisateur (réglages du front, pour tester Atlas avec ses propres crédits) : ses tours
+passent par un second processus, `pour_cle(cle)`, avec son propre CODEX_HOME connecté à cette clé. Le processus
+du serveur (`codex_vivant`) et sa connexion ne changent pas. La clé n'est gardée qu'en mémoire et dans ce
+CODEX_HOME, supprimé par `oublier_cle`.
 """
 
 import asyncio
 import hashlib
 import json
 import logging
+import shutil
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from openai_codex import AsyncCodex, AsyncThread
 from openai_codex.generated.v2_all import ThreadUnsubscribeResponse
+
+from . import config
 
 log = logging.getLogger(__name__)
 
@@ -38,7 +47,14 @@ def empreinte(parametres: dict[str, Any]) -> str:
 
 
 class CodexVivant:
-    def __init__(self) -> None:
+    def __init__(
+        self, codex_home: Path | None = None, cle_api: str | None = None, ecoute: "CodexVivant | None" = None
+    ) -> None:
+        self.codex_home = codex_home
+        """CODEX_HOME de ce processus ; None : celui du serveur (config.CODEX_HOME)."""
+        self._cle_api = cle_api
+        # Processus dont on reprend l'abonné (le gestionnaire ne s'abonne qu'au processus du serveur).
+        self._ecoute = ecoute
         self._codex: AsyncCodex | None = None
         self._verrou = asyncio.Lock()
         self._threads: dict[str, ThreadChaud] = {}
@@ -56,10 +72,10 @@ class CodexVivant:
                 await self._fermer()
             from . import agent  # import tardif : agent dépend de ce module
 
-            codex = AsyncCodex(config=agent.config_codex())
+            codex = AsyncCodex(config=agent.config_codex(self.codex_home))
             try:
                 await codex.__aenter__()
-                await agent._connecter(codex)
+                await agent._connecter(codex, self._cle_api)
             except BaseException:
                 await codex.close()
                 raise
@@ -138,10 +154,12 @@ class CodexVivant:
             log.warning("Routeur du SDK Codex introuvable : pas de suivi des sous-agents")
             return
 
+        source = self._ecoute or self
+
         def espion(notification: Any) -> None:
             try:
-                if self.abonne is not None and notification.method in self.methodes:
-                    self.abonne(notification.method, notification.payload)
+                if source.abonne is not None and notification.method in source.methodes:
+                    source.abonne(notification.method, notification.payload)
             except Exception:
                 log.exception("Notification %s non suivie", getattr(notification, "method", "?"))
             origine(notification)
@@ -157,3 +175,37 @@ def _vivant(codex: AsyncCodex) -> bool:
 
 
 codex_vivant = CodexVivant()
+
+# Processus des clés OpenAI fournies par les utilisateurs, par empreinte de clé.
+_par_cle: dict[str, CodexVivant] = {}
+
+
+def empreinte_cle(cle: str) -> str:
+    return hashlib.sha256(cle.encode()).hexdigest()[:16]
+
+
+def dossier_cle(cle: str) -> Path:
+    """CODEX_HOME d'une clé : à côté de celui du serveur, jamais dedans."""
+    return config.CODEX_HOME.parent / ".codex-cles" / empreinte_cle(cle)
+
+
+def pour_cle(cle: str | None) -> CodexVivant:
+    """Processus Codex qui fait payer `cle` ; sans clé, celui du serveur."""
+    if not cle:
+        return codex_vivant
+    empreinte = empreinte_cle(cle)
+    if empreinte not in _par_cle:
+        _par_cle[empreinte] = CodexVivant(dossier_cle(cle), cle, ecoute=codex_vivant)
+    return _par_cle[empreinte]
+
+
+def tous() -> list[CodexVivant]:
+    return [codex_vivant, *_par_cle.values()]
+
+
+async def oublier_cle(cle: str) -> None:
+    """Ferme le processus de la clé et supprime son CODEX_HOME (connexion, threads)."""
+    vivant = _par_cle.pop(empreinte_cle(cle), None)
+    if vivant is not None:
+        await vivant.fermer()
+    shutil.rmtree(dossier_cle(cle), ignore_errors=True)

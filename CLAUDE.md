@@ -86,6 +86,11 @@ L'orchestrateur est Codex via son SDK Python officiel `openai-codex` (pas `opena
 Isolation totale de la machine (produit destiné à une VM) : `CODEX_HOME` dédié (`espace/.codex`),
 `project_root_markers = []` ; ne jamais retomber sur `~/.codex`. Connexion : compte ChatGPT de Camille en dev
 (`python -m atlas.orchestrateur.connexion`), `OPENAI_API_KEY` en production — la clé, si présente, est prioritaire.
+Clé de l'utilisateur (réglages du front, « Clé OpenAI » dans le sélecteur de modèle) : gardée dans son navigateur,
+envoyée en en-tête `X-Atlas-Cle-OpenAI`, vérifiée auprès d'OpenAI (`GET /v1/models`, Codex accepte n'importe quelle
+clé), ses tours passent par un second app-server (`codex_vivant.pour_cle`, `CODEX_HOME` =
+`espace/.codex-cles/<empreinte>`, supprimé par « Oublier ») ; le vérificateur reprend ce `CODEX_HOME`. Jamais en base
+ni dans les messages ; l'appel vocal est désactivé avec une clé (il passe par les comptes d'Atlas).
 Pas d'outils Python en process avec Codex : les outils Atlas passent par le serveur MCP stdio
 `atlas/orchestrateur/mcp_atlas.py` (lecture + écriture via `atlas/ecriture.py`, qui journalise chaque écriture),
 déclaré dans `surcharges_thread()` avec `features.hooks = false`. Codex ne transmet pas tout l'environnement aux

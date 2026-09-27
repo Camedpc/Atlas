@@ -99,6 +99,11 @@ async def juger(codex: AsyncCodex, texte: str, modele: str, effort: str) -> Verd
     return lire_verdict(resultat.final_response, modele)
 
 
+def modeles_juges() -> tuple[str, str]:
+    """Modèles du juge économique et du recours (ATLAS_MODELE_VERIFICATEUR, ATLAS_MODELE_VERIFICATEUR_RECOURS)."""
+    return config.modele_agent("verificateur", "gpt-6-luna"), config.modele_agent("verificateur_recours", "gpt-6-sol")
+
+
 async def verifier(projet_id: str, noeud_ids: list[str]) -> list[dict[str, Any]]:
     """Juge en parallèle les démonstrations « à vérifier » du graphe du projet et écrit chaque verdict. Renvoie un
     résultat par démonstration (ou son erreur, sans interrompre les autres)."""
@@ -106,11 +111,9 @@ async def verifier(projet_id: str, noeud_ids: list[str]) -> list[dict[str, Any]]
     if not demonstrations:
         return []
     noeuds = {n.id: n for n in await asyncio.to_thread(lecture.lister_noeuds, projet_id)}
-    economique = (config.modele_agent("verificateur", "gpt-6-luna"), config.effort_agent("verificateur", "high"))
-    recours = (
-        config.modele_agent("verificateur_recours", "gpt-6-sol"),
-        config.effort_agent("verificateur_recours", "high"),
-    )
+    juge, juge_recours = modeles_juges()
+    economique = (juge, config.effort_agent("verificateur", "high"))
+    recours = (juge_recours, config.effort_agent("verificateur_recours", "high"))
     limite = asyncio.Semaphore(config.MAX_VERIFICATIONS)
 
     async with AsyncCodex(config=agent.config_codex()) as codex:
