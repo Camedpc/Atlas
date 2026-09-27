@@ -16,8 +16,9 @@ import type { Statut } from './api'
 import type { Contenu } from './graphe-contenu'
 import { echapper, enLigne, formulesAffichees, rendreTex, texConfiance, texteBrut } from './formules'
 import { COULEURS_FIGURE, dessinerIcone, dessinerImage, dessinerTrace, geometrieBloc, htmlFigure, TETE_FIGURE, type ImagesFigures } from './graphe-figures'
+import { cleDocument, COULEURS_DOCUMENT, detailSilhouette, htmlDocument, silhouette, TETE_DOCUMENT, titreDocument } from './graphe-documents'
 import { contourDecision } from './graphe-decision'
-import { CADRE, CLE_FONCTION, FONCTION, type Bloc, type Cadre, type Modele, type Rect } from './graphe-modele'
+import { CADRE, CLE_FONCTION, estPseudo, FONCTION, LIBELLES_RELATION, type Bloc, type Cadre, type Modele, type Rect } from './graphe-modele'
 
 export const SERIF = `'CMU Serif Atlas', KaTeX_Main, 'Latin Modern Roman', 'CMU Serif', 'Computer Modern', 'Times New Roman', serif`
 
@@ -226,8 +227,13 @@ export function dessiner(ctx: CanvasRenderingContext2D, e: EtatDessin, contenu: 
   const losanges = new Map<string, number[]>()
   if (niveau === 'point') {
     const parCouleur = new Map<string, number[]>()
+    const documents: Bloc[] = []
     for (const b of m.blocs.values()) {
       if (b.cache || b.x > vue.x1 || b.x + b.w < vue.x0 || b.y > vue.y1 || b.y + b.h < vue.y0) continue
+      if (b.document) {
+        documents.push(b)
+        continue
+      }
       const cote = b.figure ? Math.max(3, Math.min(9, b.h * z * 0.3)) : b.decision ? Math.max(10, Math.min(16, b.h * z * 0.45))
         : Math.max(3, Math.min(7, b.w * z * 0.18))
       const couleur = e.selection.has(b.id) || e.survol === b.id || e.surlignes?.has(b.id) ? PALETTE.accent
@@ -253,6 +259,8 @@ export function dessiner(ctx: CanvasRenderingContext2D, e: EtatDessin, contenu: 
       for (let i = 0; i < liste.length; i += 3) ctx.rect(liste[i]!, liste[i + 1]!, liste[i + 2]!, liste[i + 2]!)
       ctx.fill()
     }
+    // Documents : leur silhouette seule (coin corné, onglet), qui se lit même en petit.
+    for (const b of documents) dessinerSilhouetteLointaine(ctx, e, b, X, Y)
   } else {
     for (const b of m.blocs.values()) {
       if (b.cache || b.x > vue.x1 || b.x + b.w < vue.x0 || b.y > vue.y1 || b.y + b.h < vue.y0) continue
@@ -262,6 +270,14 @@ export function dessiner(ctx: CanvasRenderingContext2D, e: EtatDessin, contenu: 
         const pose = niveau === 'contenu'
           && contenu.placer(b.id, cleFigure(b, m), () => htmlFigure(b.figure!, b.numero, referenceDe(m, b.figure!.noeud_id), b.w, b.h), X(b.x), Y(b.y), z, b.w, b.h, estompe)
         if (!pose) dessinerTitreFigure(ctx, b, X, Y, z, estompe)
+        continue
+      }
+      if (b.document) {
+        dessinerDocument(ctx, e, b, X, Y, estompe)
+        const figures = figuresParFichier(m)
+        const pose = niveau === 'contenu'
+          && contenu.placer(b.id, cleDocument(b, figures), () => htmlDocument(b, figures), X(b.x), Y(b.y), z, b.w, b.h, estompe)
+        if (!pose) dessinerTitreDocument(ctx, b, X, Y, z, estompe)
         continue
       }
       const sous = actifs?.has(b.id) ?? false
@@ -289,6 +305,7 @@ export function dessiner(ctx: CanvasRenderingContext2D, e: EtatDessin, contenu: 
       if (!pose) dessinerTitreFonction(ctx, c, X, Y, z)
     }
   }
+  if (niveau !== 'point') dessinerRelations(ctx, e, vue, X, Y)
   // 4. De très loin, les noms des cadres par-dessus tout : c'est ce qu'on lit d'abord.
   if (niveau === 'point') dessinerTitresDeLoin(ctx, e, vue, X, Y)
   // Les décisions restent visibles de très loin, par-dessus les noms des cadres.
@@ -500,7 +517,8 @@ function dessinerLiens(ctx: CanvasRenderingContext2D, e: EtatDessin, vue: Rect, 
     if (!coupe(l.bbox, vue)) continue
     const accent = lignee(l.de) || lignee(l.vers)
     const estompe = !!e.estompes && (e.estompes.has(l.de) || e.estompes.has(l.vers))
-    const genre = l.role === 'auxiliaire' ? 'x' : l.role === 'decision' ? 'd' : l.role === 'ecartee' ? 'r' : 'p'
+    // Lien de document (« l ») : gris et nommé ; les autres selon leur rôle.
+    const genre = l.relation ? 'l' : l.role === 'auxiliaire' ? 'x' : l.role === 'decision' ? 'd' : l.role === 'ecartee' ? 'r' : 'p'
     const cle = `${accent ? 'a' : genre}|${l.validite === 'invalide' ? 'i' : 'v'}|${estompe && !accent ? 'e' : ''}|${genre}`
     ;(styles.get(cle) ?? styles.set(cle, []).get(cle)!).push(l)
   }
@@ -508,10 +526,10 @@ function dessinerLiens(ctx: CanvasRenderingContext2D, e: EtatDessin, vue: Rect, 
   const cles = [...styles.keys()].sort((a, b) => (a[0] === 'a' ? 1 : 0) - (b[0] === 'a' ? 1 : 0))
   for (const cle of cles) {
     const [genre, validite, estompe, sorte] = cle.split('|')
-    const couleur = genre === 'a' ? PALETTE.accent : genre === 'x' || genre === 'r' ? PALETTE.gris : PALETTE.encre
+    const couleur = genre === 'a' ? PALETTE.accent : genre === 'l' ? COULEURS_FIGURE.cadre : genre === 'x' || genre === 'r' ? PALETTE.gris : PALETTE.encre
     ctx.strokeStyle = rgba(couleur, estompe ? 0.3 : 1)
     // Flèche d'une décision vers une option écartée : tireté gris et croix.
-    ctx.lineWidth = genre === 'a' ? epaisseur + 0.5 : genre === 'x' ? Math.max(0.6, epaisseur - 0.15) : epaisseur
+    ctx.lineWidth = genre === 'a' ? epaisseur + 0.5 : genre === 'x' || genre === 'l' ? Math.max(0.6, epaisseur - 0.15) : epaisseur
     ctx.setLineDash(sorte === 'r' ? [3, 3] : validite === 'i' ? [1, 2.2] : [])
     ctx.beginPath()
     for (const l of styles.get(cle)!) {
@@ -536,6 +554,45 @@ function dessinerLiens(ctx: CanvasRenderingContext2D, e: EtatDessin, vue: Rect, 
       }
     }
     ctx.stroke()
+  }
+  ctx.restore()
+}
+
+/** Relation écrite sur les liens de documents, par-dessus les blocs (elle peut mordre sur leur bord : un fin
+ * détourage blanc la garde lisible), dès que le texte se lit. */
+function dessinerRelations(ctx: CanvasRenderingContext2D, e: EtatDessin, vue: Rect, X: (x: number) => number, Y: (y: number) => number): void {
+  const z = e.cam.z
+  const liens = e.modele.liens
+  const lignee = (id: string) => e.survol === id || e.selection.has(id)
+  const fs = 11 * z
+  if (fs < 6) return
+  ctx.save()
+  ctx.font = `italic 400 ${fs}px ${SERIF}`
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'alphabetic'
+  ctx.strokeStyle = PALETTE.surface
+  ctx.lineWidth = 3
+  ctx.lineJoin = 'round'
+  for (const l of liens) {
+    if (!l.relation || !coupe(l.bbox, vue)) continue
+    const accent = lignee(l.de) || lignee(l.vers)
+    const estompe = !!e.estompes && (e.estompes.has(l.de) || e.estompes.has(l.vers)) && !accent
+    ctx.fillStyle = accent ? PALETTE.accent : rgba(PALETTE.gris, estompe ? 0.3 : 1)
+    // Sur le plus long segment horizontal, juste au-dessus du trait.
+    const p = l.points
+    let meilleur = 0, xm = p[0]!, ym = p[1]!
+    for (let i = 0; i + 3 < p.length; i += 2) {
+      if (Math.abs(p[i + 1]! - p[i + 3]!) > 0.5) continue
+      const long = Math.abs(p[i + 2]! - p[i]!)
+      if (long > meilleur) {
+        meilleur = long
+        xm = (p[i]! + p[i + 2]!) / 2
+        ym = p[i + 1]!
+      }
+    }
+    // Centrée sur l'intervalle, comme dans la maquette : elle peut mordre sur le bord vertical des blocs voisins.
+    ctx.strokeText(LIBELLES_RELATION[l.relation], X(xm), Y(ym) - 2.5 * z)
+    ctx.fillText(LIBELLES_RELATION[l.relation], X(xm), Y(ym) - 2.5 * z)
   }
   ctx.restore()
 }
@@ -727,7 +784,7 @@ function calculerAgregat(c: Cadre, m: Modele): Agregat {
   let confiance: number | null = null
   let maillon: Bloc | null = null
   for (const b of m.blocs.values()) {
-    if (b.figure || !b.groupe || !dansCadre(m, b.groupe, c.id)) continue
+    if (estPseudo(b) || !b.groupe || !dansCadre(m, b.groupe, c.id)) continue
     const s = b.noeud.statut
     if (RANG_STATUT[s] < RANG_STATUT[statut]) statut = s
     if (s === 'a_verifier') aVerifier++
@@ -832,7 +889,7 @@ function dessinerTitreFonction(ctx: CanvasRenderingContext2D, c: Cadre, X: (x: n
 /** « Lemme 7 » : référence du nœud illustré par une figure (null s'il n'est pas dans le graphe). */
 export function referenceDe(m: Modele, noeudId: string): string | null {
   const b = m.blocs.get(noeudId)
-  return b && !b.figure ? `${b.libelle} ${b.numero}` : null
+  return b && !estPseudo(b) ? `${b.libelle} ${b.numero}` : null
 }
 
 function cleFigure(b: Bloc, m: Modele): string {
@@ -953,6 +1010,111 @@ function dessinerAttaches(ctx: CanvasRenderingContext2D, e: EtatDessin, vue: Rec
     }
     ctx.stroke()
   }
+  ctx.restore()
+}
+
+// ─── Documents ───────────────────────────────────────────────────────────────
+
+const figuresEnCache = new WeakMap<Modele, Map<string, string>>()
+/** Fichier d'origine des images de figures (relatif au projet) → « Fig. 4 » : signalé dans l'aperçu d'un dossier. */
+function figuresParFichier(m: Modele): Map<string, string> {
+  let f = figuresEnCache.get(m)
+  if (!f) {
+    f = new Map()
+    for (const b of m.blocs.values()) if (b.figure?.fichier) f.set(b.figure.fichier, `Fig. ${b.numero}`)
+    figuresEnCache.set(m, f)
+  }
+  return f
+}
+
+function styleDocument(ctx: CanvasRenderingContext2D, e: EtatDessin, b: Bloc): void {
+  const choisi = e.selection.has(b.id) || !!e.surlignes?.has(b.id)
+  const conflit = !!e.conflits?.has(b.id)
+  const survole = e.survol === b.id
+  const perdu = !b.document!.present
+  ctx.strokeStyle = conflit || (perdu && !choisi) ? PALETTE.erreur : choisi || survole ? PALETTE.accent : COULEURS_DOCUMENT.trait
+  ctx.lineWidth = conflit || choisi ? 1.6 : survole ? 1.4 : 0.9
+  ctx.setLineDash(perdu && !choisi ? [4, 3] : [])
+}
+
+/** Silhouette du document (coin corné ou onglet), fond blanc ; le contenu vient du HTML ou du titre. */
+function dessinerDocument(ctx: CanvasRenderingContext2D, e: EtatDessin, b: Bloc, X: (x: number) => number, Y: (y: number) => number, estompe: boolean): void {
+  const z = e.cam.z
+  const x0 = Math.round(X(b.x)) + 0.5, y0 = Math.round(Y(b.y)) + 0.5
+  const w = Math.round(b.w * z) - 1, h = Math.round(b.h * z) - 1
+  const dossier = b.document!.genre === 'dossier'
+  ctx.save()
+  if (estompe) ctx.globalAlpha = 0.3
+  ctx.beginPath()
+  silhouette(ctx, x0, y0, w, h, dossier, z)
+  ctx.fillStyle = PALETTE.surface
+  ctx.fill()
+  styleDocument(ctx, e, b)
+  ctx.stroke()
+  ctx.setLineDash([])
+  ctx.lineWidth = 0.8
+  if (dossier) ctx.strokeStyle = COULEURS_DOCUMENT.filet
+  detailSilhouette(ctx, x0, y0, w, h, dossier, z)
+  // Filet sous la tête d'un fichier (l'onglet d'un dossier en tient lieu).
+  if (!dossier && z >= 0.3) {
+    const yf = Math.round(Y(b.y + TETE_DOCUMENT)) + 0.5
+    ctx.strokeStyle = COULEURS_DOCUMENT.filet
+    ctx.lineWidth = 0.6
+    ctx.beginPath()
+    ctx.moveTo(x0 + 6 * z, yf)
+    ctx.lineTo(x0 + w - 18 * z, yf)
+    ctx.stroke()
+  }
+  ctx.restore()
+}
+
+/** De très loin : une petite silhouette à la place du carré des nœuds. */
+function dessinerSilhouetteLointaine(ctx: CanvasRenderingContext2D, e: EtatDessin, b: Bloc, X: (x: number) => number, Y: (y: number) => number): void {
+  const z = e.cam.z
+  const cote = Math.max(4, Math.min(9, b.w * z * 0.2))
+  const x0 = X(b.x + b.w / 2) - cote / 2, y0 = Y(b.y + b.h / 2) - cote / 2
+  ctx.save()
+  if (e.estompes?.has(b.id)) ctx.globalAlpha = 0.3
+  ctx.beginPath()
+  silhouette(ctx, x0, y0, cote, cote, b.document!.genre === 'dossier', cote / 30)
+  ctx.fillStyle = PALETTE.surface
+  ctx.fill()
+  styleDocument(ctx, e, b)
+  ctx.lineWidth = 1
+  ctx.stroke()
+  ctx.restore()
+}
+
+/** Tête d'un document sur le canevas (vue intermédiaire, ou en attendant le HTML) : « Script 1 — simulation.py ». */
+function dessinerTitreDocument(ctx: CanvasRenderingContext2D, b: Bloc, X: (x: number) => number, Y: (y: number) => number, z: number, estompe: boolean): void {
+  const { fs } = corpsTitre(z)
+  const dossier = b.document!.genre === 'dossier'
+  ctx.save()
+  ctx.beginPath()
+  ctx.rect(X(b.x), Y(b.y), b.w * z, b.h * z)
+  ctx.clip()
+  if (estompe) ctx.globalAlpha = 0.3
+  ctx.textBaseline = 'middle'
+  ctx.textAlign = 'left'
+  ctx.fillStyle = b.document!.present ? PALETTE.encre : PALETTE.erreur
+  // De près, sur une ligne dans la tête ; de loin (titre grossi), sur deux lignes : la nature, puis le nom.
+  const deLoin = fs > TETE_DOCUMENT * z * 0.8
+  const x0 = X(b.x + 8)
+  const fin = X(b.x + b.w - (dossier ? 8 : 16))
+  const ym = deLoin ? Y(b.y + b.h / 2) - fs * 0.6 : Y(b.y + TETE_DOCUMENT / 2)
+  const mot = b.libelle
+  ctx.font = `400 ${fs}px ${SERIF}`
+  ctx.fillText(mot[0]!, x0, ym)
+  let x = x0 + ctx.measureText(mot[0]!).width
+  ctx.font = `400 ${fs * 0.78}px ${SERIF}`
+  ctx.fillText(mot.slice(1).toUpperCase(), x, ym)
+  x += ctx.measureText(mot.slice(1).toUpperCase()).width
+  ctx.font = `400 ${fs}px ${SERIF}`
+  if (deLoin) {
+    ctx.fillText(` ${b.numero}`, x, ym)
+    const nom = titreDocument(b).slice(` ${b.numero} — `.length)
+    ctx.fillText(tronquer(ctx, nom, fin - x0), x0, ym + fs * 1.2)
+  } else ctx.fillText(tronquer(ctx, titreDocument(b), fin - x), x, ym)
   ctx.restore()
 }
 

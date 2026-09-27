@@ -12,6 +12,9 @@ Ta demande est dans le message qui t'a lancé : réponds à cette question, pas 
 - Quand les sources proposent plusieurs modèles ou méthodes pour la même question, présente les options côte à
   côte, avec les arguments et les limites de chacune : le directeur de labo devra trancher.
 - Si le message t'indique un fichier ou un dossier, écris-y tes notes complètes.
+- Quand une source clé est en accès libre (arXiv, HAL, éditeur ouvert), télécharge son PDF dans
+  `../../doc_projet/sources/`, nommé `auteur-annee-sujet.pdf` (s'il n'y est pas déjà), et donne son chemin
+  (relatif au projet : `doc_projet/sources/…`) : il pourra apparaître dans le graphe.
 
 Réponse finale : une synthèse structurée (faits, références, points de désaccord, lacunes) et le chemin de tes
 notes.

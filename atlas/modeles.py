@@ -24,6 +24,7 @@ Action = Literal[
     "import",
     "vue",
     "figure",
+    "document",
 ]
 
 TypeNoeud = Literal[
@@ -236,7 +237,31 @@ class FigureVue(BaseModel):
     image_largeur: int | None
     image_hauteur: int | None
     source: str | None
+    fichier: str | None = None
+    """Fichier d'origine de l'image, relatif au dossier du projet."""
     modifie_le: datetime
+
+
+class DocumentVue(BaseModel):
+    """Table `documents` : un fichier ou un dossier du projet mis dans le graphe. Sa place est dans `placements`,
+    sous l'id `doc:<id>` ; `apercu` est calculé à l'écriture (atlas/documents.py), le graphe se lit sans disque."""
+
+    id: str
+    chemin: str
+    genre: Literal["fichier", "dossier"]
+    titre: str
+    description: str | None
+    apercu: dict[str, Any]
+    present: bool
+    modifie_le: datetime
+
+
+class LienDocumentVue(BaseModel):
+    """Lien nommé entre un document et un nœud, une figure (fig:<id>) ou un autre document (doc:<id>)."""
+
+    de: str
+    vers: str
+    relation: Literal["source", "implemente", "produit", "ecrit_dans", "entree"]
 
 
 class Vue(BaseModel):
@@ -246,3 +271,5 @@ class Vue(BaseModel):
     marques: list[list[str]]
     """[noeud_id, etiquette_id]."""
     figures: list[FigureVue] = []
+    documents: list[DocumentVue] = []
+    liens_documents: list[LienDocumentVue] = []

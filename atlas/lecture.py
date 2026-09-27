@@ -14,11 +14,13 @@ from .client import supabase
 from .modeles import (
     Demonstration,
     DetailNoeud,
+    DocumentVue,
     EntreeJournal,
     EtiquetteVue,
     FigureVue,
     Graphe,
     GroupeVue,
+    LienDocumentVue,
     LigneNoeud,
     PlacementVue,
     Vue,
@@ -116,6 +118,17 @@ def charger_etat_vue(projet_id: str) -> vue.EtatVue:
             places[fid] = vue.Placement(
                 fid, f["colonne"], f["ligne"], f["groupe_id"], f["largeur"], f["hauteur"], f["fixe"]
             )
+    # Les documents aussi (doc:<id>), avec pour prémisses les bouts de départ de leurs liens entrants.
+    entrants: dict[str, list[str]] = {}
+    for lien in lister_liens_documents(projet_id):
+        if vue.est_document(lien["vers"]):
+            entrants.setdefault(lien["vers"], []).append(lien["de"])
+    for d in lister_documents(projet_id, colonnes=COLONNES_VUE_DOCUMENT):
+        did = vue.PREFIXE_DOCUMENT + d["id"]
+        premisses = tuple((de, "auxiliaire") for de in dict.fromkeys(entrants.get(did, [])))
+        noeuds[did] = vue.NoeudVue(did, d["titre"], "document", None, premisses, detail=d["chemin"])
+        if d["colonne"] is not None:
+            places[did] = vue.Placement(did, d["colonne"], d["ligne"], d["groupe_id"], 1, 1, d["fixe"])
 
     etat = vue.EtatVue(
         noeuds=noeuds,
@@ -133,6 +146,24 @@ def charger_etat_vue(projet_id: str) -> vue.EtatVue:
 
 
 COLONNES_VUE_FIGURE = "id, noeud_id, titre, groupe_id, colonne, ligne, largeur, hauteur, fixe"
+COLONNES_VUE_DOCUMENT = "id, chemin, titre, groupe_id, colonne, ligne, fixe"
+
+
+def lister_documents(projet_id: str, *, colonnes: str = "*") -> list[dict]:
+    return supabase().table("documents").select(colonnes).eq("projet_id", projet_id).order("id").execute().data
+
+
+def lire_document(projet_id: str, document_id: str) -> dict | None:
+    lignes = supabase().table("documents").select("*").eq("projet_id", projet_id).eq("id", document_id).execute().data
+    return lignes[0] if lignes else None
+
+
+def lister_liens_documents(projet_id: str) -> list[dict]:
+    return supabase().table("liens_documents").select("de, vers, relation").eq("projet_id", projet_id).execute().data
+
+
+def document_pour_le_front(d: dict) -> DocumentVue:
+    return DocumentVue.model_validate(d)
 
 
 def lister_figures(projet_id: str, *, noeud_id: str | None = None, colonnes: str = "*") -> list[dict]:
@@ -168,11 +199,17 @@ def figure_pour_le_front(f: dict) -> FigureVue:
         image_largeur=f["image_largeur"],
         image_hauteur=f["image_hauteur"],
         source=f["source"],
+        fichier=f.get("fichier"),
         modifie_le=f["modifie_le"],
     )
 
 
-def vue_pour_le_front(etat: vue.EtatVue, figures_de_l_espace: list[dict] | None = None) -> Vue:
+def vue_pour_le_front(
+    etat: vue.EtatVue,
+    figures_de_l_espace: list[dict] | None = None,
+    documents_de_l_espace: list[dict] | None = None,
+    liens_documents: list[dict] | None = None,
+) -> Vue:
     groupes = []
     for g in etat.groupes.values():
         r = vue.rect_groupe(etat, g.id)
@@ -205,4 +242,6 @@ def vue_pour_le_front(etat: vue.EtatVue, figures_de_l_espace: list[dict] | None 
         etiquettes=[EtiquetteVue(id=e.id, nom=e.nom, couleur=e.couleur) for e in etat.etiquettes.values()],
         marques=[list(m) for m in sorted(etat.marques)],
         figures=[figure_pour_le_front(f) for f in figures_de_l_espace or []],
+        documents=[document_pour_le_front(d) for d in documents_de_l_espace or []],
+        liens_documents=[LienDocumentVue.model_validate(lien) for lien in liens_documents or []],
     )

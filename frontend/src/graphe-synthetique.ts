@@ -3,7 +3,7 @@
 // Quelques figures vectorielles (mesures, lois et bandes, échelles log) y sont jointes. Lecture seule : rien n'est écrit
 // en base.
 
-import type { Demonstration, FigureVue, Graphe, GroupeVue, Noeud, PlacementVue, RolePremisse, Statut, TypeNoeud, Vue } from './api'
+import type { Demonstration, DocumentVue, FigureVue, Graphe, GroupeVue, LienDocumentVue, Noeud, PlacementVue, RolePremisse, Statut, TypeNoeud, Vue } from './api'
 
 const TYPES: TypeNoeud[] = ['lemme', 'proposition', 'lemme', 'assertion', 'calcul', 'observation', 'theoreme', 'definition']
 const STATUTS: Statut[] = ['etabli', 'etabli', 'a_verifier', 'a_verifier', 'suspendu', 'invalide', 'ouvert']
@@ -125,7 +125,36 @@ export function jeuSynthetique(n: number): { graphe: Graphe; vue: Vue } {
       largeur: 3, hauteur: 2, fixe: false,
     })
   }
-  return { graphe: { noeuds, aretes }, vue: { groupes, placements, etiquettes: [], marques: [], figures } }
+  // Documents : un script, son dossier de résultats, un article, des données (dont une introuvable), au chapitre 1.
+  const documents: DocumentVue[] = []
+  const liens_documents: LienDocumentVue[] = []
+  if (parId.has('n7') && figures[0]) {
+    const doc = (id: string, chemin: string, genre: DocumentVue['genre'], apercu: DocumentVue['apercu'], colonne: number, ligne: number, present = true) => {
+      documents.push({ id, chemin, genre, titre: id, description: null, apercu, present, modifie_le: '2026-09-28T00:00:00Z' })
+      placements.push({ noeud_id: `doc:${id}`, groupe_id: 'ch0', colonne, ligne, largeur: 1, hauteur: 1, fixe: false })
+    }
+    doc('simulation', 'scripts_projet/double-pendule/simulation.py', 'fichier', {
+      nature: 'script', lignes: 142, extrait: [
+        '"""Double pendule : RK4, pas fixe."""', 'def derivees(etat, m1, m2, l1, l2, g):', '    t1, w1, t2, w2 = etat',
+        '    d = t2 - t1', '    ...', 'def integrer(etat0, dt=1e-3, T=30):',
+      ],
+    }, 3, 6)
+    doc('resultats', 'scripts_projet/double-pendule/resultats', 'dossier', {
+      nature: 'dossier', entrees: ['trajectoire.gif', 'energie.png', 'energie.csv', 'trajectoire.csv', 'params.json'],
+      autres: 3, fichiers: 9, dossiers: 0,
+    }, 4, 6)
+    doc('shinbrot', 'doc_projet/sources/shinbrot-1992.pdf', 'fichier', {
+      nature: 'document', pages: 12, titre_pdf: 'Chaos in a double pendulum',
+    }, 3, 7)
+    doc('mesures', 'scripts_projet/double-pendule/mesures.csv', 'fichier', { nature: 'donnees', colonnes: ['t', 'theta1'] }, 4, 7, false)
+    liens_documents.push(
+      { de: 'n7', vers: 'doc:simulation', relation: 'implemente' },
+      { de: 'doc:simulation', vers: 'doc:resultats', relation: 'ecrit_dans' },
+      { de: 'doc:simulation', vers: `fig:${figures[0].id}`, relation: 'produit' },
+      { de: 'doc:shinbrot', vers: 'doc:mesures', relation: 'source' },
+    )
+  }
+  return { graphe: { noeuds, aretes }, vue: { groupes, placements, etiquettes: [], marques: [], figures, documents, liens_documents } }
 }
 
 /** Figure vectorielle synthétique, de quatre sortes : chute (loi et bande), loi de puissance (log-log), deux séries

@@ -118,6 +118,20 @@ export class VueDocuments {
     if (this.visible) void this.charger()
   }
 
+  /** Montre un fichier du projet (chemin relatif au projet) : déplie ses dossiers et ouvre son aperçu. */
+  async ouvrir(chemin: string) {
+    const parties = chemin.split('/')
+    for (let i = 1; i < parties.length; i++) this.ouverts.add(parties.slice(0, i).join('/'))
+    if (!this.aJour) await this.charger()
+    const n = this.noeud(chemin)
+    if (n?.type === 'dossier') {
+      this.ouverts.add(chemin)
+      this.choisi = chemin
+      this.dessiner()
+    } else await this.montrer(chemin)
+    this.arbreEl.querySelector(`[data-chemin="${CSS.escape(chemin)}"]`)?.scrollIntoView({ block: 'nearest' })
+  }
+
   afficher(visible: boolean) {
     this.visible = visible
     if (visible && !this.aJour) void this.charger()

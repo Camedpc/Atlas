@@ -54,7 +54,9 @@ def vue_du_graphe(
     etat = lecture.charger_etat_vue(projet)
     if format == "texte":
         return PlainTextResponse(vue.rendre_texte(etat))
-    return lecture.vue_pour_le_front(etat, lecture.lister_figures(projet))
+    return lecture.vue_pour_le_front(
+        etat, lecture.lister_figures(projet), lecture.lister_documents(projet), lecture.lister_liens_documents(projet)
+    )
 
 
 @routeur.get("/figures/{figure_id}/image")

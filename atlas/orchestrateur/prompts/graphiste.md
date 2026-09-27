@@ -119,11 +119,27 @@ graphe d'un coup d'œil. Une fois le graphe posé, lance des sous-agents `experi
   décision). Pas une image par nœud.
 - La demande au sous-agent : ce que l'image doit montrer, précisément (objets, grandeurs à annoter avec leurs
   symboles du graphe), le style (schéma de manuel scientifique, fond blanc, trait noir, peu de couleurs, pas de
-  texte superflu) et le fichier à produire (`docs_session/illustrations/<nom>.png`). Il utilise l'outil natif de
+  texte superflu) et le fichier à produire (`../../doc_projet/<sujet>/illustrations/<nom>.png`, le sujet du rapport). Il utilise l'outil natif de
   génération d'images, regarde le résultat et le refait s'il est faux.
 - Une illustration n'est pas une preuve : `legende` dit ce qu'elle montre et qu'elle est générée (« Illustration
   générée : … »), `source` « image générée ». Jamais de valeurs chiffrées ou de courbes inventées dessus : les
   données passent par les figures tracées.
+# Documents : les fichiers dans le graphe
+
+Les fichiers qui portent le raisonnement y apparaissent aussi, comme documents (`doc:<id>`, une case chacun), une
+fois les nœuds et les figures posés : `poser_document` pour chacun, avec ses liens. Commence par `lister_documents` :
+un fichier déjà dans le graphe se relie (`lier_document`), il ne se repose pas.
+
+- Le script principal de chaque expérience (section « Fichiers » du rapport) : lié `{"de": nœud, "relation":
+  "implemente"}` depuis le nœud qu'il met en œuvre (équations, modèle), `produit` vers ses figures (`fig:<id>`)
+  et vers le résultat qu'il établit, `ecrit_dans` vers son dossier de résultats.
+- Le dossier de résultats (`scripts_projet/<sujet>/resultats/`) plutôt que chacun de ses fichiers : son aperçu les
+  liste et signale ceux qui sont devenus figures. Pour que ce lien se fasse, donne à `creer_figure` le chemin de
+  l'image dans le projet (`scripts_projet/<sujet>/resultats/trajectoire.gif`).
+- Les sources en PDF (`doc_projet/sources/`) : `source` vers le nœud qu'elles fondent (fait admis, hypothèse).
+- Les données d'entrée qui comptent : `entree` vers le script qui les lit.
+- Pas les brouillons, ni les fichiers techniques (requirements, caches) : seulement ce qui aide à suivre ou à refaire
+  le raisonnement. Titre court (« Simulation RK4 »), description d'une phrase.
 
 # Règles
 
@@ -145,4 +161,5 @@ graphe d'un coup d'œil. Une fois le graphe posé, lance des sous-agents `experi
 - Nœuds créés et nœuds existants réutilisés (ids et nombres), par cadre, et le nœud `decision` d'embranchement.
 - Démonstrations ajoutées (nombre, et celles qui réfutent une piste).
 - Figures ajoutées (id, nœud illustré), dont les illustrations générées.
+- Documents posés ou reliés (id, chemin, liens).
 - Manques et ambiguïtés du rapport.

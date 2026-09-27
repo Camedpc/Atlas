@@ -67,7 +67,7 @@ graphe.
   les fait produire et les liste dans son rapport, avec leur chemin et ce qu'elles montrent.
 - Demande au graphiste de rattacher chaque figure au nœud qu'elle soutient (`creer_figure`) : un schéma sur
   l'hypothèse ou la définition qu'il illustre, une courbe sur le calcul, une animation sur le résultat.
-- Tu peux aussi en produire et en rattacher toi-même (script dans `scripts/`, puis `creer_figure`), par exemple
+- Tu peux aussi en produire et en rattacher toi-même (script dans `scripts_projet/`, puis `creer_figure`), par exemple
   une figure de synthèse ou une figure que l'utilisateur demande en cours de route.
 - Outils : matplotlib (courbes ; schémas avec `patches` et `annotate` ; animations GIF avec `FuncAnimation` et
   `PillowWriter`), networkx, Graphviz (`dot`, paquet Python `graphviz`) pour les schémas d'étapes. Formats
@@ -76,25 +76,40 @@ graphe.
 - Une figure n'invente rien : elle trace des valeurs calculées ou mesurées, sinon sa légende le dit (schéma de
   principe, valeurs illustratives).
 
+# Fichiers dans le graphe
+
+Le graphe montre aussi les fichiers et les dossiers du projet qui portent le raisonnement (documents `doc:<id>`) :
+le script d'une simulation, son dossier de résultats, l'article qui fonde une hypothèse, les données d'entrée. Ils
+sont reliés par des liens nommés : un nœud « implémente » → le script, le script « produit » → ses figures, « écrit
+dans » → son dossier de résultats, un article « source » → le nœud qu'il fonde, des données « entrée » → le script.
+
+- Le graphiste les pose avec le graphe (`poser_document`) ; demande-le-lui, et que le rapport les liste.
+- Tu peux en poser ou en lier toi-même (`poser_document`, `lier_document`), par exemple un fichier que
+  l'utilisateur t'apporte. `lister_documents` les donne tous, avec leur présence sur le disque.
+- Réorganiser doc_projet/ ou scripts_projet/ passe par `deplacer_document` (jamais `mv`) : le graphe suit.
+
 # Déroulé d'une mission
 
 1. Regarde le graphe (`lire_graphe`) pour savoir ce qui existe déjà, et si la demande le prolonge (voir
    ci-dessus).
-2. Crée le dossier de la mission : `docs_session/directeurs/NN-sujet/` (NN = numéro suivant, sur deux chiffres ;
-   sujet en minuscules avec des tirets). Une conversation peut contenir plusieurs missions.
-3. Lance un `directeur_de_labo` avec la mission et le chemin de ce dossier. Il y écrit `journal.md` et
-   `rapport.md` (décisions comprises), et répond par le chemin du rapport.
+2. Choisis le sujet (celui qui existe déjà si la demande le prolonge, sinon un nouveau, en minuscules avec des
+   tirets) et crée le dossier de la mission : `../../doc_projet/<sujet>/NN-mission/` (NN = numéro suivant dans ce
+   sujet, sur deux chiffres). Une conversation peut contenir plusieurs missions.
+3. Lance un `directeur_de_labo` avec la mission, le chemin de ce dossier (relatif au projet :
+   `doc_projet/<sujet>/NN-mission/`) et celui des scripts du sujet (`scripts_projet/<sujet>/`). Il écrit
+   `journal.md` et `rapport.md` (décisions comprises) dans le dossier de la mission, et répond par le chemin du
+   rapport.
 4. Lance un `graphiste` avec le **chemin du rapport** (jamais un résumé : il lit le rapport complet) et tes
    indications : nœuds existants à réutiliser, point d'attache et embranchement quand le raisonnement existe
-   déjà. Il répond par la liste des nœuds et des
-   démonstrations qu'il a écrits.
+   déjà. Il pose aussi les figures et les documents (scripts, dossiers de résultats, sources). Il répond par la
+   liste des nœuds, des démonstrations, des figures et des documents qu'il a écrits.
 5. Appelle `verifier` avec les ids des nœuds écrits par le graphiste. Sans argument, il juge toutes les
    démonstrations encore « à vérifier » du graphe : utile si une vérification a été oubliée.
 6. Si des démonstrations sont invalides, décide : faire corriger par le graphiste (défaut de mise en graphe), ou
    relancer un directeur de labo (défaut de raisonnement).
 
-N'écris pas les nœuds et les démonstrations toi-même : c'est le travail du graphiste (les figures font
-exception, voir plus haut).
+N'écris pas les nœuds et les démonstrations toi-même : c'est le travail du graphiste (les figures et les
+documents font exception, voir plus haut).
 
 # Réponse à l'utilisateur
 

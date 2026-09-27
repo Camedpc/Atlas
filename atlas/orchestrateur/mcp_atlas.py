@@ -14,7 +14,7 @@ from typing import Any, Literal
 from mcp.server.mcpserver import Image, MCPServer
 from pydantic import BaseModel, Field
 
-from .. import decisions, ecriture, figures, lecture, vue
+from .. import decisions, documents, ecriture, figures, lecture, vue
 from ..modeles import TypeNoeud
 
 LONGUEUR_MAX_ENONCE = 300
@@ -44,6 +44,23 @@ def _projet() -> str:
     if not projet_id:
         raise ecriture.ErreurGraphe("ATLAS_PROJET_ID absent : le serveur MCP atlas ne sait pas quel graphe lire.")
     return projet_id
+
+
+def _session() -> Path:
+    return Path(os.environ.get("ATLAS_DOSSIER_SESSION") or ".").resolve()
+
+
+def _racine() -> Path:
+    """Le dossier de l'espace (projet) : sessions/<id>/ → <projet>/."""
+    return _session().parent.parent
+
+
+def _chemin(chemin: str) -> str:
+    """Chemin relatif au projet, donné relatif au projet (doc_projet/…, scripts_projet/…) ou à la session."""
+    try:
+        return documents.normaliser(chemin, f"sessions/{_session().name}")
+    except documents.ErreurDocument as e:
+        raise ecriture.ErreurGraphe(str(e)) from None
 
 
 @serveur.tool()
@@ -278,14 +295,14 @@ def organiser_vue(operations: list[dict[str, Any]], essai: bool = False) -> str:
 
 
 def _lire_fichier_image(chemin: str) -> bytes:
-    """Un fichier de la session (chemin relatif à son dossier) ou de son espace : rien au-delà."""
-    session = Path(os.environ.get("ATLAS_DOSSIER_SESSION") or ".").resolve()
-    fichier = (session / chemin).resolve()
-    permis = session.parent.parent  # le dossier de l'espace : sessions/<id>/ → <projet>/
-    if not fichier.is_relative_to(permis):
-        raise ecriture.ErreurGraphe(f"Image hors de l'espace de travail : {chemin}.")
+    """Un fichier de l'espace (chemin relatif au projet ou à la session) : rien au-delà."""
+    relatif = _chemin(chemin)
+    try:
+        fichier = documents.sur_disque(_racine(), relatif)
+    except documents.ErreurDocument as e:
+        raise ecriture.ErreurGraphe(str(e)) from None
     if not fichier.is_file():
-        raise ecriture.ErreurGraphe(f"Image introuvable : {fichier} (chemin relatif au dossier de la session).")
+        raise ecriture.ErreurGraphe(f"Image introuvable : {relatif} (chemin relatif au projet ou à la session).")
     return fichier.read_bytes()
 
 
@@ -310,8 +327,9 @@ def creer_figure(
     son nœud (fig:<id> dans lire_vue). Un GIF ou un WebP animé est joué dans le graphe.
 
     - id : minuscules, chiffres et _ ; titre : court ; legende : ce que montre la figure, Markdown + LaTeX.
-    - image : chemin d'un PNG, JPEG, GIF ou WebP, 10 Mo au plus (relatif au dossier de la session, ex.
-      docs_session/v_t.png). Pas de SVG : exporte les schémas en PNG (dpi 200, fond blanc).
+    - image : chemin d'un PNG, JPEG, GIF ou WebP, 10 Mo au plus, relatif au projet (ex.
+      scripts_projet/chute/resultats/v_t.png) ou à la session. Pas de SVG : exporte les schémas en PNG (dpi 200,
+      fond blanc). Le fichier d'origine est retenu : deplacer_document le suit.
     - trace : {"x": {"titre": "$t$", "unite": "s", "echelle": "lin" | "log", "min"?, "max"?}, "y": {…},
       "series": [
         {"genre": "mesures", "nom": …, "points": [[x, y], [x, y, σy], [x, y, σy, σx]], "source"?: fichier},
@@ -336,6 +354,7 @@ def creer_figure(
         trace=trace,
         image=donnees,
         source=source,
+        fichier=_chemin(image) if image else None,
         groupe=groupe or None,
         largeur=largeur or None,
         hauteur=hauteur or None,
@@ -368,3 +387,110 @@ def lire_figure(id: str) -> list[str | Image]:
 
 if __name__ == "__main__":
     serveur.run("stdio")
+
+
+# ── Documents ────────────────────────────────────────────────────────────────
+
+
+class LienDocument(BaseModel):
+    """Un lien nommé du document : « vers » (du document vers un nœud, fig:<id> ou doc:<id>) ou « de » (vers le
+    document)."""
+
+    relation: Literal["source", "implemente", "produit", "ecrit_dans", "entree"]
+    vers: str | None = None
+    de: str | None = None
+
+
+@serveur.tool()
+def poser_document(
+    chemin: str,
+    id: str,
+    titre: str,
+    description: str = "",
+    liens: list[LienDocument] | None = None,
+    groupe: str = "",
+    remplacer: bool = False,
+) -> str:
+    """Met dans le graphe un fichier ou un dossier du projet déjà écrit (script, PDF, données, dossier de
+    résultats), sous l'id doc:<id>, avec ses liens nommés. Il prend une case de la vue, à droite de ce qui pointe
+    vers lui (dans `groupe` s'il est donné). Son aperçu (premières lignes, colonnes, pages, contenu du dossier) est
+    lu sur le disque.
+
+    - chemin : relatif au projet (doc_projet/…, scripts_projet/…) ou à ta session.
+    - id : minuscules, chiffres et _ ; titre : court (« Simulation RK4 ») ; description : à quoi il sert.
+    - liens : relations « source » (un article ou une donnée → le nœud qu'il fonde), « implemente » (nœud → le
+      script qui le met en œuvre : {"de": noeud}), « produit » (script → figure, résultat ou fichier qu'il
+      produit), « ecrit_dans » (script → dossier de sorties), « entree » (données → le script qui les lit).
+      Ex. pour un script : [{"de": "def_equations", "relation": "implemente"}, {"vers": "fig:trajectoire",
+      "relation": "produit"}, {"vers": "doc:resultats", "relation": "ecrit_dans"}].
+    - remplacer : vrai pour relire l'aperçu et changer titre ou description (les liens donnés s'ajoutent).
+    Ne déplace jamais un fichier du graphe à la main (mv) : utilise deplacer_document."""
+    ligne = ecriture.poser_document(
+        projet_id=_projet(),
+        racine=_racine(),
+        chemin=_chemin(chemin),
+        id=id.removeprefix(vue.PREFIXE_DOCUMENT),
+        titre=titre,
+        auteur=AUTEUR,
+        description=description,
+        liens=[lien.model_dump(exclude_none=True) for lien in liens or []],
+        groupe=groupe or None,
+        conversation_id=os.environ.get("ATLAS_CONVERSATION_ID") or None,
+        remplacer=remplacer,
+    )
+    reponse = {"ok": True, "document": vue.PREFIXE_DOCUMENT + ligne["id"], "chemin": ligne["chemin"]}
+    return json.dumps(reponse | {"apercu": ligne["apercu"]}, ensure_ascii=False)
+
+
+@serveur.tool()
+def lier_document(de: str, vers: str, relation: str, retirer: bool = False) -> str:
+    """Ajoute (ou retire, retirer=true) un lien nommé entre un document (doc:<id>) et un nœud, une figure
+    (fig:<id>) ou un autre document. Relations : source, implemente, produit, ecrit_dans, entree (voir
+    poser_document)."""
+    ecriture.lier_document(projet_id=_projet(), de=de, vers=vers, relation=relation, auteur=AUTEUR, retirer=retirer)
+    return json.dumps({"ok": True, "lien": [de, vers, relation], "retire": retirer}, ensure_ascii=False)
+
+
+@serveur.tool()
+def deplacer_document(de: str, vers: str) -> str:
+    """Déplace ou renomme un fichier ou un dossier du projet (dans le graphe ou non), et met à jour d'un coup tout
+    ce qui en dépend : chemins des documents (lui et ce qu'il contient), fichiers d'origine et sources des figures.
+    C'est la seule façon de réorganiser doc_projet/ et scripts_projet/ : jamais de mv à la main, qui casserait le
+    graphe. Refuse d'écraser ; les dossiers parents de la destination sont créés. Chemins relatifs au projet (ou à
+    ta session). Pense à corriger ensuite les chemins cités dans tes scripts et rapports."""
+    resume = ecriture.deplacer_document(
+        projet_id=_projet(), racine=_racine(), de=_chemin(de), vers=_chemin(vers), auteur=AUTEUR
+    )
+    return json.dumps({"ok": True, **resume}, ensure_ascii=False)
+
+
+@serveur.tool()
+def retirer_document(id: str) -> str:
+    """Retire un document du graphe (sa case et ses liens). Le fichier reste sur le disque."""
+    ecriture.retirer_document(projet_id=_projet(), id=id, auteur=AUTEUR)
+    return json.dumps({"ok": True, "retire": id})
+
+
+@serveur.tool()
+def lister_documents() -> str:
+    """Les documents du graphe : id (doc:<id>), chemin, genre, titre, présence sur le disque (relue maintenant),
+    aperçu, et leurs liens nommés [de, relation, vers]."""
+    projet = _projet()
+    ecriture.rafraichir_documents(projet, _racine())
+    liens = lecture.lister_liens_documents(projet)
+    resultat = []
+    for d in lecture.lister_documents(projet):
+        did = vue.PREFIXE_DOCUMENT + d["id"]
+        resultat.append(
+            {
+                "id": did,
+                "chemin": d["chemin"],
+                "genre": d["genre"],
+                "titre": d["titre"],
+                "description": d["description"],
+                "present": d["present"],
+                "apercu": d["apercu"],
+                "liens": [[x["de"], x["relation"], x["vers"]] for x in liens if did in (x["de"], x["vers"])],
+            }
+        )
+    return json.dumps(resultat, ensure_ascii=False)
