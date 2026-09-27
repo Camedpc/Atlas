@@ -3,11 +3,12 @@
 Vidéo de 1 min 59,8 s en 1920×1080 à 60 i/s, montée avec [Remotion](https://www.remotion.dev) (React) à partir de
 captures du vrai produit. Dernière version : `out/Atlas-presentation.mp4`.
 
-Le dossier est hors de OneDrive exprès (`node_modules` et des milliers d'images).
+Pour travailler, copier ce dossier hors de OneDrive (`node_modules` et des milliers d'images) : la copie de travail
+de Camille est `C:\Users\Camille\Videos\atlas-film`.
 
 ## Après un clone
 
-La vidéo finale est jointe aux releases GitHub (trop lourde pour le dépôt). Les images capturées ne sont pas
+La vidéo finale (99 Mo, trop lourde pour le dépôt) est dans `out/` de la copie de travail. Les images capturées ne sont pas
 versionnées telles quelles : elles sont dans `media/` sous forme de vidéos 4K compactes.
 
 ```bash

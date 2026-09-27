@@ -14,6 +14,7 @@ Harness de hackathon : des agents IA transforment leurs raisonnements scientifiq
 | `api/index.py` | Lecture seule, déployée comme fonction Python sur Vercel |
 | `frontend/` | Interface : espace et sessions à gauche, conversation et arbre des agents au centre, graphe de raisonnement (éditable à la souris, bouton « ? »), agent graph ou documents à droite |
 | `tests/` | Tests Python (sans réseau) |
+| `film/` | Film de présentation (Remotion, captures du vrai produit) : voir `film/README.md` |
 
 ## API
 
