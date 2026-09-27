@@ -234,7 +234,7 @@ class FigureVue(BaseModel):
     image_largeur: int | None
     image_hauteur: int | None
     scene: bool = False
-    """Vrai si la figure est une scène 3D animée (Plotly), l'image étant sa vignette."""
+    """Vrai si la figure est une scène 3D animée (Plotly), servie par GET /api/figures/{id}/scene?projet_id=."""
     source: str | None
     modifie_le: datetime
 

@@ -68,3 +68,16 @@ def image_de_figure(figure_id: str, projet_id: str | None = None) -> Response:
         media_type=figure["image_type"],
         headers={"Cache-Control": "private, max-age=86400", "X-Content-Type-Options": "nosniff"},
     )
+
+
+@routeur.get("/figures/{figure_id}/scene")
+def scene_de_figure(figure_id: str, projet_id: str | None = None) -> Response:
+    """La scène 3D d'une figure (JSON Plotly vérifié, voir atlas/figures3d.py) ; ?v= contourne le cache."""
+    figure = lecture.lire_figure(projets.id_ou_defaut(projet_id), figure_id)
+    if figure is None or not figure.get("scene_chemin"):
+        raise HTTPException(404, f"Figure sans scène 3D : {figure_id}")
+    return Response(
+        lecture.lire_scene_figure(figure["scene_chemin"]),
+        media_type="application/json",
+        headers={"Cache-Control": "private, max-age=86400", "X-Content-Type-Options": "nosniff"},
+    )

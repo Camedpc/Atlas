@@ -145,6 +145,11 @@ def lire_image_figure(chemin: str) -> bytes:
     return supabase().storage.from_("figures").download(chemin)
 
 
+def lire_scene_figure(chemin: str) -> bytes:
+    """Le JSON d'une scène 3D (bucket « figures »), tel que figures3d.serialiser l'a écrit."""
+    return supabase().storage.from_("figures").download(chemin)
+
+
 def figure_pour_le_front(f: dict) -> FigureVue:
     trace = f["trace"]
     if trace is not None:
@@ -161,6 +166,8 @@ def figure_pour_le_front(f: dict) -> FigureVue:
         image=f["image_chemin"] is not None,
         image_largeur=f["image_largeur"],
         image_hauteur=f["image_hauteur"],
+        # .get : la vue reste lisible sur une base où la migration des figures 3D n'est pas encore passée.
+        scene=f.get("scene_chemin") is not None,
         source=f["source"],
         modifie_le=f["modifie_le"],
     )

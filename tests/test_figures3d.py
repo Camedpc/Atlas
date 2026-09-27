@@ -1,5 +1,5 @@
 """Figures 3D : vérification et résumé de la scène Plotly, et exécution du script par Atlas (processus à part,
-environnement sans secrets, durée bornée). L'essai complet (plotly + kaleido + Chrome) est sauté s'ils manquent."""
+environnement sans secrets, durée bornée). L'essai complet du pendule est sauté si plotly manque."""
 
 import base64
 import importlib.util
@@ -157,21 +157,148 @@ def test_script_trop_long_arrete(session):
         figure3d.produire(script, session, delai=1)
 
 
-@pytest.mark.skipif(
-    not (importlib.util.find_spec("plotly") and importlib.util.find_spec("kaleido")), reason="plotly et kaleido absents"
-)
-def test_pendule_produit_une_scene_et_sa_vignette(session):
+@pytest.mark.skipif(not importlib.util.find_spec("plotly"), reason="plotly absent")
+def test_pendule_produit_une_scene(session):
     shutil.copy(DONNEES / "pendule3d.py", session / "scripts" / "pendule3d.py")
-    try:
-        production = figure3d.produire("scripts/pendule3d.py", session)
-    except ErreurScript as e:
-        if "Vignette impossible" in str(e):
-            pytest.skip("Chrome introuvable pour kaleido")
-        raise
+    production = figure3d.produire("scripts/pendule3d.py", session)
     figure = production.scene["figure"]
     assert production.scene["atlas"]["fps"] == 20
     assert 30 <= len(figure["frames"]) <= 50  # une période d'environ 2 s
     assert [t["type"] for t in figure["data"]] == ["scatter3d"] * 4
-    assert production.vignette.startswith(b"\x89PNG")
     assert production.script.startswith('"""Figure 3D d\'exemple')
     assert "Scène 3D animée" in figures3d.resumer_scene(production.scene)
+
+
+# ─── Écriture et outil MCP (Supabase remplacé) ───────────────────────────────
+
+PNG = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x02\xd0\x00\x00\x01\xe0" + b"\x00" * 16
+
+
+class FauxSupabase:
+    """Enregistre les envois au bucket et les écritures de la table figures ; le journal est gardé à part."""
+
+    def __init__(self):
+        self.envois: list[tuple[str, bytes, dict]] = []
+        self.retraits: list[str] = []
+        self.ecrits: list[tuple[str, dict]] = []
+        self.journal: list[dict] = []
+
+    @property
+    def storage(self):
+        return type("Stockage", (), {"from_": lambda _s, b: self})()
+
+    def upload(self, chemin, donnees, options):
+        self.envois.append((chemin, donnees, options))
+
+    def remove(self, chemins):
+        self.retraits.extend(chemins)
+
+    def table(self, nom):
+        faux = self
+
+        class Requete:
+            def insert(self, ligne):
+                (faux.journal if nom == "journal" else faux.ecrits).append(("insert", ligne))
+                return self
+
+            def update(self, ligne):
+                faux.ecrits.append(("update", ligne))
+                return self
+
+            def eq(self, *_):
+                return self
+
+            def execute(self):
+                return None
+
+        return Requete()
+
+
+@pytest.fixture
+def base(monkeypatch):
+    from atlas import ecriture, lecture, vue
+
+    faux = FauxSupabase()
+    ancienne: dict = {}
+    monkeypatch.setattr(ecriture, "supabase", lambda: faux)
+    monkeypatch.setattr(ecriture, "_existants", lambda _p, ids: set(ids))
+    monkeypatch.setattr(ecriture, "_ecrire_placements", lambda *_: None)
+    monkeypatch.setattr(lecture, "lire_figure", lambda _p, _id: ancienne.get("ligne"))
+    monkeypatch.setattr(lecture, "charger_etat_vue", lambda _p: vue.EtatVue(noeuds={"obs": vue.NoeudVue("obs", "Obs")}))
+    faux.ancienne = ancienne
+    return faux
+
+
+def _creer(**champs):
+    from atlas import ecriture
+
+    return ecriture.creer_figure(projet_id="p", id="pendule", noeud_id="obs", titre="Pendule", auteur="a", **champs)
+
+
+def test_ecriture_d_une_scene_et_de_son_script(base):
+    scene = figures3d.valider_scene(_scene())
+    _creer(scene=scene, script="fig = …", source="scripts/p.py")
+    assert [(c, o["content-type"]) for c, _, o in base.envois] == [("p/pendule.json", "application/json")]
+    assert json.loads(base.envois[0][1]) == scene
+    [(genre, ligne)] = base.ecrits
+    assert genre == "insert" and ligne["scene_chemin"] == "p/pendule.json" and ligne["scene_script"] == "fig = …"
+    # Le script reste en base, pas dans le journal.
+    [(_, entree)] = base.journal
+    assert "scene_script" not in entree["apres"] and entree["apres"]["scene_chemin"] == "p/pendule.json"
+
+
+def test_une_figure_2d_n_ecrit_pas_les_colonnes_des_scenes(base):
+    _creer(image=PNG)
+    [(_, ligne)] = base.ecrits
+    assert "scene_chemin" not in ligne and "scene_script" not in ligne
+
+
+def test_remplacer_une_scene_par_une_figure_2d_retire_ses_fichiers(base):
+    base.ancienne["ligne"] = {"image_chemin": "p/pendule.png", "scene_chemin": "p/pendule.json", "version": 3}
+    trace = {
+        "x": {"titre": "t"},
+        "y": {"titre": "E"},
+        "series": [{"genre": "courbe", "nom": "E", "points": [[0, 1], [1, 2]]}],
+    }
+    _creer(trace=trace, remplacer=True)
+    assert base.retraits == ["p/pendule.png", "p/pendule.json"]
+    [(genre, ligne)] = base.ecrits
+    assert genre == "update" and ligne["scene_chemin"] is None and ligne["scene_script"] is None
+
+
+def test_une_scene_sans_script_est_refusee(base):
+    from atlas.ecriture import ErreurGraphe
+
+    with pytest.raises(ErreurGraphe, match="script"):
+        _creer(scene=figures3d.valider_scene(_scene()))
+
+
+def test_outil_mcp_execute_le_script_puis_ecrit_la_figure(monkeypatch, tmp_path):
+    from atlas import ecriture
+    from atlas.orchestrateur import mcp_atlas
+
+    monkeypatch.setenv("ATLAS_PROJET_ID", "p")
+    monkeypatch.setenv("ATLAS_DOSSIER_SESSION", str(tmp_path))
+    scene = figures3d.valider_scene(_scene())
+    appels = {}
+    monkeypatch.setattr(
+        figure3d,
+        "produire",
+        lambda script, session: (
+            appels.setdefault("produire", (script, session)) and figure3d.Production(scene=scene, script="fig = …")
+        ),
+    )
+    monkeypatch.setattr(ecriture, "creer_figure", lambda **k: appels.setdefault("creer", k))
+    reponse = json.loads(mcp_atlas.creer_figure_3d("pendule", "obs", "Pendule", "scripts/p.py", groupe="exp"))
+    assert appels["produire"] == ("scripts/p.py", tmp_path.resolve())
+    k = appels["creer"]
+    assert (k["scene"], k["script"], k["source"], k["groupe"]) == (scene, "fig = …", "scripts/p.py", "exp")
+    assert "image" not in k
+    assert reponse["vue"] == "fig:pendule" and reponse["scene"].startswith("Scène 3D animée")
+
+    def echoue(*_):
+        raise ErreurScript("Le script a échoué (code 1) :\nValueError: raté")
+
+    monkeypatch.setattr(figure3d, "produire", echoue)
+    with pytest.raises(ecriture.ErreurGraphe, match="ValueError: raté"):
+        mcp_atlas.creer_figure_3d("pendule", "obs", "Pendule", "scripts/p.py")

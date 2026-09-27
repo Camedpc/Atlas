@@ -8,7 +8,7 @@ import re
 from dataclasses import replace
 from typing import Any
 
-from . import figures, lecture, vue
+from . import figures, figures3d, lecture, vue
 from .client import supabase
 from .modeles import Action, TypeNoeud, Validite
 
@@ -351,14 +351,20 @@ def creer_figure(
     hauteur: int | None = None,
     conversation_id: str | None = None,
     remplacer: bool = False,
+    scene: dict | None = None,
+    script: str | None = None,
 ) -> dict:
     """Crée (ou remplace) une figure qui illustre `noeud_id`, puis la place dans la vue : dans `groupe` s'il est
-    donné, sinon dans le cadre de son nœud, juste à droite de lui. Remplacer garde sa case et son cadre."""
+    donné, sinon dans le cadre de son nœud, juste à droite de lui. Remplacer garde sa case et son cadre.
+
+    `scene` : scène 3D déjà vérifiée (figures3d.valider_scene), avec le `script` qui l'a produite."""
     verifier_id(id)
     if not titre.strip():
         raise ErreurGraphe("Une figure a besoin d'un titre.")
-    if trace is None and image is None:
+    if trace is None and image is None and scene is None:
         raise ErreurGraphe("Une figure est un tracé (trace), une image, ou les deux.")
+    if scene is not None and not script:
+        raise ErreurGraphe("Une scène 3D a besoin du script qui l'a produite.")
     try:
         trace = figures.valider_trace(trace) if trace is not None else None
         examen = figures.examiner_image(image) if image is not None else None
@@ -402,15 +408,32 @@ def creer_figure(
             chemin, image, {"content-type": mime, "upsert": "true", "cache-control": "3600"}
         )
         ligne |= {"image_chemin": chemin, "image_type": mime, "image_largeur": l, "image_hauteur": h}
-    if ancienne is not None and ancienne["image_chemin"] and ancienne["image_chemin"] != ligne["image_chemin"]:
-        supabase().storage.from_("figures").remove([ancienne["image_chemin"]])
+    if scene is not None:
+        chemin = f"{projet_id}/{id}.json"
+        supabase().storage.from_("figures").upload(
+            chemin,
+            figures3d.serialiser(scene),
+            {"content-type": "application/json", "upsert": "true", "cache-control": "3600"},
+        )
+        ligne |= {"scene_chemin": chemin, "scene_script": script}
+    elif ancienne is not None and ancienne.get("scene_chemin"):
+        # Colonnes écrites seulement quand il y a une scène : les figures 2D marchent sans la migration des scènes.
+        ligne |= {"scene_chemin": None, "scene_script": None}
+    if ancienne is not None:
+        perimes = [
+            ancienne[c] for c in ("image_chemin", "scene_chemin") if ancienne.get(c) and ancienne[c] != ligne.get(c)
+        ]
+        if perimes:
+            supabase().storage.from_("figures").remove(perimes)
     ligne |= {k: v for k, v in {"largeur": largeur, "hauteur": hauteur}.items() if v is not None}
     if ancienne is None:
         supabase().table("figures").insert(ligne).execute()
     else:
         ligne["version"] = ancienne["version"] + 1
         supabase().table("figures").update(ligne).eq("projet_id", projet_id).eq("id", id).execute()
-    journal = {k: v for k, v in ligne.items() if k != "trace"} | {"series": len(trace["series"]) if trace else 0}
+    journal = {k: v for k, v in ligne.items() if k not in ("trace", "scene_script")} | {
+        "series": len(trace["series"]) if trace else 0
+    }
     _journaliser("figure", projet_id=projet_id, auteur=auteur, noeud_id=noeud_id, apres=journal)
 
     fid = vue.PREFIXE_FIGURE + id

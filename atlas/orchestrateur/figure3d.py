@@ -4,10 +4,10 @@
   (tests, partage pas encore créé), celui du serveur ;
 - répertoire de travail : le dossier de la session, pour que le script lise les données de l'agent ;
 - environnement vidé : le minimum du système, sans aucun secret du serveur (clé Supabase, clé OpenAI…) ;
-- durée bornée (ATLAS_DELAI_FIGURE3D) : au-delà, le processus et ses descendants (le Chrome de kaleido) sont tués ;
+- durée bornée (ATLAS_DELAI_FIGURE3D) : au-delà, le processus et ses descendants sont tués ;
 - sortie dans un dossier temporaire de la session, supprimé ensuite.
 
-Le lanceur (lanceur_figure3d.py) écrit `scene.json` et `vignette.png` ; la scène est vérifiée par atlas/figures3d.py.
+Le lanceur (lanceur_figure3d.py) écrit `scene.json`, vérifié ensuite par atlas/figures3d.py.
 """
 
 import os
@@ -32,7 +32,7 @@ SYSTEME = frozenset(
         "LANG",
         "LC_ALL",
         "TZ",
-        # Windows : sans elles, ni Python ni Chrome ne démarrent correctement.
+        # Windows : sans elles, Python et ses bibliothèques ne démarrent pas toujours correctement.
         "SYSTEMROOT",
         "WINDIR",
         "COMSPEC",
@@ -58,8 +58,6 @@ class ErreurScript(figures.ErreurFigure):
 class Production:
     scene: dict[str, Any]
     """Scène vérifiée (figures3d.valider_scene)."""
-    vignette: bytes
-    """PNG de la première image, en vue plongeante."""
     script: str
     """Le texte du script exécuté."""
 
@@ -87,7 +85,7 @@ def fin_sortie(texte: str, lignes: int = 40, caracteres: int = 4000) -> str:
 
 
 def _tuer(proc: subprocess.Popen) -> None:
-    """Tue le processus et ses descendants (le Chrome lancé par kaleido garderait sinon les tubes ouverts)."""
+    """Tue le processus et ses descendants."""
     try:
         if os.name == "nt":
             subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)], capture_output=True, check=False)
@@ -113,42 +111,41 @@ def _lire_script(script: str, session: Path) -> tuple[Path, str]:
 
 
 def produire(script: str, session: Path, delai: int | None = None) -> Production:
-    """Exécute `script` (chemin relatif à `session`) et renvoie la scène vérifiée, sa vignette et le script."""
+    """Exécute `script` (chemin relatif à `session`) et renvoie la scène vérifiée et le script."""
     chemin, texte = _lire_script(script, session)
     delai = delai or config.DELAI_FIGURE3D
     sortie = session / ".tmp" / f"figure3d-{uuid.uuid4().hex}"
     sortie.mkdir(parents=True)
+    # Sorties du script dans des fichiers, pas dans des tubes : un processus qu'il aurait lancé les garderait
+    # ouverts, et l'attente de leur fin durerait jusqu'au délai alors que le script a fini.
+    journal_std, journal_err = sortie / "stdout.txt", sortie / "stderr.txt"
     try:
-        proc = subprocess.Popen(
-            [interpreteur(), str(LANCEUR), str(chemin), str(sortie)],
-            cwd=session,
-            env=environnement(sortie),
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            start_new_session=os.name != "nt",
-            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0,
-        )
-        try:
-            sortie_std, erreurs = proc.communicate(timeout=delai)
-        except subprocess.TimeoutExpired:
-            _tuer(proc)
+        with journal_std.open("wb") as std, journal_err.open("wb") as err:
+            proc = subprocess.Popen(
+                [interpreteur(), str(LANCEUR), str(chemin), str(sortie)],
+                cwd=session,
+                env=environnement(sortie),
+                stdin=subprocess.DEVNULL,
+                stdout=std,
+                stderr=err,
+                start_new_session=os.name != "nt",
+                creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0,
+            )
             try:
-                proc.communicate(timeout=10)
+                proc.wait(timeout=delai)
             except subprocess.TimeoutExpired:
-                pass
-            raise ErreurScript(
-                f"Script arrêté après {delai} s : allège le calcul (moins d'images, maillage plus grossier)."
-            ) from None
+                _tuer(proc)
+                raise ErreurScript(
+                    f"Script arrêté après {delai} s : allège le calcul (moins d'images, maillage plus grossier)."
+                ) from None
         if proc.returncode:
-            detail = fin_sortie(erreurs.decode("utf-8", "replace") or sortie_std.decode("utf-8", "replace"))
+            lire = lambda f: f.read_bytes().decode("utf-8", "replace")  # noqa: E731
+            detail = fin_sortie(lire(journal_err) or lire(journal_std))
             raise ErreurScript(f"Le script a échoué (code {proc.returncode}) :\n{detail}")
         try:
-            scene = figures3d.valider_scene((sortie / "scene.json").read_bytes())
-            vignette = (sortie / "vignette.png").read_bytes()
+            donnees = (sortie / "scene.json").read_bytes()
         except FileNotFoundError:
             raise ErreurScript("Le script s'est terminé sans produire la scène (sys.exit avant la fin ?).") from None
-        figures.examiner_image(vignette)
-        return Production(scene=scene, vignette=vignette, script=texte)
+        return Production(scene=figures3d.valider_scene(donnees), script=texte)
     finally:
         shutil.rmtree(sortie, ignore_errors=True)
