@@ -26,6 +26,7 @@ Harness de hackathon : des agents IA transforment leurs raisonnements scientifiq
 | `GET /api/journal?projet_id=&noeud_id=&limite=&avant_id=` | Historique, le plus récent d'abord |
 | `GET /api/vue?projet_id=&format=json\|texte` | Vue de l'espace : cadres (et leur rectangle), placements en cases, étiquettes ; `texte` = ce que lit l'IA ; `figures` (graphiques et images, placés comme `fig:<id>`) ; `documents` (fichiers et dossiers du projet, placés comme `doc:<id>`) et `liens_documents` |
 | `GET /api/figures/{id}/image?projet_id=` | Image d'une figure (bucket privé) |
+| `GET /api/figures/{id}/scene?projet_id=` | Scène 3D animée d'une figure (JSON Plotly vérifié, bucket privé) |
 | `GET /api/docs` | Documentation interactive |
 
 Chaque espace de travail (projet) a son propre graphe : `projet_id` le choisit, et son absence désigne le

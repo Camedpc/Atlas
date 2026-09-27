@@ -43,6 +43,11 @@ prompts dans `atlas/orchestrateur/prompts/*.md` : c'est Camille qui les fait év
   Un GIF ou un WebP animé est joué sur le canevas (`ImagesFigures`, `ImageDecoder`, une image décodée à la fois,
   seulement quand la figure est dessinée) ; pas de SVG. Les prompts poussent tous les agents à produire schémas,
   courbes et animations (Graphviz et pillow dans l'image Docker), et l'orchestrateur peut rattacher une figure lui-même.
+  Scène 3D animée (`atlas/figures3d.py`, pur ; `figures.scene_chemin` / `scene_script`) : outil MCP `creer_figure_3d`,
+  Atlas exécute lui-même le script Plotly de l'agent (`orchestrateur/figure3d.py` : processus à part, sans secrets,
+  `ATLAS_DELAI_FIGURE3D`), garde la seule scène 3D et les graphiques 2D vérifiés, la range en JSON dans le bucket
+  (`/api/figures/{id}/scene`). Front : case avec un cube « 3D », double-clic = mode 3D (`graphe-3d.ts`, plotly.js
+  chargé à la demande, boucle, vitesse, glisser pour tourner) ; `?synthetique=N` contient une scène (pendule).
 - Repères (`atlas/navigation.py`, pur) : la numérotation de l'écran (« Lemme 7 », « §1.2 », « Figure 2 ») recopie
   `construireModele` de `graphe-modele.ts` ; un jeu commun (`tests/donnees/reperes.json`) est vérifié des deux
   côtés, à garder à jour si l'une change. Rien de purement visuel (cadrage, zoom, filtres) n'est enregistré ; seul un

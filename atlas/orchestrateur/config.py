@@ -61,6 +61,9 @@ MAX_VERIFICATIONS = int(os.environ.get("ATLAS_MAX_VERIFICATIONS") or 6)
 SEUIL_CONFIANCE = float(os.environ.get("ATLAS_SEUIL_CONFIANCE") or 0.8)
 DELAI_VERIFICATION = int(os.environ.get("ATLAS_DELAI_VERIFICATION") or 1800)
 
+# Durée maximale (s) du script Python d'une figure 3D, exécuté par Atlas (figure3d.py).
+DELAI_FIGURE3D = int(os.environ.get("ATLAS_DELAI_FIGURE3D") or 120)
+
 # Jeton exigé sur les routes des conversations (en-tête Authorization: Bearer …). Vide = pas de contrôle (dev local).
 # Obligatoire dès que le serveur est joignable depuis Internet : l'orchestrateur exécute des commandes.
 JETON_ACCES = _optionnel("ATLAS_JETON_ACCES")

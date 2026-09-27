@@ -91,10 +91,19 @@ def surcharges_thread(
                 "cwd": str(config.RACINE),
                 # Codex ne transmet pas tout l'environnement aux serveurs MCP : on nomme ce qu'il leur faut.
                 "env_vars": ["SUPABASE_URL", "SUPABASE_SECRET_KEY"],
-                # Le dossier de la session : les images des figures y sont lues (chemins relatifs à lui).
-                "env": {"ATLAS_CONVERSATION_ID": conversation_id, "ATLAS_DOSSIER_SESSION": str(session), **graphe},
+                # Le dossier de la session : les images des figures y sont lues (chemins relatifs à lui). L'espace et
+                # le délai servent aux figures 3D (Python partagé, durée du script).
+                "env": {
+                    "ATLAS_CONVERSATION_ID": conversation_id,
+                    "ATLAS_DOSSIER_SESSION": str(session),
+                    "ATLAS_ESPACE_TRAVAIL": str(config.ESPACE_TRAVAIL),
+                    "ATLAS_DELAI_FIGURE3D": str(config.DELAI_FIGURE3D),
+                    **graphe,
+                },
                 # Plusieurs agents qui démarrent ensemble lancent chacun ce serveur : 10 s par défaut ne suffisent pas.
                 "startup_timeout_sec": 60,
+                # creer_figure_3d exécute un script : son délai, plus l'envoi de la scène.
+                "tool_timeout_sec": config.DELAI_FIGURE3D + 60,
             },
             "verificateur": {
                 "command": sys.executable,

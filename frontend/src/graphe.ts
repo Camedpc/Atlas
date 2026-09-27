@@ -8,7 +8,8 @@
 // d'origine (le cadre s'agrandit). Pour sortir un nœud de son cadre : clic droit → « Sortir du cadre ».
 
 import './graphe.css'
-import { api, RefusVue, type Graphe, type Noeud, type OperationVue, type PlacementVue, type Vue } from './api'
+import { api, RefusVue, type FigureVue, type Graphe, type Noeud, type OperationVue, type PlacementVue, type SceneFigure, type Vue } from './api'
+import { ouvrir3d } from './graphe-3d'
 import { animer, type Animation } from './graphe-animation'
 import { instantane, operationsVers, type Entree, type Instantane } from './graphe-annuler'
 import { Contenu } from './graphe-contenu'
@@ -55,7 +56,7 @@ export const AIDE_COMMANDES: [string, string][] = [
   ['Clic sur une barre de titre, ou ▾', 'Réduire le cadre en nœud-fonction, ou le déployer'],
   ['Double-clic sur une barre de titre', 'Renommer le cadre'],
   ['Double-clic sur un nœud, ou Entrée', 'Ouvrir sa fiche'],
-  ['Double-clic sur une figure, ou Entrée', 'L’ouvrir en grand (Échap ou clic hors pour fermer)'],
+  ['Double-clic sur une figure, ou Entrée', 'L’ouvrir en grand, ou en 3D pour une scène animée (Échap pour fermer)'],
   ['Clic droit', 'Menu contextuel (nœud, cadre ou fond)'],
   ['F2', 'Renommer le nœud ou la figure sélectionnés'],
   ['C', 'Créer un cadre autour de la sélection'],
@@ -106,6 +107,8 @@ export interface OptionsVueGraphe {
   recharger: () => Promise<void>
   /** Après chaque image : le pilotage compare l'écran à son dernier état exporté (P4). */
   surChangement?: () => void
+  /** Scène 3D d'une figure ; par défaut, lue sur le serveur (le jeu synthétique fournit la sienne). */
+  chargerScene?: (figure: FigureVue) => Promise<SceneFigure>
 }
 
 /** Un nœud à l'écran, en pixels de la scène (pilotage, P4 `visibles`). */
@@ -1000,12 +1003,30 @@ export class VueGraphe {
     else this.avis(`Fichier : ${d.chemin}`)
   }
 
-  /** Ouvre une figure en grand (tracé agrandi ou image, légende complète, nœud illustré). */
+  /** Ouvre une figure en grand (tracé agrandi ou image, légende complète, nœud illustré), ou en 3D (scène). */
   ouvrirFigure(id: string): void {
     const b = this.base.blocs.get(id)
     if (!b?.figure) return
     this.fermerFenetre?.()
     const f = b.figure
+    const projetId = this.projetId
+    const chargerScene = this.options.chargerScene
+      ?? (projetId ? (x: FigureVue) => api.sceneFigure(projetId, x.id, x.modifie_le) : null)
+    if (f.scene && chargerScene) {
+      this.fermerFenetre = ouvrir3d({
+        scene: this.scene,
+        calques: [this.canvas, this.contenu.couche],
+        figure: f,
+        numero: b.numero,
+        charger: () => chargerScene(f),
+        cadrer: () => this.cadrerNoeuds([b.id]),
+        surFermer: () => {
+          this.fermerFenetre = null
+          this.scene.focus({ preventScroll: true })
+        },
+      })
+      return
+    }
     const cible = this.base.blocs.get(f.noeud_id)
     const reference = referenceDe(this.base, f.noeud_id)
     this.fermerFenetre = ouvrirFenetre({

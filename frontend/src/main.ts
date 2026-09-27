@@ -10,7 +10,7 @@ import { cheminProjet, ressembleAUnChemin } from './liens-fichiers'
 import { enLigne, formulesAffichees, nombre, rendreTex } from './formules'
 import { VueGraphe } from './graphe'
 import { lireDecision, type DetailsDecision } from './graphe-decision'
-import { jeuSynthetique } from './graphe-synthetique'
+import { jeuSynthetique, sceneSynthetique } from './graphe-synthetique'
 import { AdaptateurVue } from './pilotage/adaptateurVue'
 import { nouvelId, Pilote } from './pilotage/pilote'
 import type { CommandeBas } from './pilotage/protocole'
@@ -87,6 +87,7 @@ const vueGraphe = new VueGraphe(document.querySelector<HTMLElement>('.graphe')!,
   },
   recharger: () => chargerGraphe(),
   surChangement: () => adaptateur?.apresImage(),
+  chargerScene: SYNTHETIQUE ? sceneSynthetique : undefined,
 })
 // Développement : accès depuis la console (tests à la main, mesures d'images).
 if (import.meta.env.DEV) (window as unknown as { atlasGraphe: VueGraphe }).atlasGraphe = vueGraphe

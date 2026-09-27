@@ -14,8 +14,9 @@ from typing import Any, Literal
 from mcp.server.mcpserver import Image, MCPServer
 from pydantic import BaseModel, Field
 
-from .. import decisions, documents, ecriture, figures, lecture, vue
+from .. import decisions, documents, ecriture, figures, figures3d, lecture, vue
 from ..modeles import TypeNoeud
+from . import figure3d
 
 LONGUEUR_MAX_ENONCE = 300
 TYPES = (
@@ -365,9 +366,68 @@ def creer_figure(
 
 
 @serveur.tool()
+def creer_figure_3d(
+    id: str,
+    noeud_id: str,
+    titre: str,
+    script: str,
+    legende: str = "",
+    groupe: str = "",
+    largeur: int = 0,
+    hauteur: int = 0,
+    remplacer: bool = False,
+) -> str:
+    """Ajoute au graphe une figure 3D animée (Plotly), jouée en boucle quand on l'ouvre : à réserver à ce que la 3D
+    ou le mouvement font vraiment comprendre (système dynamique, trajectoire ou champ dans l'espace, surface) ;
+    sinon, creer_figure. Atlas exécute lui-même ton script (processus à part, sans les secrets du serveur, durée
+    bornée) et range la scène ; lire_figure t'en donne le résumé (tu ne la vois pas).
+
+    - script : chemin d'un .py, relatif au projet (ex. scripts_projet/pendule/scene3d.py) ou à la session ; il
+      s'exécute dans le dossier de la session. Il construit une figure
+      Plotly `fig` (import plotly.graph_objects as go) avec ses `frames` pour l'animation (une image par pas de
+      temps ; traces=[…] pour ne redonner que les tracés qui bougent), et peut définir `fps` (20 par défaut).
+      N'exporte rien et n'appelle pas fig.show().
+    - Une seule scène 3D (scatter3d, surface, mesh3d, cone, streamtube, isosurface, volume). À côté, si c'est
+      utile, des graphiques 2D (scatter) des grandeurs qui varient dans le temps (énergies, angle, vitesse…) :
+      make_subplots(rows=2, cols=2, specs=[[{"type": "scene", "rowspan": 2}, {"type": "xy"}], [None, {"type": "xy"}]],
+      column_widths=[0.62, 0.38]), la courbe entière en fixe et un point ou un trait vertical qui avance d'une image
+      à l'autre (dans les frames, traces=[…] donne les indices des tracés mis à jour).
+      Fixe les bornes des axes (layout.scene.xaxis.range…, xaxis2.range…) pour qu'ils ne bougent pas d'une image à
+      l'autre, et fais enchaîner la dernière image sur la première (une période entière) : l'animation tourne en
+      boucle.
+      600 images et 15 Mo au plus.
+    - Les boutons, curseurs et fonds de Plotly sont retirés : Atlas a ses propres commandes (lecture, vitesse).
+    - id, noeud_id, titre, legende, groupe, largeur, hauteur, remplacer : comme creer_figure.
+    En cas d'échec, la fin de la sortie d'erreur du script t'est renvoyée : corrige-le et rappelle l'outil."""
+    script = _chemin(script)
+    try:
+        production = figure3d.produire(script, _session(), projet=_racine())
+    except figures.ErreurFigure as e:
+        raise ecriture.ErreurGraphe(str(e)) from None
+    ecriture.creer_figure(
+        projet_id=_projet(),
+        id=id,
+        noeud_id=noeud_id,
+        titre=titre,
+        auteur=AUTEUR,
+        legende=legende,
+        source=script,
+        groupe=groupe or None,
+        largeur=largeur or None,
+        hauteur=hauteur or None,
+        conversation_id=os.environ.get("ATLAS_CONVERSATION_ID") or None,
+        remplacer=remplacer,
+        scene=production.scene,
+        script=production.script,
+    )
+    resume = figures3d.resumer_scene(production.scene)
+    return json.dumps({"ok": True, "figure": id, "vue": vue.PREFIXE_FIGURE + id, "scene": resume}, ensure_ascii=False)
+
+
+@serveur.tool()
 def lire_figure(id: str) -> list[str | Image]:
     """Une figure du graphe : son nœud, sa légende, sa source, le fichier d'origine de son image, les données de son
-    tracé (axes, points, lois et paramètres), et son image si elle en a une (tu la vois)."""
+    tracé (axes, points, lois et paramètres), le résumé de sa scène 3D, et son image si elle en a une (tu la vois)."""
     figure = lecture.lire_figure(_projet(), id.removeprefix(vue.PREFIXE_FIGURE))
     if figure is None:
         raise ecriture.ErreurGraphe(f"Figure inexistante : {id}. lire_vue liste les figures (fig:<id>).")
@@ -380,6 +440,9 @@ def lire_figure(id: str) -> list[str | Image]:
         lignes.append(f"Fichier d'origine (relatif au projet) : {figure['fichier']}")
     if figure["trace"]:
         lignes.append("Tracé :\n" + figures.resumer_trace(figure["trace"]))
+    if figure.get("scene_chemin"):
+        scene = json.loads(lecture.lire_scene_figure(figure["scene_chemin"]))
+        lignes.append(figures3d.resumer_scene(scene))
     contenu: list[str | Image] = ["\n".join(lignes)]
     if figure["image_chemin"]:
         format_image = figure["image_type"].removeprefix("image/")

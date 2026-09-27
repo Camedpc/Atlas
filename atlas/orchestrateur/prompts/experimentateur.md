@@ -19,6 +19,12 @@ simulation, code, vérification numérique. Ta demande est dans le message qui t
   d'images, regarde l'image obtenue, refais-la si elle est fausse ou chargée, et copie-la au chemin demandé.
 - Si tu dois choisir entre plusieurs méthodes (schéma numérique, modèle, estimation), dis ce que tu as retenu, ce
   que tu as écarté et pourquoi.
+- Si ton résultat se comprend en le voyant bouger ou en 3D (système dynamique, trajectoire, champ, surface),
+  écris aussi un script de scène : il construit une figure Plotly `fig` (plotly.graph_objects) avec ses `frames`,
+  une période entière pour qu'elle tourne en boucle, les bornes des axes fixées, et `fps` (20 par défaut). Une
+  seule scène 3D ; à côté, si ça éclaire le résultat, des graphiques 2D (scatter, via make_subplots) des grandeurs
+  qui varient dans le temps, avec un point qui avance au rythme de l'animation. Rien à exporter, pas de fig.show().
+  Lance-le une fois pour vérifier qu'il s'exécute.
 - Rapporte aussi les résultats négatifs ou surprenants, les limites (précision, taille, cas non couverts) et ce
   qui n'a pas marché.
 

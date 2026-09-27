@@ -234,7 +234,8 @@ export interface Trace {
   series: Serie[]
 }
 
-/** Une figure : tracé vectoriel et / ou image, qui illustre un nœud et a sa place dans la grille (« fig:<id> »). */
+/** Une figure : tracé vectoriel, image et / ou scène 3D, qui illustre un nœud et a sa place dans la grille
+ * (« fig:<id> »). */
 export interface FigureVue {
   id: string
   noeud_id: string
@@ -246,10 +247,22 @@ export interface FigureVue {
   image: boolean
   image_largeur: number | null
   image_hauteur: number | null
+  /** Vrai : une scène 3D animée est servie par GET /api/figures/{id}/scene (absent d'un serveur plus ancien). */
+  scene?: boolean
   source: string | null
   /** Fichier d'origine de l'image, relatif au dossier du projet. */
   fichier?: string | null
   modifie_le: string
+}
+
+/** Scène 3D d'une figure (atlas/figures3d.py) : figure Plotly vérifiée, jouée en boucle à `fps` images par seconde. */
+export interface SceneFigure {
+  atlas: { version: number; fps: number }
+  figure: {
+    data: Record<string, unknown>[]
+    layout: Record<string, unknown>
+    frames: { name?: string; data?: Record<string, unknown>[]; traces?: number[]; layout?: Record<string, unknown> }[]
+  }
 }
 
 /** Une opération de vue (voir organiser_vue dans atlas/orchestrateur/mcp_atlas.py). */
@@ -416,6 +429,9 @@ export const api = {
   /** Image d'une figure (fetch : le jeton d'accès est un en-tête) ; `v` ne sert qu'à contourner le cache. */
   imageFigure: async (projetId: string, figureId: string, v: string) =>
     (await requete(`/api/figures/${encodeURIComponent(figureId)}/image?projet_id=${encodeURIComponent(projetId)}&v=${encodeURIComponent(v)}`)).blob(),
+  /** Scène 3D d'une figure ; `v` ne sert qu'à contourner le cache. */
+  sceneFigure: async (projetId: string, figureId: string, v: string): Promise<SceneFigure> =>
+    (await requete(`/api/figures/${encodeURIComponent(figureId)}/scene?projet_id=${encodeURIComponent(projetId)}&v=${encodeURIComponent(v)}`)).json(),
   projets: () => appel<ListeProjets>('/api/projets'),
   creerProjet: (nom: string) =>
     appel<Projet>('/api/projets', { method: 'POST', body: JSON.stringify({ nom }) }),

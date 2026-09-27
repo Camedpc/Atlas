@@ -619,6 +619,65 @@ export function dessinerIcone(ctx: CanvasRenderingContext2D, cx: number, cy: num
   ctx.restore()
 }
 
+/** Petite icône de scène 3D : un cube en perspective cavalière, centré en (cx, cy), de côté `t`. */
+export function dessinerIcone3D(ctx: CanvasRenderingContext2D, cx: number, cy: number, t: number): void {
+  const c = t * 0.62, d = t * 0.3
+  const x0 = cx - (c + d) / 2, y0 = cy - (c - d) / 2
+  ctx.save()
+  ctx.strokeStyle = COULEURS_FIGURE.cadre
+  ctx.lineWidth = Math.max(0.8, t * 0.035)
+  ctx.lineJoin = 'round'
+  ctx.beginPath()
+  // Face avant, face arrière décalée de (d, −d), et les quatre arêtes qui les relient.
+  ctx.rect(x0, y0, c, c)
+  ctx.rect(x0 + d, y0 - d, c, c)
+  for (const [x, y] of [[0, 0], [c, 0], [0, c], [c, c]] as const) {
+    ctx.moveTo(x0 + x, y0 + y)
+    ctx.lineTo(x0 + x + d, y0 + y - d)
+  }
+  ctx.stroke()
+  // « 3D » sur la face avant, dès que le cube est assez grand pour être lu.
+  if (t >= 28) {
+    ctx.fillStyle = COULEURS_FIGURE.gris
+    ctx.font = `600 ${Math.round(c * 0.38)}px ${SERIF}`
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText('3D', x0 + c / 2, y0 + c / 2 + c * 0.03)
+  }
+  ctx.restore()
+}
+
+/** Case d'une scène 3D dans la grille (sans vignette) : le cube « 3D », puis ce que montre la scène (la légende, si
+ * la case est trop petite pour qu'elle soit écrite dessous) ou l'invitation à l'ouvrir. */
+export function dessinerCaseScene(ctx: CanvasRenderingContext2D, f: FigureVue, g: Geometrie): void {
+  const t = Math.min(g.iw * 0.45, g.ih * 0.55, 110)
+  const lignes = f.legende && g.pied <= 10 ? 2 : 1
+  const cy = g.iy + g.ih / 2 - (lignes * CORPS_LEGENDE * 1.25) / 2 - 4
+  dessinerIcone3D(ctx, g.ix + g.iw / 2, cy, t)
+  ctx.fillStyle = COULEURS_FIGURE.gris
+  ctx.font = `italic 400 ${CORPS_LEGENDE}px ${SERIF}`
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'top'
+  const y = cy + t / 2 + 8
+  if (lignes === 1) {
+    ctx.fillText('Scène 3D animée — double-clic pour l’ouvrir', g.ix + g.iw / 2, y, g.iw - 8)
+    return
+  }
+  // Légende sur deux lignes au plus, coupée aux mots.
+  const mots = texteCanevas(f.legende!).split(/\s+/)
+  const ecrites: string[] = ['']
+  for (const mot of mots) {
+    const essai = ecrites[ecrites.length - 1] ? `${ecrites[ecrites.length - 1]} ${mot}` : mot
+    if (ctx.measureText(essai).width <= g.iw - 12 || !ecrites[ecrites.length - 1]) ecrites[ecrites.length - 1] = essai
+    else if (ecrites.length < 2) ecrites.push(mot)
+    else {
+      ecrites[1] = tronquer(ctx, `${ecrites[1]} ${mot}`, g.iw - 12)
+      break
+    }
+  }
+  ecrites.forEach((l, k) => ctx.fillText(l, g.ix + g.iw / 2, y + k * CORPS_LEGENDE * 1.25, g.iw - 8))
+}
+
 /** GIF ou WebP animé, décodé une image à la fois (ImageDecoder) : seule l'image courante est gardée en mémoire. */
 interface Animation {
   blob: Blob
@@ -811,7 +870,8 @@ export function htmlTitreFigure(numero: string, titre: string): string {
 /** Contenu HTML d'une figure de la grille ; `illustre` : « Lemme 7 » (nœud illustré). */
 export function htmlFigure(f: FigureVue, numero: string, illustre: string | null, w: number, h: number): string {
   const g = geometrieBloc(f, w, h)
-  const joint = f.trace && f.image ? '<span class="gr-fig-joint">image jointe</span>' : ''
+  const joint = f.scene ? '<span class="gr-fig-joint">3D animée</span>'
+    : f.trace && f.image ? '<span class="gr-fig-joint">image jointe</span>' : ''
   const ref = illustre ? `<span class="gr-fig-ref">illustre ${echapper(illustre)}</span>` : ''
   const tete = `<div class="gr-fig-tete" style="height:${g.tete}px"><span class="gr-fig-titre">${htmlTitreFigure(numero, f.titre)}</span>${joint}${ref}</div>`
   const axes = f.trace ? htmlAxes(f.trace, g) : ''

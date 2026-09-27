@@ -15,7 +15,7 @@
 import type { Statut } from './api'
 import type { Contenu } from './graphe-contenu'
 import { echapper, enLigne, formulesAffichees, rendreTex, texConfiance, texteBrut } from './formules'
-import { COULEURS_FIGURE, dessinerIcone, dessinerImage, dessinerTrace, geometrieBloc, htmlFigure, TETE_FIGURE, type ImagesFigures } from './graphe-figures'
+import { COULEURS_FIGURE, dessinerCaseScene, dessinerIcone, dessinerIcone3D, dessinerImage, dessinerTrace, geometrieBloc, htmlFigure, TETE_FIGURE, type ImagesFigures } from './graphe-figures'
 import { cleDocument, COULEURS_DOCUMENT, detailSilhouette, htmlDocument, silhouette, TETE_DOCUMENT, titreDocument } from './graphe-documents'
 import { contourDecision } from './graphe-decision'
 import { CADRE, CLE_FONCTION, estPseudo, FONCTION, LIBELLES_RELATION, type Bloc, type Cadre, type Modele, type Rect } from './graphe-modele'
@@ -918,12 +918,16 @@ function dessinerFigure(ctx: CanvasRenderingContext2D, e: EtatDessin, b: Bloc, X
     ctx.clip()
     ctx.translate(X(b.x), Y(b.y))
     ctx.scale(z, z)
-    if (f.trace) dessinerTrace(ctx, f.trace, g, z)
+    // Une scène 3D s'ouvre au double-clic ; sa case n'a pas de vignette.
+    if (f.scene) dessinerCaseScene(ctx, f, g)
+    else if (f.trace) dessinerTrace(ctx, f.trace, g, z)
     else if (f.image) dessinerImage(ctx, f, g, e.images?.obtenir(f) ?? null)
     ctx.restore()
   } else {
     const t = Math.min(b.h - TETE_FIGURE - 16, b.w * 0.3, 70) * z
-    if (t > 8) dessinerIcone(ctx, x0 + w / 2, y0 + (TETE_FIGURE * z + h) / 2, t, !f.trace)
+    const cy = y0 + (TETE_FIGURE * z + h) / 2
+    if (t > 8 && f.scene) dessinerIcone3D(ctx, x0 + w / 2, cy, t)
+    else if (t > 8) dessinerIcone(ctx, x0 + w / 2, cy, t, !f.trace)
   }
   ctx.strokeStyle = conflit ? PALETTE.erreur : choisi || survole ? PALETTE.accent : COULEURS_FIGURE.cadre
   ctx.lineWidth = conflit || choisi ? 1.6 : survole ? 1.4 : 0.8

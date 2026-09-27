@@ -236,6 +236,8 @@ class FigureVue(BaseModel):
     """Vrai si une image est servie par GET /api/figures/{id}/image?projet_id=."""
     image_largeur: int | None
     image_hauteur: int | None
+    scene: bool = False
+    """Vrai si la figure est une scène 3D animée (Plotly), servie par GET /api/figures/{id}/scene?projet_id=."""
     source: str | None
     fichier: str | None = None
     """Fichier d'origine de l'image, relatif au dossier du projet."""
