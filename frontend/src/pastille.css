@@ -4,7 +4,7 @@
   position: fixed;
   left: 50%;
   bottom: 0;
-  z-index: 40;
+  z-index: 1000; /* au premier plan, devant les menus et panneaux (60 au plus ailleurs) */
   transform: translateX(-50%);
   opacity: 0;
   pointer-events: none;
