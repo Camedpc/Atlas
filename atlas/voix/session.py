@@ -101,6 +101,8 @@ class Session:
         self.dossier = dossier
         self._micro = bytearray() if config.ENREGISTRER else None
         self._tours: list[dict[str, Any]] = []
+        self._lectures: list[dict[str, Any]] = []
+        """Mode de lecture de la voix côté navigateur (webaudio | webrtc) et quand il change, pour le diagnostic."""
 
     # ── Arbre des agents ──
 
@@ -256,7 +258,11 @@ class Session:
             w.writeframes(bytes(self._micro or b""))
         (dossier / f"appel-{self.id}.json").write_text(
             json.dumps(
-                {"reglages": {"delai": config.STT_DELAI, "mots_cles": config.MOTS_CLES}, "tours": self._tours},
+                {
+                    "reglages": {"delai": config.STT_DELAI, "mots_cles": config.MOTS_CLES},
+                    "tours": self._tours,
+                    "lecture": self._lectures,
+                },
                 ensure_ascii=False,
                 indent=1,
             ),
@@ -296,6 +302,11 @@ class Session:
     async def _reglages(self, message: dict[str, Any]) -> None:
         if "casque" in message:
             self.casque = bool(message["casque"])
+        lecture = message.get("lecture")
+        if lecture and (not self._lectures or self._lectures[-1]["mode"] != lecture):
+            t_s = round(len(self._micro) / 48000, 2) if self._micro is not None else None
+            self._lectures.append({"t_s": t_s, "mode": lecture})
+            log.info("appel %s : lecture %s", self.id, lecture)
         if message.get("voix") and message["voix"] != self.prechauffe.voix:
             self.prechauffe.voix = message["voix"]
             await self.prechauffe.renouveler()

@@ -21,6 +21,15 @@ const VOIX_GRADIUM: [string, string][] = [
 
 const CLE_VOIX = 'atlas.voix'
 const CLE_CASQUE = 'atlas.voix.casque'
+const CLE_WEBRTC = 'atlas.voix.webrtc'
+
+/** Boucle WebRTC locale : la voix d'Atlas sort par un appel WebRTC, le chemin le mieux couvert par l'annulation
+ * d'écho de Chrome (celui des visios), au lieu de sortir directement du moteur audio de la page. */
+interface BoucleWebRTC {
+  emetteur: RTCPeerConnection
+  recepteur: RTCPeerConnection
+  sortie: HTMLAudioElement
+}
 
 function lire(cle: string): string | null {
   try {
@@ -51,6 +60,7 @@ export class Appel {
   private contexte: AudioContext | null = null
   private flux: MediaStream | null = null
   private lecteur: AudioWorkletNode | null = null
+  private boucle: BoucleWebRTC | null = null
   private muet = false
   private etatServeur = 'demarrage'
   private enLecture = false
@@ -71,6 +81,8 @@ export class Appel {
         <select class="appel-voix" title="Voix d’Atlas">${VOIX_GRADIUM.map(([id, nom]) => `<option value="${id}">${nom}</option>`).join('')}</select>
         <label class="appel-casque" title="Couper Atlas dès que tu parles. Décoche sur haut-parleurs s’il se coupe tout seul.">
           <input type="checkbox" checked> Coupure immédiate</label>
+        <label class="appel-webrtc" title="Faire sortir la voix d’Atlas par WebRTC, comme une visio, pour que l’annulation d’écho de Chrome la prenne en compte.">
+          <input type="checkbox"> Lecture WebRTC</label>
         <button type="button" class="appel-interrompre" title="Faire taire Atlas voix (Échap)">Interrompre</button>
         <button type="button" class="appel-micro" title="Couper le micro">Micro</button>
         <button type="button" class="appel-raccrocher">Raccrocher</button>
@@ -78,6 +90,13 @@ export class Appel {
       <div class="appel-texte"><span class="appel-camille"></span><span class="appel-atlas"></span></div>`
     const voix = barre.querySelector<HTMLSelectElement>('.appel-voix')!
     const casque = barre.querySelector<HTMLInputElement>('.appel-casque input')!
+    const webrtc = barre.querySelector<HTMLInputElement>('.appel-webrtc input')!
+    webrtc.checked = lire(CLE_WEBRTC) === 'true'
+    webrtc.addEventListener('change', () => {
+      garder(CLE_WEBRTC, String(webrtc.checked))
+      void this.brancherSortie()
+      this.envoyerReglages()
+    })
     voix.value = lire(CLE_VOIX) ?? VOIX_GRADIUM[0][0]
     casque.checked = lire(CLE_CASQUE) !== 'false'
     voix.addEventListener('change', () => {
@@ -156,9 +175,14 @@ export class Appel {
       type: 'reglages',
       voix: this.barre.querySelector<HTMLSelectElement>('.appel-voix')!.value,
       casque: this.barre.querySelector<HTMLInputElement>('.appel-casque input')!.checked,
+      lecture: this.lectureWebRTC ? 'webrtc' : 'webaudio',
       modele_orchestrateur: r.modele ?? null,
       effort_orchestrateur: r.effort ?? null,
     })
+  }
+
+  private get lectureWebRTC(): boolean {
+    return this.barre.querySelector<HTMLInputElement>('.appel-webrtc input')!.checked
   }
 
   private envoyer(message: Record<string, unknown>) {
@@ -183,7 +207,7 @@ export class Appel {
     }
     source.connect(micro)
     this.lecteur = new AudioWorkletNode(this.contexte, 'lecteur', { outputChannelCount: [1] })
-    this.lecteur.connect(this.contexte.destination)
+    await this.brancherSortie()
     this.lecteur.port.onmessage = (e) => {
       const joue_s = e.data.joues / 48000
       const fini = e.data.type === 'fini'
@@ -196,7 +220,49 @@ export class Appel {
     await this.contexte.resume()
   }
 
+  /** Relie le lecteur aux haut-parleurs : directement, ou par une boucle WebRTC locale (option de la barre). */
+  private async brancherSortie() {
+    const contexte = this.contexte
+    const lecteur = this.lecteur
+    if (!contexte || !lecteur) return
+    lecteur.disconnect()
+    this.fermerBoucle()
+    if (!this.lectureWebRTC) {
+      lecteur.connect(contexte.destination)
+      return
+    }
+    const destination = contexte.createMediaStreamDestination()
+    lecteur.connect(destination)
+    const emetteur = new RTCPeerConnection()
+    const recepteur = new RTCPeerConnection()
+    emetteur.onicecandidate = (e) => e.candidate && void recepteur.addIceCandidate(e.candidate)
+    recepteur.onicecandidate = (e) => e.candidate && void emetteur.addIceCandidate(e.candidate)
+    const sortie = new Audio()
+    sortie.autoplay = true
+    recepteur.ontrack = (e) => {
+      sortie.srcObject = e.streams[0]
+      void sortie.play()
+    }
+    for (const piste of destination.stream.getAudioTracks()) emetteur.addTrack(piste, destination.stream)
+    this.boucle = { emetteur, recepteur, sortie }
+    const offre = await emetteur.createOffer()
+    await emetteur.setLocalDescription(offre)
+    await recepteur.setRemoteDescription(offre)
+    const reponse = await recepteur.createAnswer()
+    await recepteur.setLocalDescription(reponse)
+    await emetteur.setRemoteDescription(reponse)
+  }
+
+  private fermerBoucle() {
+    if (!this.boucle) return
+    this.boucle.emetteur.close()
+    this.boucle.recepteur.close()
+    this.boucle.sortie.srcObject = null
+    this.boucle = null
+  }
+
   private fermerAudio() {
+    this.fermerBoucle()
     for (const piste of this.flux?.getTracks() ?? []) piste.stop()
     void this.contexte?.close()
     this.contexte = null
