@@ -113,6 +113,14 @@ Vérificateur : serveur MCP `mcp_verificateur.py` (délai `ATLAS_DELAI_VERIFICAT
 `ATLAS_SEUIL_CONFIANCE`, `ATLAS_MODELE_VERIFICATEUR_RECOURS` rejuge et fait foi ; verdict écrit par
 `ecriture.noter_demonstration` (validite, confiance ; justification au journal, action `verdict`).
 
+Atlas voix (`atlas/voix/`) : appel vocal par WebSocket (`/api/conversations/{id}/voix`, jeton dans le premier
+message), Gradium STT/TTS (`GRADIUM_API_KEY`, 3 sessions max en offre gratuite → un appel à la fois), thread Codex
+éphémère `gpt-6-sol` en mode fast. Façade, pas parent : elle confie le travail à l'orchestrateur de la
+conversation via le serveur MCP `voix` (qui rappelle `atlas.serveur`, `ATLAS_URL_INTERNE`) et reçoit ses étapes par
+`gestionnaire.abonner` ; au raccrochage, `gestionnaire.deposer_pont` ajoute la transcription au prochain tour.
+Sous `ATLAS_BUNKER=1`, un outil MCP sans `default_tools_approval_mode = "approve"` est refusé ou invisible
+(approval never) : la voix le pose sur ses serveurs. Transcription dans `messages` sous l'agent `/voix`.
+
 L'ancien backend agents (chercheur, vérificateur) reste lisible via `git show 1aa2d62:backend/app/agents/…`.
 
 ## Conventions

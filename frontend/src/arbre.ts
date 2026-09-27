@@ -4,6 +4,7 @@
 import type { Agent } from './api'
 import {
   RACINE,
+  VOIX,
   couleurRole,
   estFini,
   etat,
@@ -103,7 +104,7 @@ export class ArbreAgents {
   private estReplie(a: Agent): boolean {
     const choix = this.replis.get(a.chemin)
     if (choix !== undefined) return choix
-    if (a.chemin === RACINE) return false
+    if (a.chemin === RACINE || a.chemin === VOIX) return false
     const descendants = this.descendants(a)
     return descendants.length > 0 && estFini(a) && descendants.every(estFini)
   }
@@ -121,8 +122,6 @@ export class ArbreAgents {
 
   private aplatir(): Ligne[] {
     const lignes: Ligne[] = []
-    const racine = etat.racine
-    if (!racine) return lignes
     const parcourir = (a: Agent, prefixe: string, suite: string) => {
       const enfants = etat.enfants(a)
       const replie = enfants.length > 0 && this.estReplie(a)
@@ -133,7 +132,7 @@ export class ArbreAgents {
         parcourir(e, suite + (dernier ? '└─ ' : '├─ '), suite + (dernier ? '   ' : '│  '))
       })
     }
-    parcourir(racine, '', '')
+    for (const sommet of etat.sommets) parcourir(sommet, '', '')
     return lignes
   }
 

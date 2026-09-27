@@ -8,6 +8,8 @@ from pydantic import BaseModel, Field
 
 from .. import conversations, projets
 from ..modeles import Conversation, Execution, Message
+from ..voix.appels import appels, fusionner
+from ..voix.contexte import VOIX
 from . import agent, config
 from .gestionnaire import Reglages, TourIndisponible, gestionnaire
 
@@ -44,6 +46,8 @@ class NouveauMessage(BaseModel):
 class EtatConversation(Conversation):
     en_cours: bool
     derniere_execution: Execution | None
+    appel_en_cours: bool = False
+    """Un appel vocal avec Atlas voix est ouvert dans cette conversation."""
 
 
 def _conversation(conversation_id: str) -> Conversation:
@@ -82,6 +86,7 @@ def lire(conversation_id: str) -> EtatConversation:
         **conversation.model_dump(),
         en_cours=gestionnaire.en_cours(conversation_id),
         derniere_execution=conversations.derniere_execution(conversation_id),
+        appel_en_cours=appels.en_cours(conversation_id),
     )
 
 
@@ -96,12 +101,14 @@ def messages(conversation_id: str, apres_id: int | None = None, agent: str | Non
 
 @routeur.get("/{conversation_id}/agents")
 def agents(conversation_id: str) -> list[dict]:
-    """Arbre des agents : en direct pendant une exécution, sinon tel que l'a laissé la dernière."""
-    en_direct = gestionnaire.agents(conversation_id)
-    if en_direct is not None:
-        return en_direct
-    derniere = conversations.derniere_execution(conversation_id)
-    return (derniere.agents if derniere else None) or []
+    """Arbre des agents : en direct pendant une exécution, sinon tel que l'a laissé la dernière ; avec Atlas voix
+    (`/voix`) pendant un appel, puis tant que l'orchestrateur n'a pas été relancé à l'écrit."""
+    arbre = gestionnaire.agents(conversation_id)
+    if arbre is None:
+        derniere = conversations.derniere_execution(conversation_id)
+        arbre = (derniere.agents if derniere else None) or []
+    voix, a_confie = appels.agents_voix(conversation_id, gestionnaire.derniers_lancements.get(conversation_id))
+    return fusionner(arbre, voix, a_confie)
 
 
 @routeur.post("/{conversation_id}/messages", status_code=202)
@@ -111,9 +118,11 @@ async def envoyer(conversation_id: str, corps: NouveauMessage) -> Execution:
     Les réponses arrivent ensuite dans /messages.
     """
     conversation = _conversation(conversation_id)
+    # Atlas voix n'est pas un sous-agent de l'orchestrateur : écrit hors appel, le message va à l'orchestrateur.
+    cible = None if corps.agent == VOIX or (corps.agent or "").startswith(f"{VOIX}/") else corps.agent
     try:
         reglages = Reglages(effort=corps.effort, modele=corps.modele)
-        return await gestionnaire.envoyer(conversation, corps.contenu, corps.agent, reglages)
+        return await gestionnaire.envoyer(conversation, corps.contenu, cible, reglages)
     except TourIndisponible:
         raise HTTPException(409, "L'orchestrateur démarre ou termine son tour : réessaie dans un instant.") from None
 

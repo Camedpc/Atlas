@@ -148,6 +148,19 @@ export interface Agent {
 export interface EtatConversation extends Conversation {
   en_cours: boolean
   derniere_execution: Execution | null
+  /** Un appel vocal avec Atlas voix est ouvert (atlas/voix). */
+  appel_en_cours: boolean
+}
+
+/** WebSocket de l'appel vocal d'une conversation. Le jeton n'y figure pas : il part dans le premier message. */
+export function urlAppel(conversationId: string): string {
+  const url = new URL(`/api/conversations/${conversationId}/voix`, BASE || location.origin)
+  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
+  return url.toString()
+}
+
+export function jetonAcces(): string | null {
+  return jetonEnMemoire
 }
 
 export interface Message {

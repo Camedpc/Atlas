@@ -61,18 +61,25 @@ def ajouter_message(
 
 
 def lister_messages(
-    conversation_id: str, *, apres_id: int | None = None, limite: int = 500, agent: str | None = None
+    conversation_id: str,
+    *,
+    apres_id: int | None = None,
+    limite: int = 500,
+    agent: str | None = None,
+    derniers: bool = False,
 ) -> list[Message]:
     """Plus anciens d'abord. Pour suivre une exécution, repasser `apres_id` = id du dernier reçu.
 
     Messages de l'orchestrateur par défaut, ou ceux d'un sous-agent (`agent` = son chemin Codex).
+    `derniers` : les `limite` plus récents plutôt que les plus anciens.
     """
     q = supabase().table("messages").select("*").eq("conversation_id", conversation_id)
     q = q.eq("agent", agent) if agent else q.is_("agent", "null")
     if apres_id is not None:
         q = q.gt("id", apres_id)
-    lignes = q.order("id").limit(limite).execute().data
-    return [Message.model_validate(l) for l in lignes]
+    lignes = q.order("id", desc=derniers).limit(limite).execute().data
+    messages = [Message.model_validate(l) for l in lignes]
+    return messages[::-1] if derniers else messages
 
 
 def creer_execution(conversation_id: str) -> Execution:

@@ -2,7 +2,9 @@
 // Le fil montre l'agent sélectionné (l'orchestrateur par défaut) et la saisie lui écrit : un message à un
 // sous-agent est relayé par l'orchestrateur (Codex n'accepte pas d'entrée directe vers un sous-agent).
 // Pendant une exécution, un message s'injecte dans le tour en cours au lieu d'attendre la fin.
-import { RACINE, etat, formatTokens, nomAgent } from './agents'
+// Le bouton micro ouvre un appel avec Atlas voix (voix.ts) : pendant l'appel, le fil montre sa transcription
+// (agent /voix) et ce qui est tapé lui est adressé ; en raccrochant, on revient à l'orchestrateur.
+import { RACINE, VOIX, estVoix, etat, formatTokens, nomAgent } from './agents'
 import { ArbreAgents } from './arbre'
 import {
   api,
@@ -16,6 +18,7 @@ import {
 import { echapper, rendre } from './rendu'
 import { SelecteurModele } from './reglages'
 import { PanneauSessions } from './sessions'
+import { Appel } from './voix'
 
 const INTERVALLE_SUIVI_MS = 1500
 
@@ -93,6 +96,8 @@ export class PanneauConversation {
   private cible: HTMLElement
   private envoyer: HTMLButtonElement
   private arreter: HTMLButtonElement
+  private micro: HTMLButtonElement
+  private appel: Appel
   private racine: HTMLElement
   private projets: Projet[] = []
   private projet: Projet | null = null
@@ -139,6 +144,7 @@ export class PanneauConversation {
       <div class="fil"><div class="fil-contenu"></div></div>
       <div class="bas">
         <section class="arbre" hidden></section>
+        <section class="appel" hidden></section>
         <form class="saisie">
           <textarea rows="1" placeholder="Pose une question de recherche…"></textarea>
           <div class="saisie-pied">
@@ -146,6 +152,9 @@ export class PanneauConversation {
             <span class="espace"></span>
             <div class="selecteur"></div>
             <button class="arreter" type="button" hidden>Arrêter</button>
+            <button class="micro" type="button" title="Appel vocal avec Atlas voix" aria-label="Appel vocal avec Atlas voix">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="5.5" y="1.8" width="5" height="8.4" rx="2.5"/><path d="M3 7.6a5 5 0 0 0 10 0M8 12.6v1.8"/></svg>
+            </button>
             <button class="envoyer" type="submit" title="Envoyer (Entrée)" aria-label="Envoyer">
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 13V3M3.5 7.5 8 3l4.5 4.5"/></svg>
             </button>
@@ -160,7 +169,20 @@ export class PanneauConversation {
     this.cible = racine.querySelector('.cible')!
     this.envoyer = racine.querySelector('.envoyer')!
     this.arreter = racine.querySelector('.arreter')!
+    this.micro = racine.querySelector('.micro')!
     this.selecteur = new SelecteurModele(racine.querySelector('.selecteur')!)
+    this.appel = new Appel(racine.querySelector('.appel')!, {
+      surEtat: (ouvert) => {
+        this.micro.classList.toggle('actif', ouvert)
+        this.micro.title = ouvert ? 'Raccrocher' : 'Appel vocal avec Atlas voix'
+        etat.selectionner(ouvert ? VOIX : RACINE)
+        this.majCible()
+        window.clearTimeout(this.suivi)
+        void this.rafraichir()
+      },
+      reglagesOrchestrateur: () => this.selecteur.reglages,
+    })
+    this.micro.addEventListener('click', () => void this.appeler())
     this.arbre = new ArbreAgents(
       racine.querySelector('.arbre')!,
       () => this.saisie.focus(),
@@ -178,6 +200,8 @@ export class PanneauConversation {
         void this.envoyerMessage()
       } else if (e.key === 'ArrowUp' && !this.saisie.value && this.arbre.entrer()) {
         e.preventDefault()
+      } else if (e.key === 'Escape' && this.appel.ouvert) {
+        this.appel.interrompre()
       } else if (e.key === 'Escape' && etat.selection !== RACINE) {
         etat.selectionner(RACINE)
       }
@@ -278,6 +302,7 @@ export class PanneauConversation {
   }
 
   private ouvrirVide() {
+    this.appel.raccrocher()
     window.clearTimeout(this.suivi)
     this.courante = null
     this.generation++
@@ -326,6 +351,7 @@ export class PanneauConversation {
 
   private async ouvrir(id: string) {
     if (id === this.courante) return
+    this.appel.raccrocher()
     window.clearTimeout(this.suivi)
     this.courante = id
     this.generation++
@@ -360,10 +386,13 @@ export class PanneauConversation {
     const chaine: string[] = []
     for (let a = choisi; a && a.chemin !== RACINE; a = etat.get(a.parent)) chaine.unshift(a.chemin)
     if (!choisi) chaine.push(etat.selection)
+    // Atlas voix n'est pas sous l'orchestrateur : son fil a sa propre racine.
+    const voix = estVoix(etat.selection)
     this.ariane.innerHTML = [
-      `<button type="button" data-chemin="${RACINE}">Orchestrateur</button>`,
+      voix ? '' : `<button type="button" data-chemin="${RACINE}">Orchestrateur</button>`,
       ...chaine.map(
-        (c) => `<span>›</span><button type="button" data-chemin="${echapper(c)}">${echapper(nomAgent(etat.get(c), c))}</button>`,
+        (c, i) =>
+          `${voix && i === 0 ? '' : '<span>›</span>'}<button type="button" data-chemin="${echapper(c)}">${echapper(nomAgent(etat.get(c), c))}</button>`,
       ),
     ].join('')
   }
@@ -371,6 +400,17 @@ export class PanneauConversation {
   private majCible() {
     const sous = etat.selection !== RACINE
     const nom = nomAgent(etat.get(etat.selection), etat.selection)
+    if (estVoix(etat.selection)) {
+      const enAppel = this.appel?.ouvert
+      this.cible.innerHTML = enAppel
+        ? `À <b>Atlas voix</b> <span class="relais">pendant l’appel</span>`
+        : `À <b>l’orchestrateur</b> <span class="relais">(appel terminé)</span>
+           <button type="button" class="retirer-cible" title="Revenir au fil de l’orchestrateur (Échap)" aria-label="Revenir au fil de l’orchestrateur">×</button>`
+      this.cible.querySelector('.retirer-cible')?.addEventListener('click', () => etat.selectionner(RACINE))
+      this.saisie.placeholder = enAppel ? 'Écrire à Atlas voix pendant l’appel…' : 'Écrire à l’orchestrateur…'
+      this.majAriane()
+      return
+    }
     this.cible.innerHTML = sous
       ? `À <b>${echapper(nom)}</b> <span class="relais">via l’orchestrateur</span>
          <button type="button" class="retirer-cible" title="Écrire à l’orchestrateur (Échap)" aria-label="Écrire à l’orchestrateur">×</button>`
@@ -391,31 +431,50 @@ export class PanneauConversation {
     this.saisie.style.height = `${Math.min(this.saisie.scrollHeight, 240)}px`
   }
 
+  /** Crée la conversation au premier message ou au premier appel, comme sur claude.ai. */
+  private async assurerConversation(): Promise<string | null> {
+    if (this.courante) return this.courante
+    if (!this.projet) return null
+    try {
+      const c = await api.creerConversation(this.projet.id)
+      this.conversations.unshift(c)
+      this.courante = c.id
+      this.racine.classList.remove('accueil-projet')
+      this.contenu.innerHTML = ''
+      this.majSessions()
+      this.surChangement(c.id)
+      this.surProjet(this.projet, this.conversations)
+      return c.id
+    } catch (e) {
+      this.contenu.insertAdjacentHTML('beforeend', `<div class="msg systeme">${echapper(String(e))}</div>`)
+      return null
+    }
+  }
+
+  private async appeler() {
+    if (this.appel.ouvert) return this.appel.raccrocher()
+    const id = await this.assurerConversation()
+    if (id) await this.appel.demarrer(id)
+  }
+
   private async envoyerMessage() {
     const contenu = this.saisie.value.trim()
     if (!contenu) return
-    if (!this.courante) {
-      if (!this.projet) return
-      try {
-        const c = await api.creerConversation(this.projet.id)
-        this.conversations.unshift(c)
-        this.courante = c.id
-        this.racine.classList.remove('accueil-projet')
-        this.contenu.innerHTML = ''
-        this.majSessions()
-        this.surChangement(c.id)
-        this.surProjet(this.projet, this.conversations)
-      } catch (e) {
-        this.contenu.insertAdjacentHTML('beforeend', `<div class="msg systeme">${echapper(String(e))}</div>`)
-        return
-      }
+    if (this.appel.ouvert && estVoix(etat.selection)) {
+      this.appel.ecrire(contenu)
+      this.saisie.value = ''
+      this.ajusterSaisie()
+      return
     }
-    const agent = etat.selection === RACINE ? null : etat.selection
+    const id = await this.assurerConversation()
+    if (!id) return
+    // Hors appel, Atlas voix n'écoute plus : ce qui est tapé depuis son fil va à l'orchestrateur.
+    const agent = etat.selection === RACINE || estVoix(etat.selection) ? null : etat.selection
     this.saisie.value = ''
     this.ajusterSaisie()
     if (!agent) etat.question = contenu
     try {
-      await api.envoyer(this.courante, contenu, agent, this.selecteur.reglages)
+      await api.envoyer(id, contenu, agent, this.selecteur.reglages)
     } catch (e) {
       const texte = e instanceof Error && e.message.includes(' 409 ') ? 'L’orchestrateur démarre ou termine son tour : réessaie dans un instant.' : String(e)
       this.contenu.insertAdjacentHTML('beforeend', `<div class="msg systeme">${echapper(texte)}</div>`)
@@ -475,7 +534,9 @@ export class PanneauConversation {
     etat.mettreAJour(agents, conv.en_cours)
     if (changement) this.majSessions()
 
-    if (nouveaux.length || conv.en_cours) this.surActivite()
-    if (conv.en_cours) this.suivi = window.setTimeout(() => void this.rafraichir(), INTERVALLE_SUIVI_MS)
+    if (nouveaux.length || conv.en_cours || conv.appel_en_cours) this.surActivite()
+    if (conv.en_cours || conv.appel_en_cours || this.appel.ouvert) {
+      this.suivi = window.setTimeout(() => void this.rafraichir(), INTERVALLE_SUIVI_MS)
+    }
   }
 }

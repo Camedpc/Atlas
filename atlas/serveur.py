@@ -14,6 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from . import conversations, routes_lecture
 from .orchestrateur import config, routes, routes_projets
+from .voix import routes as routes_voix
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s : %(message)s")
 log = logging.getLogger(__name__)
@@ -35,3 +36,5 @@ app.include_router(routes_lecture.routeur)
 app.include_router(routes.routeur)
 app.include_router(routes.routeur_modeles)
 app.include_router(routes_projets.routeur)
+app.include_router(routes_voix.routeur_appel)
+app.include_router(routes_voix.routeur_outils)

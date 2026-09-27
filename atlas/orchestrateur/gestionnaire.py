@@ -2,12 +2,17 @@
 
 Un message envoyé pendant une exécution n'en lance pas une autre : il est injecté dans le tour en cours
 (`steer`), et relayé par l'orchestrateur quand il s'adresse à un sous-agent.
+
+La voix (atlas/voix) s'abonne aux événements d'une conversation (`abonner`) : étapes clés des sous-agents et fin
+du tour. Au raccrochage, elle dépose un « pont » (ce que l'orchestrateur n'a pas vu de l'appel), ajouté en tête
+du prochain message qu'il reçoit.
 """
 
 import asyncio
 import logging
 import time
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
+from typing import Any, Literal
 
 from openai_codex import AsyncTurnHandle
 
@@ -28,6 +33,9 @@ class Reglages:
 
     effort: str | None = None
     modele: str | None = None
+
+
+Origine = Literal["texte", "voix"]
 
 
 class DejaEnCours(Exception):
@@ -52,6 +60,32 @@ class Gestionnaire:
         self._executions: dict[str, Execution] = {}
         # Arbre des agents de chaque conversation en cours (l'arbre final est gardé dans l'exécution).
         self._suivis: dict[str, SuiviAgents] = {}
+        self._abonnes: dict[str, set[asyncio.Queue[dict[str, Any]]]] = {}
+        self._ponts: dict[str, str] = {}
+        self.derniers_lancements: dict[str, tuple[Origine, float]] = {}
+        """Origine et instant du dernier tour lancé dans chaque conversation (texte tapé ou voix)."""
+
+    # ── Abonnements (voix) ──
+
+    def abonner(self, conversation_id: str) -> asyncio.Queue[dict[str, Any]]:
+        file: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
+        self._abonnes.setdefault(conversation_id, set()).add(file)
+        return file
+
+    def desabonner(self, conversation_id: str, file: asyncio.Queue[dict[str, Any]]) -> None:
+        self._abonnes.get(conversation_id, set()).discard(file)
+
+    def _publier(self, conversation_id: str, evenement: dict[str, Any]) -> None:
+        for file in self._abonnes.get(conversation_id, ()):
+            file.put_nowait(evenement)
+
+    def deposer_pont(self, conversation_id: str, texte: str) -> None:
+        """Ce que l'orchestrateur doit savoir de l'appel vocal, ajouté en tête de son prochain message."""
+        self._ponts[conversation_id] = texte
+
+    def _avec_pont(self, conversation_id: str, texte: str) -> str:
+        pont = self._ponts.pop(conversation_id, None)
+        return f"{pont}\n\n{texte}" if pont else texte
 
     def en_cours(self, conversation_id: str) -> bool:
         return conversation_id in self._tours
@@ -67,6 +101,7 @@ class Gestionnaire:
         texte: str,
         agent_cible: str | None = None,
         reglages: Reglages | None = None,
+        origine: Origine = "texte",
     ) -> Execution:
         """Message de Camille à l'orchestrateur (`agent_cible` None) ou à l'un de ses sous-agents.
 
@@ -76,13 +111,13 @@ class Gestionnaire:
         cible = None if agent_cible in (None, "", RACINE) else agent_cible
         cid = conversation.id
         if cid not in self._tours:
-            return await self.lancer(conversation, texte, agent_cible=cible, reglages=reglages)
+            return await self.lancer(conversation, texte, agent_cible=cible, reglages=reglages, origine=origine)
         tour = self._tours[cid]
         execution = self._executions.get(cid)
         if tour is None or execution is None:
             raise TourIndisponible(cid)
         try:
-            await tour.steer(relais(cible, texte) if cible else texte)
+            await tour.steer(relais(cible, texte) if cible else self._avec_pont(cid, texte))
         except Exception as e:
             log.warning("Message non injecté dans le tour de %s", cid, exc_info=True)
             raise TourIndisponible(cid) from e
@@ -97,11 +132,13 @@ class Gestionnaire:
         texte: str,
         agent_cible: str | None = None,
         reglages: Reglages | None = None,
+        origine: Origine = "texte",
     ) -> Execution:
         cid = conversation.id
         if cid in self._tours:
             raise DejaEnCours(cid)
         self._tours[cid] = None  # réservé avant tout await
+        self.derniers_lancements[cid] = (origine, time.time())
         try:
             precedente = await asyncio.to_thread(conversations.derniere_execution, cid)
             execution = await asyncio.to_thread(conversations.creer_execution, cid)
@@ -119,7 +156,7 @@ class Gestionnaire:
             self._suivis.pop(cid, None)
             raise
 
-        consigne = relais(agent_cible, texte) if agent_cible else texte
+        consigne = relais(agent_cible, texte) if agent_cible else self._avec_pont(cid, texte)
         tache = asyncio.create_task(self._executer(conversation, consigne, execution.id, reglages or Reglages()))
         self._taches.add(tache)
         tache.add_done_callback(self._taches.discard)
@@ -144,6 +181,8 @@ class Gestionnaire:
         statut: StatutExecution = "erreur"
         erreur: str | None = None
         usage = None
+        reponse: str | None = None
+        self._publier(cid, {"type": "debut"})
         try:
             resultat = await agent.tour(
                 conversation,
@@ -153,6 +192,7 @@ class Gestionnaire:
                 suivi=self._suivis[cid],
                 effort=reglages.effort,
                 modele=reglages.modele,
+                sur_etape=lambda e: self._publier(cid, {"type": "etape", **asdict(e)}),
             )
             usage = resultat.usage
             if cid in self._arrets:
@@ -173,6 +213,8 @@ class Gestionnaire:
             self._executions.pop(cid, None)
             suivi = self._suivis.pop(cid, None)
             agents = _clore(suivi, statut) if suivi is not None else None
+            reponse = suivi.derniere_reponse if suivi is not None else None
+            self._publier(cid, {"type": "fin", "statut": statut, "reponse": reponse, "erreur": erreur})
 
         try:
             if erreur:

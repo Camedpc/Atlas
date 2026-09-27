@@ -5,3 +5,5 @@ openai-codex>=0.157.1
 # Serveur MCP des outils Atlas (atlas/orchestrateur/mcp_atlas.py).
 mcp>=2.2.0
 uvicorn[standard]>=0.30
+# Atlas voix : WebSocket vers Gradium (transcription et synthèse, atlas/voix/gradium.py).
+websockets>=13

@@ -43,6 +43,8 @@ Servies seulement par `atlas.serveur` (pas sur Vercel) :
 | `GET /api/conversations/{id}/agents` | Arbre des agents : en direct pendant un tour, sinon celui du dernier tour |
 | `POST /api/conversations/{id}/messages` | `{"contenu", "agent"?, "modele"?, "effort"?}` : lance un tour, ou s'injecte dans le tour en cours |
 | `POST /api/conversations/{id}/arreter` | Interrompt le tour en cours |
+| `WS /api/conversations/{id}/voix` | Appel vocal avec Atlas voix (premier message : `{"type": "auth", "jeton"}`) |
+| `/api/voix/appels/{appel}/…` | Outils du serveur MCP `voix` : confier à l'orchestrateur, son état, petites tâches |
 | `GET /api/orchestrateur/modeles` | Modèles Codex proposés à l'orchestrateur, leurs efforts, et les réglages par défaut |
 
 Chaque nœud porte aussi `parents` (ses prémisses) et `enfants` (les nœuds qui le citent), maintenus par
@@ -108,6 +110,28 @@ Connexion, dans le `CODEX_HOME` d'Atlas uniquement :
   `--code` pour une connexion par code sur une VM, à activer dans ChatGPT → Paramètres → Sécurité ;
   `--statut` affiche le compte utilisé) ;
 - en production, une clé API : renseigner `OPENAI_API_KEY` dans le `.env` suffit, elle est prioritaire.
+
+### Atlas voix
+
+Le bouton micro de la saisie ouvre un appel avec **Atlas voix** (`atlas/voix/`), la façade vocale de la
+conversation : transcription et synthèse Gradium en direct (on parle en continu, on lui coupe la parole, on lui
+donne des consignes), cerveau Codex rapide (`gpt-6-sol`, effort bas, mode fast), dans le bunker de la session.
+
+- Au décroché, elle reçoit les 30 derniers messages de la conversation (tour d'échauffement muet).
+- Recherche : elle la confie à l'orchestrateur (outil `confier_orchestrateur` du serveur MCP `voix`) — nouveau
+  tour, ou consigne injectée dans son tour en cours. Il n'y a jamais d'orchestrateur imbriqué.
+- Elle reçoit ses étapes clés (sous-agents directs lancés ou terminés, `SuiviAgents` → `gestionnaire.abonner`)
+  et sa réponse finale, et les annonce dans les silences, une phrase par étape. Les rapports bruts restent chez
+  l'orchestrateur.
+- Petites tâches pratiques : elle-même ou un petit sous-agent de fond (`lancer_tache`).
+- « Stop » la fait taire ; seule une demande explicite arrête la recherche.
+- Au raccrochage, la transcription de l'appel (enregistrée sous l'agent `/voix`) est ajoutée en tête du
+  prochain message que reçoit l'orchestrateur, sur le modèle choisi dans la saisie.
+- Dans l'arbre et l'agent graph, Atlas voix est un sommet (`/voix`) ; l'orchestrateur devient son enfant s'il
+  lui a confié du travail. Elle y reste jusqu'à la prochaine relance écrite de l'orchestrateur.
+
+Prompts : `atlas/orchestrateur/prompts/voix.md` et `tache_vocale.md`. Réglages : `GRADIUM_API_KEY` et
+`ATLAS_VOIX_*` dans `.env.example`. Prototype autonome d'origine et ses bancs d'essai : `voix-live/`.
 
 ### Sur une VM
 

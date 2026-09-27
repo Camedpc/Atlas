@@ -11,6 +11,7 @@ import { zoom as d3zoom, zoomIdentity, type ZoomBehavior } from 'd3-zoom'
 import type { Agent } from './api'
 import {
   RACINE,
+  VOIX,
   couleurRole,
   estFini,
   estVivant,
@@ -307,7 +308,7 @@ export class AgentGraph {
   private construire(a: Agent): NoeudDispo {
     const n = { cle: a.chemin, agent: a, enfants: [], reduit: false, replieManuel: false, nb: 0 } as unknown as NoeudDispo
     const enfants = etat.enfants(a)
-    if (enfants.length && a.chemin !== RACINE && estFini(a)) {
+    if (enfants.length && a.chemin !== RACINE && a.chemin !== VOIX && estFini(a)) {
       const desc = this.sousArbre(a)
       if (desc.every(estFini)) {
         const derniere = Math.max(a.fin ?? 0, ...desc.map((x) => x.fin ?? 0))
@@ -456,6 +457,7 @@ export class AgentGraph {
   }
 
   private etiquettePied(a: Agent): [string, string] {
+    if (a.etat === 'actif' && a.chemin === VOIX) return [a.outil ?? 'En appel', a.activite]
     if (a.etat === 'actif') return [a.outil ?? 'Réfléchit', a.activite]
     if (a.etat === 'attend') {
       const enfants = etat.enfants(a)
@@ -684,16 +686,24 @@ export class AgentGraph {
   // ─── Boucle de rendu ───
 
   private tic(dt: number) {
-    const racineAgent = etat.racine
-    this.vide.hidden = !!racineAgent
-    if (!racineAgent) {
+    const sommets = etat.sommets
+    this.vide.hidden = sommets.length > 0
+    if (!sommets.length) {
       if (this.rendus.size) this.reinitialiser()
       return
     }
-    const racine = this.construire(racineAgent)
-    this.mesurer(racine)
+    // Plusieurs sommets (Atlas voix et l'orchestrateur) : empilés, tous lancés par l'événement de départ.
     const noeuds: NoeudDispo[] = []
-    this.poser(racine, 0, 0, noeuds)
+    let haut = 0
+    let racine: NoeudDispo | undefined
+    for (const sommet of sommets) {
+      const n = this.construire(sommet)
+      this.mesurer(n)
+      this.poser(n, 0, haut, noeuds)
+      racine ??= n
+      haut += n.bande + ECART_Y * 3
+    }
+    if (!racine) return
     const presents = new Set(noeuds.map((n) => n.cle))
 
     let evt = this.rendus.get('evt')

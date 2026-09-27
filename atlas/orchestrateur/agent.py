@@ -23,7 +23,7 @@ from ..modeles import Conversation
 from . import bunker, config
 from .consignes import consigne_complete
 from .sous_agents import sous_agents
-from .suivi_agents import METHODES_SUIVIES, SuiviAgents
+from .suivi_agents import METHODES_SUIVIES, Etape, SuiviAgents
 from .traduction import traduire
 
 log = logging.getLogger(__name__)
@@ -124,6 +124,7 @@ async def tour(
     suivi: SuiviAgents | None = None,
     effort: str | None = None,
     modele: str | None = None,
+    sur_etape: Callable[[Etape], None] | None = None,
 ) -> ResultatTour:
     """Fait travailler l'orchestrateur sur `texte` jusqu'à sa réponse finale.
 
@@ -131,6 +132,7 @@ async def tour(
     `Arret`. `suivi` est tenu à jour avec l'arbre des agents, et les items des sous-agents sont enregistrés
     dans la conversation, rattachés à leur agent. `effort` et `modele` valent pour ce tour de l'orchestrateur
     (par défaut ATLAS_EFFORT_ORCHESTRATEUR et le modèle du thread) ; les sous-agents gardent ceux de leur rôle.
+    `sur_etape` reçoit les étapes clés du tour (sous-agents directs lancés ou terminés), pour la voix.
     """
     suivi = suivi if suivi is not None else SuiviAgents()
     projet = await asyncio.to_thread(projets.dossier_de, conversation.projet_id)
@@ -149,7 +151,7 @@ async def tour(
         file: asyncio.Queue = asyncio.Queue()
         boucle = asyncio.get_running_loop()
         retirer_espion = _espionner(codex, lambda *n: boucle.call_soon_threadsafe(file.put_nowait, n))
-        suiveur = asyncio.create_task(_suivre(codex, conversation.id, execution_id, suivi, file))
+        suiveur = asyncio.create_task(_suivre(codex, conversation.id, execution_id, suivi, file, sur_etape))
         try:
             return await _derouler(thread, texte, conversation.id, execution_id, sur_tour, effort, modele)
         finally:
@@ -240,7 +242,12 @@ def _en_dict(charge: Any) -> dict[str, Any]:
 
 
 async def _suivre(
-    codex: AsyncCodex, conversation_id: str, execution_id: str, suivi: SuiviAgents, file: asyncio.Queue
+    codex: AsyncCodex,
+    conversation_id: str,
+    execution_id: str,
+    suivi: SuiviAgents,
+    file: asyncio.Queue,
+    sur_etape: Callable[[Etape], None] | None = None,
 ) -> None:
     """Tient `suivi` à jour et enregistre les items des sous-agents, jusqu'à recevoir None."""
     enrichissements: set[asyncio.Task] = set()
@@ -248,6 +255,9 @@ async def _suivre(
         methode, charge = notification
         try:
             evenements = suivi.recevoir(methode, _en_dict(charge))
+            if sur_etape is not None:
+                for etape in evenements.etapes:
+                    sur_etape(etape)
             for thread_id in evenements.nouveaux:
                 tache = asyncio.create_task(_enrichir(codex, suivi, thread_id))
                 enrichissements.add(tache)

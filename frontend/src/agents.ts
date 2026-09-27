@@ -3,6 +3,9 @@
 import type { Agent, EtatAgent, Message } from './api'
 
 export const RACINE = '/root'
+/** Atlas voix, la façade vocale (atlas/voix) : sommet de l'arbre pendant un appel, ses petites tâches dessous. */
+export const VOIX = '/voix'
+export const estVoix = (chemin: string | null | undefined) => !!chemin && (chemin === VOIX || chemin.startsWith(`${VOIX}/`))
 
 // Couleurs de rôle pensées pour un fond clair (prototypes/vue-sous-agents/commun/clair.js).
 const COULEURS: Record<string, string> = {
@@ -13,6 +16,8 @@ const COULEURS: Record<string, string> = {
   graphiste: '#be185d',
   verificateur: '#15803d',
   recours: '#a16207',
+  atlas_voice: '#1d4ed8',
+  tache_vocale: '#0369a1',
 }
 
 const LIBELLES: Record<string, string> = {
@@ -23,6 +28,8 @@ const LIBELLES: Record<string, string> = {
   graphiste: 'Graphiste',
   verificateur: 'Vérificateur',
   recours: 'Recours',
+  atlas_voice: 'Atlas voix',
+  tache_vocale: 'Tâche vocale',
 }
 
 const ICONES: Record<string, string> = {
@@ -33,6 +40,8 @@ const ICONES: Record<string, string> = {
   graphiste: '◇',
   verificateur: '✓',
   recours: '§',
+  atlas_voice: '∿',
+  tache_vocale: '›',
 }
 
 export const LIBELLES_ETAT: Record<EtatAgent, string> = {
@@ -52,13 +61,15 @@ export const estVivant = (a: Agent) => a.etat === 'actif'
 /** Nom de la tâche donné par l'agent parent : dernier segment du chemin (`/root/hydrures_pression`). */
 export function mission(a: Agent): string {
   if (a.chemin === RACINE) return 'Orchestrateur'
+  if (a.chemin === VOIX) return 'Appel vocal'
   return a.chemin.slice(a.chemin.lastIndexOf('/') + 1).replace(/[_-]+/g, ' ')
 }
 
 /** « Directeur de labo · hydrures pression » */
 export function nomAgent(a: Agent | undefined, chemin = RACINE): string {
-  if (!a) return chemin === RACINE ? 'Orchestrateur' : chemin
+  if (!a) return chemin === RACINE ? 'Orchestrateur' : chemin === VOIX ? 'Atlas voix' : chemin
   if (a.chemin === RACINE) return 'Orchestrateur'
+  if (a.chemin === VOIX) return 'Atlas voix'
   return `${libelleRole(a.role)} · ${mission(a)}`
 }
 
@@ -103,6 +114,14 @@ class EtatAgents {
 
   enfants(a: Agent): Agent[] {
     return this.agents.filter((x) => x.parent === a.chemin)
+  }
+
+  /** Sommets de l'arbre : l'orchestrateur, et Atlas voix pendant un appel (en premier). S'il a confié du travail
+   * à l'orchestrateur, l'orchestrateur est son enfant et la voix est le seul sommet. */
+  get sommets(): Agent[] {
+    return this.agents
+      .filter((a) => !a.parent || !this.parChemin.has(a.parent))
+      .sort((a, b) => Number(b.chemin === VOIX) - Number(a.chemin === VOIX))
   }
 
   /** Sous-agents seulement (l'arbre n'apparaît que s'il y en a). */

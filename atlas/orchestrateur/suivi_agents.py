@@ -24,6 +24,7 @@ METHODES_SUIVIES = frozenset(
 
 LONGUEUR_MAX_ACTIVITE = 200
 LONGUEUR_MAX_RESULTAT = 600
+LONGUEUR_MAX_REPONSE = 4000
 
 
 @dataclass
@@ -46,6 +47,20 @@ class Agent:
 
 
 @dataclass
+class Etape:
+    """Étape clé d'un tour, racontée par la voix : un sous-agent direct de l'orchestrateur démarre ou s'arrête.
+
+    Les petits-enfants (littérature, expérimentateur…) et les outils restent muets.
+    """
+
+    genre: Literal["lance", "termine", "echec", "interrompu"]
+    chemin: str
+    role: str
+    mission: str
+    resultat: str | None = None
+
+
+@dataclass
 class Evenements:
     """Ce que le tour doit faire après une notification."""
 
@@ -53,6 +68,8 @@ class Evenements:
     """(chemin, item) : items terminés d'un sous-agent, à enregistrer dans sa conversation."""
     nouveaux: list[str] = field(default_factory=list)
     """Threads de sous-agents apparus, dont lire le rôle, le surnom et le modèle."""
+    etapes: list[Etape] = field(default_factory=list)
+    """Étapes clés à annoncer (voir `Etape`)."""
 
 
 def _court(texte: str, longueur: int) -> str:
@@ -77,6 +94,8 @@ class SuiviAgents:
         self._horloge = horloge
         self.agents: dict[str, Agent] = {}
         self._par_thread: dict[str, str] = {}
+        self.derniere_reponse: str | None = None
+        """Réponse finale de l'orchestrateur à ce tour, en entier (le `resultat` de l'agent est tronqué)."""
 
     @classmethod
     def depuis(cls, instantane: list[dict[str, Any]] | None, horloge: Callable[[], float] = time.time) -> "SuiviAgents":
@@ -130,9 +149,12 @@ class SuiviAgents:
                 agent.etat, agent.fin, agent.outil, agent.activite = "actif", None, None, "Réfléchit"
             case "turn/completed":
                 statut = (params.get("turn") or {}).get("status")
+                deja_fini = agent.etat in ("termine", "echec", "interrompu")
                 agent.etat = {"completed": "termine", "interrupted": "interrompu"}.get(statut, "echec")
                 agent.fin, agent.outil = maintenant, None
                 agent.activite = {"termine": "Terminé", "interrompu": "Interrompu"}.get(agent.etat, "Échec")
+                if not deja_fini:
+                    self._etape(evenements, agent, agent.etat)
             case "thread/tokenUsage/updated":
                 total = ((params.get("tokenUsage") or {}).get("total") or {}).get("totalTokens")
                 if isinstance(total, int):
@@ -146,6 +168,13 @@ class SuiviAgents:
         return evenements
 
     # ── interne ──
+
+    def _etape(self, evenements: Evenements, agent: Agent, genre: str) -> None:
+        if agent.parent != RACINE:
+            return
+        evenements.etapes.append(
+            Etape(genre, agent.chemin, agent.role, mission_depuis_chemin(agent.chemin), agent.resultat)  # type: ignore[arg-type]
+        )
 
     def _agent(self, thread_id: Any) -> Agent | None:
         chemin = self._par_thread.get(thread_id) if isinstance(thread_id, str) else None
@@ -164,8 +193,10 @@ class SuiviAgents:
             self.agents[chemin] = agent
             self._par_thread[thread_id] = chemin
             evenements.nouveaux.append(thread_id)
+            self._etape(evenements, agent, "lance")
         if genre == "interrupted" and agent.etat != "termine":
             agent.etat, agent.fin, agent.outil, agent.activite = "interrompu", self._horloge(), None, "Interrompu"
+            self._etape(evenements, agent, "interrompu")
 
     def _debut_item(self, agent: Agent, item: dict) -> None:
         type_ = item.get("type")
@@ -206,6 +237,8 @@ class SuiviAgents:
         type_ = item.get("type")
         if type_ == "agentMessage" and item.get("phase") == "final_answer" and str(item.get("text", "")).strip():
             agent.resultat = _court(str(item["text"]), LONGUEUR_MAX_RESULTAT)
+            if agent.chemin == RACINE:
+                self.derniere_reponse = str(item["text"])[:LONGUEUR_MAX_REPONSE]
         if agent.etat in ("termine", "echec", "interrompu"):
             return
         if type_ == "collabAgentToolCall" and item.get("tool") == "wait":

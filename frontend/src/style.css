@@ -747,6 +747,160 @@ body.sessions-repliees .deplier-sessions {
   background: #3f3f46;
 }
 
+/* ── Appel vocal (Atlas voix) ────────────────────────────── */
+
+.micro {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--trait-fort);
+  border-radius: 8px;
+  background: var(--fond);
+  color: var(--texte-2);
+}
+
+.micro:hover {
+  background: var(--fond-2);
+  color: var(--texte);
+}
+
+.micro.actif {
+  border-color: #1d4ed8;
+  background: #eff4ff;
+  color: #1d4ed8;
+}
+
+.appel {
+  margin-bottom: 8px;
+  padding: 8px 12px;
+  border: 1px solid #c7d6fb;
+  border-radius: 12px;
+  background: #f7f9ff;
+  font-size: 12.5px;
+}
+
+.appel-ligne {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.appel-ligne .espace {
+  flex: 1;
+}
+
+.appel-etat {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--texte-2);
+}
+
+.appel-etat b {
+  font-weight: 600;
+  color: var(--texte);
+}
+
+.appel-etat i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--texte-3);
+}
+
+.appel-etat[data-etat='ecoute'] i {
+  background: var(--ok);
+}
+
+.appel-etat[data-etat='parle'] i {
+  background: #1d4ed8;
+}
+
+.appel-etat[data-etat='reflexion'] i,
+.appel-etat[data-etat='travail'] i,
+.appel-etat[data-etat='demarrage'] i {
+  background: #b45309;
+}
+
+.appel-niveau {
+  width: 48px;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--fond-3);
+  overflow: hidden;
+}
+
+.appel-niveau span {
+  display: block;
+  width: 0;
+  height: 100%;
+  background: var(--ok);
+  transition: width 80ms linear;
+}
+
+.appel-mesures {
+  color: var(--texte-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.appel select,
+.appel button {
+  padding: 3px 8px;
+  border: 1px solid var(--trait-fort);
+  border-radius: 6px;
+  background: var(--fond);
+  font-size: 12px;
+}
+
+.appel button:hover {
+  background: var(--fond-2);
+}
+
+.appel-casque {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--texte-2);
+}
+
+.appel .appel-raccrocher {
+  border-color: #f1b4b4;
+  color: var(--echec);
+}
+
+.appel .appel-micro.coupe {
+  border-color: var(--echec);
+  color: var(--echec);
+}
+
+.appel-texte {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 4px;
+  min-height: 18px;
+}
+
+.appel-texte span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.appel-camille {
+  color: var(--texte-3);
+  font-style: italic;
+}
+
+.appel-atlas {
+  color: var(--texte-2);
+  text-align: right;
+}
+
 /* ── Panneau de droite ───────────────────────────────────── */
 
 .panneau-droit {
