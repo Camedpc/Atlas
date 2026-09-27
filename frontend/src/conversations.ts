@@ -22,6 +22,7 @@ import { echapper, rendre } from './rendu'
 import { SelecteurModele } from './reglages'
 import { PanneauSessions } from './sessions'
 import { Pastille } from './pastille'
+import { choisirSon, ecouterSon, sonChoisi, SONS } from './sons'
 import { Appel, optionsVoix, VOIX_GRADIUM, type MessageVoix } from './voix'
 
 const INTERVALLE_SUIVI_MS = 700
@@ -266,8 +267,15 @@ export class PanneauConversation {
     this.stop.addEventListener('click', () => this.appel.raccrocher())
     this.boutonOptions.addEventListener('click', () => this.basculerMenuVoix())
     this.menuVoix.addEventListener('click', (e) => {
-      const el = (e.target as HTMLElement).closest<HTMLElement>('[data-voix], [data-option]')
+      const el = (e.target as HTMLElement).closest<HTMLElement>('[data-voix], [data-option], [data-son]')
       if (!el) return
+      if (el.dataset.son) {
+        // Choisir un son le fait entendre : ouverture puis fermeture.
+        choisirSon(el.dataset.son)
+        ecouterSon(el.dataset.son)
+        this.dessinerMenuVoix()
+        return
+      }
       if (el.dataset.voix) optionsVoix.voix = el.dataset.voix
       if (el.dataset.option === 'casque') optionsVoix.casque = !optionsVoix.casque
       this.appel.envoyerReglages()
@@ -699,6 +707,11 @@ export class PanneauConversation {
       VOIX_GRADIUM.map(
         ([id, nom]) => `<button type="button" role="menuitemradio" aria-checked="${id === voix}" class="menu-ligne" data-voix="${id}">
           <span class="menu-texte"><b>${nom}</b></span>${coche(id === voix)}</button>`,
+      ).join('') +
+      '<hr><p class="menu-titre">Son de l’appel <small>(clic pour écouter)</small></p>' +
+      SONS.map(
+        (s) => `<button type="button" role="menuitemradio" aria-checked="${s.id === sonChoisi()}" class="menu-ligne" data-son="${s.id}">
+          <span class="menu-texte"><b>${s.nom}</b><span>${s.description}</span></span>${coche(s.id === sonChoisi())}</button>`,
       ).join('') +
       `<hr><button type="button" role="menuitemcheckbox" aria-checked="${optionsVoix.casque}" class="menu-ligne" data-option="casque">
         <span class="menu-texte"><b>Coupure immédiate</b><span>Atlas se tait dès que tu parles</span></span>${coche(optionsVoix.casque)}</button>`

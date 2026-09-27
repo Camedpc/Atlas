@@ -4,6 +4,8 @@
 // et la pastille (pastille.ts) montre les deux voix.
 import { jetonAcces, urlAppel } from './api'
 import { analyseur, type SourcesPastille } from './pastille'
+import { Generations } from './generations'
+import { jouerSon } from './sons'
 
 export const VOIX_GRADIUM: [string, string][] = [
   ['iEu63s1rhn_kegTr', 'Gaspard'],
@@ -100,11 +102,13 @@ export class Appel {
   private flux: MediaStream | null = null
   private lecteur: AudioWorkletNode | null = null
   private boucle: BoucleWebRTC | null = null
+  private sonOuvertureJoue = false
   /** webrtc, sauf si la boucle n'a pas pu s'établir (repli : sortie directe du moteur audio). */
   private modeLecture: 'webrtc' | 'webaudio' = 'webrtc'
   private etatServeur: EtatAppel = 'demarrage'
   private enLecture = false
-  private genCourante = 0
+  /** Génération audio en cours ; repart de zéro à chaque appel, comme la numérotation du serveur. */
+  private generations = new Generations()
   private position = { joues: 0, t: 0 }
   private messages = new Map<string, Suivi>()
   private image = 0
@@ -122,6 +126,10 @@ export class Appel {
   async demarrer(conversationId: string) {
     if (this.ws) return
     this.messages.clear()
+    this.sonOuvertureJoue = false
+    this.generations.nouvelAppel()
+    this.enLecture = false
+    this.position = { joues: 0, t: 0 }
     this.afficherEtat('demarrage')
     try {
       await this.ouvrirAudio()
@@ -141,8 +149,9 @@ export class Appel {
     ws.onclose = (e) => {
       if (this.ws !== ws) return
       this.ws = null
-      this.couperLecture(this.genCourante)
+      this.couperLecture(this.generations.courante)
       this.fermerAudio()
+      jouerSon('fermeture')
       cancelAnimationFrame(this.image)
       this.rappels.surSources(null)
       this.rappels.surPartiel('')
@@ -207,7 +216,7 @@ export class Appel {
         this.enLecture = false
         this.afficherEtat()
       }
-      this.envoyer({ type: 'lecture', gen: this.genCourante, joue_s: e.data.joues / 48000, fini })
+      this.envoyer({ type: 'lecture', gen: this.generations.courante, joue_s: e.data.joues / 48000, fini })
     }
     // Les deux voix de la pastille : le micro après annulation d'écho, et ce que joue le lecteur.
     const toi = analyseur(this.contexte)
@@ -279,9 +288,10 @@ export class Appel {
 
   private jouer(tampon: ArrayBuffer) {
     const gen = new DataView(tampon).getUint32(0, true)
-    if (gen < this.genCourante || !this.lecteur) return // audio d'une réponse coupée
-    if (gen > this.genCourante) {
-      this.genCourante = gen
+    if (!this.lecteur) return
+    const trame = this.generations.recevoir(gen)
+    if (trame === 'ignorer') return // audio d'une réponse coupée
+    if (trame === 'nouvelle') {
       this.position = { joues: 0, t: performance.now() }
       this.lecteur.port.postMessage({ type: 'zero' })
     }
@@ -298,12 +308,12 @@ export class Appel {
 
   private couperLecture(gen: number) {
     for (const m of this.messages.values()) {
-      if (m.gen === this.genCourante && m.prononce < m.texte.length && !m.coupe) {
+      if (m.gen === this.generations.courante && m.prononce < m.texte.length && !m.coupe) {
         m.coupe = true
         this.rappels.surMessage(m)
       }
     }
-    this.genCourante = Math.max(this.genCourante, gen)
+    this.generations.couper(gen)
     this.lecteur?.port.postMessage({ type: 'couper' })
     this.enLecture = false
     this.afficherEtat()
@@ -314,7 +324,7 @@ export class Appel {
   private suivi(id: string): Suivi {
     let m = this.messages.get(id)
     if (!m) {
-      m = { id, gen: this.genCourante, texte: '', prononce: 0, coupe: false, mots: [], curseur: 0, segments: [] }
+      m = { id, gen: this.generations.courante, texte: '', prononce: 0, coupe: false, mots: [], curseur: 0, segments: [] }
       this.messages.set(id, m)
     }
     return m
@@ -345,7 +355,7 @@ export class Appel {
   private avancerTexte() {
     const joue = this.position.joues / 48000 + (this.enLecture ? (performance.now() - this.position.t) / 1000 : 0)
     for (const m of this.messages.values()) {
-      if (m.gen !== this.genCourante || m.coupe || m.prononce >= m.texte.length) continue
+      if (m.gen !== this.generations.courante || m.coupe || m.prononce >= m.texte.length) continue
       let prononce = m.prononce
       for (const s of m.segments) if (s.debut <= joue - RETARD_SORTIE_S) prononce = Math.max(prononce, s.fin)
       // Fin de lecture : ce qui reste (ponctuation, mots non retrouvés) est dit.
@@ -405,6 +415,12 @@ export class Appel {
 
   private afficherEtat(etat?: EtatAppel) {
     if (etat) this.etatServeur = etat
+    // Première écoute : Atlas voix est prêt, on peut parler.
+    // Son propre contexte, comme la fermeture : joué par la boucle WebRTC de la voix, il ne s'entendait pas.
+    if (etat === 'ecoute' && !this.sonOuvertureJoue && this.contexte) {
+      this.sonOuvertureJoue = true
+      jouerSon('ouverture')
+    }
     const affiche = this.enLecture && this.etatServeur !== 'demarrage' ? 'parle' : this.etatServeur
     this.rappels.surEtatVoix(affiche)
   }

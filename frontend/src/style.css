@@ -820,7 +820,13 @@ body.sessions-repliees .deplier-sessions {
 }
 
 .menu-voix {
-  width: 240px;
+  width: 280px;
+  max-height: min(70vh, 560px);
+  overflow-y: auto;
+}
+
+.menu-titre small {
+  font-weight: 400;
 }
 
 .menu-titre {
