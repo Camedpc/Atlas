@@ -26,6 +26,12 @@ prompts dans `atlas/orchestrateur/prompts/*.md` : c'est Camille qui les fait év
 - `journal` est append-only (triggers) : on n'y fait que des `insert`.
 - Espaces de travail : table `projets` (nom, description, `dossier` dans le bunker) ; `conversations.projet_id`
   (null = le projet « defaut », dossier historique du bunker). Le front arrive sur la page du dernier espace ouvert.
+- Vue du graphe (2D uniquement, une par espace, façon Blueprint) : `groupes` (cadres imbricables), `placements`
+  (case de grille colonne/ligne de chaque nœud, un seul cadre par nœud, `fixe` = placé à la main), `etiquettes`.
+  Les rectangles des cadres ne sont pas stockés (ils englobent leurs nœuds). Règles et placement automatique
+  (à droite des prémisses, sans chevauchement) dans `atlas/vue.py` (pur) ; écriture par `ecriture.organiser_vue`,
+  tout ou rien, journalisée (action `vue`). Le sens reste dans `noeuds.type`, `noeuds.details` et
+  `demonstrations.roles` (rôle des prémisses non principales ; `justifie_par` garde la liste complète).
 - `noeuds.parents` / `noeuds.enfants` (parents = prémisses) sont maintenus par trigger depuis `demonstrations` :
   ne jamais les écrire. `noeuds.conversation_id` dit seulement qui a créé le nœud.
 - Un graphe par espace : `noeuds`, `demonstrations` et `journal` portent `projet_id` (non nul, « defaut » pour

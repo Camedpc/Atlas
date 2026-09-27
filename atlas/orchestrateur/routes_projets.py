@@ -2,12 +2,13 @@
 
 import asyncio
 import mimetypes
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
-from .. import projets
+from .. import ecriture, projets
 from ..modeles import Projet
 from . import bunker, config
 from .fichiers import CheminInterdit, arborescence, fichier_du_projet
@@ -67,3 +68,21 @@ def fichier(projet_id: str, chemin: str) -> FileResponse:
     if type_.startswith("text/"):
         type_ += "; charset=utf-8"
     return FileResponse(cible, media_type=type_, content_disposition_type="inline")
+
+
+class OperationsVue(BaseModel):
+    operations: list[dict[str, Any]] = Field(min_length=1)
+    essai: bool = False
+    """Valide sans rien écrire."""
+
+
+@routeur.post("/{projet_id}/vue")
+def organiser_vue(projet_id: str, corps: OperationsVue) -> dict:
+    """Réarrange la vue de l'espace (mêmes opérations que l'outil MCP organiser_vue), au nom de l'utilisateur."""
+    _projet(projet_id)
+    try:
+        return ecriture.organiser_vue(
+            projet_id=projet_id, operations=corps.operations, auteur=config.UTILISATEUR, essai=corps.essai
+        )
+    except ecriture.ErreurGraphe as e:
+        raise HTTPException(422, str(e)) from None

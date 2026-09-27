@@ -23,6 +23,7 @@ Harness de hackathon : des agents IA transforment leurs raisonnements scientifiq
 | `GET /api/graphe?projet_id=` | Tous les nœuds (avec statut et démonstrations) et toutes les arêtes du graphe d'un espace |
 | `GET /api/noeuds/{id}?projet_id=` | Un nœud, ses prémisses et les nœuds qui l'utilisent |
 | `GET /api/journal?projet_id=&noeud_id=&limite=&avant_id=` | Historique, le plus récent d'abord |
+| `GET /api/vue?projet_id=&format=json\|texte` | Vue de l'espace : cadres (et leur rectangle), placements en cases, étiquettes ; `texte` = ce que lit l'IA |
 | `GET /api/docs` | Documentation interactive |
 
 Chaque espace de travail (projet) a son propre graphe : `projet_id` le choisit, et son absence désigne le
@@ -36,6 +37,7 @@ Servies seulement par `atlas.serveur` (pas sur Vercel) :
 | `POST /api/projets` | Crée un espace (`{"nom", "description"?}`) et son dossier dans le bunker |
 | `GET /api/projets/{id}/fichiers` | Arborescence du dossier de l'espace dans le bunker (vue Documents) |
 | `GET /api/projets/{id}/fichier?chemin=` | Contenu d'un fichier de l'espace, pour l'aperçu |
+| `POST /api/projets/{id}/vue` | Réarrange la vue (`{"operations": [...], "essai"?}`, mêmes opérations que l'outil MCP `organiser_vue`) |
 | `GET /api/conversations?projet_id=` | Conversations (d'un espace), la plus récente d'abord |
 | `POST /api/conversations` | Crée une conversation (`{"titre"?, "projet_id"?}`) |
 | `GET /api/conversations/{id}` | Conversation, `en_cours` (tour de l'orchestrateur), `actif` (un agent travaille), `brouillons` (texte en cours d'écriture), dernière exécution |

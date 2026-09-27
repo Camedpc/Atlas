@@ -7,8 +7,9 @@ Les refus métier lèvent `ErreurGraphe`, dont le message est renvoyé tel quel 
 import re
 from typing import Any
 
+from . import lecture, vue
 from .client import supabase
-from .modeles import Action, Validite
+from .modeles import Action, TypeNoeud, Validite
 
 MOTIF_ID = re.compile(r"^[a-z0-9_]+$")
 
@@ -35,7 +36,9 @@ def normaliser_premisses(noeud_id: str, justifie_par: list[str]) -> list[str]:
 # ── Écritures ────────────────────────────────────────────────────────────────
 
 
-def _journaliser(action: Action, *, projet_id: str, auteur: str, noeud_id: str, apres: Any, **champs: Any) -> None:
+def _journaliser(
+    action: Action, *, projet_id: str, auteur: str, noeud_id: str | None, apres: Any, **champs: Any
+) -> None:
     supabase().table("journal").insert(
         {"action": action, "projet_id": projet_id, "auteur": auteur, "noeud_id": noeud_id, "apres": apres, **champs}
     ).execute()
@@ -58,7 +61,11 @@ def creer_noeud(
     auteur: str,
     conversation_id: str | None = None,
     raison: str | None = None,
+    type: TypeNoeud | None = None,
+    details: dict | None = None,
+    groupe: str | None = None,
 ) -> dict:
+    """Crée le nœud puis le place dans la vue : dans `groupe` s'il est donné, sinon près de ses voisins."""
     verifier_id(id)
     if _existants(projet_id, [id]):
         raise ErreurGraphe(f"Le nœud {id} existe déjà : consulte-le avec lire_noeud et réutilise-le.")
@@ -69,17 +76,36 @@ def creer_noeud(
         "enonce": enonce,
         "admis": admis,
         "conversation_id": conversation_id,
+        "type": type,
+        "details": details,
     }
+    etat = lecture.charger_etat_vue(projet_id)
+    if groupe and groupe not in etat.groupes:
+        raise ErreurGraphe(f"Cadre inexistant : {groupe}. Crée-le avec organiser_vue (creer_groupe), ou omets groupe.")
     supabase().table("noeuds").insert(ligne).execute()
     _journaliser("creation_noeud", projet_id=projet_id, auteur=auteur, noeud_id=id, apres=ligne, raison=raison)
+    etat.noeuds[id] = vue.NoeudVue(id, nom, type)
+    _placer(projet_id, etat, id, groupe or ...)
     return ligne
 
 
 def ajouter_demonstration(
-    *, projet_id: str, noeud_id: str, nom_demonstration: str, justifie_par: list[str], demonstration: str, auteur: str
+    *,
+    projet_id: str,
+    noeud_id: str,
+    nom_demonstration: str,
+    justifie_par: list[str],
+    demonstration: str,
+    auteur: str,
+    roles: dict[str, str] | None = None,
 ) -> dict:
-    """Toute démonstration écrite par un agent démarre « à vérifier »."""
+    """Toute démonstration écrite par un agent démarre « à vérifier ». `roles` donne le rôle des prémisses non
+    principales ; un nœud qui n'a pas été placé à la main se replace ensuite à droite de ses prémisses."""
     premisses = normaliser_premisses(noeud_id, justifie_par)
+    try:
+        roles = vue.valider_roles(premisses, roles)
+    except vue.ErreurVue as e:
+        raise ErreurGraphe(str(e)) from None
     trouves = _existants(projet_id, [noeud_id, *premisses])
     if noeud_id not in trouves:
         raise ErreurGraphe(f"Nœud inexistant : {noeud_id}. Crée-le d'abord avec creer_noeud.")
@@ -102,6 +128,7 @@ def ajouter_demonstration(
         "noeud_id": noeud_id,
         "nom_demonstration": nom_demonstration,
         "justifie_par": premisses,
+        "roles": roles,
         "demonstration": demonstration,
         "validite": "a_verifier",
         "auteur": "ia",
@@ -115,6 +142,10 @@ def ajouter_demonstration(
         nom_demonstration=nom_demonstration,
         apres=ligne,
     )
+    etat = lecture.charger_etat_vue(projet_id)
+    place = etat.placements.get(noeud_id)
+    if place is None or not place.fixe:
+        _placer(projet_id, etat, noeud_id, ...)
     return ligne
 
 
@@ -162,3 +193,112 @@ def noter_demonstration(
         raison=justification,
     )
     return apres
+
+
+# ── Vue du graphe ────────────────────────────────────────────────────────────
+
+
+def _placer(projet_id: str, etat: vue.EtatVue, noeud_id: str, groupe: str | None | Any) -> None:
+    """Placement automatique d'un nœud (sans journal : c'est la conséquence d'une écriture déjà journalisée)."""
+    try:
+        place = vue.placer_auto(etat, noeud_id, groupe)
+    except vue.ErreurVue:
+        return  # la vue le montrera « non placé » ; une réorganisation le rattrapera
+    if etat.placements.get(noeud_id) == place:
+        return
+    etat.placements[noeud_id] = place
+    _ecrire_placements(projet_id, [place])
+
+
+def _ligne_placement(projet_id: str, p: vue.Placement) -> dict:
+    return {
+        "projet_id": projet_id,
+        "noeud_id": p.noeud_id,
+        "groupe_id": p.groupe_id,
+        "colonne": p.colonne,
+        "ligne": p.ligne,
+        "largeur": p.largeur,
+        "hauteur": p.hauteur,
+        "fixe": p.fixe,
+    }
+
+
+def _ecrire_placements(projet_id: str, placements: list[vue.Placement]) -> None:
+    if placements:
+        lignes = [_ligne_placement(projet_id, p) for p in placements]
+        supabase().table("placements").upsert(lignes, on_conflict="projet_id,noeud_id").execute()
+
+
+def organiser_vue(*, projet_id: str, operations: list[dict[str, Any]], auteur: str, essai: bool = False) -> dict:
+    """Applique des opérations sur la vue, tout ou rien ; `essai` valide sans rien écrire.
+
+    Renvoie le résumé des changements. Les renommages de nœuds modifient `noeuds.nom` (l'id ne change jamais).
+    """
+    if not operations:
+        raise ErreurGraphe("Aucune opération.")
+    avant = lecture.charger_etat_vue(projet_id)
+    try:
+        apres, renommages = vue.appliquer(avant, operations)
+    except vue.ErreurVue as e:
+        raise ErreurGraphe(str(e)) from None
+    diff = vue.differences(avant, apres)
+    resume = {
+        "cadres_modifies": [g.id for g in diff["groupes"]],
+        "cadres_supprimes": diff["groupes_supprimes"],
+        "noeuds_places": [p.noeud_id for p in diff["placements"]],
+        "noeuds_renommes": sorted(renommages),
+        "etiquettes": [e.id for e in diff["etiquettes"]],
+        "marques_ajoutees": diff["marques_ajoutees"],
+        "marques_retirees": diff["marques_retirees"],
+    }
+    if essai:
+        return {"essai": True, **resume}
+
+    base = supabase()
+    # Cadres : parents avant enfants, pour que la clé du parent existe.
+    profondeur = {}
+    for g in diff["groupes"]:
+        d, x = 0, g
+        while x.parent_id is not None and x.parent_id in apres.groupes:
+            d, x = d + 1, apres.groupes[x.parent_id]
+        profondeur[g.id] = d
+    for g in sorted(diff["groupes"], key=lambda g: profondeur[g.id]):
+        base.table("groupes").upsert(
+            {
+                "projet_id": projet_id,
+                "id": g.id,
+                "nom": g.nom,
+                "parent_id": g.parent_id,
+                "genre": g.genre,
+                "couleur": g.couleur,
+                "replie": g.replie,
+                "ordre": g.ordre,
+            },
+            on_conflict="projet_id,id",
+        ).execute()
+    for eid in [e.id for e in diff["etiquettes"]]:
+        e = apres.etiquettes[eid]
+        base.table("etiquettes").upsert(
+            {"projet_id": projet_id, "id": e.id, "nom": e.nom, "couleur": e.couleur}, on_conflict="projet_id,id"
+        ).execute()
+    _ecrire_placements(projet_id, diff["placements"])
+    for nid, nom in renommages.items():
+        base.table("noeuds").update({"nom": nom}).eq("projet_id", projet_id).eq("id", nid).execute()
+    for nid, eid in diff["marques_ajoutees"]:
+        base.table("noeuds_etiquettes").upsert(
+            {"projet_id": projet_id, "noeud_id": nid, "etiquette_id": eid},
+            on_conflict="projet_id,noeud_id,etiquette_id",
+        ).execute()
+    for nid, eid in diff["marques_retirees"]:
+        (
+            base.table("noeuds_etiquettes")
+            .delete()
+            .eq("projet_id", projet_id)
+            .eq("noeud_id", nid)
+            .eq("etiquette_id", eid)
+            .execute()
+        )
+    for gid in diff["groupes_supprimes"]:
+        base.table("groupes").delete().eq("projet_id", projet_id).eq("id", gid).execute()
+    _journaliser("vue", projet_id=projet_id, auteur=auteur, noeud_id=None, apres={"operations": operations, **resume})
+    return resume

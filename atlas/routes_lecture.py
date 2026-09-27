@@ -4,10 +4,10 @@ Chaque espace de travail a son graphe : `projet_id` le choisit (absent = le proj
 """
 
 from fastapi import APIRouter, HTTPException, Query
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 
-from . import lecture, projets
-from .modeles import DetailNoeud, EntreeJournal, Graphe
+from . import lecture, projets, vue
+from .modeles import DetailNoeud, EntreeJournal, Graphe, Vue
 
 routeur = APIRouter(prefix="/api")
 
@@ -42,3 +42,15 @@ def journal(
     avant_id: int | None = None,
 ) -> list[EntreeJournal]:
     return lecture.lire_journal(projets.id_ou_defaut(projet_id), noeud_id=noeud_id, limite=limite, avant_id=avant_id)
+
+
+@routeur.get("/vue", response_model=None)
+def vue_du_graphe(
+    projet_id: str | None = None, format: str = Query("json", pattern="^(json|texte)$")
+) -> Vue | PlainTextResponse:
+    """Vue de l'espace : cadres (avec leur rectangle de cases), placements, étiquettes. `format=texte` donne la
+    même vue telle que l'IA la lit (outil MCP lire_vue)."""
+    etat = lecture.charger_etat_vue(projets.id_ou_defaut(projet_id))
+    if format == "texte":
+        return PlainTextResponse(vue.rendre_texte(etat))
+    return lecture.vue_pour_le_front(etat)
