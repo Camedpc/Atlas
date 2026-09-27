@@ -1,10 +1,10 @@
 // Petits sons de l'appel vocal : ouverture (Atlas voix est prêt à écouter) et fermeture (raccroché). Synthétisés
 // avec Web Audio, sans fichier. Plusieurs familles à essayer : le choix se fait dans le menu du micro et reste
 // dans ce navigateur.
-// L'ouverture se joue au clic sur le micro, avant qu'il s'ouvre (Windows baisse de 80 % par défaut les autres
-// sons pendant une communication), dans son propre contexte. La fermeture passe par le chemin de la voix d'Atlas
-// (contexte de l'appel, sortie WebRTC), encore ouvert. Un son joué dans un contexte neuf est précédé d'un
-// souffle inaudible qui réveille la sortie : un casque USB-C en veille avale sinon le début du premier son.
+// Hors communication, chacun dans son propre contexte (Windows baisse de 80 % par défaut les autres sons pendant
+// une communication) : l'ouverture au clic, avant que le micro s'ouvre ; la fermeture une fois le micro et
+// l'audio de l'appel relâchés. Chaque son est précédé d'un souffle inaudible qui réveille la sortie : un casque
+// USB-C en veille avale sinon le début du son.
 
 export type Sens = 'ouverture' | 'fermeture'
 
@@ -113,9 +113,6 @@ const RECETTES: Record<string, (ctx: AudioContext, sortie: AudioNode, t: number,
     if (sens === 'ouverture') note(ctx, sortie, t + 0.06, 1800, 0.05, 0.08, 'triangle')
   },
 }
-
-/** Durée maximale d'un son (s) : l'appel attend au moins ça avant de fermer sa sortie audio. */
-export const DUREE_SON_S = 1.0
 
 /** Souffle inaudible (−80 dB) qui réveille la sortie audio avant le son. */
 export const REVEIL_S = 0.35

@@ -5,7 +5,7 @@
 import { jetonAcces, urlAppel } from './api'
 import { analyseur, type SourcesPastille } from './pastille'
 import { Generations } from './generations'
-import { DUREE_SON_S, jouerSon, REVEIL_S } from './sons'
+import { jouerSon, REVEIL_S } from './sons'
 
 export const VOIX_GRADIUM: [string, string][] = [
   ['iEu63s1rhn_kegTr', 'Gaspard'],
@@ -102,8 +102,6 @@ export class Appel {
   private flux: MediaStream | null = null
   private lecteur: AudioWorkletNode | null = null
   private boucle: BoucleWebRTC | null = null
-  /** Sortie de la voix d'Atlas (boucle WebRTC, ou sortie directe en repli) : les sons de l'appel y passent aussi. */
-  private sortieSons: AudioNode | null = null
   /** webrtc, sauf si la boucle n'a pas pu s'établir (repli : sortie directe du moteur audio). */
   private modeLecture: 'webrtc' | 'webaudio' = 'webrtc'
   private etatServeur: EtatAppel = 'demarrage'
@@ -165,8 +163,10 @@ export class Appel {
       this.ws = null
       this.couperLecture(this.generations.courante)
       // Le son de fin passe encore par la sortie de l'appel, qui ne se ferme qu'une fois le son joué.
-      if (this.contexte) jouerSon('fermeture', undefined, this.contexte, this.sortieSons ?? undefined)
-      this.fermerAudio(DUREE_SON_S * 1000)
+      // Comme l'ouverture : micro et audio de l'appel relâchés d'abord, puis le son dans son propre contexte.
+      // Par la sortie WebRTC de l'appel (0,2 à 0,9 s de retard), il était coupé à la fermeture de cette sortie.
+      this.fermerAudio()
+      jouerSon('fermeture')
       cancelAnimationFrame(this.image)
       this.rappels.surSources(null)
       this.rappels.surPartiel('')
@@ -257,7 +257,6 @@ export class Appel {
       console.warn('Lecture WebRTC impossible, sortie directe', e)
       this.fermerBoucle()
       lecteur.connect(contexte.destination)
-      this.sortieSons = contexte.destination
       this.modeLecture = 'webaudio'
     }
   }
@@ -265,7 +264,6 @@ export class Appel {
   private async brancherWebRTC(contexte: AudioContext, lecteur: AudioWorkletNode) {
     const destination = contexte.createMediaStreamDestination()
     lecteur.connect(destination)
-    this.sortieSons = destination
     // Souffle inaudible (−80 dB) : sans lui, la sortie est en silence numérique parfait entre deux phrases et
     // WebRTC y perd le début du son suivant (mesuré : ~0,5 s, un « déclic » disparaissait en entier).
     const souffle = contexte.createBufferSource()
@@ -312,7 +310,6 @@ export class Appel {
     this.flux = null
     this.contexte = null
     this.lecteur = null
-    this.sortieSons = null
     for (const piste of flux?.getAudioTracks() ?? []) piste.enabled = false // plus rien ne part vers Atlas
     window.setTimeout(() => {
       if (boucle) {
