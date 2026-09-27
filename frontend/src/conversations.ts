@@ -81,18 +81,10 @@ function rendreMessage(m: Message): string {
     case 'outil':
       return rendreOutil(m)
     case 'systeme':
-      return m.donnees?.type === 'parcours' ? rendreParcours(m.donnees) : `<div class="msg systeme">${echapper(m.contenu)}</div>`
+      return `<div class="msg systeme">${echapper(m.contenu)}</div>`
   }
 }
 
-/** Parcours préparé par l'agent navigateur (atlas/parcours.py) : une carte qui le lance sur le graphe. */
-function rendreParcours(d: Record<string, unknown>): string {
-  const n = Number(d.etapes) || 0
-  return `<div class="msg parcours"><span class="etiquette">Parcours</span>
-    <span class="parcours-titre">${echapper(String(d.titre ?? ''))}</span>
-    <span class="parcours-etapes">${n} étape${n > 1 ? 's' : ''}</span>
-    <button type="button" class="lancer-parcours" data-parcours="${echapper(String(d.chemin ?? ''))}">Dérouler</button></div>`
-}
 
 interface Bilan {
   nb_outils: number
@@ -158,8 +150,6 @@ export class PanneauConversation {
   /** Écran du graphe, piloté par Atlas voix pendant un appel (main.ts le branche). */
   private ecran: Pilote | null = null
   private avantCommandes: () => Promise<void> = async () => {}
-  /** Carte « Parcours » du fil : main.ts le déroule sur le graphe. */
-  private surParcours: (chemin: string) => void = () => {}
   /** La saisie montre ce que Camille est en train de dire (et non un texte tapé). */
   private dictee = false
   /** Camille tape pendant l'appel : la dictée n'écrase plus la saisie. */
@@ -348,8 +338,6 @@ export class PanneauConversation {
       if (lien) etat.selectionner(lien.dataset.chemin!)
       const session = (e.target as HTMLElement).closest<HTMLElement>('[data-session]')
       if (session) void this.ouvrir(session.dataset.session!)
-      const parcours = (e.target as HTMLElement).closest<HTMLElement>('[data-parcours]')
-      if (parcours) this.surParcours(parcours.dataset.parcours!)
     })
     this.ariane.addEventListener('click', (e) => {
       const lien = (e.target as HTMLElement).closest<HTMLElement>('[data-chemin]')
@@ -392,10 +380,9 @@ export class PanneauConversation {
 
   /** Range ou ressort la barre des sessions (poignée de redimensionnement). */
   /** Écran du graphe que la voix pilote pendant un appel ; `avant` le rend visible avant chaque lot. */
-  brancherEcran(pilote: Pilote, avant: () => Promise<void>, surParcours: (chemin: string) => void) {
+  brancherEcran(pilote: Pilote, avant: () => Promise<void>) {
     this.ecran = pilote
     this.avantCommandes = avant
-    this.surParcours = surParcours
   }
 
   replierSessions(replie: boolean) {

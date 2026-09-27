@@ -11,7 +11,6 @@ import { VueGraphe } from './graphe'
 import { jeuSynthetique } from './graphe-synthetique'
 import { AdaptateurVue } from './pilotage/adaptateurVue'
 import { nouvelId, Pilote } from './pilotage/pilote'
-import { chargerParcours, LecteurParcours, type Parcours } from './parcours'
 import type { CommandeBas } from './pilotage/protocole'
 import { installerPoignees } from './redimension'
 import { echapper, rendre } from './rendu'
@@ -247,21 +246,12 @@ async function montrerGraphe() {
   montrer('raisonnement')
   for (let i = 0; i < 2; i++) await new Promise((r) => requestAnimationFrame(r))
 }
-const lecteurParcours = new LecteurParcours(document.querySelector<HTMLElement>('.vue-raisonnement')!, pilote, montrerGraphe,
-  (px) => (vueGraphe.margeBas = px))
-conversation.brancherEcran(pilote, montrerGraphe, (chemin) => {
-  if (!projetId) return
-  chargerParcours(projetId, chemin)
-    .then((p) => lecteurParcours.ouvrir(p))
-    .catch((e) => (compteur.textContent = `Parcours illisible : ${e instanceof Error ? e.message : String(e)}`))
-})
-// Développement : pilotage à la main depuis la console, ex. atlasAffichage.commander({ op: 'zoomer', facteur: 2 }),
-// ou atlasAffichage.parcours({ version: 1, titre, etapes: [{ phrase, compris: [], commandes }] }).
+conversation.brancherEcran(pilote, montrerGraphe)
+// Développement : pilotage à la main depuis la console, ex. atlasAffichage.commander({ op: 'zoomer', facteur: 2 }).
 if (import.meta.env.DEV) {
   const atlasAffichage = {
     etat: () => pilote.etat(),
     commander: (...c: CommandeBas[]) => pilote.commander(...c),
-    parcours: (p: Parcours) => lecteurParcours.ouvrir(p),
     pilote,
   }
   Object.assign(window, { atlasAffichage })

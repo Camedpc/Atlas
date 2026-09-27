@@ -39,12 +39,10 @@ prompts dans `atlas/orchestrateur/prompts/*.md` : c'est Camille qui les fait év
   Sa case est dans sa propre ligne (`colonne`, `ligne`…) ; dans `vue.py` elle est un pseudo-nœud `fig:<id>` dont la
   prémisse est son nœud, et elle remonte au cadre parent si le sien est trop serré (`placer_figure`). Quatre formats
   seulement (`FORMATS_FIGURE`) : 1 × 1, 2 × 1, 1 × 2 ou 2 × 2 cases, 2 × 2 par défaut.
-- Repères et parcours (`atlas/navigation.py`, pur) : la numérotation de l'écran (« Lemme 7 », « §1.2 »,
-  « Figure 2 ») recopie `construireModele` de `graphe-modele.ts` ; un jeu commun (`tests/donnees/reperes.json`) est
-  vérifié des deux côtés, à garder à jour si l'une change. Un parcours (`atlas/parcours.py`) est un fichier JSON
-  dans `docs_session/parcours/` de la session, annoncé par un message `systeme` (`donnees.type = "parcours"`) :
-  pas de table, et il ne déplace jamais rien. Rien de purement visuel (cadrage, zoom, filtres) n'est enregistré ;
-  seul un déplacement l'est (vue de l'espace, auteur `voix`).
+- Repères (`atlas/navigation.py`, pur) : la numérotation de l'écran (« Lemme 7 », « §1.2 », « Figure 2 ») recopie
+  `construireModele` de `graphe-modele.ts` ; un jeu commun (`tests/donnees/reperes.json`) est vérifié des deux
+  côtés, à garder à jour si l'une change. Rien de purement visuel (cadrage, zoom, filtres) n'est enregistré ; seul un
+  déplacement l'est (vue de l'espace, auteur `voix`).
 - `noeuds.parents` / `noeuds.enfants` (parents = prémisses) sont maintenus par trigger depuis `demonstrations` :
   ne jamais les écrire. `noeuds.conversation_id` dit seulement qui a créé le nœud.
 - Un graphe par espace : `noeuds`, `demonstrations` et `journal` portent `projet_id` (non nul, « defaut » pour
@@ -150,11 +148,7 @@ Sous `ATLAS_BUNKER=1`, un outil MCP sans `default_tools_approval_mode = "approve
 `zoomer`, `effacer_ecran`, `lire_ecran`, `deplacer`) ; les références sont résolues côté serveur
 (`navigation.py`), et les lots de commandes (P3) comme l'état de l'écran (P4) passent par la WebSocket de l'appel
 (messages `commandes`, `compte_rendu`, `ecran`), exécutés par `pilotage/` (contrat dans `protocoles/`, origine
-`voix`). Parcours : l'agent navigateur (rôle `navigateur` de l'orchestrateur, ou tâche de la voix
-`preparer_parcours`, prompt `prompts/navigateur.md`) les pose par `poser_parcours` ; la voix les déroule tout
-seuls (`derouler_parcours`, `deroulement.py` : phrases dites telles quelles, sans le modèle, pause dès que Camille
-parle), le front par la carte « Parcours » du fil (`parcours.ts`, dont le lecteur réserve sa hauteur aux cadrages :
-`margeBas`). Le registre et le relais d'AtlasVoice ne
+`voix`). Le registre et le relais d'AtlasVoice ne
 servent plus à Atlas. Lecture de la voix par boucle WebRTC locale
 (`voix.ts`) : en sortie Web Audio directe, l'annulation d'écho de Chrome décroche après des interruptions et la
 voix s'entend en boucle. Gradium : 300 s max par session STT (renouvelée au silence, `ATLAS_VOIX_STT_DUREE`).
