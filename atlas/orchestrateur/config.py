@@ -38,6 +38,10 @@ CODEX_HOME = Path(os.environ.get("ATLAS_CODEX_HOME") or ESPACE_TRAVAIL / ".codex
 # Exécutable Codex ; vide = celui installé avec le SDK (openai-codex-cli-bin).
 CODEX_BIN = _optionnel("ATLAS_CODEX_BIN")
 
+# Durée (s) pendant laquelle un thread inutilisé reste chargé dans le processus Codex, sous-agents compris :
+# répondre à une conversation « chaude » évite de la recharger. Un thread où un agent travaille n'est jamais déchargé.
+DUREE_THREAD_CHAUD = int(os.environ.get("ATLAS_DUREE_THREAD_CHAUD") or 3600)
+
 # Plafond de sous-agents ouverts en même temps par conversation (vide = défaut de Codex).
 MAX_SOUS_AGENTS = int(v) if (v := _optionnel("ATLAS_MAX_SOUS_AGENTS")) else None
 

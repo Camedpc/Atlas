@@ -729,6 +729,12 @@ body.sessions-repliees .deplier-sessions {
 
 .arreter {
   font-size: 12.5px;
+  white-space: nowrap;
+}
+
+/* Message que l'agent est en train d'écrire (deltas Codex), remplacé par le message final. */
+.msg.brouillon {
+  color: #52525b;
 }
 
 .envoyer {

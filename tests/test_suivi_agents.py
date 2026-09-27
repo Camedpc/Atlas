@@ -69,3 +69,37 @@ def test_reprise_depuis_l_instantane_du_tour_precedent():
 
 def test_mission_depuis_chemin():
     assert mission_depuis_chemin("/root/hydrures_sous-pression") == "hydrures sous pression"
+
+
+def test_brouillon_et_tour_en_cours():
+    suivi = _suivi()
+    _lancement(suivi, RACINE_ID, "/root/hydrures", DIR_ID)
+    suivi.recevoir("turn/started", {"threadId": DIR_ID, "turn": {"id": "u1"}})
+    assert suivi.agents["/root/hydrures"].tour == "u1"
+    for morceau in ("Trois ", "sources"):
+        suivi.recevoir("item/agentMessage/delta", {"threadId": DIR_ID, "itemId": "m", "delta": morceau})
+    assert suivi.brouillons == {"/root/hydrures": "Trois sources"}
+    message = {"type": "agentMessage", "text": "Trois sources", "id": "m"}
+    suivi.recevoir("item/completed", {"threadId": DIR_ID, "item": message})
+    assert suivi.brouillons == {}
+    suivi.recevoir("turn/completed", {"threadId": DIR_ID, "turn": {"status": "completed"}})
+    assert suivi.agents["/root/hydrures"].tour is None
+
+
+def test_fin_d_un_sous_agent_hors_tour_enregistree_dans_le_fil_de_l_orchestrateur():
+    suivi = _suivi()
+    _lancement(suivi, RACINE_ID, "/root/hydrures", DIR_ID)
+    fin = {"type": "subAgentActivity", "agentPath": "/root/hydrures", "agentThreadId": DIR_ID, "kind": "completed"}
+    # Pendant le tour, c'est le flux du tour qui l'enregistre.
+    assert suivi.recevoir("item/completed", {"threadId": RACINE_ID, "item": fin}).a_enregistrer == []
+    suivi.recevoir("turn/completed", {"threadId": RACINE_ID, "turn": {"status": "completed"}})
+    assert suivi.recevoir("item/completed", {"threadId": RACINE_ID, "item": fin}).a_enregistrer == [(RACINE, fin)]
+    assert [a.chemin for a in suivi.au_travail(sous_agents_seuls=True)] == ["/root/hydrures"]
+
+
+def test_un_arbre_relu_d_un_ancien_processus_ne_travaille_plus():
+    suivi = _suivi()
+    _lancement(suivi, RACINE_ID, "/root/hydrures", DIR_ID)
+    repris = SuiviAgents.depuis(suivi.instantane())
+    assert repris.agents["/root/hydrures"].etat == "interrompu"
+    assert repris.au_travail() == []

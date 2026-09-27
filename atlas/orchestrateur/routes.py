@@ -1,6 +1,7 @@
 """Routes des conversations avec l'orchestrateur."""
 
 import secrets
+from dataclasses import asdict
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException
@@ -10,6 +11,7 @@ from .. import conversations, projets
 from ..modeles import Conversation, Execution, Message
 from . import agent, config
 from .gestionnaire import Reglages, TourIndisponible, gestionnaire
+from .suivi_agents import agents_figes
 
 
 def verifier_jeton(authorization: str | None = Header(default=None)) -> None:
@@ -41,8 +43,18 @@ class NouveauMessage(BaseModel):
     """Modèle de l'orchestrateur pour ce tour ; absent = celui du thread (ATLAS_MODELE_ORCHESTRATEUR ou défaut)."""
 
 
+class Arret(BaseModel):
+    agent: str | None = None
+    """Chemin Codex du sous-agent à arrêter ; absent = tout arrêter (l'orchestrateur et ses sous-agents)."""
+
+
 class EtatConversation(Conversation):
     en_cours: bool
+    """L'orchestrateur a un tour en cours."""
+    actif: bool
+    """L'orchestrateur ou un sous-agent travaille (les sous-agents peuvent continuer après le tour)."""
+    brouillons: dict[str, str]
+    """Messages en cours d'écriture, par chemin d'agent (/root = l'orchestrateur)."""
     derniere_execution: Execution | None
 
 
@@ -81,6 +93,8 @@ def lire(conversation_id: str) -> EtatConversation:
     return EtatConversation(
         **conversation.model_dump(),
         en_cours=gestionnaire.en_cours(conversation_id),
+        actif=gestionnaire.actif(conversation_id),
+        brouillons=gestionnaire.brouillons(conversation_id),
         derniere_execution=conversations.derniere_execution(conversation_id),
     )
 
@@ -96,12 +110,13 @@ def messages(conversation_id: str, apres_id: int | None = None, agent: str | Non
 
 @routeur.get("/{conversation_id}/agents")
 def agents(conversation_id: str) -> list[dict]:
-    """Arbre des agents : en direct pendant une exécution, sinon tel que l'a laissé la dernière."""
+    """Arbre des agents : en direct tant que la conversation est chargée dans Codex, sinon tel que l'a laissé la
+    dernière exécution (plus personne n'y travaille alors)."""
     en_direct = gestionnaire.agents(conversation_id)
     if en_direct is not None:
         return en_direct
     derniere = conversations.derniere_execution(conversation_id)
-    return (derniere.agents if derniere else None) or []
+    return [asdict(a) for a in agents_figes(derniere.agents if derniere else None)]
 
 
 @routeur.post("/{conversation_id}/messages", status_code=202)
@@ -115,13 +130,14 @@ async def envoyer(conversation_id: str, corps: NouveauMessage) -> Execution:
         reglages = Reglages(effort=corps.effort, modele=corps.modele)
         return await gestionnaire.envoyer(conversation, corps.contenu, corps.agent, reglages)
     except TourIndisponible:
-        raise HTTPException(409, "L'orchestrateur démarre ou termine son tour : réessaie dans un instant.") from None
+        raise HTTPException(409, "L'orchestrateur ne démarre pas son tour : réessaie dans un instant.") from None
 
 
 @routeur.post("/{conversation_id}/arreter", status_code=202)
-async def arreter(conversation_id: str) -> dict:
-    if not await gestionnaire.arreter(conversation_id):
-        raise HTTPException(409, "Aucune exécution en cours dans cette conversation.")
+async def arreter(conversation_id: str, corps: Arret | None = None) -> dict:
+    """Arrête tout (l'orchestrateur et ses sous-agents), ou un seul sous-agent (`agent`)."""
+    if not await gestionnaire.arreter(conversation_id, corps.agent if corps else None):
+        raise HTTPException(409, "Rien ne travaille dans cette conversation.")
     return {"ok": True}
 
 

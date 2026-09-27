@@ -38,11 +38,11 @@ Servies seulement par `atlas.serveur` (pas sur Vercel) :
 | `GET /api/projets/{id}/fichier?chemin=` | Contenu d'un fichier de l'espace, pour l'aperçu |
 | `GET /api/conversations?projet_id=` | Conversations (d'un espace), la plus récente d'abord |
 | `POST /api/conversations` | Crée une conversation (`{"titre"?, "projet_id"?}`) |
-| `GET /api/conversations/{id}` | Conversation, exécution en cours et dernière exécution |
+| `GET /api/conversations/{id}` | Conversation, `en_cours` (tour de l'orchestrateur), `actif` (un agent travaille), `brouillons` (texte en cours d'écriture), dernière exécution |
 | `GET /api/conversations/{id}/messages?apres_id=&agent=` | Messages de l'orchestrateur, ou d'un sous-agent (`agent` = chemin Codex) |
 | `GET /api/conversations/{id}/agents` | Arbre des agents : en direct pendant un tour, sinon celui du dernier tour |
 | `POST /api/conversations/{id}/messages` | `{"contenu", "agent"?, "modele"?, "effort"?}` : lance un tour, ou s'injecte dans le tour en cours |
-| `POST /api/conversations/{id}/arreter` | Interrompt le tour en cours |
+| `POST /api/conversations/{id}/arreter` | `{"agent"?}` : arrête tout (orchestrateur et sous-agents), ou un seul sous-agent |
 | `GET /api/orchestrateur/modeles` | Modèles Codex proposés à l'orchestrateur, leurs efforts, et les réglages par défaut |
 
 Chaque nœud porte aussi `parents` (ses prémisses) et `enfants` (les nœuds qui le citent), maintenus par
