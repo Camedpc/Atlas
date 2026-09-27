@@ -8,6 +8,7 @@
 // annuler) : `figure` est renseigné, et `noeud` n'en est qu'un tenant-lieu (nom = titre, sans statut ni démonstration).
 
 import type { FigureVue, Graphe, GroupeVue, Noeud, TypeNoeud, Validite, Vue } from './api'
+import { geometrieDecision, lireDecision, REGLAGES as DECISION, type DetailsDecision } from './graphe-decision'
 
 /** Pas de la grille et taille d'un bloc 1 × 1 (px de mise en page) ; l'écart sert aux liaisons et aux cadres. */
 export const GRILLE = { pasX: 280, pasY: 170, blocL: 236, blocH: 124 }
@@ -80,6 +81,8 @@ export interface Bloc {
   portee: Set<string> | null
   /** Bloc d'une figure (sinon null) ; son `numero` est celui de la figure (« Figure 2 »). */
   figure: FigureVue | null
+  /** Décision (losange) : ses détails, sinon null ; son `numero` est « D1 », « D2 »… */
+  decision: DetailsDecision | null
 }
 
 export interface Broche {
@@ -129,7 +132,8 @@ export interface Lien {
   /** Représentants (id de bloc, ou « cadre:<id> » pour un nœud-fonction). */
   de: string
   vers: string
-  role: 'principale' | 'auxiliaire'
+  /** decision : d'une décision vers un nœud d'une option retenue ; ecartee : vers celui d'une option écartée. */
+  role: RoleLien
   validite: Validite
   /** Polyligne orthogonale x0, y0, x1, y1… */
   points: number[]
@@ -154,6 +158,8 @@ export interface Surcharge {
   ligne: number
   groupe: string | null
 }
+
+export type RoleLien = 'principale' | 'auxiliaire' | 'decision' | 'ecartee'
 
 export const CLE_FONCTION = 'cadre:'
 /** Préfixe des figures dans les placements et les opérations de vue. */
@@ -214,8 +220,8 @@ export function construireModele(graphe: Graphe, vue: Vue, surcharges?: Map<stri
   })
   ordre.sort((a, b) => a.c - b.c || a.l - b.l || (a.n.id < b.n.id ? -1 : 1))
   const numeros = new Map<string, string>()
-  let k = 0, h = 0
-  for (const { n } of ordre) numeros.set(n.id, estHypothese(n) ? `(${romains(++h)})` : String(++k))
+  let k = 0, h = 0, d = 0
+  for (const { n } of ordre) numeros.set(n.id, estHypothese(n) ? `(${romains(++h)})` : n.type === 'decision' ? `D${++d}` : String(++k))
 
   // Cadres : profondeur, parents d'abord.
   const groupes = new Map(vue.groupes.map((g) => [g.id, g]))
@@ -270,6 +276,7 @@ export function construireModele(graphe: Graphe, vue: Vue, surcharges?: Map<stri
       confiance: meilleure?.confiance ?? null,
       portee: null,
       figure: null,
+      decision: n.type === 'decision' ? lireDecision(n.details) : null,
     })
   }
 
@@ -308,6 +315,7 @@ export function construireModele(graphe: Graphe, vue: Vue, surcharges?: Map<stri
       confiance: null,
       portee: null,
       figure: f,
+      decision: null,
     })
   })
 
@@ -394,9 +402,20 @@ export function construireModele(graphe: Graphe, vue: Vue, surcharges?: Map<stri
   // Nœuds-fonctions : broches d'entrée (représentants extérieurs) et de sortie (membres utilisés dehors).
   const entrees = new Map<string, Set<string>>()
   const sorties = new Map<string, Set<string>>()
-  const fleches: { de: string; vers: string; sortie: string | null; role: 'principale' | 'auxiliaire'; validite: Validite }[] = []
+  const fleches: { de: string; vers: string; sortie: string | null; role: RoleLien; validite: Validite }[] = []
   const vues = new Set<string>()
-  for (const { p, n, role, validite } of couples.values()) {
+  // Décisions : vers les nœuds de chaque option (retenue l'emporte), comme des prémisses sans démonstration.
+  const pointees: { p: string; n: string; role: RoleLien; validite: Validite }[] = []
+  for (const b of blocs.values()) {
+    if (!b.decision) continue
+    const liens = new Map<string, boolean>()
+    for (const a of b.decision.alternatives) for (const n of a.noeuds ?? []) liens.set(n, (liens.get(n) ?? false) || a.retenue)
+    for (const [n, retenue] of liens) {
+      if (!blocs.has(n) || n === b.id || couples.has(`${b.id}\u0000${n}`)) continue
+      if (retenue || DECISION.ecartees) pointees.push({ p: b.id, n, role: retenue ? 'decision' : 'ecartee', validite: 'valide' })
+    }
+  }
+  for (const { p, n, role, validite } of [...couples.values(), ...pointees]) {
     if (role === 'technique' || role === 'contexte') {
       const b = blocs.get(n)!
       if (!b.cache) b.renvois.push(p)
@@ -505,13 +524,14 @@ export function construireModele(graphe: Graphe, vue: Vue, surcharges?: Map<stri
         return fo?.sorties.find((s) => s.id === f.sortie)?.y ?? (fo ? fo.y + fo.h / 2 : 0)
       }
       const b = blocs.get(f.de)!
-      return b.y + b.h / 2
+      return b.decision ? b.y + geometrieDecision(b.w, b.h).sortie.y : b.y + b.h / 2
     }
     const valides = liste.filter((f) => !f.de.startsWith(CLE_FONCTION) || cadres.get(f.de.slice(CLE_FONCTION.length))?.fonction)
     valides.sort((a, b) => yDepart(a) - yDepart(b))
     valides.forEach((f, k) => {
       const pd = position(f.de), td = taille(f.de)
-      const xa = pd.x + td.w, ya = yDepart(f)
+      const bd = blocs.get(f.de)
+      const xa = pd.x + (bd?.decision ? geometrieDecision(bd.w, bd.h).sortie.x : td.w), ya = yDepart(f)
       let yb: number
       if (fonctionV) {
         const e = fonctionV.entrees.find((x) => x.id === f.de)

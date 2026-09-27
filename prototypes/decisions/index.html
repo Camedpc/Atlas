@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" />
+    <title>Losange de décision</title>
+  </head>
+  <body>
+    <header class="entete">
+      <div>
+        <h1>Losange de décision</h1>
+        <p>Choisir le rendu des nœuds « décision » dans le moteur du graphe d’Atlas · fontaine de chaîne, trois décisions</p>
+      </div>
+    </header>
+    <main class="etude">
+      <aside class="reglages">
+        <section>
+          <h2>Variante</h2>
+          <p class="aide">Graduées : de R42 agrandi à des formes plus libres. La taille en cases change la mise en page.</p>
+          <div class="variantes" role="radiogroup" aria-label="Variante du losange"></div>
+        </section>
+        <section>
+          <h2>Flèches vers les nœuds commandés</h2>
+          <div class="puces fleches" role="radiogroup" aria-label="Style des flèches"></div>
+          <label class="case"><input type="checkbox" class="ecartees" checked /> Flèche tiretée × vers la piste écartée</label>
+        </section>
+        <section>
+          <h2>Regarder</h2>
+          <div class="puces zooms">
+            <button type="button" data-zoom="tout">Tout le graphe</button>
+            <button type="button" data-zoom="loin">De loin</button>
+            <button type="button" data-zoom="titre">Titres</button>
+            <button type="button" data-zoom="contenu">De près</button>
+          </div>
+          <div class="puces decisions" aria-label="Aller à une décision"></div>
+        </section>
+        <section class="choix">
+          <h2>Mon choix</h2>
+          <p class="resume"></p>
+          <button type="button" class="copier">Copier le choix</button>
+          <span class="copie" role="status"></span>
+        </section>
+      </aside>
+      <div class="colonne">
+        <div class="scene-cadre">
+          <div class="graphe"></div>
+        </div>
+        <figure class="reference">
+          <figcaption>
+            <span><b>Référence R42</b> · petit losange « D1 » (le nom au-dessus, la tige et × vers l’option non retenue) : en bas à gauche du cadre « Modélisation » et près de la piste abandonnée</span>
+            <button type="button" class="basculer">Réduire</button>
+          </figcaption>
+          <div class="image"><img src="./r42.png" alt="Capture du prototype R42 : fontaine de chaîne, avec deux petits losanges de décision." /></div>
+        </figure>
+      </div>
+    </main>
+    <script type="module" src="./src/etude.ts"></script>
+  </body>
+</html>

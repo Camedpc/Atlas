@@ -208,7 +208,8 @@ export class VueGraphe {
       .map(([t, d]) => `<tr><th>${echapper(t)}</th><td>${echapper(d)}</td></tr>`).join('')}</table>`
     this.aide.innerHTML = `<h3>Commandes</h3>${table(AIDE_COMMANDES)}<h3>Sur tablette</h3>${table(AIDE_TACTILE)}`
       + '<p>Un nœud déposé hors de tout cadre garde son cadre d’origine ; pour l’en sortir : clic droit → « Sortir du cadre ». '
-      + 'Seules les prémisses principales et auxiliaires sont des flèches ; les autres sont des renvois « cf. ».</p>'
+      + 'Seules les prémisses principales et auxiliaires sont des flèches ; les autres sont des renvois « cf. ». '
+      + 'Un losange est une décision : il pointe vers les nœuds de l’option retenue (tireté et × : option écartée).</p>'
     this.avisEl = element(scene, 'div', 'gr-avis')
     this.avisEl.hidden = true
     this.avisEl.setAttribute('role', 'status')

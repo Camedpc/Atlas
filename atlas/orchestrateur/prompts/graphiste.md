@@ -81,7 +81,7 @@ modèle ou de la méthode entre des options explicites ; une simple hypothèse r
 - `nom` : deux à quatre mots (« Origine de la fontaine », « Estimer α ») ; `enonce` vide (résumé automatique).
 - `details` : `{"question": …, "alternatives": [{"libelle": …, "retenue": true, "noeuds": [ids]},
   {"libelle": …, "retenue": false, "raison": …, "noeuds": [ids]}], "raison": …}`. Libellés courts, avec leur
-  formule (« Élan seul ($lpha = 0$) ») ; chaque option écartée dit pourquoi en une phrase.
+  formule (« Élan seul ($\alpha = 0$) ») ; chaque option écartée dit pourquoi en une phrase.
 - `noeuds` : ce qui découle de l'option. Pour la retenue, le ou les premiers nœuds qui l'appliquent (l'hypothèse
   ou le choix de modélisation qui la traduit, le calcul ou l'expérience qu'elle impose) ; pour une écartée, le
   nœud de sa piste abandonnée s'il existe, sinon rien. Le losange pointe vers eux : flèche pleine vers la retenue,
