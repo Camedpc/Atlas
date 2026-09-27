@@ -1,18 +1,18 @@
-// Pastille de l'appel vocal (visuel retenu sur la branche visu/voix) : une vague collée au bas de l'écran, au
-// centre, sur un blanc radial qui s'efface vers le transparent. Vague montante : ligne de zéro plate, barres
-// qui montent. Camille occupe la gauche (rouge), Atlas voix la droite (bleu) ; quand les deux parlent, chaque
+// Vague de l'appel vocal (visuel retenu sur la branche visu/voix, étendu à toute la largeur de l'écran) : collée
+// au bas de l'écran, basse pour ne pas empiéter, sur un blanc qui s'efface vers le haut. Vague montante : ligne de
+// zéro plate, barres qui montent. Camille occupe la gauche (rouge), Atlas voix la droite (bleu) ; quand les deux parlent, chaque
 // barre prend la couleur de la voix qui y domine.
 // Les deux voix sont lues sur de vrais signaux : le micro après l'annulation d'écho (la voix d'Atlas n'y
 // apparaît pas) et le son joué par le lecteur.
 import './pastille.css'
 
-// Réglages validés par Camille le 2026-09-27 (commit ef6188f de visu/voix).
+// Réglages validés par Camille le 2026-09-27 (commit ef6188f de visu/voix), puis vague sur toute la largeur de
+// l'écran et moins haute (20 → 12 px) : le nombre de barres suit la largeur de la fenêtre.
 const R = {
-  barres: 44,
   largeur: 2,
-  ecart: 2.4,
-  hauteurMax: 20,
-  pied: 5,
+  ecart: 3,
+  hauteurMax: 12,
+  pied: 3,
   arrondi: 1,
   opaciteLigne: 1,
   gain: 2,
@@ -25,10 +25,8 @@ const R = {
   couleurAtlas: '#2563eb',
   couleurRepos: '#d4d4cf',
   couleurLigne: '#e5e5e1',
-  margeX: 44,
-  margeHaut: 6,
+  margeHaut: 4,
   opaciteFond: 0.96,
-  debutFondu: 55,
 }
 
 /** Les deux voix de l'appel, à lire en direct. */
@@ -39,7 +37,8 @@ export interface SourcesPastille {
 
 export function analyseur(ctx: AudioContext): AnalyserNode {
   const a = ctx.createAnalyser()
-  a.fftSize = 1024
+  // Assez fin pour des centaines de barres sur la bande de la voix (~12 Hz par case).
+  a.fftSize = 4096
   a.smoothingTimeConstant = 0.6
   return a
 }
@@ -58,19 +57,28 @@ class Vague {
   private spectres: number[][] = [[], []]
   private affichees: number[] = []
   private donnees: Uint8Array<ArrayBuffer> | null = null
+  private n = 0
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas
     this.ctx = canvas.getContext('2d')!
-    this.spectres = [0, 1].map(() => Array.from({ length: R.barres }, () => 0))
-    this.affichees = Array.from({ length: R.barres }, () => 0)
-    const l = R.barres * R.largeur + (R.barres - 1) * R.ecart
+    this.dimensionner(window.innerWidth)
+  }
+
+  /** Autant de barres que la largeur en contient ; à rappeler quand la fenêtre change de taille. */
+  dimensionner(largeurEcran: number) {
+    const n = Math.max(8, Math.floor((largeurEcran + R.ecart) / (R.largeur + R.ecart)))
+    const ajuster = (t: number[]) => Array.from({ length: n }, (_, i) => t[i] ?? 0)
+    this.spectres = this.spectres.map(ajuster)
+    this.affichees = ajuster(this.affichees)
+    this.n = n
+    const l = n * R.largeur + (n - 1) * R.ecart
     const h = R.hauteurMax + R.pied
     const dpr = window.devicePixelRatio || 1
-    canvas.width = Math.round(l * dpr)
-    canvas.height = Math.round(h * dpr)
-    canvas.style.width = `${l}px`
-    canvas.style.height = `${h}px`
+    this.canvas.width = Math.round(l * dpr)
+    this.canvas.height = Math.round(h * dpr)
+    this.canvas.style.width = `${l}px`
+    this.canvas.style.height = `${h}px`
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
   }
 
@@ -114,7 +122,7 @@ class Vague {
   }
 
   private dessiner(dt: number) {
-    const n = R.barres
+    const n = this.n
     const ctx = this.ctx
     ctx.clearRect(0, 0, this.canvas.width, this.canvas.height)
     const actifs = this.enveloppe[0] + this.enveloppe[1] > 0.04
@@ -157,10 +165,11 @@ export class Pastille {
     this.el.setAttribute('role', 'status')
     this.el.setAttribute('aria-label', 'Appel vocal avec Atlas voix')
     this.el.innerHTML = '<canvas></canvas>'
-    this.el.style.padding = `${R.margeHaut}px ${R.margeX}px 0`
-    this.el.style.background = `radial-gradient(closest-side, rgba(255, 255, 255, ${R.opaciteFond}) ${R.debutFondu}%, rgba(255, 255, 255, 0))`
+    this.el.style.paddingTop = `${R.margeHaut}px`
+    this.el.style.background = `linear-gradient(to top, rgba(255, 255, 255, ${R.opaciteFond}) 45%, rgba(255, 255, 255, 0))`
     document.body.append(this.el)
     this.vague = new Vague(this.el.querySelector('canvas')!)
+    window.addEventListener('resize', () => this.vague.dimensionner(window.innerWidth))
     this.el.addEventListener('click', () => {
       if (!this.enAppel) surClicRepos()
     })
