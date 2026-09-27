@@ -2,8 +2,11 @@
 // Pas d'interface propre, comme sur claude.ai : le panneau de conversation affiche ce que ce module lui passe
 // (ta phrase en cours dans la saisie, les messages dans le fil, la voix d'Atlas colorée au fil de sa lecture),
 // et la pastille (pastille.ts) montre les deux voix.
+// Atlas voix pilote aussi l'écran du graphe (atlas/voix/ecran.py) : ce module lui envoie l'état de l'écran (P4,
+// `ecran`) et exécute ses lots de commandes (P3, `commandes`) par le pilote, compte rendu à l'appui.
 import { jetonAcces, urlAppel } from './api'
 import { analyseur, type SourcesPastille } from './pastille'
+import type { Pilote } from './pilotage/pilote'
 
 export const VOIX_GRADIUM: [string, string][] = [
   ['iEu63s1rhn_kegTr', 'Gaspard'],
@@ -75,6 +78,10 @@ export interface RappelsAppel {
   surInfo: (texte: string, erreur: boolean) => void
   /** Réglages de l'orchestrateur choisis dans la saisie, pour le travail que la voix lui confie. */
   reglagesOrchestrateur: () => { modele?: string; effort?: string }
+  /** Pilote de l'écran du graphe, que la voix commande pendant l'appel (null : pas d'écran). */
+  ecran: () => Pilote | null
+  /** Un lot de commandes arrive : rendre l'écran du graphe visible avant de l'exécuter. */
+  avantCommandes: () => Promise<void>
 }
 
 // Texte → mots avec leur fin (en caractères), pour colorer le texte au rythme des segments prononcés.
@@ -108,6 +115,8 @@ export class Appel {
   private position = { joues: 0, t: 0 }
   private messages = new Map<string, Suivi>()
   private image = 0
+  /** Fin de l'envoi des états de l'écran au serveur. */
+  private finEcran: (() => void) | null = null
   muet = false
   private readonly rappels: RappelsAppel
 
@@ -135,12 +144,15 @@ export class Appel {
     ws.onopen = () => {
       ws.send(JSON.stringify({ type: 'auth', jeton: jetonAcces() }))
       this.envoyerReglages()
+      this.brancherEcran()
       this.rappels.surEtat(true)
     }
     ws.onmessage = (e) => (typeof e.data === 'string' ? this.recevoir(JSON.parse(e.data)) : this.jouer(e.data))
     ws.onclose = (e) => {
       if (this.ws !== ws) return
       this.ws = null
+      this.finEcran?.()
+      this.finEcran = null
       this.couperLecture(this.genCourante)
       this.fermerAudio()
       cancelAnimationFrame(this.image)
@@ -357,6 +369,23 @@ export class Appel {
     }
   }
 
+  // ─── Écran du graphe ───
+
+  private brancherEcran() {
+    const pilote = this.rappels.ecran()
+    if (!pilote) return
+    this.envoyer({ type: 'ecran', etat: pilote.etat() })
+    this.finEcran = pilote.ecouter((etat) => this.envoyer({ type: 'ecran', etat }))
+  }
+
+  private async executerLot(lot: unknown) {
+    const pilote = this.rappels.ecran()
+    if (!pilote) return
+    await this.rappels.avantCommandes()
+    const compteRendu = await pilote.executer(lot)
+    this.envoyer({ type: 'compte_rendu', compte_rendu: compteRendu })
+  }
+
   // ─── Messages du serveur ───
 
   private recevoir(m: any) {
@@ -399,6 +428,9 @@ export class Appel {
         break
       case 'info':
         this.rappels.surInfo(m.message, false)
+        break
+      case 'commandes':
+        void this.executerLot(m.lot)
         break
     }
   }

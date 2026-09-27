@@ -7,11 +7,13 @@ import json
 import os
 import urllib.error
 import urllib.request
+from typing import Any, Literal
 
 from mcp.server.mcpserver import MCPServer
 
 serveur = MCPServer(
-    "voix", instructions="Confier du travail à l'orchestrateur, lancer de petites tâches, changer l'affichage."
+    "voix",
+    instructions="Confier du travail à l'orchestrateur, lancer de petites tâches, piloter l'écran du graphe.",
 )
 
 
@@ -59,6 +61,22 @@ def lancer_tache(titre: str, consigne: str) -> str:
 
 
 @serveur.tool()
+def preparer_parcours(titre: str, consigne: str) -> str:
+    """Confie à l'agent navigateur la préparation d'un parcours du graphe : une suite d'écrans commentés que Camille
+    déroulera étape par étape (dérouler une preuve, visite guidée d'un cadre, suivre une lignée). Prend une ou deux
+    minutes et rend la main tout de suite ; le résultat (le chemin du parcours) arrive dans un message [Système].
+    `consigne` : ce que Camille veut voir et dans quel ordre, dans ses mots, avec les repères qu'il a cités."""
+    return _appel("/taches", {"titre": titre, "consigne": consigne, "genre": "navigateur"})
+
+
+@serveur.tool()
+def jouer_etape(parcours: str, etape: int = 1) -> str:
+    """Montre à l'écran l'étape `etape` (à partir de 1) d'un parcours, et renvoie sa `phrase` : dis-la à Camille
+    (avec tes mots), puis attends qu'il demande la suite. `parcours` : son chemin (…/parcours/<fichier>.json)."""
+    return _appel("/ecran/parcours", {"parcours": parcours, "etape": etape})
+
+
+@serveur.tool()
 def etat_taches() -> str:
     """Les petites tâches de l'appel : statut, dernières étapes, résultat si terminée."""
     return _appel("/taches")
@@ -76,20 +94,58 @@ def arreter_tache(id: int) -> str:
     return _appel(f"/taches/{id}/arreter", {})
 
 
-@serveur.tool()
-def afficher(demande: str, extrait: str = "", titre: str = "") -> str:
-    """Change ce que Camille voit à l'écran du graphe : montrer, cadrer, zoomer, sélectionner ou filtrer des nœuds,
-    enchaîner avec des pauses, revenir à l'affichage précédent. L'agent navigateur d'AtlasVoice s'en charge.
-    `demande` : ce que Camille veut voir, dans ses mots, avec tout l'enchaînement. `extrait` : les mots exacts de sa
-    phrase qui concernent l'affichage, s'il n'y en a qu'une partie. `titre` : quelques mots. Rend la main tout de
-    suite ; le résultat ou une question de l'agent arrive dans un message [Affichage]."""
-    return _appel("/affichage", {"demande": demande, "extrait": extrait, "titre": titre})
+# ── Écran du graphe (atlas/voix/ecran.py) : rien de visuel n'est enregistré, sauf `deplacer`. ──
+# Références : « Lemme 7 », « Hypothèse (ii) », « Figure 2 », « §1.2 », ou un nom de nœud ou de cadre.
 
 
 @serveur.tool()
-def repondre_affichage(id: int, reponse: str) -> str:
-    """Transmet la réponse de Camille à la question posée par l'agent navigateur (message [Affichage — question])."""
-    return _appel(f"/affichage/{id}/reponse", {"reponse": reponse})
+def montrer(
+    references: list[str],
+    etendue: Literal["seul", "premisses", "consequences", "lignee"] = "seul",
+    garder_seulement: bool = False,
+    fiche: bool = False,
+    statuts: list[str] | None = None,
+) -> str:
+    """Montre des nœuds, cadres ou figures à Camille : l'écran les cadre, sélectionne un nœud seul ou surligne
+    plusieurs. `etendue` ajoute à chaque nœud ses prémisses (transitivement), ses conséquences ou les deux
+    (`lignee`). `garder_seulement` estompe tout le reste. `fiche` ouvre la fiche du premier nœud. `statuts`
+    (etabli, suspendu, a_verifier, invalide, ouvert) ajoute les nœuds de ces statuts. Renvoie ce qui a été compris
+    (`compris`), ou une erreur avec des `candidats` si la référence est ambiguë."""
+    corps = {"references": references, "etendue": etendue, "garder_seulement": garder_seulement, "fiche": fiche}
+    return _appel("/ecran/montrer", corps | {"statuts": statuts or []})
+
+
+@serveur.tool()
+def vue_d_ensemble() -> str:
+    """Cadre tout le graphe (ce qui passe les filtres, s'il y en a)."""
+    return _appel("/ecran/ensemble", {})
+
+
+@serveur.tool()
+def zoomer(facteur: float) -> str:
+    """Zoome autour du centre de l'écran : 1.5 rapproche, 0.6 éloigne."""
+    return _appel("/ecran/zoomer", {"facteur": facteur})
+
+
+@serveur.tool()
+def effacer_ecran() -> str:
+    """Retire filtres, surlignage, sélection et fiche (la caméra ne bouge pas)."""
+    return _appel("/ecran/effacer", {})
+
+
+@serveur.tool()
+def lire_ecran() -> str:
+    """Ce que Camille voit : zoom, sélection, fiche ouverte, filtres, et les nœuds au centre de l'écran."""
+    return _appel("/ecran")
+
+
+@serveur.tool()
+def deplacer(deplacements: list[dict[str, Any]]) -> str:
+    """Déplace des nœuds ou des figures dans la vue : c'est ENREGISTRÉ (Camille le retrouvera), à ne faire que sur
+    sa demande explicite. Chaque déplacement : {"quoi": référence, "a_cote_de": référence, "cote": "droite" |
+    "gauche" | "dessous" | "dessus"} (première case libre de ce côté ; il rejoint le cadre de son voisin), ou
+    {"quoi", "colonne", "ligne"} (case de la grille). Tout ou rien : un refus n'a rien changé."""
+    return _appel("/ecran/deplacer", {"deplacements": deplacements})
 
 
 if __name__ == "__main__":

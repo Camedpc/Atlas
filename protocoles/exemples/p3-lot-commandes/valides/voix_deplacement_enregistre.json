@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "lot_id": "b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+  "ecran": "ecran_1a2b3c4d",
+  "origine": "voix",
+  "emis_le": "2026-09-27T14:00:00Z",
+  "commandes": [
+    { "op": "recharger_donnees" },
+    { "op": "surligner", "cibles": [{ "noeud": "lemme_compacite" }] },
+    { "op": "cadrer", "cibles": [{ "noeud": "lemme_compacite" }] }
+  ]
+}

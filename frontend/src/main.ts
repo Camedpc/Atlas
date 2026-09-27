@@ -10,8 +10,8 @@ import { enLigne, formulesAffichees, nombre, rendreTex } from './formules'
 import { VueGraphe } from './graphe'
 import { jeuSynthetique } from './graphe-synthetique'
 import { AdaptateurVue } from './pilotage/adaptateurVue'
-import { ClientRelais } from './pilotage/client'
 import { nouvelId, Pilote } from './pilotage/pilote'
+import { chargerParcours, LecteurParcours, type Parcours } from './parcours'
 import type { CommandeBas } from './pilotage/protocole'
 import { installerPoignees } from './redimension'
 import { echapper, rendre } from './rendu'
@@ -74,7 +74,7 @@ let projetId: string | null = null
 let dernierChargement = 0
 // Nœud dont la fiche est ouverte (pilotage : P4 `fiche`).
 let ficheId: string | null = null
-// Adaptateur du pilotage (défini plus bas, seulement si un relais d'affichage est configuré).
+// Adaptateur du pilotage (défini plus bas).
 let adaptateur: AdaptateurVue | undefined
 
 const vueGraphe = new VueGraphe(document.querySelector<HTMLElement>('.graphe')!, {
@@ -230,25 +230,40 @@ const conversation = new PanneauConversation(
 
 const panneau = installerPoignees((replie) => conversation.replierSessions(replie))
 
-// ─── Pilotage de l'écran par l'agent navigateur d'AtlasVoice (P3/P4, relais VITE_AFFICHAGE_URL) ───
-// Sans relais configuré, rien ne change : la vue reste pilotée à la souris seulement.
+// ─── Pilotage de l'écran (P3/P4) : Atlas voix, pendant un appel (voix.ts, atlas/voix/ecran.py) ───
 
-if (ClientRelais.configure()) {
-  adaptateur = new AdaptateurVue(vueGraphe, {
-    fiche: () => ficheId,
-    definirFiche: (id) => afficherDetail(id === null ? null : (graphe.noeuds.find((n) => n.id === id) ?? null)),
-    panneauOuvert: () => panneau.ouvert(),
-    definirPanneau: (ouvert) => panneau.ouvrir(ouvert),
-    conversationAffichee: () => conversationId,
-    recharger: () => chargerGraphe(),
-  }, `ecran_${nouvelId().slice(0, 8)}`, 'local')
-  const pilote = new Pilote(adaptateur)
-  new ClientRelais(pilote).demarrer()
-  // Développement : pilotage à la main depuis la console, ex. atlasAffichage.commander({ op: 'zoomer', facteur: 2 }).
-  if (import.meta.env.DEV) {
-    const atlasAffichage = { etat: () => pilote.etat(), commander: (...c: CommandeBas[]) => pilote.commander(...c), pilote }
-    Object.assign(window, { atlasAffichage })
+adaptateur = new AdaptateurVue(vueGraphe, {
+  fiche: () => ficheId,
+  definirFiche: (id) => afficherDetail(id === null ? null : (graphe.noeuds.find((n) => n.id === id) ?? null)),
+  panneauOuvert: () => panneau.ouvert(),
+  definirPanneau: (ouvert) => panneau.ouvrir(ouvert),
+  conversationAffichee: () => conversationId,
+  recharger: () => chargerGraphe(),
+}, `ecran_${nouvelId().slice(0, 8)}`, 'local')
+const pilote = new Pilote(adaptateur)
+async function montrerGraphe() {
+  // Un cadrage sur une vue masquée ne fait rien : l'onglet du graphe s'ouvre, et on attend qu'il ait sa taille.
+  if (!document.querySelector<HTMLElement>('.vue-raisonnement')!.hidden) return
+  montrer('raisonnement')
+  for (let i = 0; i < 2; i++) await new Promise((r) => requestAnimationFrame(r))
+}
+const lecteurParcours = new LecteurParcours(document.querySelector<HTMLElement>('.vue-raisonnement')!, pilote, montrerGraphe)
+conversation.brancherEcran(pilote, montrerGraphe, (chemin) => {
+  if (!projetId) return
+  chargerParcours(projetId, chemin)
+    .then((p) => lecteurParcours.ouvrir(p))
+    .catch((e) => (compteur.textContent = `Parcours illisible : ${e instanceof Error ? e.message : String(e)}`))
+})
+// Développement : pilotage à la main depuis la console, ex. atlasAffichage.commander({ op: 'zoomer', facteur: 2 }),
+// ou atlasAffichage.parcours({ version: 1, titre, etapes: [{ phrase, compris: [], commandes }] }).
+if (import.meta.env.DEV) {
+  const atlasAffichage = {
+    etat: () => pilote.etat(),
+    commander: (...c: CommandeBas[]) => pilote.commander(...c),
+    parcours: (p: Parcours) => lecteurParcours.ouvrir(p),
+    pilote,
   }
+  Object.assign(window, { atlasAffichage })
 }
 
 let vueInitiale: Onglet = 'raisonnement'
