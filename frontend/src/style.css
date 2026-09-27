@@ -124,7 +124,7 @@ body.redimensionne {
   user-select: none;
 }
 
-body.redimensionne .sigma,
+body.redimensionne .graphe,
 body.redimensionne .scene-agents {
   pointer-events: none;
 }
@@ -845,35 +845,11 @@ body.sessions-repliees .deplier-sessions {
   display: none;
 }
 
-.sigma {
+.graphe {
   position: absolute;
   inset: 0;
 }
 
-.legende {
-  position: absolute;
-  bottom: 12px;
-  left: 12px;
-  display: flex;
-  gap: 12px;
-  margin: 0;
-  padding: 6px 12px;
-  list-style: none;
-  background: rgba(255, 255, 255, 0.94);
-  border: 1px solid var(--trait);
-  border-radius: 6px;
-  font-size: 12px;
-  color: var(--texte-2);
-}
-
-.legende i {
-  display: inline-block;
-  width: 0.65rem;
-  height: 0.65rem;
-  border-radius: 50%;
-  margin-right: 0.35rem;
-  vertical-align: -1px;
-}
 
 .detail {
   position: absolute;
@@ -906,11 +882,38 @@ body.sessions-repliees .deplier-sessions {
   font-size: 0.85rem;
 }
 
-.pastille {
-  color: white;
-  border-radius: 999px;
-  padding: 0.1rem 0.5rem;
-  margin-right: 0.4rem;
+.fiche-titre {
+  font: 400 1.05rem 'CMU Serif Atlas', KaTeX_Main, 'Latin Modern Roman', 'CMU Serif', serif;
+  font-variant-ligatures: no-common-ligatures;
+}
+
+.fiche-formule {
+  margin: 0.4rem 0 0.6rem;
+  text-align: center;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.fiche-details {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.2rem 0.8rem;
+  margin: 0.6rem 0;
+  font-size: 0.85rem;
+}
+
+.fiche-details dt {
+  color: var(--texte-2);
+}
+
+.fiche-details dd {
+  margin: 0;
+}
+
+.detail .role {
+  font-size: 0.75rem;
+  font-style: italic;
+  color: var(--texte-3);
 }
 
 .lien {

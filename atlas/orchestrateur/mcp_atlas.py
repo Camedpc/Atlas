@@ -167,8 +167,9 @@ def organiser_vue(operations: list[dict[str, Any]], essai: bool = False) -> str:
       "sous_probleme" | "etape" | "piste_abandonnee" | "libre", "couleur": "#rrggbb"}
     - {"op": "modifier_groupe", "id": …, "nom"?, "parent"? ("" = racine), "genre"?, "couleur"?, "replie"?, "ordre"?}
     - {"op": "supprimer_groupe", "id": …} : ses nœuds et sous-cadres remontent dans le cadre parent
-    - {"op": "placer", "noeud": …, "groupe"? ("" = hors cadre), "colonne"?, "ligne"?, "largeur"?, "hauteur"?} :
-      avec colonne et ligne, le nœud est fixé à cette case ; sans, il est placé à droite de ses prémisses
+    - {"op": "placer", "noeud": …, "groupe"? ("" = hors cadre), "colonne"?, "ligne"?, "largeur"?, "hauteur"?, "fixe"?} :
+      avec colonne et ligne, le nœud est fixé à cette case (sauf "fixe": false) ; sans, il est placé à droite de
+      ses prémisses
     - {"op": "deplacer_groupe", "id": …, "colonnes": dc, "lignes": dl} : décale tout le cadre
     - {"op": "reorganiser", "groupe"?} : replace les nœuds non fixés (d'un cadre ou de toute la vue)
     - {"op": "renommer_noeud", "id": …, "nom": …} : change le nom affiché (l'id ne change jamais)

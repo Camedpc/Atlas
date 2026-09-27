@@ -456,6 +456,11 @@ def _appliquer_une(etat: EtatVue, op: dict[str, Any], renommages: dict[str, str]
         if "colonne" in op or "ligne" in op:
             if "colonne" not in op or "ligne" not in op:
                 raise ErreurVue("Donne colonne et ligne ensemble (ou aucune des deux pour un placement automatique).")
+            # Fixé par défaut ; `fixe: false` garde la case mais laisse `reorganiser` le déplacer (« libérer »,
+            # ou annulation d'un déplacement depuis le front).
+            fixe = op.get("fixe", True)
+            if not isinstance(fixe, bool):
+                raise ErreurVue(f"fixe invalide « {fixe} » : vrai ou faux.")
             etat.placements[nid] = Placement(
                 nid,
                 _case(op["colonne"], "Colonne"),
@@ -463,7 +468,7 @@ def _appliquer_une(etat: EtatVue, op: dict[str, Any], renommages: dict[str, str]
                 None if groupe is ... else groupe,
                 largeur,
                 hauteur,
-                True,
+                fixe,
             )
         else:
             etat.placements[nid] = placer_auto(etat, nid, groupe, largeur, hauteur)

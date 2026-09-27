@@ -13,7 +13,7 @@ Atlas est un harnais de recherche scientifique. Dans un seul thread Codex par co
 des missions à des directeurs de labo (qui convoquent `litterature` et `experimentateur`, tiennent `journal.md` et
 rédigent `rapport.md` dans `directeurs/NN-sujet/`), fait transformer chaque rapport en graphe par le `graphiste`
 (nœud = assertion, démonstration = liaison depuis ses prémisses `justifie_par`), puis appelle l'outil `verifier`
-qui note chaque liaison. L'UI : conversations à gauche, graphe sigma.js à droite. Rôles dans `sous_agents.py`,
+qui note chaque liaison. L'UI : conversations à gauche, graphe de raisonnement (vision R41, éditable façon Blueprint d'UE5) à droite. Rôles dans `sous_agents.py`,
 prompts dans `atlas/orchestrateur/prompts/*.md` : c'est Camille qui les fait évoluer (prompt engineering).
 
 ## Modèle de graphe
@@ -133,8 +133,21 @@ L'ancien backend agents (chercheur, vérificateur) reste lisible via `git show 1
   `conversations.ts` (colonne centrale), `sessions.ts` (barre latérale et sélecteur d'espace), `documents.ts`
   (arbre du bunker et aperçus, pdf.js), `agents.ts` (état partagé des agents et
   sélection = destinataire de la saisie), `arbre.ts` (arbre façon Claude Code), `agentgraph.ts` (Blueprint porté de
-  `visu/vue-sous-agents`), `graphe.ts` (sigma : réglages en tête, couleurs opaques uniquement), `rendu.ts`
-  (Markdown + LaTeX). Thème clair uniquement.
+  `visu/vue-sous-agents`), `rendu.ts` (Markdown + LaTeX). Thème clair uniquement.
+- Graphe de raisonnement (onglet de droite), porté du prototype R41 (worktree `Atlas-raisonnement`,
+  `prototypes/graphe-3d/raisonnement/r41-synthese-b/`) : positions = cases de `/api/vue` (× `GRILLE` de
+  `graphe-modele.ts`), jamais de mise en page côté front (les nœuds sans placement sont rangés provisoirement sous le
+  reste). `graphe-modele.ts` (pur : numérotation « Lemme 7 » / « Hypothèse (ii) » dans l'ordre colonne puis ligne,
+  cadres, cadres réduits en nœuds-fonctions, liaisons orthogonales dans les couloirs entre cases ; seules les prémisses
+  principales et auxiliaires sont des flèches, technique et contexte = renvois « cf. »), `graphe-dessin.ts` (canevas,
+  niveaux de détail z < 0,225 carrés / < 0,6 titres / contenu, culling), `graphe-contenu.ts` (HTML KaTeX des seuls
+  blocs visibles : cache, pool recyclé, budget par image, mesures groupées), `graphe.ts` (caméra aux paliers de zoom
+  d'UE5, commandes souris / clavier d'UE5 listées dans `AIDE_COMMANDES` et l'aide « ? », opérations
+  `POST /api/projets/{id}/vue` tout ou rien, annuler / rétablir par différence d'états dans `graphe-annuler.ts`),
+  `formules.ts` (extraction des formules de R41, plus le LaTeX explicite `$…$`). Texte en CMU Serif (jsdelivr,
+  `graphe.css`) : les fontes KaTeX n'ont pas les accents ; ligatures coupées (« ff » sort en carré). En dev,
+  `?synthetique=1000` charge un jeu synthétique en lecture seule et `window.atlasGraphe` expose la vue. Un onglet
+  masqué gèle requestAnimationFrame : pour tester par script, appeler `atlasGraphe.dessinerMaintenant()`.
 - Git : une branche par sujet (ex. `visu/graphe-3d`), merge dans `main`. Commits = phrase française courte,
   sans préfixe conventional-commit.
 

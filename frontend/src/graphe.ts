@@ -1,137 +1,929 @@
-// Vue sigma.js du graphe de raisonnement. Tout ce qui se règle (couleurs, tailles, disposition) est en haut.
-import Graph from 'graphology'
-import Sigma from 'sigma'
-import type { Graphe, Noeud, Statut, Validite } from './api'
+// Vue « Graphe de raisonnement » : rendu R41 (graphe-dessin.ts) des positions de /api/vue, édité à la souris comme
+// l'éditeur Blueprint d'Unreal Engine 5. Toute modification passe par POST /api/projets/{id}/vue (tout ou rien) ;
+// un refus (422) ramène la vue à son état et affiche le message du serveur.
+//
+// Règle de dépôt d'un nœud glissé : il prend la case (colonne, ligne) sous lui, magnétisée sur la grille, et le cadre
+// sous le point de dépôt (le plus profond, hors cadres réduits) ; déposé hors de tout cadre, il garde son cadre
+// d'origine (le cadre s'agrandit). Pour sortir un nœud de son cadre : clic droit → « Sortir du cadre ».
 
-export const COULEURS_STATUT: Record<Statut, string> = {
-  etabli: '#2e9e5b',
-  suspendu: '#d69a1f',
-  a_verifier: '#4a7fd4',
-  invalide: '#d64545',
-  ouvert: '#8a8f98',
+import './graphe.css'
+import { api, RefusVue, type Graphe, type Noeud, type OperationVue, type Vue } from './api'
+import { instantane, operationsVers, type Entree, type Instantane } from './graphe-annuler'
+import { Contenu } from './graphe-contenu'
+import { dansCadre, dessiner, niveauDe, oublierMesures, PALETTE, positionsRenvois, rgba, type Camera, type EtatDessin } from './graphe-dessin'
+import { CADRE, CLE_FONCTION, construireModele, dansRect, GRILLE, rectBloc, TEINTES, union, type Bloc, type Modele, type Rect, type Surcharge } from './graphe-modele'
+import { echapper } from './rendu'
+
+/** Paliers de zoom de l'éditeur Blueprint d'UE5 (−12 à +7, au-delà de 1:1 avec Ctrl), plus trois paliers lointains. */
+const ZOOMS: [number, string][] = [
+  [0.04, '−15'], [0.06, '−14'], [0.08, '−13'],
+  [0.1, '−12'], [0.125, '−11'], [0.15, '−10'], [0.175, '−9'], [0.2, '−8'], [0.225, '−7'], [0.25, '−6'],
+  [0.375, '−5'], [0.5, '−4'], [0.675, '−3'], [0.75, '−2'], [0.875, '−1'], [1, '1:1'],
+  [1.25, '+1'], [1.375, '+2'], [1.5, '+3'], [1.675, '+4'], [1.75, '+5'], [1.875, '+6'], [2, '+7'],
+]
+const INDEX_1_1 = ZOOMS.findIndex(([z]) => z === 1)
+/** Déplacement (px d'écran) au-delà duquel un clic devient un glisser. */
+const SEUIL_GLISSER = 4
+/** Délai qui distingue un clic sur une barre de titre (réduire) d'un double-clic (renommer). */
+const DELAI_DOUBLE_CLIC = 260
+
+export const AIDE_COMMANDES: [string, string][] = [
+  ['Clic droit + glisser (ou molette enfoncée)', 'Déplacer la vue'],
+  ['Molette', 'Zoom sur le curseur, par paliers (jusqu’à 1:1)'],
+  ['Ctrl + molette', 'Zoom au-delà de 1:1 (jusqu’à +7)'],
+  ['Clic droit', 'Menu contextuel (nœud, cadre ou fond)'],
+  ['Clic', 'Sélectionner un nœud ; sur le fond : tout désélectionner'],
+  ['Ctrl + clic', 'Ajouter ou retirer de la sélection'],
+  ['Maj + clic', 'Ajouter à la sélection'],
+  ['Glisser sur le fond', 'Sélection rectangulaire (Ctrl ou Maj : ajouter)'],
+  ['Glisser un nœud', 'Déplacer la sélection, case par case ; déposée dans un cadre, elle y entre'],
+  ['Glisser une barre de titre', 'Déplacer le cadre et tout son contenu'],
+  ['Clic sur une barre de titre, ou ▾', 'Réduire le cadre en nœud-fonction, ou le déployer'],
+  ['Double-clic sur une barre de titre', 'Renommer le cadre'],
+  ['Double-clic sur un nœud', 'Ouvrir sa fiche'],
+  ['F2', 'Renommer le nœud sélectionné'],
+  ['C', 'Créer un cadre autour de la sélection'],
+  ['Origine (Home)', 'Cadrer tout le graphe'],
+  ['F', 'Cadrer la sélection'],
+  ['Échap', 'Désélectionner'],
+  ['Ctrl + Z / Ctrl + Y', 'Annuler / rétablir les changements de vue de la session'],
+  ['Suppr', 'Sans effet : la vue ne supprime aucun nœud'],
+]
+
+type Cible =
+  | { genre: 'bloc'; id: string }
+  | { genre: 'fonction'; cadre: string }
+  | { genre: 'titre'; cadre: string; glyphe: boolean }
+  | { genre: 'renvoi'; id: string }
+  | { genre: 'cadre'; cadre: string }
+  | { genre: 'fond' }
+
+interface Origine {
+  colonne: number
+  ligne: number
+  groupe: string | null
 }
 
-export const LIBELLES_STATUT: Record<Statut, string> = {
-  etabli: 'Établi',
-  suspendu: 'Suspendu',
-  a_verifier: 'À vérifier',
-  invalide: 'Invalide',
-  ouvert: 'Ouvert',
-}
+type Geste =
+  | { genre: 'vue'; x0: number; y0: number; camX: number; camY: number; bouge: boolean; bouton: number }
+  | { genre: 'noeuds'; x0: number; y0: number; origines: Map<string, Origine>; dc: number; dl: number; bouge: boolean; seul: string | null }
+  | { genre: 'cadre'; x0: number; y0: number; cadre: string; origines: Map<string, Origine>; dc: number; dl: number; bouge: boolean; titre: boolean }
+  | { genre: 'rectangle'; x0: number; y0: number; ajout: boolean; avant: Set<string>; bouge: boolean }
+  | { genre: 'renvoi'; x0: number; y0: number; id: string; bouge: boolean }
+  | { genre: 'repli'; x0: number; y0: number; cadre: string; bouge: boolean }
 
-const COULEURS_VALIDITE: Record<Validite, string> = {
-  valide: '#2e9e5b',
-  a_verifier: '#9aa3b2',
-  invalide: '#d64545',
-}
-
-// Thème clair uniquement. Couleurs opaques : sigma gère mal la transparence des nœuds.
-const COULEUR_ESTOMPEE = '#e4e4e0'
-const COULEUR_ETIQUETTE = '#18181b'
-const TAILLE_NOEUD = 9
-const ECART_X = 3
-const ECART_Y = 2.5
-
-/** Disposition en couches : les prémisses en haut, chaque nœud une couche sous sa prémisse la plus profonde. */
-function disposer(noeuds: Noeud[]): Map<string, { x: number; y: number }> {
-  const parId = new Map(noeuds.map((n) => [n.id, n]))
-  const profondeurs = new Map<string, number>()
-  const profondeur = (id: string, pile: Set<string>): number => {
-    const connue = profondeurs.get(id)
-    if (connue !== undefined) return connue
-    if (pile.has(id)) return 0 // cycle : on coupe
-    pile.add(id)
-    const parents = (parId.get(id)?.parents ?? []).filter((p) => parId.has(p))
-    const p = parents.length ? 1 + Math.max(...parents.map((q) => profondeur(q, pile))) : 0
-    pile.delete(id)
-    profondeurs.set(id, p)
-    return p
-  }
-  const couches = new Map<number, string[]>()
-  for (const n of noeuds) {
-    const p = profondeur(n.id, new Set())
-    couches.set(p, [...(couches.get(p) ?? []), n.id])
-  }
-  const positions = new Map<string, { x: number; y: number }>()
-  for (const [p, ids] of couches) {
-    ids.forEach((id, i) => positions.set(id, { x: (i - (ids.length - 1) / 2) * ECART_X, y: -p * ECART_Y }))
-  }
-  return positions
+export interface OptionsVueGraphe {
+  /** Double-clic sur un nœud (null : fermer la fiche). */
+  surOuvrir: (noeud: Noeud | null) => void
+  /** Relit le graphe et la vue de l'espace (puis appelle `afficher`). */
+  recharger: () => Promise<void>
 }
 
 export class VueGraphe {
-  private graphe = new Graph({ type: 'directed', multi: true })
-  private sigma: Sigma
-  private selection: string | null = null
-  // Ids affichés au dernier dessin : s'ils changent (filtre, conversation, nouveaux nœuds), on recadre.
-  private affiches = ''
-  private surSelection: (noeud: Noeud | null) => void
+  private scene: HTMLElement
+  private canvas: HTMLCanvasElement
+  private ctx: CanvasRenderingContext2D
+  private contenu: Contenu
+  private options: OptionsVueGraphe
+  private graphe: Graphe = { noeuds: [], aretes: [] }
+  private vue: Vue = { groupes: [], placements: [], etiquettes: [], marques: [] }
+  private base: Modele
+  private modele: Modele
+  private estompes: Set<string> | null = null
+  private projetId: string | null = null
+  private lectureSeule: string | null = null
+  private cam: Camera = { x: 40, y: 40, z: 1 }
+  private iZoom = INDEX_1_1
+  private largeur = 0
+  private hauteur = 0
+  private selection = new Set<string>()
+  private survol: string | null = null
+  private renvoiSurvole: string | null = null
+  private titreSurvole: string | null = null
+  private hypothese: Bloc | null = null
+  private surcharges: Map<string, Surcharge> | null = null
+  private conflits: Set<string> | null = null
+  private cadreCible: string | null = null
+  private geste: Geste | null = null
+  private image = 0
+  private aCadrer = true
+  private pile: Entree[] = []
+  private refaire: Entree[] = []
+  private enCours = false
+  private minuterieTitre = 0
+  private molette = 0
+  private menu: HTMLElement
+  private saisie: HTMLInputElement
+  private aide: HTMLElement
+  private avisEl: HTMLElement
+  private minuterieAvis = 0
+  private zoomEl: HTMLElement
+  private rectangle: HTMLElement
+  private renommage: ((valider: boolean) => void) | null = null
 
-  constructor(conteneur: HTMLElement, surSelection: (noeud: Noeud | null) => void) {
-    this.surSelection = surSelection
-    this.sigma = new Sigma(this.graphe, conteneur, {
-      defaultEdgeType: 'arrow',
-      // Le conteneur est masqué quand l'agent graph est affiché : sigma se redimensionne au retour.
-      allowInvalidContainer: true,
-      labelColor: { color: COULEUR_ETIQUETTE },
-      stagePadding: 90,
-      labelRenderedSizeThreshold: 0,
-      labelSize: 12,
-      zIndex: true,
-      nodeReducer: (id, attributs) => {
-        if (!this.selection || id === this.selection || this.graphe.areNeighbors(id, this.selection)) {
-          return { ...attributs, highlighted: id === this.selection, zIndex: 1 }
-        }
-        return { ...attributs, color: COULEUR_ESTOMPEE, label: '', zIndex: 0 }
-      },
-      edgeReducer: (arete, attributs) => {
-        if (!this.selection || this.graphe.extremities(arete).includes(this.selection)) return attributs
-        return { ...attributs, hidden: true }
-      },
+  constructor(scene: HTMLElement, options: OptionsVueGraphe) {
+    this.scene = scene
+    this.options = options
+    scene.classList.add('gr-scene')
+    scene.tabIndex = 0
+    scene.setAttribute('aria-label', 'Graphe de raisonnement (aide : bouton ?)')
+    this.canvas = document.createElement('canvas')
+    this.canvas.className = 'gr-canevas'
+    scene.append(this.canvas)
+    this.ctx = this.canvas.getContext('2d')!
+    this.contenu = new Contenu(scene)
+    this.rectangle = element(scene, 'div', 'gr-rectangle')
+    this.rectangle.hidden = true
+    this.menu = element(scene, 'div', 'gr-menu')
+    this.menu.hidden = true
+    this.menu.setAttribute('role', 'menu')
+    this.saisie = element(scene, 'input', 'gr-saisie') as HTMLInputElement
+    this.saisie.hidden = true
+    this.aide = element(scene, 'div', 'gr-aide')
+    this.aide.hidden = true
+    this.aide.innerHTML = `<h3>Commandes (comme l’éditeur Blueprint d’Unreal Engine 5)</h3><table>${AIDE_COMMANDES
+      .map(([t, d]) => `<tr><th>${echapper(t)}</th><td>${echapper(d)}</td></tr>`).join('')}</table>`
+      + '<p>Un nœud déposé hors de tout cadre garde son cadre d’origine ; pour l’en sortir : clic droit → « Sortir du cadre ». '
+      + 'Seules les prémisses principales et auxiliaires sont des flèches ; les autres sont des renvois « cf. ».</p>'
+    this.avisEl = element(scene, 'div', 'gr-avis')
+    this.avisEl.hidden = true
+    this.avisEl.setAttribute('role', 'status')
+    const legende = element(scene, 'div', 'gr-legende')
+    legende.innerHTML = [
+      ['', 'établi'], ['4 3', 'à vérifier'], ['4 3|g', 'suspendu'], ['x', 'invalide'], ['1 2.2|g', 'ouvert'],
+    ].map(([m, t]) => `<span>${iconeStatut(m!)}${t}</span>`).join('')
+    this.zoomEl = element(scene, 'div', 'gr-zoom')
+    this.base = construireModele(this.graphe, this.vue)
+    this.modele = this.base
+
+    scene.addEventListener('pointerdown', (e) => this.appui(e))
+    scene.addEventListener('pointermove', (e) => this.mouvement(e))
+    scene.addEventListener('pointerup', (e) => this.relache(e))
+    scene.addEventListener('pointercancel', () => this.annulerGeste())
+    scene.addEventListener('dblclick', (e) => this.doubleClic(e))
+    scene.addEventListener('wheel', (e) => this.roulette(e), { passive: false })
+    scene.addEventListener('contextmenu', (e) => e.preventDefault())
+    scene.addEventListener('keydown', (e) => this.touche(e))
+    scene.addEventListener('pointerleave', () => {
+      if (!this.geste && (this.survol || this.titreSurvole || this.renvoiSurvole)) {
+        this.survol = this.titreSurvole = this.renvoiSurvole = null
+        this.hypothese = null
+        this.demander()
+      }
     })
-    this.sigma.on('clickNode', ({ node }) => this.selectionner(node))
-    this.sigma.on('clickStage', () => this.selectionner(null))
+    this.saisie.addEventListener('keydown', (e) => {
+      e.stopPropagation()
+      if (e.key === 'Enter') this.renommage?.(true)
+      if (e.key === 'Escape') this.renommage?.(false)
+    })
+    this.saisie.addEventListener('blur', () => this.renommage?.(true))
+    document.addEventListener('pointerdown', (e) => {
+      if (!this.aide.hidden && !this.aide.contains(e.target as Node) && !(e.target as HTMLElement).closest('.aide-graphe')) {
+        this.aide.hidden = true
+      }
+    })
+    new ResizeObserver(() => this.redimensionner()).observe(scene)
+    // Computer Modern (CMU Serif et fontes de KaTeX) : les titres du canevas sont mesurés dans cette fonte ; à son arrivée, on
+    // remesure tout (lignes du canevas, ajustements des blocs HTML).
+    const fontes = ['400 12px "CMU Serif Atlas"', '700 12px "CMU Serif Atlas"', 'italic 400 12px "CMU Serif Atlas"', '400 12px KaTeX_Main', '400 12px KaTeX_Math']
+    void Promise.all(fontes.map((f) => document.fonts.load(f))).then(() => {
+      oublierMesures()
+      this.contenu.vider()
+      this.demander()
+    })
   }
 
-  afficher(donnees: Graphe, conversationId: string | null) {
-    const noeuds = conversationId ? donnees.noeuds.filter((n) => n.conversation_id === conversationId) : donnees.noeuds
-    const gardes = new Set(noeuds.map((n) => n.id))
-    const positions = disposer(noeuds)
+  // ─── Données ───────────────────────────────────────────────────────────────
 
-    this.graphe.clear()
-    for (const n of noeuds) {
-      this.graphe.addNode(n.id, {
-        ...positions.get(n.id),
-        label: n.nom,
-        size: TAILLE_NOEUD,
-        color: COULEURS_STATUT[n.statut],
-        noeud: n,
-      })
+  /** Espace ouvert (null : pas d'écriture possible) ; `lectureSeule` explique pourquoi la vue ne s'écrit pas. */
+  definirProjet(projetId: string | null, lectureSeule: string | null = null): void {
+    if (projetId !== this.projetId) {
+      this.projetId = projetId
+      this.selection.clear()
+      this.pile = []
+      this.refaire = []
+      this.aCadrer = true
+      this.options.surOuvrir(null)
     }
-    for (const a of donnees.aretes) {
-      if (gardes.has(a.source) && gardes.has(a.cible)) {
-        this.graphe.addEdge(a.source, a.cible, { color: COULEURS_VALIDITE[a.validite], size: 2 })
+    this.lectureSeule = lectureSeule
+  }
+
+  /** Nouvelles données (lecture périodique pendant qu'un agent travaille, ou après une opération). */
+  afficher(graphe: Graphe, vue: Vue, conversationId: string | null): number {
+    this.graphe = graphe
+    this.vue = vue
+    this.estompes = conversationId
+      ? new Set(graphe.noeuds.filter((n) => n.conversation_id !== conversationId).map((n) => n.id))
+      : null
+    for (const id of [...this.selection]) if (!graphe.noeuds.some((n) => n.id === id)) this.selection.delete(id)
+    this.reconstruire()
+    if (this.aCadrer && graphe.noeuds.length && this.largeur) {
+      this.aCadrer = false
+      this.cadrerTout()
+    }
+    return conversationId ? graphe.noeuds.length - this.estompes!.size : graphe.noeuds.length
+  }
+
+  /** Numérotation d'un nœud dans la vue (« Lemme », « 7 »). */
+  reference(id: string): { libelle: string; numero: string } | null {
+    const b = this.base.blocs.get(id)
+    return b ? { libelle: b.libelle, numero: b.numero } : null
+  }
+
+  get nonPlaces(): number {
+    return this.base.nonPlaces
+  }
+
+  /** Sélectionne un nœud, le centre et ouvre sa fiche (null : tout désélectionner, fiche fermée). */
+  montrer(id: string | null): void {
+    this.selection.clear()
+    if (!id || !this.base.blocs.has(id)) {
+      this.options.surOuvrir(null)
+      this.demander()
+      return
+    }
+    this.selection.add(id)
+    const r = this.rectRepresentant(this.modele.representant.get(id) ?? id)
+    if (r) this.centrerSur((r.x0 + r.x1) / 2, (r.y0 + r.y1) / 2)
+    this.options.surOuvrir(this.base.blocs.get(id)!.noeud)
+    this.demander()
+  }
+
+  recentrer(): void {
+    this.cadrerTout()
+  }
+
+  basculerAide(): void {
+    this.aide.hidden = !this.aide.hidden
+  }
+
+  private reconstruire(): void {
+    this.base = construireModele(this.graphe, this.vue)
+    this.modele = this.surcharges ? construireModele(this.graphe, this.vue, this.surcharges) : this.base
+    this.demander()
+  }
+
+  // ─── Caméra ────────────────────────────────────────────────────────────────
+
+  private redimensionner(): void {
+    const r = this.scene.getBoundingClientRect()
+    if (!r.width || !r.height) return
+    const dpr = window.devicePixelRatio || 1
+    this.largeur = r.width
+    this.hauteur = r.height
+    this.canvas.width = Math.round(r.width * dpr)
+    this.canvas.height = Math.round(r.height * dpr)
+    this.canvas.style.width = `${r.width}px`
+    this.canvas.style.height = `${r.height}px`
+    if (this.aCadrer && this.graphe.noeuds.length) {
+      this.aCadrer = false
+      this.cadrerTout()
+    }
+    this.dessinerMaintenant()
+  }
+
+  private cadrer(r: Rect): void {
+    if (!this.largeur) return
+    const w = Math.max(1, r.x1 - r.x0), h = Math.max(1, r.y1 - r.y0)
+    const z = Math.min((this.largeur - 80) / w, (this.hauteur - 80) / h)
+    // Comme UE : le plus grand palier qui fait tout tenir, sans dépasser 1:1.
+    let i = 0
+    for (let k = 0; k <= INDEX_1_1; k++) if (ZOOMS[k]![0] <= z) i = k
+    this.iZoom = i
+    this.cam.z = ZOOMS[i]![0]
+    this.centrerSur((r.x0 + r.x1) / 2, (r.y0 + r.y1) / 2)
+  }
+
+  private centrerSur(x: number, y: number): void {
+    this.cam.x = this.largeur / 2 - x * this.cam.z
+    this.cam.y = this.hauteur / 2 - y * this.cam.z
+    this.demander()
+  }
+
+  private cadrerTout(): void {
+    this.cadrer(this.modele.bornes)
+  }
+
+  private cadrerSelection(): void {
+    let r: Rect | null = null
+    for (const id of this.selection) {
+      const x = this.rectRepresentant(this.modele.representant.get(id) ?? id)
+      if (x) r = r ? union(r, x) : x
+    }
+    if (r) this.cadrer(r)
+    else this.avis('Rien n’est sélectionné : F cadre la sélection, Origine cadre tout.')
+  }
+
+  private rectRepresentant(rep: string): Rect | null {
+    if (rep.startsWith(CLE_FONCTION)) {
+      const f = this.modele.cadres.get(rep.slice(CLE_FONCTION.length))?.fonction
+      return f ? { x0: f.x, y0: f.y, x1: f.x + f.w, y1: f.y + f.h } : null
+    }
+    const b = this.modele.blocs.get(rep)
+    return b ? rectBloc(b) : null
+  }
+
+  private versMonde(sx: number, sy: number): { x: number; y: number } {
+    return { x: (sx - this.cam.x) / this.cam.z, y: (sy - this.cam.y) / this.cam.z }
+  }
+
+  private pointeur(e: MouseEvent): { sx: number; sy: number } {
+    const r = this.scene.getBoundingClientRect()
+    return { sx: e.clientX - r.left, sy: e.clientY - r.top }
+  }
+
+  private zoomer(sens: 1 | -1, sx: number, sy: number, ctrl: boolean): void {
+    const max = ctrl ? ZOOMS.length - 1 : INDEX_1_1
+    let i = this.iZoom + sens
+    if (sens > 0 && i > max) return
+    i = Math.max(0, Math.min(ZOOMS.length - 1, i))
+    if (i === this.iZoom) return
+    const m = this.versMonde(sx, sy)
+    this.iZoom = i
+    this.cam.z = ZOOMS[i]![0]
+    this.cam.x = sx - m.x * this.cam.z
+    this.cam.y = sy - m.y * this.cam.z
+    this.demander()
+  }
+
+  // ─── Dessin ────────────────────────────────────────────────────────────────
+
+  private demander(): void {
+    if (!this.image) this.image = requestAnimationFrame(() => this.dessinerMaintenant())
+  }
+
+  private dessinerMaintenant(): void {
+    if (this.image) cancelAnimationFrame(this.image)
+    this.image = 0
+    if (!this.largeur) return
+    const dpr = window.devicePixelRatio || 1
+    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+    const etat: EtatDessin = {
+      modele: this.modele,
+      cam: this.cam,
+      largeur: this.largeur,
+      hauteur: this.hauteur,
+      selection: this.selection,
+      survol: this.survol,
+      renvoiSurvole: this.renvoiSurvole,
+      titreSurvole: this.titreSurvole,
+      estompes: this.estompes,
+      conflits: this.conflits,
+      cadreCible: this.cadreCible,
+      hypothese: this.hypothese,
+    }
+    dessiner(this.ctx, etat, this.contenu)
+    const [, nom] = ZOOMS[this.iZoom]!
+    const texte = `Zoom ${nom}`
+    if (this.zoomEl.textContent !== texte) this.zoomEl.textContent = texte
+    // Budget de composition épuisé : le reste à l'image suivante (rien ne tourne en boucle une fois tout composé).
+    if (this.contenu.enAttente) this.demander()
+  }
+
+  // ─── Cibles ────────────────────────────────────────────────────────────────
+
+  private cibleEn(sx: number, sy: number, modele = this.modele): Cible {
+    const { x, y } = this.versMonde(sx, sy)
+    if (niveauDe(this.cam.z) === 'contenu') {
+      for (const b of modele.blocs.values()) {
+        if (b.cache || !b.renvois.length || x < b.x || x > b.x + b.w || y < b.y + b.h || y > b.y + b.h + 20) continue
+        for (const r of positionsRenvois(b)) if (x >= r.x - 2 && x <= r.x + 34 && y >= r.y0 && y <= r.y1) return { genre: 'renvoi', id: r.id }
       }
     }
-    if (this.selection && !gardes.has(this.selection)) this.selectionner(null)
-    this.sigma.refresh()
-    const affiches = [...gardes].sort().join(' ')
-    if (affiches !== this.affiches) {
-      this.affiches = affiches
-      this.sigma.getCamera().animatedReset()
+    for (const b of modele.blocs.values()) {
+      if (!b.cache && x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) return { genre: 'bloc', id: b.id }
     }
-    return noeuds.length
+    for (const c of modele.cadres.values()) {
+      const f = c.fonction
+      if (f && x >= f.x && x <= f.x + f.w && y >= f.y && y <= f.y + f.h) return { genre: 'fonction', cadre: c.id }
+    }
+    const cadres = [...modele.cadresOrdonnes].reverse()
+    for (const c of cadres) {
+      const r = c.rect
+      if (r && x >= r.x0 && x <= r.x1 && y >= r.y0 && y <= r.y0 + CADRE.titre) {
+        return { genre: 'titre', cadre: c.id, glyphe: x <= r.x0 + 7 + 14 }
+      }
+    }
+    for (const c of cadres) if (c.rect && dansRect(c.rect, x, y)) return { genre: 'cadre', cadre: c.id }
+    return { genre: 'fond' }
   }
 
-  selectionner(id: string | null) {
-    this.selection = id
-    this.surSelection(id ? (this.graphe.getNodeAttribute(id, 'noeud') as Noeud) : null)
-    this.sigma.refresh()
+  /** Cadre sous un point (px de mise en page) : le plus profond, hors cadres réduits. */
+  private cadreSous(x: number, y: number): string | null {
+    const cadres = [...this.base.cadresOrdonnes].reverse()
+    for (const c of cadres) if (c.rect && !c.replie && dansRect(c.rect, x, y)) return c.id
+    return null
   }
 
-  recentrer() {
-    this.sigma.resize()
-    this.sigma.refresh()
-    this.sigma.getCamera().animatedReset()
+  // ─── Souris ────────────────────────────────────────────────────────────────
+
+  private appui(e: PointerEvent): void {
+    if (e.target === this.saisie || this.menu.contains(e.target as Node) || this.aide.contains(e.target as Node)) return
+    this.fermerMenu()
+    this.scene.focus({ preventScroll: true })
+    const { sx, sy } = this.pointeur(e)
+    if (e.button === 1 || e.button === 2) {
+      e.preventDefault()
+      this.geste = { genre: 'vue', x0: sx, y0: sy, camX: this.cam.x, camY: this.cam.y, bouge: false, bouton: e.button }
+      this.capturer(e.pointerId)
+      return
+    }
+    if (e.button !== 0) return
+    const c = this.cibleEn(sx, sy)
+    const ajout = e.ctrlKey || e.metaKey || e.shiftKey
+    if (c.genre === 'renvoi') this.geste = { genre: 'renvoi', x0: sx, y0: sy, id: c.id, bouge: false }
+    else if (c.genre === 'titre' && c.glyphe) this.geste = { genre: 'repli', x0: sx, y0: sy, cadre: c.cadre, bouge: false }
+    else if (c.genre === 'titre' || c.genre === 'fonction') {
+      this.geste = { genre: 'cadre', x0: sx, y0: sy, cadre: c.cadre, origines: this.originesCadre(c.cadre), dc: 0, dl: 0, bouge: false, titre: c.genre === 'titre' }
+    } else if (c.genre === 'bloc') {
+      let seul: string | null = null
+      if (e.ctrlKey || e.metaKey) {
+        if (this.selection.has(c.id)) this.selection.delete(c.id)
+        else this.selection.add(c.id)
+      } else if (e.shiftKey) this.selection.add(c.id)
+      else if (!this.selection.has(c.id)) {
+        this.selection.clear()
+        this.selection.add(c.id)
+      } else seul = c.id
+      const origines = new Map<string, Origine>()
+      if (this.selection.has(c.id)) {
+        for (const id of this.selection) {
+          const b = this.base.blocs.get(id)
+          if (b && !b.cache) origines.set(id, { colonne: b.colonne, ligne: b.ligne, groupe: b.groupe })
+        }
+      }
+      this.geste = { genre: 'noeuds', x0: sx, y0: sy, origines, dc: 0, dl: 0, bouge: false, seul }
+      this.demander()
+    } else {
+      this.geste = { genre: 'rectangle', x0: sx, y0: sy, ajout, avant: new Set(this.selection), bouge: false }
+    }
+    this.capturer(e.pointerId)
   }
+
+  private mouvement(e: PointerEvent): void {
+    const { sx, sy } = this.pointeur(e)
+    const g = this.geste
+    if (!g) return this.survoler(sx, sy)
+    if (!g.bouge && Math.hypot(sx - g.x0, sy - g.y0) < SEUIL_GLISSER) return
+    g.bouge = true
+    if (g.genre === 'vue') {
+      this.scene.classList.add('gr-deplace')
+      this.cam.x = g.camX + sx - g.x0
+      this.cam.y = g.camY + sy - g.y0
+      this.demander()
+    } else if (g.genre === 'noeuds' || g.genre === 'cadre') {
+      if (!g.origines.size) return
+      let dc = Math.round((sx - g.x0) / this.cam.z / GRILLE.pasX)
+      let dl = Math.round((sy - g.y0) / this.cam.z / GRILLE.pasY)
+      const minC = Math.min(...[...g.origines.values()].map((o) => o.colonne))
+      const minL = Math.min(...[...g.origines.values()].map((o) => o.ligne))
+      dc = Math.max(dc, -minC)
+      dl = Math.max(dl, -minL)
+      const cible = g.genre === 'noeuds' ? this.cadreSous(this.versMonde(sx, sy).x, this.versMonde(sx, sy).y) : null
+      if (dc === g.dc && dl === g.dl && cible === this.cadreCible) return
+      g.dc = dc
+      g.dl = dl
+      this.cadreCible = cible
+      this.surcharges = new Map([...g.origines].map(([id, o]) => [id, { colonne: o.colonne + dc, ligne: o.ligne + dl, groupe: o.groupe }]))
+      this.conflits = this.casesOccupees(this.surcharges)
+      this.modele = construireModele(this.graphe, this.vue, this.surcharges)
+      this.demander()
+    } else if (g.genre === 'rectangle') {
+      const x0 = Math.min(g.x0, sx), y0 = Math.min(g.y0, sy)
+      const w = Math.abs(sx - g.x0), h = Math.abs(sy - g.y0)
+      Object.assign(this.rectangle.style, { left: `${x0}px`, top: `${y0}px`, width: `${w}px`, height: `${h}px` })
+      this.rectangle.hidden = false
+      const a = this.versMonde(x0, y0), b = this.versMonde(x0 + w, y0 + h)
+      this.selection = new Set(g.ajout ? g.avant : [])
+      for (const bl of this.modele.blocs.values()) {
+        if (!bl.cache && bl.x < b.x && bl.x + bl.w > a.x && bl.y < b.y && bl.y + bl.h > a.y) this.selection.add(bl.id)
+      }
+      this.demander()
+    }
+  }
+
+  private relache(e: PointerEvent): void {
+    const g = this.geste
+    if (!g) return
+    this.geste = null
+    this.scene.classList.remove('gr-deplace')
+    if (this.scene.hasPointerCapture(e.pointerId)) this.scene.releasePointerCapture(e.pointerId)
+    const { sx, sy } = this.pointeur(e)
+    if (g.genre === 'vue') {
+      if (!g.bouge && g.bouton === 2) this.ouvrirMenu(this.cibleEn(g.x0, g.y0), g.x0, g.y0)
+    } else if (g.genre === 'noeuds') {
+      if (g.bouge && g.origines.size) void this.deposer(g, sx, sy)
+      else if (!g.bouge && g.seul) {
+        this.selection.clear()
+        this.selection.add(g.seul)
+      }
+    } else if (g.genre === 'cadre') {
+      if (g.bouge && (g.dc || g.dl)) {
+        void this.executer([{ op: 'deplacer_groupe', id: g.cadre, colonnes: g.dc, lignes: g.dl }], 'Déplacer le cadre')
+      } else if (g.bouge) this.finirGlisser()
+      else if (g.titre) {
+        clearTimeout(this.minuterieTitre)
+        this.minuterieTitre = window.setTimeout(() => void this.basculerRepli(g.cadre), DELAI_DOUBLE_CLIC)
+      }
+    } else if (g.genre === 'rectangle') {
+      this.rectangle.hidden = true
+      if (!g.bouge && !g.ajout) this.selection.clear()
+    } else if (g.genre === 'renvoi') {
+      if (!g.bouge) this.montrer(g.id)
+    } else if (g.genre === 'repli') {
+      if (!g.bouge) void this.basculerRepli(g.cadre)
+    }
+    this.demander()
+  }
+
+  /** Garde le pointeur pendant un geste (sans effet si le navigateur ne connaît pas ce pointeur). */
+  private capturer(id: number): void {
+    try {
+      this.scene.setPointerCapture(id)
+    } catch {
+      // pointeur déjà relâché ou simulé
+    }
+  }
+
+  private annulerGeste(): void {
+    this.geste = null
+    this.rectangle.hidden = true
+    this.scene.classList.remove('gr-deplace')
+    this.finirGlisser()
+  }
+
+  private finirGlisser(): void {
+    this.surcharges = null
+    this.conflits = null
+    this.cadreCible = null
+    this.modele = this.base
+    this.demander()
+  }
+
+  private survoler(sx: number, sy: number): void {
+    const c = this.cibleEn(sx, sy)
+    const survol = c.genre === 'bloc' ? c.id : c.genre === 'fonction' ? CLE_FONCTION + c.cadre : null
+    const titre = c.genre === 'titre' ? c.cadre : null
+    const renvoi = c.genre === 'renvoi' ? c.id : null
+    if (survol === this.survol && titre === this.titreSurvole && renvoi === this.renvoiSurvole) return
+    this.survol = survol
+    this.titreSurvole = titre
+    this.renvoiSurvole = renvoi
+    const b = survol ? this.modele.blocs.get(survol) : undefined
+    this.hypothese = b?.hypothese ? b : null
+    this.scene.classList.toggle('gr-main', !!renvoi || (c.genre === 'titre' && c.glyphe))
+    this.demander()
+  }
+
+  private doubleClic(e: MouseEvent): void {
+    if (e.target === this.saisie || this.menu.contains(e.target as Node)) return
+    this.fermerMenu()
+    const { sx, sy } = this.pointeur(e)
+    const c = this.cibleEn(sx, sy)
+    if (c.genre === 'titre') {
+      clearTimeout(this.minuterieTitre)
+      this.renommerCadre(c.cadre)
+    } else if (c.genre === 'bloc') this.options.surOuvrir(this.base.blocs.get(c.id)?.noeud ?? null)
+    else if (c.genre === 'fonction') void this.basculerRepli(c.cadre)
+  }
+
+  private roulette(e: WheelEvent): void {
+    e.preventDefault()
+    this.molette += e.deltaY * (e.deltaMode === 1 ? 33 : e.deltaMode === 2 ? 400 : 1)
+    if (Math.abs(this.molette) < 30) return
+    const sens = this.molette < 0 ? 1 : -1
+    this.molette = 0
+    const { sx, sy } = this.pointeur(e)
+    this.zoomer(sens, sx, sy, e.ctrlKey || e.metaKey)
+  }
+
+  // ─── Clavier ───────────────────────────────────────────────────────────────
+
+  private touche(e: KeyboardEvent): void {
+    if (e.target === this.saisie) return
+    const ctrl = e.ctrlKey || e.metaKey
+    const k = e.key
+    let traitee = true
+    if (k === 'Escape') {
+      if (!this.menu.hidden || !this.aide.hidden) {
+        this.fermerMenu()
+        this.aide.hidden = true
+      } else {
+        this.selection.clear()
+        this.options.surOuvrir(null)
+      }
+    } else if (k === 'Home') this.cadrerTout()
+    else if ((k === 'f' || k === 'F') && !ctrl && !e.altKey) this.cadrerSelection()
+    else if ((k === 'c' || k === 'C') && !ctrl && !e.altKey) void this.creerCadre()
+    else if (k === 'F2') this.renommerNoeud()
+    else if (ctrl && (k === 'z' || k === 'Z') && !e.shiftKey) void this.annuler()
+    else if (ctrl && (k === 'y' || k === 'Y' || ((k === 'z' || k === 'Z') && e.shiftKey))) void this.retablir()
+    else if (k === 'Delete' || k === 'Backspace') this.avis('Suppr est sans effet ici : la vue ne supprime aucun nœud du graphe.')
+    else traitee = false
+    if (traitee) {
+      e.preventDefault()
+      this.demander()
+    }
+  }
+
+  // ─── Opérations ────────────────────────────────────────────────────────────
+
+  private instantane(): Instantane {
+    return instantane(this.vue, this.graphe.noeuds.map((n) => [n.id, n.nom]))
+  }
+
+  private peutEcrire(): boolean {
+    if (this.lectureSeule || !this.projetId) {
+      this.avis(this.lectureSeule ?? 'Aucun espace ouvert : la vue est en lecture seule.')
+      return false
+    }
+    if (this.enCours) {
+      this.avis('Une modification de la vue est déjà en cours.')
+      return false
+    }
+    return true
+  }
+
+  /** Envoie des opérations (tout ou rien) ; en cas de refus, la vue revient et le message du serveur s'affiche. */
+  private async executer(ops: OperationVue[], libelle: string): Promise<boolean> {
+    if (!ops.length) return true
+    if (!this.peutEcrire()) {
+      this.finirGlisser()
+      return false
+    }
+    this.enCours = true
+    const avant = this.instantane()
+    try {
+      await api.organiserVue(this.projetId!, ops)
+      await this.options.recharger()
+      this.pile.push({ libelle, avant, apres: this.instantane() })
+      if (this.pile.length > 100) this.pile.shift()
+      this.refaire = []
+      return true
+    } catch (e) {
+      this.avis(e instanceof RefusVue ? `Refusé : ${e.message}` : `Échec : ${e instanceof Error ? e.message : String(e)}`)
+      return false
+    } finally {
+      this.enCours = false
+      this.finirGlisser()
+    }
+  }
+
+  private async rejouer(entree: Entree, sens: 'annuler' | 'retablir'): Promise<boolean> {
+    const ops = sens === 'annuler' ? operationsVers(entree.apres, entree.avant) : operationsVers(entree.avant, entree.apres)
+    if (!ops.length) return true
+    if (!this.peutEcrire()) return false
+    this.enCours = true
+    try {
+      await api.organiserVue(this.projetId!, ops)
+      await this.options.recharger()
+      this.avis(`${sens === 'annuler' ? 'Annulé' : 'Rétabli'} : ${entree.libelle.toLowerCase()}.`)
+      return true
+    } catch (e) {
+      this.avis(`${sens === 'annuler' ? 'Annulation' : 'Rétablissement'} refusé : ${e instanceof Error ? e.message : String(e)}`)
+      return false
+    } finally {
+      this.enCours = false
+      this.demander()
+    }
+  }
+
+  private async annuler(): Promise<void> {
+    const entree = this.pile[this.pile.length - 1]
+    if (!entree) return this.avis('Rien à annuler dans cette session.')
+    if (await this.rejouer(entree, 'annuler')) this.refaire.push(this.pile.pop()!)
+  }
+
+  private async retablir(): Promise<void> {
+    const entree = this.refaire[this.refaire.length - 1]
+    if (!entree) return this.avis('Rien à rétablir.')
+    if (await this.rejouer(entree, 'retablir')) this.pile.push(this.refaire.pop()!)
+  }
+
+  private originesCadre(cadre: string): Map<string, Origine> {
+    const origines = new Map<string, Origine>()
+    for (const b of this.base.blocs.values()) {
+      if (b.groupe && dansCadre(this.base, b.groupe, cadre)) origines.set(b.id, { colonne: b.colonne, ligne: b.ligne, groupe: b.groupe })
+    }
+    return origines
+  }
+
+  /** Cases déjà prises par un nœud non déplacé : les nœuds déplacés qui y tombent sont en conflit. */
+  private casesOccupees(surcharges: Map<string, Surcharge>): Set<string> | null {
+    const prises = new Set<string>()
+    for (const b of this.base.blocs.values()) {
+      if (surcharges.has(b.id) || !b.place) continue
+      for (let c = b.colonne; c < b.colonne + b.largeur; c++) for (let l = b.ligne; l < b.ligne + b.hauteur; l++) prises.add(`${c},${l}`)
+    }
+    const conflits = new Set<string>()
+    for (const [id, s] of surcharges) {
+      const b = this.base.blocs.get(id)!
+      for (let c = s.colonne; c < s.colonne + b.largeur; c++) for (let l = s.ligne; l < s.ligne + b.hauteur; l++) if (prises.has(`${c},${l}`)) conflits.add(id)
+    }
+    return conflits.size ? conflits : null
+  }
+
+  private async deposer(g: Extract<Geste, { genre: 'noeuds' }>, sx: number, sy: number): Promise<void> {
+    const m = this.versMonde(sx, sy)
+    const cible = this.cadreSous(m.x, m.y)
+    const ops: OperationVue[] = []
+    for (const [id, o] of g.origines) {
+      const groupe = cible ?? o.groupe
+      if (!g.dc && !g.dl && groupe === o.groupe && this.base.blocs.get(id)!.place) continue
+      ops.push({ op: 'placer', noeud: id, colonne: o.colonne + g.dc, ligne: o.ligne + g.dl, groupe: groupe ?? '' })
+    }
+    if (!ops.length) return this.finirGlisser()
+    // Pendant l'envoi, les nœuds restent où on les a posés.
+    this.surcharges = new Map([...g.origines].map(([id, o]) => [id, { colonne: o.colonne + g.dc, ligne: o.ligne + g.dl, groupe: cible ?? o.groupe }]))
+    this.modele = construireModele(this.graphe, this.vue, this.surcharges)
+    this.cadreCible = null
+    await this.executer(ops, ops.length > 1 ? `Déplacer ${ops.length} nœuds` : 'Déplacer le nœud')
+  }
+
+  private async basculerRepli(cadre: string): Promise<void> {
+    const c = this.base.cadres.get(cadre)
+    if (!c) return
+    await this.executer([{ op: 'modifier_groupe', id: cadre, replie: !c.replie }], c.replie ? 'Déployer le cadre' : 'Réduire le cadre')
+  }
+
+  private async creerCadre(): Promise<void> {
+    const ids = [...this.selection].filter((id) => this.base.blocs.get(id) && !this.base.blocs.get(id)!.cache)
+    if (!ids.length) return this.avis('Sélectionne d’abord des nœuds : C crée un cadre autour de la sélection.')
+    // Parent : le cadre commun le plus profond des nœuds sélectionnés.
+    const chaine = (g: string | null) => {
+      const r: string[] = []
+      for (let x = g, d = 0; x && d < 50; x = this.base.cadres.get(x)?.parent ?? null, d++) r.unshift(x)
+      return r
+    }
+    const chaines = ids.map((id) => chaine(this.base.blocs.get(id)!.groupe))
+    let parent: string | null = null
+    for (let k = 0; chaines.every((c) => c[k] !== undefined && c[k] === chaines[0]![k]); k++) parent = chaines[0]![k]!
+    const id = `cadre_${Date.now().toString(36)}`
+    const ops: OperationVue[] = [{ op: 'creer_groupe', id, nom: 'Nouveau cadre', parent: parent ?? '', genre: 'libre' }]
+    for (const n of ids) {
+      const b = this.base.blocs.get(n)!
+      ops.push({ op: 'placer', noeud: n, colonne: b.colonne, ligne: b.ligne, groupe: id, fixe: b.place ? b.fixe : true })
+    }
+    if (await this.executer(ops, 'Créer un cadre')) this.renommerCadre(id)
+  }
+
+  // ─── Renommer sur place ────────────────────────────────────────────────────
+
+  private renommerCadre(cadre: string): void {
+    const c = this.modele.cadres.get(cadre)
+    if (!c) return
+    const r = c.rect ?? (c.fonction ? { x0: c.fonction.x, y0: c.fonction.y, x1: c.fonction.x + c.fonction.w, y1: c.fonction.y + CADRE.titre } : null)
+    if (!r) return
+    this.ouvrirSaisie(r.x0, r.y0, r.x1, r.y0 + CADRE.titre, c.nom, (nom) => {
+      if (nom !== c.nom) void this.executer([{ op: 'modifier_groupe', id: cadre, nom }], 'Renommer le cadre')
+    })
+  }
+
+  private renommerNoeud(id?: string): void {
+    const cible = id ?? (this.selection.size === 1 ? [...this.selection][0]! : null)
+    const b = cible ? this.modele.blocs.get(cible) : undefined
+    if (!b || b.cache) return this.avis('Sélectionne un seul nœud visible pour le renommer (F2).')
+    this.ouvrirSaisie(b.x, b.y, b.x + b.w, b.y + 26, b.noeud.nom, (nom) => {
+      if (nom !== b.noeud.nom) void this.executer([{ op: 'renommer_noeud', id: b.id, nom }], 'Renommer le nœud')
+    })
+  }
+
+  private ouvrirSaisie(x0: number, y0: number, x1: number, y1: number, valeur: string, valider: (nom: string) => void): void {
+    const z = this.cam.z
+    const hauteur = Math.max(24, (y1 - y0) * z)
+    Object.assign(this.saisie.style, {
+      left: `${Math.max(4, x0 * z + this.cam.x)}px`,
+      top: `${Math.max(4, y0 * z + this.cam.y)}px`,
+      width: `${Math.max(180, (x1 - x0) * z)}px`,
+      height: `${hauteur}px`,
+    })
+    this.saisie.value = valeur
+    this.saisie.hidden = false
+    this.saisie.focus()
+    this.saisie.select()
+    this.renommage = (ok) => {
+      this.renommage = null
+      this.saisie.hidden = true
+      const nom = this.saisie.value.trim()
+      this.scene.focus({ preventScroll: true })
+      if (ok && nom) valider(nom)
+    }
+  }
+
+  // ─── Menu contextuel ───────────────────────────────────────────────────────
+
+  private ouvrirMenu(c: Cible, sx: number, sy: number): void {
+    type Article = { libelle: string; raccourci?: string; action?: () => void; inactif?: string } | 'sep' | { couleurs: string }
+    const articles: Article[] = []
+    let titre = ''
+    if (c.genre === 'bloc' || c.genre === 'renvoi') {
+      const id = c.id
+      const b = this.base.blocs.get(id)!
+      if (!this.selection.has(id)) {
+        this.selection.clear()
+        this.selection.add(id)
+      }
+      titre = `${b.libelle} ${b.numero}`
+      articles.push({ libelle: 'Renommer', raccourci: 'F2', action: () => this.renommerNoeud(id) })
+      if (b.place && b.fixe) {
+        articles.push({ libelle: 'Libérer (la réorganisation pourra le déplacer)', action: () => void this.executer([{ op: 'placer', noeud: id, colonne: b.colonne, ligne: b.ligne, groupe: b.groupe ?? '', fixe: false }], 'Libérer le nœud') })
+      } else {
+        articles.push({ libelle: 'Fixer à sa case', action: () => void this.executer([{ op: 'placer', noeud: id, colonne: b.colonne, ligne: b.ligne, groupe: b.groupe ?? '' }], 'Fixer le nœud') })
+      }
+      const parent = b.groupe ? this.base.cadres.get(b.groupe)?.parent ?? null : null
+      articles.push(b.groupe
+        ? { libelle: 'Sortir du cadre', action: () => void this.executer([{ op: 'placer', noeud: id, groupe: parent ?? '' }], 'Sortir du cadre') }
+        : { libelle: 'Sortir du cadre', inactif: 'hors cadre' })
+      articles.push('sep')
+      if (this.selection.size > 1) articles.push({ libelle: 'Cadre autour de la sélection', raccourci: 'C', action: () => void this.creerCadre() })
+      articles.push({ libelle: 'Ouvrir la fiche', raccourci: 'double-clic', action: () => this.options.surOuvrir(b.noeud) })
+      articles.push({ libelle: 'Cadrer la sélection', raccourci: 'F', action: () => this.cadrerSelection() })
+    } else if (c.genre === 'titre' || c.genre === 'cadre' || c.genre === 'fonction') {
+      const g = this.base.cadres.get(c.cadre)!
+      titre = `${g.numero} ${g.nom}`
+      articles.push({ libelle: 'Renommer', raccourci: 'double-clic', action: () => this.renommerCadre(g.id) })
+      articles.push({ couleurs: g.id })
+      articles.push({ libelle: g.replie ? 'Déployer' : 'Réduire en nœud-fonction', raccourci: 'clic sur le titre', action: () => void this.basculerRepli(g.id) })
+      articles.push({ libelle: 'Réorganiser le cadre', action: () => void this.executer([{ op: 'reorganiser', groupe: g.id }], 'Réorganiser le cadre') })
+      articles.push('sep')
+      articles.push({ libelle: 'Supprimer le cadre (les nœuds restent)', action: () => void this.executer([{ op: 'supprimer_groupe', id: g.id }], 'Supprimer le cadre') })
+    } else {
+      titre = 'Graphe'
+      articles.push(this.selection.size
+        ? { libelle: 'Nouveau cadre autour de la sélection', raccourci: 'C', action: () => void this.creerCadre() }
+        : { libelle: 'Nouveau cadre ici', inactif: 'sélectionne d’abord des nœuds : un cadre vide n’a pas de place' })
+      articles.push({ libelle: 'Réorganiser tout', action: () => void this.executer([{ op: 'reorganiser' }], 'Réorganiser tout') })
+      articles.push('sep')
+      articles.push({ libelle: 'Cadrer tout', raccourci: 'Origine', action: () => this.cadrerTout() })
+    }
+    this.menu.innerHTML = `<div class="gr-menu-titre">${echapper(titre)}</div>`
+    for (const a of articles) {
+      if (a === 'sep') {
+        this.menu.append(element(null, 'hr', 'gr-menu-sep'))
+      } else if ('couleurs' in a) {
+        const ligne = element(this.menu, 'div', 'gr-menu-couleurs')
+        ligne.innerHTML = '<span>Couleur</span>'
+        const actuelle = this.vue.groupes.find((x) => x.id === a.couleurs)?.couleur ?? null
+        for (const t of [null, ...TEINTES]) {
+          const b = element(ligne, 'button', 'gr-teinte') as HTMLButtonElement
+          b.type = 'button'
+          b.title = t ?? 'Par défaut (palette par ordre)'
+          b.style.background = t ? rgba(t, 0.35) : 'transparent'
+          b.style.borderColor = t ?? PALETTE.gris
+          if (!t) b.textContent = '∅'
+          if (t === actuelle) b.classList.add('actif')
+          b.addEventListener('click', () => {
+            this.fermerMenu()
+            void this.executer([{ op: 'modifier_groupe', id: a.couleurs, couleur: t ?? '' }], 'Changer la couleur du cadre')
+          })
+        }
+      } else {
+        const b = element(this.menu, 'button', 'gr-menu-article') as HTMLButtonElement
+        b.type = 'button'
+        b.setAttribute('role', 'menuitem')
+        b.innerHTML = `<span>${echapper(a.libelle)}</span>${a.raccourci ? `<kbd>${echapper(a.raccourci)}</kbd>` : ''}`
+        if (a.inactif) {
+          b.disabled = true
+          b.title = a.inactif
+          b.innerHTML += `<small>${echapper(a.inactif)}</small>`
+        }
+        b.addEventListener('click', () => {
+          this.fermerMenu()
+          a.action?.()
+        })
+      }
+    }
+    this.menu.hidden = false
+    const w = this.menu.offsetWidth, h = this.menu.offsetHeight
+    this.menu.style.left = `${Math.min(sx, this.largeur - w - 6)}px`
+    this.menu.style.top = `${Math.min(sy, this.hauteur - h - 6)}px`
+    this.demander()
+  }
+
+  private fermerMenu(): void {
+    this.menu.hidden = true
+  }
+
+  private avis(texte: string): void {
+    this.avisEl.textContent = texte
+    this.avisEl.hidden = false
+    clearTimeout(this.minuterieAvis)
+    this.minuterieAvis = window.setTimeout(() => (this.avisEl.hidden = true), Math.min(9000, 3000 + texte.length * 40))
+  }
+}
+
+function element(parent: HTMLElement | null, balise: string, classe: string): HTMLElement {
+  const el = document.createElement(balise)
+  el.className = classe
+  parent?.append(el)
+  return el
+}
+
+/** Petit cadre de légende : le statut se lit au trait. */
+function iconeStatut(motif: string): string {
+  const [dash, gris] = motif.split('|')
+  const couleur = gris ? '#8a8a8a' : '#000'
+  const barre = dash === 'x' ? '<line x1="1" y1="11" x2="21" y2="1" stroke="#000" stroke-opacity=".55" stroke-width=".8"/>' : ''
+  const tirets = dash && dash !== 'x' ? ` stroke-dasharray="${dash}"` : ''
+  return `<svg width="22" height="12" viewBox="0 0 22 12" aria-hidden="true"><rect x=".5" y=".5" width="21" height="11" fill="#fff" stroke="${couleur}"${tirets}/>${barre}</svg>`
 }

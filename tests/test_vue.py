@@ -182,3 +182,12 @@ def test_reorganiser_place_aussi_les_noeuds_jamais_places():
     assert set(apres.placements) == set(apres.noeuds)
     assert apres.placements["thm_loi"].colonne > apres.placements["l_prise"].colonne
     assert not vue.conflits(apres)
+
+
+def test_placer_a_une_case_sans_fixer():
+    """« Libérer » un nœud (ou annuler un déplacement) : il garde sa case mais redevient déplaçable."""
+    etat = _tout_placer(_fontaine())
+    etat2, _ = vue.appliquer(etat, [{"op": "placer", "noeud": "thm_loi", "colonne": 9, "ligne": 3, "fixe": False}])
+    assert etat2.placements["thm_loi"] == Placement("thm_loi", 9, 3, None, 1, 1, False)
+    with pytest.raises(ErreurVue, match="fixe invalide"):
+        vue.appliquer(etat, [{"op": "placer", "noeud": "thm_loi", "colonne": 9, "ligne": 3, "fixe": "oui"}])
