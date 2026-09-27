@@ -819,12 +819,6 @@ body.sessions-repliees .deplier-sessions {
   color: #1d4ed8;
 }
 
-.micro:disabled {
-  color: var(--texte-3);
-  background: transparent;
-  cursor: not-allowed;
-}
-
 .menu-voix {
   width: 240px;
 }

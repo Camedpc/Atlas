@@ -31,7 +31,6 @@ let jetonEnMemoire = lireJeton()
 // Clé OpenAI de l'utilisateur (facultative), gardée dans ce navigateur seulement : ses tours de l'orchestrateur
 // passent alors par ses crédits. Envoyée seulement aux routes qui font travailler Codex (en-tête X-Atlas-Cle-OpenAI).
 const CLE_OPENAI = 'atlas.cle-openai'
-const EVENEMENT_CLE = 'atlas:cle-openai'
 
 let cleEnMemoire: string | null = (() => {
   try {
@@ -45,7 +44,7 @@ export function cleOpenAI(): string | null {
   return cleEnMemoire
 }
 
-/** Enregistre (ou efface, avec null) la clé OpenAI de ce navigateur et prévient l'interface. */
+/** Enregistre (ou efface, avec null) la clé OpenAI de ce navigateur. */
 export function enregistrerCleOpenAI(cle: string | null) {
   cleEnMemoire = cle
   try {
@@ -54,11 +53,6 @@ export function enregistrerCleOpenAI(cle: string | null) {
   } catch {
     // navigation privée : la clé ne tiendra que le temps de la page
   }
-  window.dispatchEvent(new Event(EVENEMENT_CLE))
-}
-
-export function surChangementCle(f: () => void) {
-  window.addEventListener(EVENEMENT_CLE, f)
 }
 
 /** « sk-proj-…abcd » : de quoi reconnaître sa clé sans l'afficher. */

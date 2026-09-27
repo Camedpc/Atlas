@@ -212,7 +212,7 @@ export class SelecteurModele {
         (cle
           ? `<p class="menu-note">Tes tours (orchestrateur, sous-agents, vérificateur) utilisent tes crédits OpenAI avec la
               clé <b>${echapper(cleMasquee(cle))}</b>. Elle reste dans ce navigateur ; le serveur ne l’écrit jamais en base.
-              L’appel vocal passe par le compte d’Atlas : il est désactivé tant que ta clé est active.</p>
+              L’appel vocal, lui, reste sur le compte d’Atlas.</p>
             <div class="menu-cle"><button type="button" class="bouton-cle" data-action="oublier-cle">Oublier ma clé</button></div>`
           : `<p class="menu-note">Colle une clé OpenAI (de préférence une clé de projet avec un plafond de dépense) : tes
               tours utiliseront tes crédits au lieu du compte d’Atlas. Elle reste dans ce navigateur.</p>
