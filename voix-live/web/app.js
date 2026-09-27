@@ -219,6 +219,11 @@ async function demarrer() {
   ws.onclose = () => {
     etatServeur = 'arret'
     couperLecture(genCourante)
+    // Relâche le micro : sinon l'onglet le garde, et une autre page qui l'ouvre ensuite capte un son dégradé.
+    for (const piste of flux?.getTracks() ?? []) piste.stop()
+    void contexte?.close()
+    contexte = null
+    flux = null
     afficherEtat()
     $('demarrer').disabled = false
     $('demarrer').textContent = 'Démarrer la conversation'

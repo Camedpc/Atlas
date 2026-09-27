@@ -23,6 +23,7 @@ import logging
 import struct
 import time
 import uuid
+import wave
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -32,7 +33,7 @@ from fastapi import WebSocket
 
 from .. import conversations
 from ..modeles import Conversation, Message
-from ..orchestrateur.gestionnaire import Reglages, gestionnaire
+from ..orchestrateur.gestionnaire import Reglages, gestionnaire, titre_depuis
 from ..orchestrateur.suivi_agents import Agent
 from ..orchestrateur.traduction import traduire
 from . import config
@@ -97,6 +98,9 @@ class Session:
         self.annonces: list[str] = []
         self.evenements_orchestrateur: list[dict[str, Any]] = []
         self.pret = False
+        self.dossier = dossier
+        self._micro = bytearray() if config.ENREGISTRER else None
+        self._tours: list[dict[str, Any]] = []
 
     # ── Arbre des agents ──
 
@@ -235,13 +239,36 @@ class Session:
         duree = round((self.agent.fin - self.agent.debut) / 60)
         self.agent.activite = "Appel terminé"
         self.agent.resultat = f"Appel de {duree} min, {len(self.messages_appel)} messages."
+        if self._micro is not None:
+            await asyncio.to_thread(self._ecrire_diagnostic)
         texte = pont(self.messages_appel, self.debut, datetime.now())
         if texte:
             gestionnaire.deposer_pont(self.conversation.id, texte)
 
+    def _ecrire_diagnostic(self) -> None:
+        """Micro reçu (PCM 24 kHz) et tours transcrits, pour comprendre une mauvaise transcription."""
+        dossier = self.dossier / ".tmp"
+        dossier.mkdir(parents=True, exist_ok=True)
+        with wave.open(str(dossier / f"appel-{self.id}.wav"), "wb") as w:
+            w.setnchannels(1)
+            w.setsampwidth(2)
+            w.setframerate(24000)
+            w.writeframes(bytes(self._micro or b""))
+        (dossier / f"appel-{self.id}.json").write_text(
+            json.dumps(
+                {"reglages": {"delai": config.STT_DELAI, "mots_cles": config.MOTS_CLES}, "tours": self._tours},
+                ensure_ascii=False,
+                indent=1,
+            ),
+            encoding="utf-8",
+        )
+        log.info("diagnostic de l'appel %s écrit dans %s", self.id, dossier)
+
     # ── Entrées du navigateur ──
 
     async def _audio_micro(self, pcm: bytes) -> None:
+        if self._micro is not None:
+            self._micro += pcm
         if self.stt is not None:
             with contextlib.suppress(Exception):
                 await self.stt.envoyer(pcm)
@@ -350,6 +377,8 @@ class Session:
                 if message.get("flush_id") == self.flush_attendu:
                     texte = " ".join(self.tampon)
                     self.tampon, self.flush_attendu, self.pas_fin = [], None, 0
+                    if self._micro is not None:
+                        self._tours.append({"fin_s": round(len(self._micro) / 48000, 2), "texte": texte})
                     await self.mesurer("flush", self.debut_fin_tour)
                     await self.tour_utilisateur(texte, "voix")
 
@@ -457,6 +486,12 @@ class Session:
     async def confier(self, consigne_: str) -> dict[str, Any]:
         """Confie du travail à l'orchestrateur : nouveau tour s'il est libre, sinon injecté dans son tour."""
         en_cours = gestionnaire.en_cours(self.conversation.id)
+        if self.conversation.titre == conversations.TITRE_PAR_DEFAUT:
+            # Sinon le titre serait tiré du message transmis, préfixe compris.
+            self.conversation.titre = titre_depuis(consigne_)
+            await asyncio.to_thread(
+                conversations.modifier_conversation, self.conversation.id, titre=self.conversation.titre
+            )
         texte = f"{PREFIXE_CONFIE} {consigne_.strip()}"
         await gestionnaire.envoyer(self.conversation, texte, reglages=self.reglages_orchestrateur, origine="voix")
         self.a_confie = True

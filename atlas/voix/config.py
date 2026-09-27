@@ -54,6 +54,9 @@ TIER = _texte("ATLAS_VOIX_TIER", "fast")
 MODELE_TACHES = config_orchestrateur.modele_agent("tache_vocale", "gpt-6-luna")
 EFFORT_TACHES = config_orchestrateur.effort_agent("tache_vocale", "medium")
 
+ENREGISTRER = os.environ.get("ATLAS_VOIX_ENREGISTRER") == "1"
+"""Diagnostic : écrit le micro reçu et les tours transcrits dans le .tmp de la session (appel-<id>.wav/.json)."""
+
 # Contexte donné à la voix au décroché : derniers messages de la conversation.
 CONTEXTE_MESSAGES = int(_texte("ATLAS_VOIX_CONTEXTE_MESSAGES", "30"))
 
