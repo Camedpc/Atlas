@@ -115,6 +115,8 @@ export class Appel {
   private demarrage = false
   /** Le micro a été demandé pour cet appel (le son de fin ne sonne que si l'appel a vraiment commencé). */
   private audioDemande = false
+  /** Micro capté avant l'ouverture du WebSocket, envoyé juste après l'authentification. */
+  private enAttente: ArrayBuffer[] = []
   private readonly rappels: RappelsAppel
 
   constructor(rappels: RappelsAppel) {
@@ -136,22 +138,27 @@ export class Appel {
     }
   }
 
-  /** L'appel démarre sans micro : Atlas voix se prépare (tour d'échauffement), puis, quand il est prêt, le son
-   * d'ouverture dit « tu peux parler » et le micro s'ouvre juste après. Le micro fermé pendant le son évite que
-   * Windows le baisse (il réduit de 80 % les autres sons pendant une communication). */
+  /** Au clic : son d'ouverture, WebSocket en parallèle, puis le micro juste après le son (micro ouvert pendant le
+   * son, Windows le baisserait de 80 % : il réduit les autres sons pendant une communication). On peut parler dès
+   * lors : le serveur garde le micro jusqu'à l'ouverture de la transcription et le lui rejoue, et la réponse attend
+   * qu'Atlas voix soit prêt. */
   private async lancer(conversationId: string) {
     this.messages.clear()
     this.generations.nouvelAppel()
     this.enLecture = false
     this.position = { joues: 0, t: 0 }
-    this.audioDemande = false
+    this.audioDemande = true
+    this.enAttente = []
     this.afficherEtat('demarrage')
+    jouerSon('ouverture')
     const ws = new WebSocket(urlAppel(conversationId))
     ws.binaryType = 'arraybuffer'
     this.ws = ws
     ws.onopen = () => {
       ws.send(JSON.stringify({ type: 'auth', jeton: jetonAcces() }))
       this.envoyerReglages()
+      for (const pcm of this.enAttente) ws.send(pcm)
+      this.enAttente = []
       this.rappels.surEtat(true)
     }
     ws.onmessage = (e) => (typeof e.data === 'string' ? this.recevoir(JSON.parse(e.data)) : this.jouer(e.data))
@@ -162,6 +169,7 @@ export class Appel {
       // Comme l'ouverture : micro et audio de l'appel relâchés d'abord, puis le son dans son propre contexte.
       // Par la sortie WebRTC de l'appel (0,2 à 0,9 s de retard), il était coupé à la fermeture de cette sortie.
       const avecAudio = this.contexte !== null || this.audioDemande
+      this.audioDemande = false
       this.fermerAudio()
       if (avecAudio) jouerSon('fermeture')
       cancelAnimationFrame(this.image)
@@ -174,14 +182,13 @@ export class Appel {
       this.image = requestAnimationFrame(suivre)
     }
     this.image = requestAnimationFrame(suivre)
+    await this.ouvrirApresSon(ws)
   }
 
-  /** Atlas voix est prêt : son d'ouverture, puis micro et sortie de la voix. */
-  private async ouvrirApresSon() {
-    const ws = this.ws
-    jouerSon('ouverture')
+  /** Micro et sortie de la voix, une fois le son d'ouverture joué. */
+  private async ouvrirApresSon(ws: WebSocket) {
     await new Promise((ok) => window.setTimeout(ok, (REVEIL_S + 0.35) * 1000))
-    if (this.ws !== ws || !ws) return // raccroché entre-temps
+    if (this.ws !== ws) return // raccroché entre-temps
     try {
       await this.ouvrirAudio()
     } catch (e) {
@@ -190,6 +197,7 @@ export class Appel {
       return
     }
     if (this.ws !== ws) this.fermerAudio() // raccroché pendant l'ouverture du micro
+    this.afficherEtat()
   }
 
   raccrocher() {
@@ -233,7 +241,9 @@ export class Appel {
     const source = this.contexte.createMediaStreamSource(this.flux)
     const micro = new AudioWorkletNode(this.contexte, 'micro')
     micro.port.onmessage = (e) => {
-      if (!this.muet && this.ws?.readyState === WebSocket.OPEN) this.ws.send(e.data.pcm)
+      if (this.muet || !this.ws) return
+      if (this.ws.readyState === WebSocket.OPEN) this.ws.send(e.data.pcm)
+      else if (this.ws.readyState === WebSocket.CONNECTING) this.enAttente.push(e.data.pcm)
     }
     source.connect(micro)
     this.lecteur = new AudioWorkletNode(this.contexte, 'lecteur', { outputChannelCount: [1] })
@@ -464,12 +474,9 @@ export class Appel {
 
   private afficherEtat(etat?: EtatAppel) {
     if (etat) this.etatServeur = etat
-    // Première écoute : Atlas voix est prêt, on peut parler.
-    if (etat === 'ecoute' && !this.audioDemande && this.ws) {
-      this.audioDemande = true
-      void this.ouvrirApresSon()
-    }
-    const affiche = this.enLecture && this.etatServeur !== 'demarrage' ? 'parle' : this.etatServeur
+    // Micro ouvert : on peut parler, même si Atlas voix finit de se préparer (il répondra une fois prêt).
+    const serveur = this.etatServeur === 'demarrage' && this.contexte !== null ? 'ecoute' : this.etatServeur
+    const affiche = this.enLecture && serveur !== 'demarrage' ? 'parle' : serveur
     this.rappels.surEtatVoix(affiche)
   }
 }
