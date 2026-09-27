@@ -105,6 +105,9 @@ def surcharges_thread(
                 "env": {
                     "ATLAS_CODEX_HOME": str(codex_home or config.CODEX_HOME),
                     "ATLAS_ESPACE_TRAVAIL": str(config.ESPACE_TRAVAIL),
+                    # Il raconte son avancement à atlas.serveur, pour l'agent graph de la conversation.
+                    "ATLAS_CONVERSATION_ID": conversation_id,
+                    "ATLAS_URL_INTERNE": config.URL_INTERNE,
                     **graphe,
                 },
                 "tool_timeout_sec": config.DELAI_VERIFICATION,

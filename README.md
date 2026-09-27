@@ -47,6 +47,7 @@ Servies seulement par `atlas.serveur` (pas sur Vercel) :
 | `GET /api/conversations/{id}/agents` | Arbre des agents : en direct pendant un tour, sinon celui du dernier tour |
 | `POST /api/conversations/{id}/messages` | `{"contenu", "agent"?, "modele"?, "effort"?}` : lance un tour, ou s'injecte dans le tour en cours |
 | `POST /api/conversations/{id}/arreter` | `{"agent"?}` : arrête tout (orchestrateur et sous-agents), ou un seul sous-agent |
+| `POST /api/conversations/{id}/verification` | Interne : avancement de l'outil `verifier` (juges, verdicts), pour l'arbre des agents |
 | `WS /api/conversations/{id}/voix` | Appel vocal avec Atlas voix (premier message : `{"type": "auth", "jeton"}`) |
 | `/api/voix/appels/{appel}/…` | Outils du serveur MCP `voix` : confier à l'orchestrateur, son état, petites tâches, écran du graphe |
 | `GET /api/orchestrateur/modeles` | Modèles Codex proposés à l'orchestrateur, leurs efforts, et les réglages par défaut (avec `X-Atlas-Cle-OpenAI` : ceux de la clé) |

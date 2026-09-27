@@ -7,7 +7,7 @@
 // Le bouton micro ouvre un appel avec Atlas voix (voix.ts), présenté comme sur claude.ai : ta phrase s'écrit en
 // direct dans la saisie, le fil montre l'échange (agent /voix) avec la voix d'Atlas colorée au fil de sa lecture,
 // « Stop » raccroche, et la pastille (pastille.ts) montre les deux voix. En raccrochant, on revient à l'orchestrateur.
-import { RACINE, VOIX, estVoix, etat, formatDuree, formatTokens, nomAgent } from './agents'
+import { RACINE, VOIX, estJuge, estVoix, etat, formatDuree, formatTokens, nomAgent } from './agents'
 import { ArbreAgents } from './arbre'
 import {
   api,
@@ -546,6 +546,17 @@ export class PanneauConversation {
   private majCible() {
     const sous = etat.selection !== RACINE
     const nom = nomAgent(etat.get(etat.selection), etat.selection)
+    // Le vérificateur et ses juges sont des threads éphémères : leur fil (les verdicts) se lit seulement.
+    const juge = estJuge(etat.get(etat.selection))
+    this.saisie.disabled = this.envoyer.disabled = juge
+    if (juge) {
+      this.cible.innerHTML = `Verdicts de <b>${echapper(nom)}</b> <span class="relais">lecture seule</span>
+        <button type="button" class="retirer-cible" title="Écrire à l’orchestrateur (Échap)" aria-label="Écrire à l’orchestrateur">×</button>`
+      this.cible.querySelector('.retirer-cible')?.addEventListener('click', () => etat.selectionner(RACINE))
+      this.saisie.placeholder = 'Lecture seule · Échap pour écrire à l’orchestrateur'
+      this.majAriane()
+      return
+    }
     if (estVoix(etat.selection)) {
       const enAppel = this.appel?.ouvert
       this.cible.innerHTML = enAppel
@@ -575,7 +586,8 @@ export class PanneauConversation {
   /** Le sous-agent sélectionné s'il travaille (Arrêter ne vise que lui), sinon null (Arrêter vise tout). */
   private cibleArret(): string | null {
     const a = etat.get(etat.selection)
-    return a && a.chemin !== RACINE && (a.etat === 'actif' || a.etat === 'attend') ? a.chemin : null
+    // Un juge du vérificateur ne s'arrête pas seul : il travaille dans l'outil de son appelant.
+    return a && a.chemin !== RACINE && !estJuge(a) && (a.etat === 'actif' || a.etat === 'attend') ? a.chemin : null
   }
 
   private majArreter() {
@@ -757,7 +769,7 @@ export class PanneauConversation {
 
   private async envoyerMessage() {
     const contenu = this.saisie.value.trim()
-    if (!contenu) return
+    if (!contenu || estJuge(etat.get(etat.selection))) return
     if (this.appel.ouvert) {
       if (this.dictee) return // la saisie montre la dictée en cours, pas un message tapé
       this.appel.ecrire(contenu)

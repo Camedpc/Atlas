@@ -65,5 +65,8 @@ DELAI_VERIFICATION = int(os.environ.get("ATLAS_DELAI_VERIFICATION") or 1800)
 # Obligatoire dès que le serveur est joignable depuis Internet : l'orchestrateur exécute des commandes.
 JETON_ACCES = _optionnel("ATLAS_JETON_ACCES")
 
+# Adresse à laquelle les serveurs MCP (voix, vérificateur) rappellent atlas.serveur (même machine, même conteneur).
+URL_INTERNE = os.environ.get("ATLAS_URL_INTERNE") or "http://127.0.0.1:8000"
+
 # Origines autorisées à appeler le serveur depuis un navigateur (ex. le front Vercel), séparées par des virgules.
 CORS_ORIGINES = [o.strip() for o in os.environ.get("ATLAS_CORS_ORIGINES", "").split(",") if o.strip()]

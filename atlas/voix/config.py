@@ -67,5 +67,4 @@ PRECHAUFFAGE_S = float(_texte("ATLAS_VOIX_PRECHAUFFAGE_S", "600"))
 # Contexte donné à la voix au décroché : derniers messages de la conversation.
 CONTEXTE_MESSAGES = int(_texte("ATLAS_VOIX_CONTEXTE_MESSAGES", "30"))
 
-# Adresse à laquelle le serveur MCP de la voix rappelle atlas.serveur (même machine, même conteneur).
-URL_INTERNE = _texte("ATLAS_URL_INTERNE", "http://127.0.0.1:8000")
+URL_INTERNE = config_orchestrateur.URL_INTERNE

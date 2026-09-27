@@ -149,6 +149,10 @@ Vérificateur : serveur MCP `mcp_verificateur.py` (délai `ATLAS_DELAI_VERIFICAT
 (threads éphémères, lecture seule, sortie structurée) : `ATLAS_MODELE_VERIFICATEUR` juge, et si « invalide » ou sous
 `ATLAS_SEUIL_CONFIANCE`, `ATLAS_MODELE_VERIFICATEUR_RECOURS` rejuge et fait foi ; verdict écrit par
 `ecriture.noter_demonstration` (validite, confiance ; justification au journal, action `verdict`).
+Dans l'arbre et l'agent graph, il n'est pas un sous-agent Codex : son serveur MCP raconte son avancement à
+`POST /api/conversations/{id}/verification` (`ATLAS_URL_INTERNE`), et `SuiviAgents.verification` en fait des agents
+(`<appelant>/verification`, un juge par démonstration titré par son repère, `…/recours` s'il rejuge) ; chaque verdict
+va dans le fil de son juge et du vérificateur, en lecture seule. La fin de l'outil clôt ce qui n'a pas été raconté.
 
 Atlas voix (`atlas/voix/`) : appel vocal par WebSocket (`/api/conversations/{id}/voix`, jeton dans le premier
 message), Gradium STT/TTS (`GRADIUM_API_KEY`, 3 sessions max en offre gratuite → un appel à la fois), thread Codex
