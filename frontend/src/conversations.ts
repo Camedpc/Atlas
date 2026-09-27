@@ -2,8 +2,9 @@
 // Le fil montre l'agent sélectionné (l'orchestrateur par défaut) et la saisie lui écrit : un message à un
 // sous-agent est relayé par l'orchestrateur (Codex n'accepte pas d'entrée directe vers un sous-agent).
 // Pendant une exécution, un message s'injecte dans le tour en cours au lieu d'attendre la fin.
-// Le bouton micro ouvre un appel avec Atlas voix (voix.ts) : pendant l'appel, le fil montre sa transcription
-// (agent /voix) et ce qui est tapé lui est adressé ; en raccrochant, on revient à l'orchestrateur.
+// Le bouton micro ouvre un appel avec Atlas voix (voix.ts), présenté comme sur claude.ai : ta phrase s'écrit en
+// direct dans la saisie, le fil montre l'échange (agent /voix) avec la voix d'Atlas colorée au fil de sa lecture,
+// « Stop » raccroche, et la pastille (pastille.ts) montre les deux voix. En raccrochant, on revient à l'orchestrateur.
 import { RACINE, VOIX, estVoix, etat, formatTokens, nomAgent } from './agents'
 import { ArbreAgents } from './arbre'
 import {
@@ -18,7 +19,8 @@ import {
 import { echapper, rendre } from './rendu'
 import { SelecteurModele } from './reglages'
 import { PanneauSessions } from './sessions'
-import { Appel } from './voix'
+import { Pastille } from './pastille'
+import { Appel, optionsVoix, VOIX_GRADIUM, type MessageVoix } from './voix'
 
 const INTERVALLE_SUIVI_MS = 1500
 
@@ -97,7 +99,18 @@ export class PanneauConversation {
   private envoyer: HTMLButtonElement
   private arreter: HTMLButtonElement
   private micro: HTMLButtonElement
+  private stop: HTMLButtonElement
+  private menuVoix: HTMLElement
+  private boutonOptions: HTMLButtonElement
   private appel: Appel
+  private pastille: Pastille
+  /** La saisie montre ce que Camille est en train de dire (et non un texte tapé). */
+  private dictee = false
+  /** Camille tape pendant l'appel : la dictée n'écrase plus la saisie. */
+  private tape = false
+  /** Fil de la voix chargé au début de l'appel ; ensuite il se remplit en direct, sans relire la base. */
+  private filVoixCharge = false
+  private elementsVoix = new Map<string, HTMLElement>()
   private racine: HTMLElement
   private projets: Projet[] = []
   private projet: Projet | null = null
@@ -144,7 +157,6 @@ export class PanneauConversation {
       <div class="fil"><div class="fil-contenu"></div></div>
       <div class="bas">
         <section class="arbre" hidden></section>
-        <section class="appel" hidden></section>
         <form class="saisie">
           <textarea rows="1" placeholder="Pose une question de recherche…"></textarea>
           <div class="saisie-pied">
@@ -152,11 +164,20 @@ export class PanneauConversation {
             <span class="espace"></span>
             <div class="selecteur"></div>
             <button class="arreter" type="button" hidden>Arrêter</button>
-            <button class="micro" type="button" title="Appel vocal avec Atlas voix" aria-label="Appel vocal avec Atlas voix">
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="5.5" y="1.8" width="5" height="8.4" rx="2.5"/><path d="M3 7.6a5 5 0 0 0 10 0M8 12.6v1.8"/></svg>
-            </button>
+            <div class="groupe-micro">
+              <button class="micro" type="button" title="Parler avec Atlas voix" aria-label="Parler avec Atlas voix">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="5.5" y="1.8" width="5" height="8.4" rx="2.5"/><path d="M3 7.6a5 5 0 0 0 10 0M8 12.6v1.8"/></svg>
+              </button>
+              <button class="options-voix" type="button" aria-haspopup="menu" aria-expanded="false" title="Options de la voix" aria-label="Options de la voix">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="m3 4.5 3 3 3-3"/></svg>
+              </button>
+              <div class="menu-modele menu-voix" role="menu" hidden></div>
+            </div>
             <button class="envoyer" type="submit" title="Envoyer (Entrée)" aria-label="Envoyer">
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 13V3M3.5 7.5 8 3l4.5 4.5"/></svg>
+            </button>
+            <button class="stop-appel" type="button" hidden title="Raccrocher" data-etat="demarrage">
+              <span class="points"><i></i><i></i><i></i></span>Stop
             </button>
           </div>
         </form>
@@ -170,19 +191,54 @@ export class PanneauConversation {
     this.envoyer = racine.querySelector('.envoyer')!
     this.arreter = racine.querySelector('.arreter')!
     this.micro = racine.querySelector('.micro')!
+    this.stop = racine.querySelector('.stop-appel')!
+    this.menuVoix = racine.querySelector('.menu-voix')!
+    this.boutonOptions = racine.querySelector('.options-voix')!
+    this.pastille = new Pastille(() => void this.appeler())
     this.selecteur = new SelecteurModele(racine.querySelector('.selecteur')!)
-    this.appel = new Appel(racine.querySelector('.appel')!, {
-      surEtat: (ouvert) => {
-        this.micro.classList.toggle('actif', ouvert)
-        this.micro.title = ouvert ? 'Raccrocher' : 'Appel vocal avec Atlas voix'
-        etat.selectionner(ouvert ? VOIX : RACINE)
-        this.majCible()
-        window.clearTimeout(this.suivi)
-        void this.rafraichir()
+    this.appel = new Appel({
+      surEtat: (ouvert, raison) => this.surAppel(ouvert, raison),
+      surEtatVoix: (e) => {
+        this.stop.dataset.etat = e
       },
+      surSources: (sources) => this.pastille.brancher(sources),
+      surPartiel: (texte) => this.afficherDictee(texte),
+      surUtilisateur: (texte) => this.ajouterVoix(`<div class="msg utilisateur"><div class="bulle">${echapper(texte)}</div></div>`),
+      surMessage: (m) => this.afficherMessageVoix(m),
+      surOutil: (id, description, fini, ok) => {
+        let el = this.elementsVoix.get(`outil:${id}`)
+        if (!el) {
+          el = this.ajouterVoix(`<div class="msg outil-voix"><span class="etiquette">Outil</span>
+            <span class="resume">${echapper(description)}</span></div>`)
+          this.elementsVoix.set(`outil:${id}`, el)
+        }
+        el.classList.toggle('en-cours', !fini)
+        el.classList.toggle('echec', fini && !ok)
+      },
+      surInfo: (texte, erreur) => this.ajouterVoix(`<div class="msg systeme${erreur ? ' erreur' : ''}">${echapper(texte)}</div>`),
       reglagesOrchestrateur: () => this.selecteur.reglages,
     })
     this.micro.addEventListener('click', () => void this.appeler())
+    this.stop.addEventListener('click', () => this.appel.raccrocher())
+    this.boutonOptions.addEventListener('click', () => this.basculerMenuVoix())
+    this.menuVoix.addEventListener('click', (e) => {
+      const el = (e.target as HTMLElement).closest<HTMLElement>('[data-voix], [data-option]')
+      if (!el) return
+      if (el.dataset.voix) optionsVoix.voix = el.dataset.voix
+      if (el.dataset.option === 'casque') optionsVoix.casque = !optionsVoix.casque
+      this.appel.envoyerReglages()
+      this.dessinerMenuVoix()
+    })
+    document.addEventListener('pointerdown', (e) => {
+      if (!this.menuVoix.hidden && !this.menuVoix.parentElement!.contains(e.target as Node)) this.basculerMenuVoix(false)
+    })
+    this.menuVoix.parentElement!.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !this.menuVoix.hidden) {
+        e.stopPropagation()
+        this.basculerMenuVoix(false)
+        this.boutonOptions.focus()
+      }
+    })
     this.arbre = new ArbreAgents(
       racine.querySelector('.arbre')!,
       () => this.saisie.focus(),
@@ -202,6 +258,12 @@ export class PanneauConversation {
         e.preventDefault()
       } else if (e.key === 'Escape' && this.appel.ouvert) {
         this.appel.interrompre()
+      } else if (this.appel.ouvert && e.key.length === 1 && !e.ctrlKey && !e.metaKey) {
+        // Camille se met à taper : la dictée s'efface et ne réécrit plus la saisie.
+        if (this.dictee) this.saisie.value = ''
+        this.dictee = false
+        this.tape = true
+        this.saisie.classList.remove('dictee')
       } else if (e.key === 'Escape' && etat.selection !== RACINE) {
         etat.selectionner(RACINE)
       }
@@ -407,7 +469,7 @@ export class PanneauConversation {
         : `À <b>l’orchestrateur</b> <span class="relais">(appel terminé)</span>
            <button type="button" class="retirer-cible" title="Revenir au fil de l’orchestrateur (Échap)" aria-label="Revenir au fil de l’orchestrateur">×</button>`
       this.cible.querySelector('.retirer-cible')?.addEventListener('click', () => etat.selectionner(RACINE))
-      this.saisie.placeholder = enAppel ? 'Écrire à Atlas voix pendant l’appel…' : 'Écrire à l’orchestrateur…'
+      this.saisie.placeholder = enAppel ? 'Parle, ou écris à Atlas voix…' : 'Écrire à l’orchestrateur…'
       this.majAriane()
       return
     }
@@ -451,6 +513,78 @@ export class PanneauConversation {
     }
   }
 
+  // ─── Appel vocal ───
+
+  private surAppel(ouvert: boolean, raison?: string) {
+    this.racine.classList.toggle('en-appel', ouvert)
+    this.stop.hidden = !ouvert
+    this.envoyer.hidden = ouvert
+    this.micro.classList.toggle('actif', ouvert)
+    this.micro.title = ouvert ? 'Raccrocher' : 'Parler avec Atlas voix'
+    this.tape = false
+    this.afficherDictee('')
+    this.elementsVoix.clear()
+    this.filVoixCharge = false
+    etat.selectionner(ouvert ? VOIX : RACINE)
+    this.majCible()
+    if (raison) this.contenu.insertAdjacentHTML('beforeend', `<div class="msg systeme">${echapper(raison)}</div>`)
+    window.clearTimeout(this.suivi)
+    void this.rafraichir()
+  }
+
+  private afficherDictee(texte: string) {
+    if (this.tape) return
+    this.dictee = texte.length > 0
+    this.saisie.classList.toggle('dictee', this.dictee)
+    this.saisie.value = texte
+    this.ajusterSaisie()
+  }
+
+  /** Ajoute un élément au fil pendant l'appel (et le fait défiler s'il était en bas). */
+  private ajouterVoix(html: string): HTMLElement {
+    const enBas = this.fil.scrollHeight - this.fil.scrollTop - this.fil.clientHeight < 80
+    this.contenu.querySelector(':scope > .vide')?.remove()
+    this.contenu.insertAdjacentHTML('beforeend', html)
+    if (enBas) this.fil.scrollTop = this.fil.scrollHeight
+    return this.contenu.lastElementChild as HTMLElement
+  }
+
+  /** Réponse d'Atlas voix : ce qu'il a déjà dit en noir, le reste en gris, comme sur claude.ai. */
+  private afficherMessageVoix(m: MessageVoix) {
+    if (!m.texte.trim()) return
+    let el = this.elementsVoix.get(m.id)
+    if (!el) {
+      el = this.ajouterVoix('<div class="msg assistant voix-direct"></div>')
+      this.elementsVoix.set(m.id, el)
+    }
+    const enBas = this.fil.scrollHeight - this.fil.scrollTop - this.fil.clientHeight < 80
+    el.innerHTML =
+      `<span class="dit">${echapper(m.texte.slice(0, m.prononce))}</span>` +
+      `<span class="a-dire">${echapper(m.texte.slice(m.prononce))}</span>` +
+      (m.coupe ? '<span class="coupe">coupé</span>' : '')
+    if (enBas) this.fil.scrollTop = this.fil.scrollHeight
+  }
+
+  private basculerMenuVoix(ouvrir = this.menuVoix.hidden) {
+    this.menuVoix.hidden = !ouvrir
+    this.boutonOptions.setAttribute('aria-expanded', String(ouvrir))
+    if (ouvrir) this.dessinerMenuVoix()
+  }
+
+  private dessinerMenuVoix() {
+    const coche = (oui: boolean) =>
+      oui ? '<svg class="coche" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m3.5 8.5 3 3 6-7"/></svg>' : ''
+    const voix = optionsVoix.voix
+    this.menuVoix.innerHTML =
+      '<p class="menu-titre">Voix d’Atlas</p>' +
+      VOIX_GRADIUM.map(
+        ([id, nom]) => `<button type="button" role="menuitemradio" aria-checked="${id === voix}" class="menu-ligne" data-voix="${id}">
+          <span class="menu-texte"><b>${nom}</b></span>${coche(id === voix)}</button>`,
+      ).join('') +
+      `<hr><button type="button" role="menuitemcheckbox" aria-checked="${optionsVoix.casque}" class="menu-ligne" data-option="casque">
+        <span class="menu-texte"><b>Coupure immédiate</b><span>Atlas se tait dès que tu parles</span></span>${coche(optionsVoix.casque)}</button>`
+  }
+
   private async appeler() {
     if (this.appel.ouvert) return this.appel.raccrocher()
     const id = await this.assurerConversation()
@@ -460,8 +594,10 @@ export class PanneauConversation {
   private async envoyerMessage() {
     const contenu = this.saisie.value.trim()
     if (!contenu) return
-    if (this.appel.ouvert && estVoix(etat.selection)) {
+    if (this.appel.ouvert) {
+      if (this.dictee) return // la saisie montre la dictée en cours, pas un message tapé
       this.appel.ecrire(contenu)
+      this.tape = false
       this.saisie.value = ''
       this.ajusterSaisie()
       return
@@ -490,11 +626,14 @@ export class PanneauConversation {
     const generation = this.generation
     if (!id) return
     const agent = etat.selection === RACINE ? null : etat.selection
+    // Pendant l'appel, le fil de la voix se remplit en direct (voix.ts) : on ne le lit qu'une fois, au début.
+    const direct = this.appel.ouvert && estVoix(etat.selection) && this.filVoixCharge
+    if (this.appel.ouvert && estVoix(etat.selection)) this.filVoixCharge = true
     let conv: EtatConversation, nouveaux: Message[], agents
     try {
       ;[conv, nouveaux, agents] = await Promise.all([
         api.conversation(id),
-        api.messages(id, this.dernierId, agent),
+        direct ? Promise.resolve([]) : api.messages(id, this.dernierId, agent),
         api.agents(id),
       ])
     } catch (e) {
@@ -517,7 +656,7 @@ export class PanneauConversation {
         const question = [...nouveaux].reverse().find((m) => m.role === 'utilisateur')
         if (question) etat.question = question.contenu
       }
-    } else if (this.dernierId === undefined) {
+    } else if (this.dernierId === undefined && !direct) {
       this.contenu.innerHTML =
         agent
           ? `<p class="vide">${echapper(nomAgent(etat.get(agent), agent))} n’a encore rien produit.</p>`

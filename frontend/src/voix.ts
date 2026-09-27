@@ -1,17 +1,11 @@
 // Appel vocal avec Atlas voix (atlas/voix) : micro → serveur en PCM 24 kHz, voix ← serveur en PCM 48 kHz.
-// La barre d'appel montre l'état, ce que Camille est en train de dire et la phrase en cours d'Atlas voix ; la
-// transcription complète arrive dans le fil (agent /voix), comme les messages des autres agents.
+// Pas d'interface propre, comme sur claude.ai : le panneau de conversation affiche ce que ce module lui passe
+// (ta phrase en cours dans la saisie, les messages dans le fil, la voix d'Atlas colorée au fil de sa lecture),
+// et la pastille (pastille.ts) montre les deux voix.
 import { jetonAcces, urlAppel } from './api'
+import { analyseur, type SourcesPastille } from './pastille'
 
-const ETATS: Record<string, string> = {
-  demarrage: 'Décroche…',
-  ecoute: 'À l’écoute',
-  reflexion: 'Réfléchit…',
-  travail: 'Travaille…',
-  parle: 'Parle',
-}
-
-const VOIX_GRADIUM: [string, string][] = [
+export const VOIX_GRADIUM: [string, string][] = [
   ['iEu63s1rhn_kegTr', 'Gaspard'],
   ['6oIkS98REoVZ1dEw', 'Apolline'],
   ['YKeBw3OV1RgpdhLh', 'Jules'],
@@ -21,14 +15,8 @@ const VOIX_GRADIUM: [string, string][] = [
 
 const CLE_VOIX = 'atlas.voix'
 const CLE_CASQUE = 'atlas.voix.casque'
-
-/** Boucle WebRTC locale : la voix d'Atlas sort par un appel WebRTC, le chemin le mieux couvert par l'annulation
- * d'écho de Chrome (celui des visios), au lieu de sortir directement du moteur audio de la page. */
-interface BoucleWebRTC {
-  emetteur: RTCPeerConnection
-  recepteur: RTCPeerConnection
-  sortie: HTMLAudioElement
-}
+/** Retard de la sortie WebRTC sur le compteur du lecteur : le texte ne doit pas devancer la voix. */
+const RETARD_SORTIE_S = 0.15
 
 function lire(cle: string): string | null {
   try {
@@ -46,15 +34,67 @@ function garder(cle: string, valeur: string) {
   }
 }
 
+/** Options de l'appel, gardées dans ce navigateur. */
+export const optionsVoix = {
+  get voix(): string {
+    return lire(CLE_VOIX) ?? VOIX_GRADIUM[0][0]
+  },
+  set voix(v: string) {
+    garder(CLE_VOIX, v)
+  },
+  /** Coupure immédiate : Atlas se tait dès que Camille parle (sinon, seulement sur des mots qui ne sont pas les siens). */
+  get casque(): boolean {
+    return lire(CLE_CASQUE) !== 'false'
+  },
+  set casque(v: boolean) {
+    garder(CLE_CASQUE, String(v))
+  },
+}
+
+export type EtatAppel = 'demarrage' | 'ecoute' | 'reflexion' | 'travail' | 'parle'
+
+/** Un message d'Atlas voix pendant l'appel : `prononce` caractères déjà dits, le reste encore à dire. */
+export interface MessageVoix {
+  id: string
+  texte: string
+  prononce: number
+  coupe: boolean
+}
+
 export interface RappelsAppel {
-  /** L'appel est ouvert (true) ou terminé (false). */
-  surEtat: (ouvert: boolean) => void
+  /** L'appel est ouvert (true) ou terminé (false, avec la raison s'il a été coupé par le serveur). */
+  surEtat: (ouvert: boolean, raison?: string) => void
+  surEtatVoix: (etat: EtatAppel) => void
+  /** Les deux voix, pour la pastille (null : appel terminé). */
+  surSources: (sources: SourcesPastille | null) => void
+  /** Ce que Camille est en train de dire (vide : tour terminé). */
+  surPartiel: (texte: string) => void
+  surUtilisateur: (texte: string, source: string) => void
+  surMessage: (message: MessageVoix) => void
+  surOutil: (id: string, description: string, fini: boolean, ok: boolean) => void
+  surInfo: (texte: string, erreur: boolean) => void
   /** Réglages de l'orchestrateur choisis dans la saisie, pour le travail que la voix lui confie. */
   reglagesOrchestrateur: () => { modele?: string; effort?: string }
 }
 
+// Texte → mots avec leur fin (en caractères), pour colorer le texte au rythme des segments prononcés.
+const MOT = /[\p{L}\p{N}]+/gu
+const normaliser = (m: string) => m.toLowerCase().normalize('NFD').replace(/\p{M}/gu, '')
+
+interface Suivi extends MessageVoix {
+  gen: number
+  mots: { mot: string; fin: number }[]
+  curseur: number
+  segments: { debut: number; fin: number }[]
+}
+
+interface BoucleWebRTC {
+  emetteur: RTCPeerConnection
+  recepteur: RTCPeerConnection
+  sortie: HTMLAudioElement
+}
+
 export class Appel {
-  private barre: HTMLElement
   private ws: WebSocket | null = null
   private contexte: AudioContext | null = null
   private flux: MediaStream | null = null
@@ -62,51 +102,17 @@ export class Appel {
   private boucle: BoucleWebRTC | null = null
   /** webrtc, sauf si la boucle n'a pas pu s'établir (repli : sortie directe du moteur audio). */
   private modeLecture: 'webrtc' | 'webaudio' = 'webrtc'
-  private muet = false
-  private etatServeur = 'demarrage'
+  private etatServeur: EtatAppel = 'demarrage'
   private enLecture = false
   private genCourante = 0
-  private phrase = ''
+  private position = { joues: 0, t: 0 }
+  private messages = new Map<string, Suivi>()
+  private image = 0
+  muet = false
   private readonly rappels: RappelsAppel
 
-  constructor(barre: HTMLElement, rappels: RappelsAppel) {
-    this.barre = barre
+  constructor(rappels: RappelsAppel) {
     this.rappels = rappels
-    barre.hidden = true
-    barre.innerHTML = `
-      <div class="appel-ligne">
-        <span class="appel-etat" data-etat="demarrage"><i></i><b>Atlas voix</b><span></span></span>
-        <span class="appel-niveau"><span></span></span>
-        <span class="appel-mesures"></span>
-        <span class="espace"></span>
-        <select class="appel-voix" title="Voix d’Atlas">${VOIX_GRADIUM.map(([id, nom]) => `<option value="${id}">${nom}</option>`).join('')}</select>
-        <label class="appel-casque" title="Couper Atlas dès que tu parles. Décoche sur haut-parleurs s’il se coupe tout seul.">
-          <input type="checkbox" checked> Coupure immédiate</label>
-        <button type="button" class="appel-interrompre" title="Faire taire Atlas voix (Échap)">Interrompre</button>
-        <button type="button" class="appel-micro" title="Couper le micro">Micro</button>
-        <button type="button" class="appel-raccrocher">Raccrocher</button>
-      </div>
-      <div class="appel-texte"><span class="appel-camille"></span><span class="appel-atlas"></span></div>`
-    const voix = barre.querySelector<HTMLSelectElement>('.appel-voix')!
-    const casque = barre.querySelector<HTMLInputElement>('.appel-casque input')!
-    voix.value = lire(CLE_VOIX) ?? VOIX_GRADIUM[0][0]
-    casque.checked = lire(CLE_CASQUE) !== 'false'
-    voix.addEventListener('change', () => {
-      garder(CLE_VOIX, voix.value)
-      this.envoyerReglages()
-    })
-    casque.addEventListener('change', () => {
-      garder(CLE_CASQUE, String(casque.checked))
-      this.envoyerReglages()
-    })
-    barre.querySelector('.appel-interrompre')!.addEventListener('click', () => this.interrompre())
-    barre.querySelector('.appel-raccrocher')!.addEventListener('click', () => this.raccrocher())
-    barre.querySelector('.appel-micro')!.addEventListener('click', (e) => {
-      this.muet = !this.muet
-      const b = e.currentTarget as HTMLElement
-      b.classList.toggle('coupe', this.muet)
-      b.textContent = this.muet ? 'Micro coupé' : 'Micro'
-    })
   }
 
   get ouvert(): boolean {
@@ -115,12 +121,12 @@ export class Appel {
 
   async demarrer(conversationId: string) {
     if (this.ws) return
-    this.barre.hidden = false
+    this.messages.clear()
     this.afficherEtat('demarrage')
     try {
       await this.ouvrirAudio()
     } catch (e) {
-      this.texte('.appel-camille', `Micro indisponible : ${e instanceof Error ? e.message : String(e)}`)
+      this.rappels.surInfo(`Micro indisponible : ${e instanceof Error ? e.message : String(e)}`, true)
       return
     }
     const ws = new WebSocket(urlAppel(conversationId))
@@ -137,19 +143,20 @@ export class Appel {
       this.ws = null
       this.couperLecture(this.genCourante)
       this.fermerAudio()
-      this.barre.hidden = e.code === 1000 || e.code === 1005
-      if (!this.barre.hidden) {
-        this.afficherEtat('arret')
-        this.texte('.appel-camille', e.reason || 'Appel coupé.')
-        this.texte('.appel-atlas', '')
-      }
-      this.rappels.surEtat(false)
+      cancelAnimationFrame(this.image)
+      this.rappels.surSources(null)
+      this.rappels.surPartiel('')
+      this.rappels.surEtat(false, e.code === 1000 || e.code === 1005 ? undefined : e.reason || 'Appel coupé.')
     }
+    const suivre = () => {
+      this.avancerTexte()
+      this.image = requestAnimationFrame(suivre)
+    }
+    this.image = requestAnimationFrame(suivre)
   }
 
   raccrocher() {
     this.ws?.close(1000)
-    this.barre.hidden = true
   }
 
   interrompre() {
@@ -165,8 +172,8 @@ export class Appel {
     const r = this.rappels.reglagesOrchestrateur()
     this.envoyer({
       type: 'reglages',
-      voix: this.barre.querySelector<HTMLSelectElement>('.appel-voix')!.value,
-      casque: this.barre.querySelector<HTMLInputElement>('.appel-casque input')!.checked,
+      voix: optionsVoix.voix,
+      casque: optionsVoix.casque,
       lecture: this.modeLecture,
       modele_orchestrateur: r.modele ?? null,
       effort_orchestrateur: r.effort ?? null,
@@ -189,23 +196,27 @@ export class Appel {
     const source = this.contexte.createMediaStreamSource(this.flux)
     const micro = new AudioWorkletNode(this.contexte, 'micro')
     micro.port.onmessage = (e) => {
-      const niveau = this.barre.querySelector<HTMLElement>('.appel-niveau span')!
-      niveau.style.width = `${Math.min(100, e.data.niveau * 400)}%`
       if (!this.muet && this.ws?.readyState === WebSocket.OPEN) this.ws.send(e.data.pcm)
     }
     source.connect(micro)
     this.lecteur = new AudioWorkletNode(this.contexte, 'lecteur', { outputChannelCount: [1] })
-    await this.brancherSortie()
     this.lecteur.port.onmessage = (e) => {
-      const joue_s = e.data.joues / 48000
+      this.position = { joues: e.data.joues, t: performance.now() }
       const fini = e.data.type === 'fini'
       if (fini) {
         this.enLecture = false
         this.afficherEtat()
       }
-      this.envoyer({ type: 'lecture', gen: this.genCourante, joue_s, fini })
+      this.envoyer({ type: 'lecture', gen: this.genCourante, joue_s: e.data.joues / 48000, fini })
     }
+    // Les deux voix de la pastille : le micro après annulation d'écho, et ce que joue le lecteur.
+    const toi = analyseur(this.contexte)
+    const atlas = analyseur(this.contexte)
+    source.connect(toi)
+    this.lecteur.connect(atlas)
+    await this.brancherSortie()
     await this.contexte.resume()
+    this.rappels.surSources({ toi, atlas })
   }
 
   /** Relie le lecteur aux haut-parleurs par une boucle WebRTC locale. En sortie directe du moteur audio de la
@@ -221,15 +232,12 @@ export class Appel {
     } catch (e) {
       console.warn('Lecture WebRTC impossible, sortie directe', e)
       this.fermerBoucle()
-      lecteur.disconnect()
       lecteur.connect(contexte.destination)
       this.modeLecture = 'webaudio'
     }
   }
 
   private async brancherWebRTC(contexte: AudioContext, lecteur: AudioWorkletNode) {
-    lecteur.disconnect()
-    this.fermerBoucle()
     const destination = contexte.createMediaStreamDestination()
     lecteur.connect(destination)
     const emetteur = new RTCPeerConnection()
@@ -274,6 +282,7 @@ export class Appel {
     if (gen < this.genCourante || !this.lecteur) return // audio d'une réponse coupée
     if (gen > this.genCourante) {
       this.genCourante = gen
+      this.position = { joues: 0, t: performance.now() }
       this.lecteur.port.postMessage({ type: 'zero' })
     }
     const pcm = new Int16Array(tampon, 4)
@@ -282,15 +291,70 @@ export class Appel {
     this.lecteur.port.postMessage({ type: 'audio', echantillons }, [echantillons.buffer])
     if (!this.enLecture) {
       this.enLecture = true
+      this.position.t = performance.now()
       this.afficherEtat()
     }
   }
 
   private couperLecture(gen: number) {
+    for (const m of this.messages.values()) {
+      if (m.gen === this.genCourante && m.prononce < m.texte.length && !m.coupe) {
+        m.coupe = true
+        this.rappels.surMessage(m)
+      }
+    }
     this.genCourante = Math.max(this.genCourante, gen)
     this.lecteur?.port.postMessage({ type: 'couper' })
     this.enLecture = false
     this.afficherEtat()
+  }
+
+  // ─── Texte d'Atlas au rythme de sa voix ───
+
+  private suivi(id: string): Suivi {
+    let m = this.messages.get(id)
+    if (!m) {
+      m = { id, gen: this.genCourante, texte: '', prononce: 0, coupe: false, mots: [], curseur: 0, segments: [] }
+      this.messages.set(id, m)
+    }
+    return m
+  }
+
+  private decouper(m: Suivi) {
+    m.mots = [...m.texte.matchAll(MOT)].map((x) => ({ mot: normaliser(x[0]), fin: (x.index ?? 0) + x[0].length }))
+  }
+
+  /** Un segment prononcé (mots Gradium) : on avance dans les mots du message pour savoir jusqu'où il va. */
+  private segment(id: string, gen: number, debut: number, texte: string) {
+    const m = this.suivi(id)
+    m.gen = gen
+    let fin = m.segments.at(-1)?.fin ?? 0
+    for (const x of texte.matchAll(MOT)) {
+      const mot = normaliser(x[0])
+      for (let j = m.curseur; j < Math.min(m.mots.length, m.curseur + 6); j++) {
+        if (m.mots[j].mot === mot) {
+          m.curseur = j + 1
+          fin = m.mots[j].fin
+          break
+        }
+      }
+    }
+    m.segments.push({ debut, fin })
+  }
+
+  private avancerTexte() {
+    const joue = this.position.joues / 48000 + (this.enLecture ? (performance.now() - this.position.t) / 1000 : 0)
+    for (const m of this.messages.values()) {
+      if (m.gen !== this.genCourante || m.coupe || m.prononce >= m.texte.length) continue
+      let prononce = m.prononce
+      for (const s of m.segments) if (s.debut <= joue - RETARD_SORTIE_S) prononce = Math.max(prononce, s.fin)
+      // Fin de lecture : ce qui reste (ponctuation, mots non retrouvés) est dit.
+      if (!this.enLecture && m.segments.length && m.curseur >= m.mots.length) prononce = m.texte.length
+      if (prononce !== m.prononce) {
+        m.prononce = prononce
+        this.rappels.surMessage(m)
+      }
+    }
   }
 
   // ─── Messages du serveur ───
@@ -301,46 +365,47 @@ export class Appel {
         this.afficherEtat(m.etat)
         break
       case 'partiel':
-        this.texte('.appel-camille', m.texte)
+        this.rappels.surPartiel(m.texte)
         break
       case 'utilisateur':
-        this.texte('.appel-camille', '')
-        this.phrase = ''
+        this.rappels.surPartiel('')
+        this.rappels.surUtilisateur(m.texte, m.source)
         break
-      case 'agent_delta':
-        this.phrase += m.texte
-        this.texte('.appel-atlas', this.phrase.slice(-220))
+      case 'agent_delta': {
+        const s = this.suivi(m.id)
+        s.texte += m.texte
+        this.decouper(s)
+        this.rappels.surMessage(s)
         break
-      case 'agent_fin':
-        this.phrase = ''
+      }
+      case 'agent_fin': {
+        const s = this.suivi(m.id)
+        s.texte = m.texte
+        this.decouper(s)
+        this.rappels.surMessage(s)
+        break
+      }
+      case 'segment':
+        this.segment(m.id, m.gen, m.debut_s, m.texte)
         break
       case 'outil':
-        if (!m.fini) this.texte('.appel-atlas', `▸ ${m.description}`)
+        this.rappels.surOutil(m.id, m.description, m.fini, m.ok !== false)
         break
       case 'couper':
         this.couperLecture(m.gen)
         break
-      case 'mesure':
-        if (m.nom === 'premier_son') this.texte('.appel-mesures', `réponse en ${(m.ms / 1000).toFixed(1)} s`)
-        break
       case 'erreur':
+        this.rappels.surInfo(m.message, true)
+        break
       case 'info':
-        this.texte('.appel-atlas', m.message)
+        this.rappels.surInfo(m.message, false)
         break
     }
   }
 
-  private afficherEtat(etat?: string) {
+  private afficherEtat(etat?: EtatAppel) {
     if (etat) this.etatServeur = etat
     const affiche = this.enLecture && this.etatServeur !== 'demarrage' ? 'parle' : this.etatServeur
-    const el = this.barre.querySelector<HTMLElement>('.appel-etat')!
-    el.dataset.etat = affiche
-    el.querySelector('span')!.textContent = ETATS[affiche] ?? (affiche === 'arret' ? 'Terminé' : affiche)
-  }
-
-  private texte(selecteur: string, valeur: string) {
-    const el = this.barre.querySelector<HTMLElement>(selecteur)!
-    el.textContent = valeur
-    el.title = valeur
+    this.rappels.surEtatVoix(affiche)
   }
 }

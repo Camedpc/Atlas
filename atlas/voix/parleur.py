@@ -84,11 +84,15 @@ class Parleur:
         prechauffe: Prechauffe,
         envoyer_audio: Callable[[int, bytes], Awaitable[None]],
         sur_premier_audio: Callable[[], Awaitable[None]],
+        sur_segment: Callable[[str, float, str], Awaitable[None]] | None = None,
     ):
         self.gen = gen
         self.prechauffe = prechauffe
         self.envoyer_audio = envoyer_audio
         self.sur_premier_audio = sur_premier_audio
+        self.sur_segment = sur_segment
+        """Reçoit (message, instant dans l'audio du tour, texte) pour chaque segment prononcé : le navigateur
+        colore le texte au rythme de la voix."""
         self._messages: asyncio.Queue[tuple[str, asyncio.Queue[str | None]] | None] = asyncio.Queue()
         self._files: dict[str, asyncio.Queue[str | None]] = {}
         self._decoupeurs: dict[str, Decoupeur] = {}
@@ -146,14 +150,14 @@ class Parleur:
 
     async def _consommer(self) -> None:
         while (message := await self._messages.get()) is not None:
-            _, file = message
+            id_, file = message
             premier = await file.get()
             if premier is None:
                 continue
             synthese = await self.prechauffe.prendre()
             self._actives.add(synthese)
             self.prechauffe.lancer()
-            lecteur = asyncio.create_task(self._lire(synthese))
+            lecteur = asyncio.create_task(self._lire(synthese, id_))
             try:
                 morceau: str | None = premier
                 while morceau is not None:
@@ -166,7 +170,7 @@ class Parleur:
                 self._actives.discard(synthese)
                 await synthese.fermer()
 
-    async def _lire(self, synthese: Synthese) -> None:
+    async def _lire(self, synthese: Synthese, id_: str) -> None:
         decalage = self.duree
         async for evenement in synthese.evenements():
             if self.arrete:
@@ -178,4 +182,7 @@ class Parleur:
                 await self.envoyer_audio(self.gen, evenement["pcm"])
                 self.duree += len(evenement["pcm"]) / OCTETS_PAR_SECONDE
             elif evenement.get("type") == "text":
-                self.segments.append((decalage + float(evenement.get("start_s", 0)), evenement.get("text", "")))
+                debut = decalage + float(evenement.get("start_s", 0))
+                self.segments.append((debut, evenement.get("text", "")))
+                if self.sur_segment is not None:
+                    await self.sur_segment(id_, debut, evenement.get("text", ""))

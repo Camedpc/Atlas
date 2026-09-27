@@ -747,158 +747,163 @@ body.sessions-repliees .deplier-sessions {
   background: #3f3f46;
 }
 
-/* ── Appel vocal (Atlas voix) ────────────────────────────── */
+/* ── Appel vocal (Atlas voix), présenté comme sur claude.ai ─ */
 
-.micro {
+.groupe-micro {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.micro,
+.options-voix {
   display: grid;
   place-items: center;
-  width: 32px;
   height: 32px;
   padding: 0;
-  border: 1px solid var(--trait-fort);
-  border-radius: 8px;
-  background: var(--fond);
+  border: 0;
+  background: transparent;
   color: var(--texte-2);
 }
 
-.micro:hover {
+.micro {
+  width: 30px;
+  border-radius: 8px 0 0 8px;
+}
+
+.options-voix {
+  width: 18px;
+  border-radius: 0 8px 8px 0;
+  color: var(--texte-3);
+}
+
+.micro:hover,
+.options-voix:hover,
+.options-voix[aria-expanded='true'] {
   background: var(--fond-2);
   color: var(--texte);
 }
 
 .micro.actif {
-  border-color: #1d4ed8;
-  background: #eff4ff;
   color: #1d4ed8;
 }
 
-.appel {
-  margin-bottom: 8px;
-  padding: 8px 12px;
-  border: 1px solid #c7d6fb;
-  border-radius: 12px;
-  background: #f7f9ff;
-  font-size: 12.5px;
+.menu-voix {
+  width: 240px;
 }
 
-.appel-ligne {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.appel-ligne .espace {
-  flex: 1;
-}
-
-.appel-etat {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--texte-2);
-}
-
-.appel-etat b {
-  font-weight: 600;
-  color: var(--texte);
-}
-
-.appel-etat i {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--texte-3);
-}
-
-.appel-etat[data-etat='ecoute'] i {
-  background: var(--ok);
-}
-
-.appel-etat[data-etat='parle'] i {
-  background: #1d4ed8;
-}
-
-.appel-etat[data-etat='reflexion'] i,
-.appel-etat[data-etat='travail'] i,
-.appel-etat[data-etat='demarrage'] i {
-  background: #b45309;
-}
-
-.appel-niveau {
-  width: 48px;
-  height: 5px;
-  border-radius: 3px;
-  background: var(--fond-3);
-  overflow: hidden;
-}
-
-.appel-niveau span {
-  display: block;
-  width: 0;
-  height: 100%;
-  background: var(--ok);
-  transition: width 80ms linear;
-}
-
-.appel-mesures {
+.menu-titre {
+  margin: 4px 10px 2px;
+  font-size: 11px;
+  font-weight: 500;
   color: var(--texte-3);
-  font-variant-numeric: tabular-nums;
 }
 
-.appel select,
-.appel button {
-  padding: 3px 8px;
-  border: 1px solid var(--trait-fort);
-  border-radius: 6px;
-  background: var(--fond);
-  font-size: 12px;
-}
-
-.appel button:hover {
-  background: var(--fond-2);
-}
-
-.appel-casque {
+/* « ••• Stop » : remplace l'envoi pendant l'appel et raccroche. Les points ne bougent que pendant que la voix
+   réfléchit ou travaille. */
+.stop-appel {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 7px;
+  height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 8px;
+  background: #dbe7fd;
+  color: #1d4ed8;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.stop-appel:hover {
+  background: #cddcfb;
+}
+
+.stop-appel[hidden],
+.envoyer[hidden] {
+  display: none;
+}
+
+.stop-appel .points {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.stop-appel .points i {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.stop-appel:is([data-etat='reflexion'], [data-etat='travail'], [data-etat='demarrage']) .points i {
+  animation: points-voix 1.2s ease-in-out infinite;
+}
+
+.stop-appel .points i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.stop-appel .points i:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes points-voix {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  40% {
+    opacity: 1;
+  }
+}
+
+/* Ce que Camille est en train de dire, écrit en direct dans la saisie. */
+.saisie textarea.dictee {
+  font-style: italic;
   color: var(--texte-2);
 }
 
-.appel .appel-raccrocher {
-  border-color: #f1b4b4;
-  color: var(--echec);
+/* Réponse d'Atlas voix : déjà dit en noir, encore à dire en gris. */
+.msg.assistant.voix-direct {
+  white-space: pre-wrap;
 }
 
-.appel .appel-micro.coupe {
-  border-color: var(--echec);
-  color: var(--echec);
+.voix-direct .a-dire {
+  color: var(--texte-3);
 }
 
-.appel-texte {
+.voix-direct .coupe {
+  margin-left: 6px;
+  font-size: 12px;
+  color: var(--texte-3);
+}
+
+.msg.outil-voix {
   display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  margin-top: 4px;
-  min-height: 18px;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--texte-3);
 }
 
-.appel-texte span {
+.msg.outil-voix .resume {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-family: var(--mono);
 }
 
-.appel-camille {
-  color: var(--texte-3);
-  font-style: italic;
-}
-
-.appel-atlas {
+.msg.outil-voix.en-cours .etiquette {
   color: var(--texte-2);
-  text-align: right;
+}
+
+.msg.outil-voix.echec .etiquette {
+  color: var(--echec);
+}
+
+.msg.systeme.erreur {
+  color: var(--echec);
 }
 
 /* ── Panneau de droite ───────────────────────────────────── */

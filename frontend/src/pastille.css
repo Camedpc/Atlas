@@ -1,0 +1,27 @@
+/* Pastille de l'appel vocal : en bas au centre de l'écran, blanc sans bord qui s'efface vers le transparent,
+   la vague reste lisible par-dessus le graphe ou la saisie sans poser de cadre. Marges et fondu : pastille.ts. */
+.pastille-voix {
+  position: fixed;
+  left: 50%;
+  bottom: 0;
+  z-index: 40;
+  transform: translateX(-50%);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+
+.pastille-voix canvas {
+  display: block;
+}
+
+.pastille-voix.visible {
+  opacity: 1;
+}
+
+/* Pendant l'appel, elle laisse passer les clics (elle recouvre parfois la saisie) ; au repos, conversation
+   rangée, elle attend qu'on la clique pour appeler. */
+.pastille-voix.visible.repos {
+  pointer-events: auto;
+  cursor: pointer;
+}

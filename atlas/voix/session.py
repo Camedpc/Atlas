@@ -467,7 +467,10 @@ class Session:
             self._activite("Parle")
             await self.mesurer("premier_son", debut)
 
-        parleur = Parleur(gen, self.prechauffe, self.envoyer_audio, premier_audio)
+        async def segment(id_: str, debut_s: float, texte: str) -> None:
+            await self.envoyer({"type": "segment", "gen": gen, "id": id_, "debut_s": round(debut_s, 3), "texte": texte})
+
+        parleur = Parleur(gen, self.prechauffe, self.envoyer_audio, premier_audio, segment)
         self.parleur = parleur
         await self.etat("reflexion")
         premier_texte = True
