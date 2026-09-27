@@ -428,3 +428,80 @@ def test_parcours_enregistre_annonce_puis_joue_a_la_voix(monkeypatch, tmp_path):
         assert len(nav.lots) == 1
 
     asyncio.run(scenario())
+
+
+# ── Parcours déroulé tout seul pendant l'appel ──
+
+
+def _parcours_3():
+    return {
+        "titre": "Preuve",
+        "etapes": [{"phrase": f"Phrase {i}.", "commandes": [{"op": "zoomer", "facteur": 1.5}]} for i in (1, 2, 3)],
+    }
+
+
+def _deroulement(monkeypatch, coupe_a: int | None = None, refus: bool = False):
+    from atlas.voix import deroulement
+
+    monkeypatch.setattr(deroulement, "PAUSE_ENTRE_ETAPES_S", 0)
+    journal: list[str] = []
+    annonces: list[str] = []
+
+    async def executer(commandes):
+        journal.append("ecran")
+        return {"ok": False, "erreur": "écran fermé"} if refus else {"ok": True}
+
+    async def dire(phrase):
+        journal.append(phrase)
+        return phrase != f"Phrase {coupe_a}."
+
+    d = deroulement.Deroulement("p.json", _parcours_3(), 1, executer, dire, lambda: True, annonces.append)
+    return d, journal, annonces
+
+
+def test_deroulement_enchaine_les_etapes(monkeypatch):
+    async def scenario():
+        d, journal, annonces = _deroulement(monkeypatch)
+        d.lancer()
+        await d.tache
+        assert journal == ["ecran", "Phrase 1.", "ecran", "Phrase 2.", "ecran", "Phrase 3."]
+        assert len(annonces) == 1 and "terminé" in annonces[0]
+        assert not d.en_pause
+
+    asyncio.run(scenario())
+
+
+def test_deroulement_en_pause_quand_camille_coupe(monkeypatch):
+    async def scenario():
+        d, journal, annonces = _deroulement(monkeypatch, coupe_a=2)
+        d.lancer()
+        await d.tache
+        assert journal == ["ecran", "Phrase 1.", "ecran", "Phrase 2."]
+        assert d.en_pause and annonces == []
+        assert "étape 2/3" in d.note() and "depuis=3" in d.note()
+
+    asyncio.run(scenario())
+
+
+def test_deroulement_suspendu_pendant_un_blanc_et_ecran_refuse(monkeypatch):
+    from atlas.voix import deroulement
+
+    async def scenario():
+        async def executer(_):
+            return {"ok": True}
+
+        async def dire(_):
+            return True
+
+        attente = deroulement.Deroulement("p.json", _parcours_3(), 2, executer, dire, lambda: False, lambda _: None)
+        attente.lancer()
+        await asyncio.sleep(0.05)
+        assert "étape 2/3" in attente.suspendre()
+        assert not attente.actif and attente.suspendre() is None
+
+        d, journal, annonces = _deroulement(monkeypatch, refus=True)
+        d.lancer()
+        await d.tache
+        assert journal == ["ecran"] and "écran fermé" in annonces[0]
+
+    asyncio.run(scenario())

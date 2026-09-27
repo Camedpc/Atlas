@@ -27,6 +27,9 @@ AUTEUR = "voix"
 VISIBLES_MAX = 12
 
 
+ParcoursIntrouvable = parcours.ErreurParcours
+
+
 def erreur(message: str, candidats: list[str] | None = None) -> dict[str, Any]:
     return {"ok": False, "erreur": message, **({"candidats": candidats} if candidats else {})}
 
@@ -152,10 +155,13 @@ class Ecran:
         affiche = await self.executer(commandes) if self._indisponible() is None else {"ok": False}
         return {"ok": True, "enregistre": faits, "affiche": affiche["ok"]}
 
+    async def charger_parcours(self, chemin: str) -> dict[str, Any]:
+        return await asyncio.to_thread(parcours.lire, self.dossier_projet, chemin)
+
     async def jouer_etape(self, chemin: str, etape: int) -> dict[str, Any]:
         """Montre l'étape `etape` (à partir de 1) d'un parcours, et renvoie la phrase qui l'accompagne."""
         try:
-            p = await asyncio.to_thread(parcours.lire, self.dossier_projet, chemin)
+            p = await self.charger_parcours(chemin)
         except parcours.ErreurParcours as e:
             return erreur(str(e))
         total = len(p["etapes"])

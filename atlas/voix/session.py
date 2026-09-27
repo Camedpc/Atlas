@@ -40,7 +40,8 @@ from ..orchestrateur.traduction import traduire
 from . import config
 from .cerveau import Cerveau, Tache, Taches, modele_tache
 from .contexte import VOIX, annonce, contexte_decroche, pont
-from .ecran import Ecran
+from .deroulement import Deroulement
+from .ecran import Ecran, ParcoursIntrouvable
 from .gradium import Transcripteur
 from .parleur import Parleur, Prechauffe
 from .texte import est_echo
@@ -51,6 +52,8 @@ ATTENTE_MAX_STT = 10 * 48000
 """Micro gardé pendant qu'une session STT se rouvre (10 s en PCM 24 kHz 16 bits), rejoué dans la nouvelle."""
 
 PREFIXE_CONFIE = "[Transmis par Atlas voix, pendant un appel avec Camille]"
+DUREE_MAX_PHRASE_S = 90.0
+"""Au-delà, on n'attend plus la fin de la lecture d'une phrase de parcours (navigateur muet, onglet fermé)."""
 
 
 def consigne(texte: str) -> str:
@@ -97,6 +100,10 @@ class Session:
         self.gen = 0
         self.lecture = {"gen": 0, "joue_s": 0.0, "fini": True, "t": 0.0}
         self.note_interruption = ""
+        self.deroulement: Deroulement | None = None
+        """Parcours qui s'enchaîne tout seul (outil `derouler_parcours`)."""
+        self.note_parcours = ""
+        self.parle_parcours = False
         self.consignes = ""
         self.dit_recemment = ""
         self.annonces: list[str] = []
@@ -227,6 +234,8 @@ class Session:
     async def fermer(self) -> None:
         for tache in self._fond:
             tache.cancel()
+        if self.deroulement is not None:
+            self.deroulement.suspendre()
         self.ecran.fermer()
         if self.parleur is not None:
             await self.parleur.arreter()
@@ -426,6 +435,12 @@ class Session:
             await self.envoyer({"type": "info", "message": f"Écho ignoré : « {texte} »"})
             return
         await self.envoyer({"type": "utilisateur", "texte": texte, "source": source})
+        if self.deroulement is not None:
+            # Camille parle : le parcours s'arrête là, et la voix apprend où il en est.
+            d, self.deroulement = self.deroulement, None
+            note = d.suspendre() if d.actif else d.note() if d.en_pause else None
+            if note:
+                self.note_parcours = note
         asyncio.create_task(self.enregistrer("utilisateur", texte, {"source": source}))
         if self.tour is not None and not self.tour.done():
             if self.cerveau.outil_actif and await self.cerveau.orienter(f"(Camille ajoute : « {texte} »)"):
@@ -446,6 +461,9 @@ class Session:
         if self.note_interruption:
             entetes.append(self.note_interruption)
             self.note_interruption = ""
+        if self.note_parcours:
+            entetes.append(self.note_parcours)
+            self.note_parcours = ""
         return "\n".join([*entetes, texte])
 
     async def couper(self) -> None:
@@ -520,6 +538,72 @@ class Session:
             if gen == self.gen:
                 await self.etat("ecoute")
 
+    # ── Parcours qui s'enchaîne tout seul ──
+
+    def libre(self) -> bool:
+        """Un blanc : personne ne parle et la voix n'a pas de tour en cours."""
+        repos = (self.tour is None or self.tour.done()) and not self.agent_parle()
+        return repos and not self.tampon and self.pas_parole == 0 and self.pret and not self.parle_parcours
+
+    async def dire(self, texte: str) -> bool:
+        """Dit un texte tel quel, sans passer par le modèle, et attend que Camille l'ait entendu en entier ;
+        False si elle a coupé la parole."""
+        self.gen += 1
+        gen = self.gen
+        id_ = f"parcours-{uuid.uuid4().hex[:8]}"
+
+        async def premier_audio() -> None:
+            self._activite("Parle")
+
+        async def segment(sid: str, debut_s: float, t: str) -> None:
+            await self.envoyer({"type": "segment", "gen": gen, "id": sid, "debut_s": round(debut_s, 3), "texte": t})
+
+        parleur = Parleur(gen, self.prechauffe, self.envoyer_audio, premier_audio, segment)
+        self.parleur = parleur
+        self.parle_parcours = True
+        try:
+            await self.envoyer({"type": "agent_delta", "id": id_, "texte": texte})
+            await self.envoyer({"type": "agent_fin", "id": id_, "texte": texte})
+            self.dit_recemment = (self.dit_recemment + " " + texte)[-800:]
+            asyncio.create_task(self.enregistrer("assistant", texte))
+            parleur.texte(id_, texte)
+            parleur.fin_message(id_)
+            await parleur.terminer()
+            # Tout l'audio est parti : on attend que le navigateur ait fini de le jouer.
+            limite = time.monotonic() + DUREE_MAX_PHRASE_S
+            while gen == self.gen and time.monotonic() < limite:
+                if self.lecture["gen"] == gen and self.lecture["fini"]:
+                    break
+                await asyncio.sleep(0.1)
+            return gen == self.gen
+        finally:
+            self.parle_parcours = False
+            if gen == self.gen:
+                await self.etat("ecoute")
+
+    async def derouler(self, chemin: str, depuis: int) -> dict[str, Any]:
+        try:
+            p = await self.ecran.charger_parcours(chemin)
+        except ParcoursIntrouvable as e:
+            return {"ok": False, "erreur": str(e)}
+        total = len(p["etapes"])
+        if not 1 <= depuis <= total:
+            return {"ok": False, "erreur": f"Ce parcours a {total} étape(s)."}
+        if self.deroulement is not None:
+            self.deroulement.suspendre()
+        self.deroulement = Deroulement(
+            chemin, p, depuis, self.ecran.executer, self.dire, self.libre, self.annonces.append
+        )
+        self.deroulement.lancer()
+        return {
+            "ok": True,
+            "titre": p.get("titre"),
+            "depuis": depuis,
+            "total": total,
+            "note": "Les étapes s'enchaînent dès que tu te tais, leurs phrases dites telles quelles : ne dis rien de "
+            "plus maintenant.",
+        }
+
     # ── Orchestrateur (appelé par le serveur MCP `voix`) ──
 
     async def confier(self, consigne_: str) -> dict[str, Any]:
@@ -581,7 +665,7 @@ class Session:
         """Annonce ce qui arrive (orchestrateur, tâches) dès que la conversation laisse un blanc."""
         while True:
             await asyncio.sleep(0.4)
-            libre = (self.tour is None or self.tour.done()) and not self.agent_parle()
+            libre = (self.tour is None or self.tour.done()) and not self.agent_parle() and not self.parle_parcours
             if not (libre and not self.tampon and self.pas_parole == 0 and self.pret):
                 continue
             # Les événements s'accumulent jusqu'au blanc : la fin du tour rend alors les étapes inutiles.
