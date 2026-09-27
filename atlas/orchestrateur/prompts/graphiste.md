@@ -15,7 +15,7 @@ explicitement. Aucun outil ne supprime un nœud : un doublon reste pour toujours
 - Réutilise par id tout nœud existant dont l'énoncé vaut encore (définitions, lois, hypothèses, résultats qui ne
   dépendent pas de ce qui change), même si le rapport le reformule.
 - Quand le rapport change une hypothèse ou pose une alternative, marque l'embranchement par un nœud `decision`
-  (voir « Décisions ») dont chaque alternative pointe vers son hypothèse : l'existante garde sa branche telle
+  (voir « Décisions ») dont chaque alternative pointe vers sa branche : l'existante garde sa branche telle
   quelle, la nouvelle ne porte que les nœuds dont une prémisse change. Si les deux branches restent étudiées, les
   deux alternatives sont `retenue`.
 - Place les nouveaux nœuds dans les cadres existants (la nouvelle hypothèse dans le cadre des hypothèses, le
@@ -75,19 +75,24 @@ ses conditions), chaque démonstration un argument complet, aussi détaillés qu
 # Décisions (losanges)
 
 Chaque décision du rapport (section « Décisions », entrées « Décision » du journal) devient un nœud `decision` :
-un losange qui montre la question, l'option retenue et les options écartées (×). Réservé aux vrais choix du
-modèle ou de la méthode entre des options explicites ; une simple hypothèse reste un nœud `hypothese`.
+un losange qui porte son nom ; sa fiche montre la question, les options retenues et les options écartées (×).
+Réservé aux vrais choix du modèle ou de la méthode entre des options explicites ; une simple hypothèse reste un
+nœud `hypothese`.
 
 - `nom` : deux à quatre mots (« Origine de la fontaine », « Estimer α ») ; `enonce` vide (résumé automatique).
-- `details` : `{"question": …, "alternatives": [{"libelle": …, "retenue": true, "noeuds": [ids]},
-  {"libelle": …, "retenue": false, "raison": …, "noeuds": [ids]}], "raison": …}`. Libellés courts, avec leur
-  formule (« Élan seul ($\alpha = 0$) ») ; chaque option écartée dit pourquoi en une phrase.
-- `noeuds` : ce qui découle de l'option. Pour la retenue, le ou les premiers nœuds qui l'appliquent (l'hypothèse
-  ou le choix de modélisation qui la traduit, le calcul ou l'expérience qu'elle impose) ; pour une écartée, le
-  nœud de sa piste abandonnée s'il existe, sinon rien. Le losange pointe vers eux : flèche pleine vers la retenue,
-  pointillée × vers l'écartée.
+- `details` : `{"question": …, "alternatives": [{"libelle": …, "retenue": true, "groupes": [ids], "noeuds": [ids]},
+  {"libelle": …, "retenue": false, "raison": …, "groupes": [ids], "noeuds": [ids]}], "raison": …}`. Libellés
+  courts, avec leur formule (« Élan seul ($\alpha = 0$) ») ; chaque option écartée dit pourquoi en une phrase.
+- Une branche = un cadre : quand une option ouvre une suite de raisonnement, range cette suite dans son propre
+  cadre et vise-le avec `groupes` ; un losange pointe ainsi vers deux cadres (ex. « Sans réaction du tas »,
+  « Avec réaction du tas »), ou vers le cadre `piste_abandonnee` de l'option écartée. `noeuds` pour une option qui
+  tient en un ou deux nœuds (l'hypothèse qui la traduit, le calcul qu'elle impose).
+- Deux options peuvent être retenues quand le rapport suit les deux pistes en parallèle : formule alors la
+  question en conséquence (« Réaction nulle ou non ? On suit les deux »).
+- Le losange pointe vers ce que visent ses options : flèche pleine vers une retenue, tiretée × vers une écartée.
 - Pas de démonstration pour une décision, et ne la cite pas dans `justifie_par` : elle n'est pas une prémisse,
-  elle pointe. Range-la dans le cadre de ses nœuds (`groupe`) ; la mise en page la met à leur gauche, en grand.
+  elle pointe. Range-la dans le cadre où le choix se pose (`groupe`) ; la mise en page la met à gauche de ce
+  qu'elle vise.
 
 # Figures
 

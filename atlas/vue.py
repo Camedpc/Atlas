@@ -9,8 +9,8 @@ Règles de la grille :
 - un nœud est dans un seul cadre ; le rectangle d'un cadre englobe les cases de ses nœuds et de ses sous-cadres ;
 - deux cadres frères laissent au moins une case d'écart (place pour la barre de titre, pas de chevauchement).
 
-Une décision (losange) se place avant les nœuds qui en découlent, comme une prémisse (rôle interne « decision », tiré
-de ses détails, voir `decisions.py`), et prend TAILLE_DECISION cases pour que sa question se lise.
+Une décision (losange) se place avant les nœuds et les cadres qui en découlent, comme une prémisse (rôle interne
+« decision », tiré de ses détails, voir `decisions.py`).
 
 Une figure occupe ses propres cases : elle entre dans la vue comme un pseudo-nœud `fig:<id>`, de type « figure »,
 dont la seule prémisse est le nœud qu'elle illustre ; elle se place donc par défaut juste à droite de lui.
@@ -34,8 +34,8 @@ ROLES_FLECHES = ("principale", "auxiliaire", ROLE_DECISION)
 TAILLE_MAX = 8
 PREFIXE_FIGURE = "fig:"
 TAILLE_FIGURE = (2, 2)
-TAILLE_DECISION = (2, 2)
-"""Losange d'une décision (largeur × hauteur, en cases) : assez grand pour lire la question et les alternatives."""
+TAILLE_DECISION = (1, 1)
+"""Losange d'une décision (largeur × hauteur, en cases) : « Décision D1 » et son nom ; le reste est dans sa fiche."""
 FORMATS_FIGURE = ((1, 1), (2, 1), (1, 2), (2, 2))
 """Formats d'une figure (largeur × hauteur, en cases) : une case, deux côte à côte, deux l'une sur l'autre, ou 2 × 2."""
 # Disposition : au-delà de cette hauteur (en cases), une colonne de départs se replie en plusieurs.
@@ -156,6 +156,21 @@ def relier_decisions(noeuds: dict[str, NoeudVue], commandes: dict[str, list[tupl
             if n is None or nid == did or any(p == did for p, _ in n.premisses):
                 continue
             noeuds[nid] = replace(n, premisses=(*n.premisses, (did, ROLE_DECISION)))
+
+
+def relier_cadres(
+    etat: EtatVue, cadres: dict[str, list[tuple[str, bool]]], groupe_de: dict[str, str | None] | None = None
+) -> None:
+    """Une décision qui vise un cadre entier (`decisions.cadres`) devient une prémisse (rôle « decision ») de tous les
+    nœuds du cadre et de ses sous-cadres : le cadre se place à sa droite. `groupe_de` complète les placements (nœuds
+    pas encore placés → leur cadre). Modifie `etat.noeuds` sur place."""
+    groupe_de = {nid: p.groupe_id for nid, p in etat.placements.items()} | (groupe_de or {})
+    for did, liens in cadres.items():
+        vises: set[str] = set()
+        for gid, _ in liens:
+            if gid in etat.groupes:
+                vises |= {gid} | descendants(etat, gid)
+        relier_decisions(etat.noeuds, {did: [(nid, True) for nid, g in groupe_de.items() if g in vises]})
 
 
 def rect_de(p: Placement) -> Rect:

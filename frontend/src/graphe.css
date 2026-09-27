@@ -678,133 +678,19 @@
   text-underline-offset: 2px;
 }
 
-/* ─── Décisions (losanges, graphe-decision.ts) ─── */
+/* ─── Décisions (losanges, graphe-decision.ts) : tête et nom dans le rectangle inscrit du losange ─── */
 
 .gr-dec-corps {
+  inset: 18% 22%;
   padding: 0;
-}
-
-.gr-dec-forme {
-  text-align: center;
-  hyphens: auto;
-}
-
-/* Réduit depuis la pointe haute : le texte reste dans le losange dessiné. */
-.gr-dec-forme .gr-corps-int {
-  transform-origin: 50% 0;
-}
-
-.gr-dec-flot {
-  width: 50%;
-  shape-margin: 7px;
-}
-
-.gr-dec-flot-g {
-  float: left;
-  shape-outside: polygon(0 0, 100% 0, 0 50%, 100% 100%, 0 100%);
-}
-
-.gr-dec-flot-d {
-  float: right;
-  shape-outside: polygon(100% 0, 0 0, 100% 50%, 0 100%, 100% 100%);
-}
-
-.gr-dec-tete {
-  margin: 0 0 3px;
-}
-
-.gr-dec-gauche {
-  text-align: left;
-}
-
-.gr-dec-question {
-  margin: 0 0 3px;
-  font-style: italic;
-}
-
-.gr-dec-liste {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.gr-dec-liste li {
-  margin: 0 0 1px;
-}
-
-.gr-dec-puce {
-  display: inline-block;
-  width: 1.05em;
-  font-style: normal;
-}
-
-.gr-dec-ecartee {
-  color: #333;
-}
-
-.gr-dec-ecartee s {
-  text-decoration-thickness: 0.5px;
-}
-
-.gr-dec-raison {
-  font-style: italic;
-  font-size: 0.92em;
-  color: #555;
-}
-
-.gr-dec-motif {
-  margin: 3px 0 0;
-  font-size: 0.92em;
-  color: #444;
-}
-
-.gr-dec-dans {
-  position: absolute;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-sizing: border-box;
-  padding: 0 30px;
   text-align: center;
   line-height: 1.2;
+  hyphens: auto;
 }
 
-.gr-dec-dessous {
-  position: absolute;
-  left: 18px;
-  right: 18px;
-  text-align: center;
-  font-size: 0.95em;
-}
-
-.gr-dec-r42-nom {
-  position: absolute;
-  left: 4px;
-  right: 4px;
-  top: 0;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  text-align: center;
-  overflow: hidden;
-}
-
-.gr-dec-num {
-  position: absolute;
-  width: 40px;
-  text-align: center;
-  font-size: 11px;
-  line-height: 16px;
-}
-
-.gr-dec-nr {
-  position: absolute;
-  left: 4px;
-  right: 4px;
-  text-align: center;
-  font-size: 10.5px;
-  color: #333;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.gr-dec-corps .gr-corps-int {
+  transform-origin: 50% 50%;
 }

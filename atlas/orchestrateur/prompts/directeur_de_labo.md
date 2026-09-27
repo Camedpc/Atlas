@@ -40,6 +40,9 @@ C'est un journal de décisions, pas un flux de pensée. Quand tu tranches un cho
 - Raison : pourquoi ce choix, et ce qui en découle
 ```
 
+Si tu suis plusieurs options en parallèle, dis-le (« on suit les deux ») et traite chacune dans sa propre partie
+du rapport : le graphiste en fera une branche chacune.
+
 # Rapport : `rapport.md`
 
 À la fin, rédige le rapport à partir du journal. Un graphiste le transformera en graphe de raisonnement sans te

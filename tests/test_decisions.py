@@ -28,7 +28,7 @@ def test_details_valides_et_refus_clairs():
     assert decisions.commandes(d) == [("hyp_prise", True), ("conj_elan", False)]
     assert decisions.retenues(d) == ["Réaction du tas (α > 0)"]
     assert decisions.enonce(d).startswith("On retient : Réaction du tas")
-    assert "× Élan seul (α = 0)" in decisions.resume(d)
+    assert "× Élan seul (α = 0) → conj_elan" in decisions.resume(d)
     with pytest.raises(decisions.ErreurDecision, match="question"):
         decisions.valider({**ORIGINE, "question": " "})
     with pytest.raises(decisions.ErreurDecision, match="au moins deux"):
@@ -64,8 +64,8 @@ def _plan(noeuds, demonstrations=(), etat=None):
     )
 
 
-def _n(id, type="lemme", **champs):
-    return {"id": id, "nom": id, "enonce": f"Énoncé de {id}", "type": type, "groupe": "", **champs}
+def _n(id, type="lemme", groupe="", **champs):
+    return {"id": id, "nom": id, "enonce": f"Énoncé de {id}", "type": type, "groupe": groupe, **champs}
 
 
 def test_poser_une_decision_la_place_avant_ses_noeuds():
@@ -83,7 +83,7 @@ def test_poser_une_decision_la_place_avant_ses_noeuds():
     assert not plan["avertissements"] and not vue.conflits(etat)
     assert ("d_origine", vue.ROLE_DECISION) in etat.noeuds["hyp_prise"].premisses
     texte = vue.rendre_texte(etat)
-    assert "◇ « Pourquoi la chaîne" in texte and "◇d_origine" in texte
+    assert "◇ « Pourquoi la chaîne" in texte and "◇d_origine" in texte and "× Élan seul (α = 0) → conj_elan" in texte
 
 
 def test_une_decision_ne_se_demontre_pas_et_cite_des_noeuds_existants():
@@ -104,3 +104,35 @@ def test_le_verificateur_lit_une_decision_citee_en_premisse():
     noeuds = {"d_origine": LigneNoeud(**d), "lemme": _ligne("lemme")}
     texte = verificateur.demande(_demo("lemme", "d_origine", validite="a_verifier"), noeuds)
     assert "décision : d_origine" in texte and "écartée : Élan seul (α = 0) — Donne h₁ = 0." in texte
+
+
+def test_une_decision_peut_viser_deux_cadres_suivis_en_parallele():
+    details = {
+        "question": "Réaction du tas nulle ou non ? On suit les deux.",
+        "alternatives": [
+            {"libelle": "Réaction nulle", "retenue": True, "groupes": ["br_nulle"]},
+            {"libelle": "Réaction non nulle", "retenue": True, "groupes": ["br_reaction"]},
+        ],
+    }
+    plan = ecriture.planifier_graphe(
+        vue.EtatVue(), set(), projet_id="p",
+        cadres=[{"id": "br_nulle", "nom": "Sans réaction"}, {"id": "br_reaction", "nom": "Avec réaction"}],
+        noeuds=[{**_n("d_reaction", "decision"), "enonce": "", "details": details},
+                _n("hyp_nulle", "hypothese", groupe="br_nulle"), _n("hyp_reaction", "hypothese", groupe="br_reaction")],
+        demonstrations=[],
+    )
+    assert decisions.cadres(details) == [("br_nulle", True), ("br_reaction", True)]
+    assert not any("d_reaction" in a for a in plan["avertissements"])
+    etat = plan["etat"]
+    d = etat.placements["d_reaction"]
+    assert (d.largeur, d.hauteur) == vue.TAILLE_DECISION == (1, 1)
+    for cadre in ("br_nulle", "br_reaction"):
+        assert vue.rect_groupe(etat, cadre).c0 > d.colonne  # chaque branche à droite du losange
+    assert "✓ Réaction nulle → ▸br_nulle" in vue.rendre_texte(etat)
+
+
+def test_un_cadre_vise_doit_exister():
+    details = {**ORIGINE, "alternatives": [{**ORIGINE["alternatives"][0], "noeuds": [], "groupes": ["nulle_part"]},
+                                           ORIGINE["alternatives"][2]]}
+    with pytest.raises(ErreurGraphe, match="cadres inexistants nulle_part"):
+        _plan([{**_n("d_origine", "decision"), "details": details}])

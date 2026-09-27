@@ -16,7 +16,7 @@ import type { Statut } from './api'
 import type { Contenu } from './graphe-contenu'
 import { echapper, enLigne, formulesAffichees, rendreTex, texConfiance, texteBrut } from './formules'
 import { COULEURS_FIGURE, dessinerIcone, dessinerImage, dessinerTrace, geometrieBloc, htmlFigure, TETE_FIGURE, type ImagesFigures } from './graphe-figures'
-import { cleDecision, geometrieDecision, htmlDecision, REGLAGES as DECISION, titreDecision } from './graphe-decision'
+import { contourDecision } from './graphe-decision'
 import { CADRE, CLE_FONCTION, FONCTION, type Bloc, type Cadre, type Modele, type Rect } from './graphe-modele'
 
 export const SERIF = `'CMU Serif Atlas', KaTeX_Main, 'Latin Modern Roman', 'CMU Serif', 'Computer Modern', 'Times New Roman', serif`
@@ -236,8 +236,7 @@ export function dessiner(ctx: CanvasRenderingContext2D, e: EtatDessin, contenu: 
       // Une décision reste un losange de loin, centré sur son losange.
       const tas = b.decision ? losanges : parCouleur
       const liste = tas.get(cle) ?? tas.set(cle, []).get(cle)!
-      const c = b.decision ? geometrieDecision(b.w, b.h).centre : { x: b.w / 2, y: b.h / 2 }
-      liste.push(X(b.x + c.x) - cote / 2, Y(b.y + c.y) - cote / 2, cote)
+      liste.push(X(b.x + b.w / 2) - cote / 2, Y(b.y + b.h / 2) - cote / 2, cote)
     }
     for (const c of m.cadres.values()) {
       const f = c.fonction
@@ -511,10 +510,9 @@ function dessinerLiens(ctx: CanvasRenderingContext2D, e: EtatDessin, vue: Rect, 
     const [genre, validite, estompe, sorte] = cle.split('|')
     const couleur = genre === 'a' ? PALETTE.accent : genre === 'x' || genre === 'r' ? PALETTE.gris : PALETTE.encre
     ctx.strokeStyle = rgba(couleur, estompe ? 0.3 : 1)
-    // Flèches d'une décision : selon le réglage ; vers une option écartée : tireté gris et croix.
-    const appuyee = sorte === 'd' && DECISION.fleches === 'appuyee'
-    ctx.lineWidth = (genre === 'a' ? epaisseur + 0.5 : genre === 'x' ? Math.max(0.6, epaisseur - 0.15) : epaisseur) + (appuyee ? 0.9 : 0)
-    ctx.setLineDash(sorte === 'r' ? [3, 3] : sorte === 'd' && DECISION.fleches === 'tiretee' ? [7, 3.5] : validite === 'i' ? [1, 2.2] : [])
+    // Flèche d'une décision vers une option écartée : tireté gris et croix.
+    ctx.lineWidth = genre === 'a' ? epaisseur + 0.5 : genre === 'x' ? Math.max(0.6, epaisseur - 0.15) : epaisseur
+    ctx.setLineDash(sorte === 'r' ? [3, 3] : validite === 'i' ? [1, 2.2] : [])
     ctx.beginPath()
     for (const l of styles.get(cle)!) {
       const p = l.points
@@ -542,23 +540,18 @@ function dessinerLiens(ctx: CanvasRenderingContext2D, e: EtatDessin, vue: Rect, 
   ctx.restore()
 }
 
-/** Losange d'une décision (ou sa forme, selon le rendu), tige pointillée vers les options écartées, filet du
- * cartouche. Une décision est toujours établie : trait plein ; sélection et survol en bleu. */
+/** Losange d'une décision : il remplit son bloc. Une décision est toujours établie : trait plein ; sélection et survol
+ * en bleu. */
 function dessinerDecision(ctx: CanvasRenderingContext2D, e: EtatDessin, b: Bloc, X: (x: number) => number, Y: (y: number) => number, estompe: boolean): void {
-  const z = e.cam.z
-  const g = geometrieDecision(b.w, b.h)
+  const contour = contourDecision(b.w, b.h)
   const choisi = e.selection.has(b.id) || !!e.surlignes?.has(b.id)
   const conflit = !!e.conflits?.has(b.id)
   const survole = e.survol === b.id
   ctx.save()
   if (estompe) ctx.globalAlpha = 0.3
-  if (g.fond) {
-    ctx.fillStyle = PALETTE.surface
-    ctx.fillRect(X(b.x + g.fond.x0), Y(b.y + g.fond.y0), (g.fond.x1 - g.fond.x0) * z, (g.fond.y1 - g.fond.y0) * z)
-  }
   ctx.beginPath()
-  for (let i = 0; i < g.contour.length; i += 2) {
-    const x = X(b.x + g.contour[i]!), y = Y(b.y + g.contour[i + 1]!)
+  for (let i = 0; i < contour.length; i += 2) {
+    const x = X(b.x + contour[i]!), y = Y(b.y + contour[i + 1]!)
     if (i) ctx.lineTo(x, y)
     else ctx.moveTo(x, y)
   }
@@ -569,68 +562,27 @@ function dessinerDecision(ctx: CanvasRenderingContext2D, e: EtatDessin, b: Bloc,
   ctx.lineWidth = conflit || choisi ? 1.6 : survole ? 1.4 : 0.9
   ctx.lineJoin = 'miter'
   ctx.stroke()
-  if (g.filet) {
-    ctx.strokeStyle = PALETTE.encre
-    ctx.lineWidth = 0.8
-    ctx.beginPath()
-    ctx.moveTo(X(b.x + g.filet.x), Y(b.y + g.filet.y0))
-    ctx.lineTo(X(b.x + g.filet.x), Y(b.y + g.filet.y1))
-    ctx.stroke()
-  }
-  if (g.tige && b.decision!.alternatives.some((a) => !a.retenue)) {
-    ctx.strokeStyle = PALETTE.gris
-    ctx.lineWidth = 0.8
-    ctx.setLineDash([2 * Math.max(0.6, z), 2 * Math.max(0.6, z)])
-    ctx.beginPath()
-    ctx.moveTo(X(b.x + g.tige.x), Y(b.y + g.tige.y0))
-    ctx.lineTo(X(b.x + g.tige.x), Y(b.y + g.tige.y1))
-    ctx.stroke()
-    ctx.setLineDash([])
-    const r = 3.5 * z, cx = X(b.x + g.tige.x), cy = Y(b.y + g.tige.y1) + r
-    ctx.beginPath()
-    ctx.moveTo(cx - r, cy - r)
-    ctx.lineTo(cx + r, cy + r)
-    ctx.moveTo(cx + r, cy - r)
-    ctx.lineTo(cx - r, cy + r)
-    ctx.stroke()
-  }
   ctx.restore()
 }
 
 /** Décision au niveau « titre » (ou en attendant la composition HTML) : « Décision D1 » et le nom, centrés dans le
- * losange ; rendu R42 : le numéro dans le losange, le nom au-dessus. De loin, le titre grossit (un losange, un mot). */
+ * rectangle inscrit du losange ; de loin, le titre grossit (un losange, un mot). */
 function dessinerTitreDecision(ctx: CanvasRenderingContext2D, b: Bloc, X: (x: number) => number, Y: (y: number) => number, z: number, estompe: boolean): void {
-  const g = geometrieDecision(b.w, b.h)
-  const { fs, g: gros } = corpsTitre(z)
-  const interligne = CORPS * 1.2 * gros
+  const { fs, g } = corpsTitre(z)
+  const interligne = CORPS * 1.2 * g
+  const max = Math.max(0, Math.floor((b.h * 0.62) / interligne) - 1)
+  const suite = max ? lignes(texteBrut(b.noeud.nom), (b.w * 0.56) / g, max) : []
+  const cx = X(b.x + b.w / 2)
+  const y0 = Y(b.y + b.h / 2) - (suite.length * interligne * z) / 2
   ctx.save()
   if (estompe) ctx.globalAlpha = 0.3
   ctx.fillStyle = PALETTE.encre
   ctx.textAlign = 'center'
-  if (DECISION.style === 'r42') {
-    ctx.textBaseline = 'middle'
-    ctx.font = `400 ${Math.max(8, 11 * z)}px ${SERIF}`
-    ctx.fillText(b.numero, X(b.x + g.centre.x), Y(b.y + g.centre.y))
-    const max = Math.max(1, Math.floor((g.centre.y - g.centre.r - 4) / interligne))
-    const suite = lignes(texteBrut(b.noeud.nom), (b.w - 10) / gros, max)
-    ctx.font = `400 ${fs}px ${SERIF}`
-    ctx.textBaseline = 'bottom'
-    const y1 = Y(b.y + g.centre.y - g.centre.r - 4)
-    suite.forEach((l, k) => ctx.fillText(l, X(b.x + b.w / 2), y1 - (suite.length - 1 - k) * interligne * z))
-    ctx.restore()
-    return
-  }
-  // Largeur et hauteur utiles : le rectangle inscrit dans le losange (toute la forme pour le rendu étiré).
-  const etire = DECISION.style === 'etire'
-  const large = etire ? b.w * 0.8 : DECISION.style === 'cartouche' ? g.centre.x : b.w / 2
-  const haut = etire ? b.h - 12 : g.centre.r
-  const max = Math.max(0, Math.floor(haut / interligne) - 1)
-  const suite = max ? lignes(texteBrut(b.noeud.nom), large / gros, max) : []
-  const cx = X(b.x + g.centre.x)
-  const y0 = Y(b.y + g.centre.y) - (suite.length * interligne * z) / 2
   ctx.textBaseline = 'middle'
   ctx.font = `700 ${fs}px ${SERIF}`
-  ctx.fillText(titreDecision(b.numero), cx, y0)
+  // De loin, « D1 » seul si « Décision D1 » déborderait du losange.
+  const tete = ctx.measureText(`${b.libelle} ${b.numero}`).width <= b.w * z * 0.7 ? `${b.libelle} ${b.numero}` : b.numero
+  ctx.fillText(tete, cx, y0)
   ctx.font = `400 ${fs}px ${SERIF}`
   suite.forEach((l, k) => ctx.fillText(l, cx, y0 + (k + 1) * interligne * z))
   ctx.restore()
@@ -1021,7 +973,7 @@ function texDe(enonce: string): string {
 
 export function cleBloc(b: Bloc): string {
   const n = b.noeud
-  if (b.decision) return `${b.id}|${b.numero}|${n.nom}|${b.w}|${b.h}|${cleDecision()}|${JSON.stringify(n.details ?? '')}`
+  if (b.decision) return `${b.id}|${b.numero}|${n.nom}|${b.w}|${b.h}|decision`
   return `${b.id}|${b.numero}|${b.libelle}|${n.nom}|${n.enonce}|${n.statut}|${b.w}|${b.h}|${b.validite}|${b.confiance}|${b.portee?.size ?? ''}|${JSON.stringify(n.details ?? '')}`
 }
 
@@ -1036,7 +988,10 @@ function piedBloc(b: Bloc): string {
 
 export function htmlBloc(b: Bloc): string {
   const n = b.noeud
-  if (b.decision) return htmlDecision(b.decision, n.nom, b.numero, b.w, b.h)
+  if (b.decision) {
+    // Le losange ne porte que la tête et le nom ; le reste s'ouvre dans la fiche (double-clic).
+    return `<div class="gr-corps gr-dec-corps"><div class="gr-corps-int"><span class="gr-type">${echapper(b.libelle)} <span class="gr-num">${echapper(b.numero)}</span></span><br>${enLigne(n.nom)}</div></div>`
+  }
   if (b.hypothese) {
     // Présentation de R37 : un paragraphe \newtheorem, tête grasse, nom entre parenthèses, corps italique.
     const d = n.details as { hypothese?: unknown; portee?: unknown } | null

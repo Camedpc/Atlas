@@ -117,7 +117,7 @@ def charger_etat_vue(projet_id: str) -> vue.EtatVue:
                 fid, f["colonne"], f["ligne"], f["groupe_id"], f["largeur"], f["hauteur"], f["fixe"]
             )
 
-    return vue.EtatVue(
+    etat = vue.EtatVue(
         noeuds=noeuds,
         groupes={
             r["id"]: vue.Groupe(r["id"], r["nom"], r["parent_id"], r["genre"], r["couleur"], r["replie"], r["ordre"])
@@ -127,6 +127,9 @@ def charger_etat_vue(projet_id: str) -> vue.EtatVue:
         etiquettes={r["id"]: vue.Etiquette(r["id"], r["nom"], r["couleur"]) for r in lignes("etiquettes")},
         marques={(r["noeud_id"], r["etiquette_id"]) for r in lignes("noeuds_etiquettes")},
     )
+    # Une décision qui vise un cadre se place avant lui.
+    vue.relier_cadres(etat, {n.id: decisions.cadres(n.details) for n in g.noeuds if n.type == "decision"})
+    return etat
 
 
 COLONNES_VUE_FIGURE = "id, noeud_id, titre, groupe_id, colonne, ligne, largeur, hauteur, fixe"

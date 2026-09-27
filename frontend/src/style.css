@@ -1093,6 +1093,35 @@ body.sessions-repliees .deplier-sessions {
   margin: 0;
 }
 
+.fiche-question {
+  font-family: 'CMU Serif Atlas', KaTeX_Main, 'Latin Modern Roman', 'CMU Serif', serif;
+}
+
+.fiche-options {
+  list-style: none;
+  margin: 0.4rem 0 0.6rem;
+  padding: 0;
+}
+
+.fiche-options li {
+  display: flex;
+  gap: 0.4rem;
+  margin: 0 0 0.35rem;
+}
+
+.fiche-options .puce {
+  flex: none;
+  width: 1rem;
+}
+
+.fiche-options .ecartee {
+  color: var(--texte-2);
+}
+
+.fiche-cadre {
+  font-style: italic;
+}
+
 .detail .role {
   font-size: 0.75rem;
   font-style: italic;

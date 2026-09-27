@@ -78,6 +78,28 @@ export function jeuSynthetique(n: number): { graphe: Graphe; vue: Vue } {
       })
     }
   }
+  // Décisions (losanges) entre deux chapitres voisins, hors cadre : une branche = un cadre (le chapitre suivant, et
+  // celui du dessous suivi en parallèle), et une option écartée qui vise un nœud.
+  for (let k = 0; k + 1 < chapitres; k += 2) {
+    if (k % parLigne === parLigne - 1) continue
+    const id = `d${k}`
+    const c0 = (k % parLigne) * 9, l0 = Math.floor(k / parLigne) * 9
+    const dessous = k + 1 + parLigne < chapitres ? [`ch${k + 1 + parLigne}`] : []
+    noeuds.push({
+      projet_id: 'synthetique', id, nom: `Suite du chapitre ${k + 1}`, enonce: 'Décision synthétique.', admis: false,
+      type: 'decision', parents: [], enfants: [], conversation_id: null, statut: 'etabli', demonstrations: [],
+      details: {
+        question: `Après le chapitre ${k + 1}, quel modèle ? On suit les deux.`,
+        alternatives: [
+          { libelle: 'Modèle stationnaire', retenue: true, groupes: [`ch${k + 1}`] },
+          { libelle: 'Modèle transitoire', retenue: true, groupes: dessous },
+          { libelle: 'Modèle microscopique', retenue: false, raison: 'Trop coûteux pour ce qu’il apporte.', noeuds: [`n${(k + 1) * parChapitre + 20}`] },
+        ],
+        raison: 'Les deux régimes se confrontent aux mêmes mesures.',
+      },
+    })
+    placements.push({ noeud_id: id, groupe_id: null, colonne: c0 + 7, ligne: l0 + 7, largeur: 1, hauteur: 1, fixe: false })
+  }
   const parId = new Map(noeuds.map((x) => [x.id, x]))
   const aretes: Graphe['aretes'] = []
   for (const x of noeuds) {

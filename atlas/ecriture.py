@@ -89,6 +89,7 @@ def creer_noeud(
     if _existants(projet_id, [id]):
         raise ErreurGraphe(f"Le nœud {id} existe déjà : consulte-le avec lire_noeud et réutilise-le.")
     resume = ""
+    etat = lecture.charger_etat_vue(projet_id)
     if type == "decision":
         details, enonce = valider_decision(details, enonce)
         cibles = [n for n, _ in decisions.commandes(details)]
@@ -97,6 +98,8 @@ def creer_noeud(
                 f"Nœuds inexistants dans details.alternatives[].noeuds : {', '.join(manquants)}. Crée d'abord les "
                 "nœuds qui découlent de la décision (ou pose le tout avec poser_graphe)."
             )
+        if manquants := sorted({g for g, _ in decisions.cadres(details)} - set(etat.groupes)):
+            raise ErreurGraphe(f"Cadres inexistants dans details.alternatives[].groupes : {', '.join(manquants)}.")
         resume = decisions.resume(details)
     ligne = {
         "projet_id": projet_id,
@@ -108,7 +111,6 @@ def creer_noeud(
         "type": type,
         "details": details,
     }
-    etat = lecture.charger_etat_vue(projet_id)
     if groupe and groupe not in etat.groupes:
         raise ErreurGraphe(f"Cadre inexistant : {groupe}. Crée-le avec organiser_vue (creer_groupe), ou omets groupe.")
     supabase().table("noeuds").insert(ligne).execute()
@@ -536,16 +538,23 @@ def planifier_graphe(
         resume = decisions.resume(details) if type_noeud == "decision" else ""
         apres.noeuds[nid] = vue.NoeudVue(nid, nom, type_noeud, resume=resume)
 
-    # Décisions du lot : les nœuds qui découlent de leurs alternatives existent (dans le lot ou le graphe).
+    # Décisions du lot : les nœuds et les cadres qui découlent de leurs alternatives existent (lot ou graphe).
     commandes: dict[str, list[tuple[str, bool]]] = {}
+    cadres_vises: dict[str, list[tuple[str, bool]]] = {}
     for i, l in enumerate(lignes_noeuds):
         if l["type"] != "decision":
             continue
         commandes[l["id"]] = decisions.commandes(l["details"])
+        cadres_vises[l["id"]] = decisions.cadres(l["details"])
         if manquants := [c for c, _ in commandes[l["id"]] if c not in apres.noeuds or c == l["id"]]:
             raise ErreurGraphe(
                 f"noeuds[{i}] ({l['id']}) : details.alternatives[].noeuds cite des nœuds inexistants "
                 f"{', '.join(manquants)} ; ajoute-les à noeuds."
+            )
+        if manquants := [g for g, _ in cadres_vises[l["id"]] if g not in apres.groupes]:
+            raise ErreurGraphe(
+                f"noeuds[{i}] ({l['id']}) : details.alternatives[].groupes cite des cadres inexistants "
+                f"{', '.join(manquants)} ; déclare-les dans cadres."
             )
 
     lignes_demonstrations: list[dict[str, Any]] = []
@@ -594,6 +603,7 @@ def planifier_graphe(
         apres.noeuds[noeud_id] = replace(noeud, premisses=tuple(forts.items()))
 
     vue.relier_decisions(apres.noeuds, commandes)
+    vue.relier_cadres(apres, cadres_vises, nouveaux)
 
     # Mise en page : les cadres de premier niveau créés ici (avec leurs nœuds) et les nouveaux nœuds hors cadre
     # d'un bloc ; les nouveaux nœuds des cadres existants un par un, dans l'ordre logique.
@@ -620,6 +630,7 @@ def planifier_graphe(
     demontres = {d["noeud_id"] for d in lignes_demonstrations}
     utilises = {p for d in lignes_demonstrations for p in d["justifie_par"]}
     utilises |= {d for d, liens in commandes.items() if liens} | {c for liens in commandes.values() for c, _ in liens}
+    utilises |= {d for d, liens in cadres_vises.items() if liens}
     avertissements = [
         f"{l['id']} ({l['type'] or 'sans type'}) n'est ni admis ni démontré"
         for l in lignes_noeuds

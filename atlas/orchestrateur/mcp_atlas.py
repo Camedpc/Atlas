@@ -50,8 +50,9 @@ def _projet() -> str:
 def lire_graphe() -> str:
     """Vue compacte du graphe de l'espace de travail : pour chaque nœud, id, nom, énoncé (tronqué), statut effectif
     (etabli | suspendu | a_verifier | invalide | ouvert), admis, parents (prémisses) et enfants. Une décision
-    (losange) donne en plus sa question, ses alternatives retenues et écartées, et les nœuds vers lesquels elle
-    pointe (`commande` : ceux de ses alternatives retenues, `ecarte` : ceux des écartées)."""
+    (losange) donne en plus sa question, ses alternatives retenues et écartées, et ce vers quoi elle pointe
+    (`commande` / `cadres_commandes` : nœuds et cadres de ses alternatives retenues ; `ecarte` / `cadres_ecartes` :
+    ceux des écartées)."""
     graphe = lecture.charger_graphe(_projet())
 
     def ligne(n) -> dict[str, Any]:
@@ -67,12 +68,15 @@ def lire_graphe() -> str:
         }
         if n.type == "decision" and isinstance(n.details, dict):
             liens = decisions.commandes(n.details)
+            cadres = decisions.cadres(n.details)
             l["decision"] = {
                 "question": n.details.get("question"),
                 "retenue": decisions.retenues(n.details),
                 "ecartees": [a.get("libelle") for a in decisions.ecartees(n.details)],
                 "commande": [c for c, retenue in liens if retenue],
                 "ecarte": [c for c, retenue in liens if not retenue],
+                "cadres_commandes": [c for c, retenue in cadres if retenue],
+                "cadres_ecartes": [c for c, retenue in cadres if not retenue],
             }
         return l
 
@@ -116,10 +120,11 @@ def creer_noeud(
 
     Décision (type "decision", un losange dans la vue) : un choix de modélisation ou de méthode, avec ses
     alternatives. Elle ne se démontre pas et elle est toujours établie. details = {"question": "…?",
-    "alternatives": [{"libelle": …, "retenue": true, "noeuds": [ids des nœuds qui en découlent]},
-    {"libelle": …, "retenue": false, "raison": "pourquoi écartée", "noeuds"?: [ids]}], "raison": "pourquoi ce
-    choix"}. Le losange pointe vers les `noeuds` de chaque alternative (flèche pleine si retenue, pointillée × si
-    écartée) : ces nœuds doivent exister avant. enonce peut rester vide (il résume alors le choix).
+    "alternatives": [{"libelle": …, "retenue": true, "noeuds"?: [ids], "groupes"?: [ids de cadres]},
+    {"libelle": …, "retenue": false, "raison": "pourquoi écartée", "noeuds"?: [ids], "groupes"?: [ids]}],
+    "raison": "pourquoi ce choix"}. Le losange pointe vers les nœuds (`noeuds`) ou les cadres entiers (`groupes`)
+    de chaque alternative (flèche pleine si retenue, tiretée × si écartée) : ils doivent exister avant. Plusieurs
+    alternatives peuvent être retenues (pistes suivies en parallèle). enonce peut rester vide (il résume le choix).
     """
     if type and type not in TYPES:
         raise ecriture.ErreurGraphe(f"Type inconnu « {type} » : {', '.join(TYPES)}.")
@@ -193,7 +198,8 @@ class NoeudAPoser(BaseModel):
         None,
         description=(
             "decision : {question, alternatives: [{libelle, retenue, raison si écartée, noeuds: [ids qui en "
-            "découlent, du lot ou du graphe]}], raison} ; choix_modelisation : {hypothese, portee, alternatives}"
+            "découlent], groupes: [ids des cadres de cette branche]}], raison} (nœuds et cadres du lot ou du "
+            "graphe) ; choix_modelisation : {hypothese, portee, alternatives}"
         ),
     )
 
@@ -222,9 +228,9 @@ def poser_graphe(
     Mise en page automatique : les cadres de premier niveau que tu crées se suivent de gauche à droite dans l'ordre
     du raisonnement (un cadre dont les nœuds s'appuient sur un autre va à sa droite ; à hauteur égale, dans l'ordre
     de la liste) ; dans chaque cadre, les nœuds vont à droite de leurs prémisses principales et auxiliaires.
-    Une décision (losange, type "decision", voir creer_noeud) se place à gauche des nœuds de ses alternatives et n'a
-    pas de démonstration. Les démonstrations démarrent « à vérifier ». essai = vrai : valide et renvoie les
-    avertissements (nœuds ni admis ni démontrés, nœuds reliés à rien) sans rien écrire."""
+    Une décision (losange, type "decision", voir creer_noeud) se place à gauche des nœuds et des cadres de ses
+    alternatives et n'a pas de démonstration. Les démonstrations démarrent « à vérifier ». essai = vrai : valide et
+    renvoie les avertissements (nœuds ni admis ni démontrés, nœuds reliés à rien) sans rien écrire."""
     try:
         resultat = ecriture.poser_graphe(
             projet_id=_projet(),
