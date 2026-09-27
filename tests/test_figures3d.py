@@ -3,7 +3,9 @@ environnement sans secrets, durée bornée). L'essai complet du pendule est saut
 
 import base64
 import importlib.util
+import io
 import json
+import math
 import shutil
 import struct
 from pathlib import Path
@@ -12,7 +14,7 @@ import pytest
 
 from atlas import figures3d
 from atlas.figures import ErreurFigure
-from atlas.orchestrateur import bunker, config, figure3d
+from atlas.orchestrateur import apercu3d, bunker, config, figure3d
 from atlas.orchestrateur.figure3d import ErreurScript
 
 DONNEES = Path(__file__).parent / "donnees"
@@ -194,6 +196,19 @@ def test_pendule_produit_une_scene(session):
     assert "Scène 3D animée" in figures3d.resumer_scene(production.scene)
 
 
+@pytest.mark.skipif(not importlib.util.find_spec("plotly"), reason="plotly absent")
+def test_le_rendu_de_controle_de_l_agent_est_sans_effet(session):
+    # L'agent vérifie lui-même son rendu (fig.write_image) : chez Atlas, ni Chrome ni fichier écrit.
+    script = _ecrire(
+        session,
+        "import plotly.graph_objects as go\n"
+        "fig = go.Figure(go.Scatter3d(x=[0, 1], y=[0, 1], z=[0, 1]))\n"
+        "fig.write_image('rendu.png')\nfig.write_html('scene.html')\n",
+    )
+    figure3d.produire(script, session)
+    assert not (session / "rendu.png").exists() and not (session / "scene.html").exists()
+
+
 # ─── Écriture et outil MCP (Supabase remplacé) ───────────────────────────────
 
 PNG = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x02\xd0\x00\x00\x01\xe0" + b"\x00" * 16
@@ -316,8 +331,13 @@ def test_outil_mcp_execute_le_script_puis_ecrit_la_figure(monkeypatch, tmp_path)
         ),
     )
     monkeypatch.setattr(ecriture, "creer_figure", lambda **k: appels.setdefault("creer", k))
+    monkeypatch.setattr(apercu3d, "verifier", lambda s: [(0, _png(40, 30, (200, 0, 0)))])
     # Chemin relatif à la session, retenu relatif au projet (comme les images, pour deplacer_document).
-    reponse = json.loads(mcp_atlas.creer_figure_3d("pendule", "obs", "Pendule", "scripts/p.py", groupe="exp"))
+    contenu = mcp_atlas.creer_figure_3d("pendule", "obs", "Pendule", "scripts/p.py", groupe="exp")
+    reponse = json.loads(contenu[0])
+    # Les rendus suivent le résumé : l'agent voit la scène avant de conclure.
+    assert "Rendus de la scène" in contenu[1] and contenu[2] == "Image 1 sur 1 :"
+    assert contenu[3].data.startswith(b"\x89PNG")
     racine = (tmp_path / "projet").resolve()
     assert appels["produire"] == ("sessions/s1/scripts/p.py", session.resolve(), racine)
     k = appels["creer"]
@@ -334,3 +354,108 @@ def test_outil_mcp_execute_le_script_puis_ecrit_la_figure(monkeypatch, tmp_path)
     monkeypatch.setattr(figure3d, "produire", echoue)
     with pytest.raises(ecriture.ErreurGraphe, match="ValueError: raté"):
         mcp_atlas.creer_figure_3d("pendule", "obs", "Pendule", "scripts/p.py")
+
+
+def test_outil_mcp_refuse_une_scene_vide_sans_l_ecrire(monkeypatch, tmp_path):
+    from atlas import ecriture
+    from atlas.orchestrateur import mcp_atlas
+
+    monkeypatch.setenv("ATLAS_PROJET_ID", "p")
+    monkeypatch.setenv("ATLAS_DOSSIER_SESSION", str(tmp_path / "projet" / "sessions" / "s1"))
+    scene = figures3d.valider_scene(_scene())
+    monkeypatch.setattr(figure3d, "produire", lambda *_, **__: figure3d.Production(scene=scene, script="fig = …"))
+    monkeypatch.setattr(apercu3d, "rendre", lambda s: [(0, _png(40, 30, (255, 255, 255)))])
+    ecrit = []
+    monkeypatch.setattr(ecriture, "creer_figure", lambda **k: ecrit.append(k))
+    with pytest.raises(ecriture.ErreurGraphe, match="rendue est vide"):
+        mcp_atlas.creer_figure_3d("pendule", "obs", "Pendule", "scripts/p.py")
+    assert ecrit == []
+
+
+# ─── Vue du front et aperçu ──────────────────────────────────────────────────
+
+
+def _png(largeur: int, hauteur: int, couleur: tuple[int, int, int], tache: int = 0) -> bytes:
+    """PNG uni, avec une tache noire de `tache` × `tache` pixels au milieu."""
+    from PIL import Image
+
+    image = Image.new("RGB", (largeur, hauteur), couleur)
+    for x in range(tache):
+        for y in range(tache):
+            image.putpixel((largeur // 2 + x - tache // 2, hauteur // 2 + y - tache // 2), (0, 0, 0))
+    tampon = io.BytesIO()
+    image.save(tampon, format="PNG")
+    return tampon.getvalue()
+
+
+def test_oeil_final_de_l_agent_ou_par_defaut():
+    assert figures3d.oeil_final({"scene": {"camera": {"eye": {"x": 7, "y": -2, "z": 4}}}}) == {"x": 7, "y": -2, "z": 4}
+    for layout in (
+        {},
+        {"scene": {"camera": {"eye": {"x": 0, "y": 0, "z": 0}}}},
+        {"scene": {"camera": {"eye": {"x": 1}}}},
+    ):
+        assert figures3d.oeil_final(layout) == figures3d.OEIL_DEFAUT
+    o = figures3d.OEIL_DEFAUT
+    assert math.hypot(o["x"], o["y"], o["z"]) == pytest.approx(3)
+    assert math.degrees(math.asin(o["z"] / 3)) == pytest.approx(30)
+
+
+def test_marges_de_l_agent_jamais_sous_celles_du_front():
+    assert figures3d.marges({"margin": {"l": 0, "r": 0, "t": 85, "b": 60}}) == {"l": 12, "r": 12, "t": 85, "b": 64}
+    assert figures3d.marges({}) == figures3d.MARGES_FRONT
+
+
+def test_image_de_la_figure_applique_l_image_comme_plotly():
+    figure = {
+        "data": [
+            {"type": "scatter3d", "x": [0], "marker": {"size": 3, "color": "red"}},
+            {"type": "scatter", "x": {"dtype": "f8", "bdata": "AAAAAAAAAAA="}},
+        ],
+        "layout": {"annotations": [{"text": "t = 0"}], "scene": {"camera": {"eye": {"x": 9, "y": 9, "z": 9}}}},
+        "frames": [
+            {
+                "data": [{"x": {"dtype": "f8", "bdata": "AAAAAAAA8D8="}}],
+                "traces": [1],
+                "layout": {"annotations": [{"text": "t = 1"}]},
+            },
+            {"data": [{"marker": {"size": 5}}]},
+        ],
+    }
+    image = figures3d.image_de_la_figure(figure, 0)
+    assert image["data"][1]["x"] == {"dtype": "f8", "bdata": "AAAAAAAA8D8="}
+    assert image["layout"]["annotations"] == [{"text": "t = 1"}]
+    assert "frames" not in image
+    # Les objets se complètent : la couleur reste, la taille change.
+    assert figures3d.image_de_la_figure(figure, 1)["data"][0]["marker"] == {"size": 5, "color": "red"}
+    assert figures3d.image_de_la_figure(figure, -1)["data"] == figure["data"]
+
+    vue = figures3d.vue_du_front(figure | {"layout": figure["layout"] | {"title": {"text": "T"}}}, 0)
+    assert "title" not in vue["layout"] and vue["layout"]["paper_bgcolor"] == "white"
+    assert vue["layout"]["scene"]["camera"]["eye"] == {"x": 9, "y": 9, "z": 9}
+    assert vue["layout"]["margin"] == figures3d.MARGES_FRONT
+
+
+def test_indices_apercu():
+    assert figures3d.indices_apercu(180) == [0, 60, 120]
+    assert figures3d.indices_apercu(2) == [0, 1]
+    assert figures3d.indices_apercu(0) == [-1]
+
+
+def test_rendu_vide_ou_non():
+    assert apercu3d.vide(_png(100, 100, (255, 255, 255)))
+    assert apercu3d.vide(_png(100, 100, (9, 20, 38), tache=5))  # 25 pixels sur 10 000 : du texte, pas une scène
+    assert not apercu3d.vide(_png(100, 100, (255, 255, 255), tache=20))
+
+
+@pytest.mark.skipif(
+    importlib.util.find_spec("kaleido") is None or importlib.util.find_spec("plotly") is None,
+    reason="Kaleido et plotly nécessaires au rendu réel",
+)
+def test_rendu_reel_du_pendule():
+    scene = figures3d.valider_scene(_scene())
+    try:
+        rendus = apercu3d.verifier(scene)
+    except apercu3d.ErreurApercu as e:
+        pytest.skip(f"Chrome indisponible pour Kaleido : {e}")
+    assert [i for i, _ in rendus] == [0] and rendus[0][1].startswith(b"\x89PNG")

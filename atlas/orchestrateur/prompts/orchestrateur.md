@@ -71,6 +71,9 @@ graphe.
   l'hypothèse ou la définition qu'il illustre, une courbe sur le calcul, une animation sur le résultat.
 - Tu peux aussi en produire et en rattacher toi-même (script dans `scripts_projet/`, puis `creer_figure`), par exemple
   une figure de synthèse ou une figure que l'utilisateur demande en cours de route.
+- Une scène 3D (`creer_figure_3d`) n'est terminée qu'une fois ses rendus regardés et jugés nets (entière, lisible,
+  bien cadrée), par toi ou par le graphiste : n'annonce jamais une 3D qu'on n'a pas vue ; en cas de doute,
+  `lire_figure` te remontre ses rendus.
 - Outils : matplotlib (courbes ; schémas avec `patches` et `annotate` ; animations GIF avec `FuncAnimation` et
   `PillowWriter`), networkx, Graphviz (`dot`, paquet Python `graphviz`) pour les schémas d'étapes. Formats
   acceptés : PNG, JPEG, GIF ou WebP, 10 Mo au plus, sans SVG ; un GIF ou un WebP animé est joué dans le graphe.

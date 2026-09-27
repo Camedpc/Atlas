@@ -3,7 +3,7 @@
 // Entrée : la vue 2D cadre la case ; la scène apparaît par-dessus et, pendant que sa caméra descend de la verticale
 // jusqu'à une vue plongeante (environ 30°) en tournant de 45° (de face, puis à trois-quarts), la vue 2D s'efface ; puis
 // l'animation tourne en boucle. Caméra fixe, que l'on peut tourner en glissant à la souris (et zoomer à la molette).
-// Commandes : lecture / pause (Espace), vitesse ×0,5 / ×1 / ×2 (retenue), fermer (Échap, ×, double-clic).
+// Commandes : lecture / pause (bouton), vitesse ×0,5 / ×1 / ×2 (retenue), fermer (Échap, ×, double-clic).
 // Appliquer une image redessine la scène avec la caméra de la mise en page, que Plotly ne met à jour qu'à la fin d'un
 // geste : pendant qu'on tient la souris (ou qu'on tourne la molette), l'animation attend donc, puis la caméra laissée
 // par le geste (plotly_relayout) est reprise dans la mise en page avant de repartir.
@@ -24,14 +24,18 @@ const CLE_VITESSE = 'atlas.vitesse3d'
 const DUREE_RETOUR = 450
 const DUREE_CAMERA = 1200
 
-// Caméra (unités de la scène Plotly, centre en 0) : descente de la verticale jusqu'à 30°, en tournant de 45° (de face,
-// puis à trois-quarts).
-const AZIMUT_DEPART = -Math.PI / 2
-const AZIMUT = -Math.PI / 4
+// Caméra (unités de la scène Plotly, centre en 0) : la vue finale est celle de l'agent (layout.scene.camera.eye),
+// que le serveur a rendue et montrée à l'agent (atlas/figures3d.py, oeil_final : à garder alignés), sinon une vue
+// plongeante à 30°, à trois-quarts. On y descend depuis la verticale, 20 % plus loin, en tournant de 45°.
+type Point = { x: number; y: number; z: number }
 const ELEVATION_DEPART = (86 * Math.PI) / 180
-const ELEVATION_FIN = (30 * Math.PI) / 180
-const DISTANCE_DEPART = 3.6
-const DISTANCE_FIN = 3.0
+const RECUL_DEPART = 1.2
+const ROTATION = Math.PI / 4
+// Vue plongeante à 30°, à trois-quarts (azimut −45°), à distance 3.
+const HORIZONTAL = 3 * Math.cos(Math.PI / 6) * Math.SQRT1_2
+export const OEIL_DEFAUT: Point = { x: HORIZONTAL, y: -HORIZONTAL, z: 1.5 }
+/** Marges minimales : le titre en haut, la barre de commandes en bas (les graphiques 2D ne passent pas dessous). */
+const MARGES = { l: 12, r: 12, t: 44, b: 64 }
 
 /** Image à montrer au temps `t` (s) : la boucle de `n` images à `fps` ; −1 pour une scène sans animation. */
 export function imageA(t: number, fps: number, n: number): number {
@@ -40,12 +44,33 @@ export function imageA(t: number, fps: number, n: number): number {
   return i < 0 ? i + n : i
 }
 
-/** Œil de la caméra à l'avancement `u` (0 : presque à la verticale, de face ; 1 : vue plongeante, à trois-quarts). */
-export function oeil(u: number): { x: number; y: number; z: number } {
-  const el = ELEVATION_DEPART + (ELEVATION_FIN - ELEVATION_DEPART) * u
-  const d = DISTANCE_DEPART + (DISTANCE_FIN - DISTANCE_DEPART) * u
-  const az = AZIMUT_DEPART + (AZIMUT - AZIMUT_DEPART) * u
+/** L'œil final : celui de la scène s'il est valide, sinon OEIL_DEFAUT. */
+export function oeilFinal(scene: unknown): Point {
+  const e = (scene as { camera?: { eye?: Partial<Point> } } | undefined)?.camera?.eye
+  const v = [e?.x, e?.y, e?.z]
+  if (v.every((x) => typeof x === 'number' && Number.isFinite(x)) && Math.hypot(...(v as number[])) > 1e-6) {
+    const [x, y, z] = v as number[]
+    return { x: x!, y: y!, z: z! }
+  }
+  return { ...OEIL_DEFAUT }
+}
+
+/** Œil de la caméra à l'avancement `u` (0 : presque à la verticale, de face ; 1 : l'œil final). */
+export function oeil(u: number, fin: Point = OEIL_DEFAUT): Point {
+  const d1 = Math.hypot(fin.x, fin.y, fin.z)
+  const el1 = Math.asin(Math.max(-1, Math.min(1, fin.z / d1)))
+  const az1 = Math.atan2(fin.y, fin.x)
+  const el = ELEVATION_DEPART + (el1 - ELEVATION_DEPART) * u
+  const d = d1 * (RECUL_DEPART + (1 - RECUL_DEPART) * u)
+  const az = az1 - ROTATION * (1 - u)
   return { x: d * Math.cos(el) * Math.cos(az), y: d * Math.cos(el) * Math.sin(az), z: d * Math.sin(el) }
+}
+
+/** Marges : celles de l'agent (ses annotations au-dessus du tracé y tiennent), jamais sous MARGES. */
+export function marges(agent: unknown): typeof MARGES {
+  const m = (agent ?? {}) as Partial<Record<keyof typeof MARGES, unknown>>
+  const cote = (k: keyof typeof MARGES) => (typeof m[k] === 'number' ? Math.max(MARGES[k], m[k] as number) : MARGES[k])
+  return { l: cote('l'), r: cote('r'), t: cote('t'), b: cote('b') }
 }
 
 function vitesseRetenue(): number {
@@ -93,7 +118,7 @@ export function ouvrir3d(o: OptionsMode3D): () => void {
     <header class="gr-3d-tete"><span class="gr-3d-titre">${htmlTitreFigure(o.numero, o.figure.titre)}</span></header>
     <p class="gr-3d-etat" role="status">Chargement de la scène…</p>
     <div class="gr-3d-barre" role="toolbar" aria-label="Animation">
-      <button type="button" class="gr-3d-lecture" aria-label="Pause" title="Pause (Espace)">❚❚</button>
+      <button type="button" class="gr-3d-lecture" aria-label="Pause" title="Pause">❚❚</button>
       <span class="gr-3d-vitesses" role="group" aria-label="Vitesse">${VITESSES.map((v) =>
         `<button type="button" data-vitesse="${v}">×${String(v).replace('.', ',')}</button>`).join('')}</span>
       <button type="button" class="gr-3d-fermer" aria-label="Fermer" title="Fermer (Échap)">×</button>
@@ -125,7 +150,7 @@ export function ouvrir3d(o: OptionsMode3D): () => void {
   const montrerLecture = () => {
     lecture.textContent = pause ? '▶' : '❚❚'
     lecture.setAttribute('aria-label', pause ? 'Lecture' : 'Pause')
-    lecture.title = `${pause ? 'Lecture' : 'Pause'} (Espace)`
+    lecture.title = pause ? 'Lecture' : 'Pause'
   }
   montrerVitesse()
   for (const b of boutonsVitesse) {
@@ -162,11 +187,8 @@ export function ouvrir3d(o: OptionsMode3D): () => void {
   }
 
   const clavier = (e: KeyboardEvent) => {
-    if (e.key === 'Escape') fermer()
-    else if (e.key === ' ' && !(e.target instanceof HTMLButtonElement)) {
-      pause = !pause
-      montrerLecture()
-    } else return
+    if (e.key !== 'Escape') return
+    fermer()
     e.preventDefault()
     e.stopPropagation()
   }
@@ -239,17 +261,17 @@ export function ouvrir3d(o: OptionsMode3D): () => void {
     const layout: Record<string, unknown> = { ...figure.layout }
     delete layout.title // le titre est celui de la figure, dans l'en-tête
     // Fond de scène transparent (la vue 2D s'efface derrière) ; les parois et la grille restent celles de l'agent.
+    const fin = oeilFinal(layout.scene)
     layout.scene = {
       ...(layout.scene as Record<string, unknown> | undefined),
       bgcolor: 'rgba(0,0,0,0)',
-      camera: { eye: oeil(reduit ? 1 : 0), up: { x: 0, y: 0, z: 1 } },
+      camera: { eye: oeil(reduit ? 1 : 0, fin), up: { x: 0, y: 0, z: 1 } },
     }
     Object.assign(layout, {
       paper_bgcolor: 'rgba(0,0,0,0)',
       plot_bgcolor: 'rgba(0,0,0,0)',
       autosize: true,
-      // Marges : le titre en haut, la barre de commandes en bas (les graphiques 2D ne passent pas dessous).
-      margin: { l: 12, r: 12, t: 44, b: 64 },
+      margin: marges(layout.margin),
       // Garde la caméra tournée par l'utilisateur d'une image à l'autre.
       uirevision: 'atlas',
     })
@@ -276,7 +298,7 @@ export function ouvrir3d(o: OptionsMode3D): () => void {
     if (reduit) effacer(0)
     else {
       const pas = (u: number) => {
-        void p.relayout(trace, { 'scene.camera.eye': oeil(u) })
+        void p.relayout(trace, { 'scene.camera.eye': oeil(u, fin) })
         effacer(1 - u)
       }
       camera = animer(pas, () => pas(1), DUREE_CAMERA)

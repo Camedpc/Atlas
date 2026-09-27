@@ -135,6 +135,82 @@ def serialiser(scene: dict[str, Any]) -> bytes:
     return json.dumps(scene, ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode()
 
 
+# ─── Ce que montre le front ──────────────────────────────────────────────────
+# Recopie des réglages de frontend/src/graphe-3d.ts, pour que l'aperçu rendu par le serveur (apercu3d.py) soit ce
+# que Camille verra à la fin de la descente de la caméra : à garder alignés.
+
+# Œil par défaut (vue plongeante à 30°, à trois-quarts, à distance 3) quand la scène n'en donne pas.
+_HORIZONTAL = 3 * math.cos(math.pi / 6) / math.sqrt(2)
+OEIL_DEFAUT = {"x": _HORIZONTAL, "y": -_HORIZONTAL, "z": 1.5}
+# Marges minimales du front : le titre en haut, la barre de commandes en bas.
+MARGES_FRONT = {"l": 12, "r": 12, "t": 44, "b": 64}
+
+
+def oeil_final(layout: dict[str, Any]) -> dict[str, float]:
+    """L'œil de la caméra où la descente du front s'arrête : celui de l'agent (layout.scene.camera.eye) s'il est
+    valide, sinon OEIL_DEFAUT."""
+    reglages = layout.get("scene")
+    camera = reglages.get("camera") if isinstance(reglages, dict) else None
+    oeil = camera.get("eye") if isinstance(camera, dict) else None
+    if isinstance(oeil, dict):
+        v = [oeil.get(k) for k in "xyz"]
+        if all(isinstance(x, int | float) and not isinstance(x, bool) and math.isfinite(x) for x in v):
+            if math.hypot(*v) > 1e-6:
+                return {k: float(x) for k, x in zip("xyz", v, strict=True)}
+    return dict(OEIL_DEFAUT)
+
+
+def marges(layout: dict[str, Any]) -> dict[str, float]:
+    """Marges du front : celles de l'agent, jamais sous MARGES_FRONT."""
+    agent = layout.get("margin") if isinstance(layout.get("margin"), dict) else {}
+    return {
+        k: max(m, v) if isinstance(v := agent.get(k), int | float) and not isinstance(v, bool) else m
+        for k, m in MARGES_FRONT.items()
+    }
+
+
+def _fusionner(base: Any, ajout: Any) -> Any:
+    """Fusion à la manière de Plotly.animate : les objets se complètent, le reste (valeurs, listes, tableaux typés
+    {dtype, bdata}) est remplacé."""
+    if isinstance(base, dict) and isinstance(ajout, dict) and "bdata" not in ajout and "bdata" not in base:
+        return {**base, **{k: _fusionner(base.get(k), v) for k, v in ajout.items()}}
+    return ajout
+
+
+def image_de_la_figure(figure: dict[str, Any], i: int) -> dict[str, Any]:
+    """La figure à l'image `i` de son animation (base si i < 0 ou sans images) : {data, layout}, sans frames."""
+    data = [dict(t) for t in figure["data"]]
+    layout = dict(figure["layout"])
+    images = figure.get("frames") or []
+    if 0 <= i < len(images):
+        image = images[i]
+        indices = image.get("traces")
+        for k, t in enumerate(image.get("data") or []):
+            n = indices[k] if indices is not None and k < len(indices) else k
+            if 0 <= n < len(data):
+                data[n] = _fusionner(data[n], t)
+        if image.get("layout"):
+            layout = _fusionner(layout, image["layout"])
+    return {"data": data, "layout": layout}
+
+
+def vue_du_front(figure: dict[str, Any], i: int) -> dict[str, Any]:
+    """L'image `i` telle que le front la montre : sans titre (il est dans l'en-tête), fond blanc, parois de l'agent,
+    caméra finale (oeil_final), marges du front."""
+    vue = image_de_la_figure(figure, i)
+    layout = {k: v for k, v in vue["layout"].items() if k != "title"}
+    scene = dict(layout.get("scene") or {})
+    scene["bgcolor"] = "rgba(0,0,0,0)"
+    scene["camera"] = {"eye": oeil_final(figure["layout"]), "up": {"x": 0, "y": 0, "z": 1}}
+    layout |= {"scene": scene, "paper_bgcolor": "white", "plot_bgcolor": "white", "margin": marges(figure["layout"])}
+    return {"data": vue["data"], "layout": layout}
+
+
+def indices_apercu(n: int) -> list[int]:
+    """Images montrées à l'agent : début, tiers et deux tiers de la boucle (la base si la scène est fixe)."""
+    return sorted({0, n // 3, 2 * n // 3}) if n > 0 else [-1]
+
+
 # ─── Résumé pour l'IA ────────────────────────────────────────────────────────
 
 

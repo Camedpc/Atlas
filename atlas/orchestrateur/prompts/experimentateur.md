@@ -24,7 +24,10 @@ simulation, code, vérification numérique. Ta demande est dans le message qui t
   une période entière pour qu'elle tourne en boucle, les bornes des axes fixées, et `fps` (20 par défaut). Une
   seule scène 3D ; à côté, si ça éclaire le résultat, des graphiques 2D (scatter, via make_subplots) des grandeurs
   qui varient dans le temps, avec un point qui avance au rythme de l'animation. Rien à exporter, pas de fig.show().
-  Lance-le une fois pour vérifier qu'il s'exécute.
+  Règle la caméra (`layout.scene.camera.eye`) pour que tout soit entier et lisible : plus la boîte `aspectratio`
+  est grande, plus l'œil doit être loin. Lance-le une fois, puis vérifie son rendu : `fig.write_image("rendu.png")`
+  (Kaleido) et regarde l'image, que tu corriges tant qu'un objet est coupé, minuscule ou caché. Le graphiste la
+  reverra quand il la mettra dans le graphe.
 - Rapporte aussi les résultats négatifs ou surprenants, les limites (précision, taille, cas non couverts) et ce
   qui n'a pas marché.
 
