@@ -67,3 +67,20 @@ jugée très claire mais « trop scolaire » ; R14 garde la structure et change 
   nomenclature exportable.
 - Repères de grille cliquables (« aller en C4 ») et coordonnées du curseur dans le cartouche.
 - Hachures pour les zones de piste abandonnée, comme une partie supprimée sur un plan.
+
+## Second jeu : fontaine de chaîne (`?jeu=fontaine`)
+
+`jeu-fontaine.ts` : raisonnement de mécanique sur l'effet Mould (modèle de Biggins & Warner, 2014), 39 énoncés,
+5 sous-problèmes dont une piste abandonnée (« l'élan suffit », contredite par l'observation). Mesures illustratives.
+Aucune ligne de la dérivation, de la mise en page ni du rendu n'a changé : 39 nœuds → 20 blocs, 20 liaisons.
+
+Ce que l'essai montre sur la généralisation :
+- **Tient** : la dérivation ne lit que les types, les rôles des prémisses, `admis` et `piste` ; aucun identifiant
+  du jeu synthétique n'est codé en dur. Chaîne invariant → vitesse / hauteur → loi → résultats lisible d'emblée.
+- **Casse** : un choix de modélisation issu d'une décision (« Force de prise anormale », conséquence de
+  « Origine de la fontaine ») part dans la marge sans liaison : le cœur du récit physique (observation →
+  contradiction → décision → hypothèse → prédiction) est coupé. Une décision dont la seule prémisse est un choix
+  (« Estimer α ») se retrouve isolée en marge. Les énoncés (équations) ne sont visibles qu'au survol.
+- **Dépend des données** : sans rôles annotés ni types, l'adaptateur `depuisApiAtlas` devine le type d'après
+  le préfixe de l'identifiant et le rôle d'après le type de la prémisse. En production, il faut que les agents
+  écrivent le type du nœud, le rôle de chaque prémisse, et les décisions / choix structurés.

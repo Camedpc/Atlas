@@ -257,3 +257,29 @@ body:has(.rsn-vue[data-theme='sombre']) {
   font-size: 10.5px;
   letter-spacing: 0.02em;
 }
+
+/* Sélecteur de jeu : sous le lien « catalogue », au style du cartouche. */
+.r14-jeu {
+  position: fixed;
+  top: 56px;
+  left: 12px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 4px 3px 8px;
+  border: 1px solid var(--texte);
+  background: var(--surface);
+  font-family: var(--r14-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  color: var(--texte);
+}
+.r14-jeu select {
+  border: 0;
+  background: transparent;
+  font: inherit;
+  letter-spacing: 0;
+  color: inherit;
+  cursor: pointer;
+}

@@ -10,6 +10,7 @@
 import {
   creerVueRaisonnement, el, type Disposition, type ReducteurAreteR, type ReducteurPoint, type VueRaisonnement,
 } from '../../src/raisonnement'
+import { jeuFontaine } from './jeu-fontaine'
 import meta from './meta.json'
 import { mettreEnPage, type MiseEnPage } from './mise-en-page'
 import {
@@ -67,11 +68,20 @@ const reducteurArete: ReducteurAreteR = (info, a) => {
   if (info.genre === 'lecture') a.cache = true
 }
 
+// ─── Jeu de données ──────────────────────────────────────────────────────────
+// Le même schéma sur un autre raisonnement : ?jeu=fontaine (fontaine de chaîne) ; sinon le jeu synthétique.
+
+const JEUX = { edp: 'EDP stochastique (synthétique)', fontaine: 'Fontaine de chaîne' } as const
+type Jeu = keyof typeof JEUX
+const jeuChoisi: Jeu = new URLSearchParams(location.search).get('jeu') === 'fontaine' ? 'fontaine' : 'edp'
+
 // ─── Vue ─────────────────────────────────────────────────────────────────────
 
 const D = 'Schéma R14'
 const vue = creerVueRaisonnement(document.getElementById('app')!, {
-  id: meta.id,
+  // Réglages mémorisés par jeu : cadrage et niveau ne se mélangent pas d'un raisonnement à l'autre.
+  id: jeuChoisi === 'edp' ? meta.id : `${meta.id}-${jeuChoisi}`,
+  jeu: jeuChoisi === 'fontaine' ? jeuFontaine() : undefined,
   mode: '2d',
   strategie: STRATEGIE_NIVEAU.squelette,
   reglages: {
@@ -479,3 +489,16 @@ function majPanneau(): void {
 // Convention : le script de capture lit window.rsnVue.
 ;(window as unknown as { rsnVue: typeof vue; r14: EtatRendu }).rsnVue = vue
 ;(window as unknown as { r14: EtatRendu }).r14 = etat
+
+// Sélecteur de jeu, sous le lien vers le catalogue.
+{
+  const choix = el('select', { class: 'r14-jeu-choix', 'aria-label': 'Raisonnement affiché' }) as HTMLSelectElement
+  for (const [cle, libelle] of Object.entries(JEUX)) choix.append(new Option(libelle, cle, false, cle === jeuChoisi))
+  choix.addEventListener('change', () => {
+    const url = new URL(location.href)
+    if (choix.value === 'edp') url.searchParams.delete('jeu')
+    else url.searchParams.set('jeu', choix.value)
+    location.href = url.toString()
+  })
+  document.body.append(el('label', { class: 'r14-jeu' }, el('span', {}, 'JEU'), choix))
+}
