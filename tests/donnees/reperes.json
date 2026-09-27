@@ -1,0 +1,50 @@
+{
+  "_commentaire": "Numérotation de la vue, vérifiée à la fois par tests/test_navigation.py (atlas/navigation.py) et par frontend/src/graphe-modele.test.ts (construireModele) : les deux doivent donner les mêmes repères.",
+  "graphe": {
+    "noeuds": [
+      {"id": "h_a", "nom": "Régime stationnaire", "type": "hypothese", "admis": false, "parents": [], "enfants": ["l_1"]},
+      {"id": "d_x", "nom": "Coefficient alpha", "type": "definition", "admis": false, "parents": [], "enfants": ["l_1"]},
+      {"id": "h_b", "nom": "Fil inextensible", "type": "choix_modelisation", "admis": false, "parents": [], "enfants": ["t_1"]},
+      {"id": "l_1", "nom": "Tension au point de prise", "type": "lemme", "admis": false, "parents": ["h_a", "d_x"], "enfants": ["t_1"]},
+      {"id": "t_1", "nom": "Loi de la fontaine", "type": "theoreme", "admis": false, "parents": ["l_1", "h_b"], "enfants": ["p_2"]},
+      {"id": "p_2", "nom": "Hauteur maximale", "type": "proposition", "admis": false, "parents": ["t_1"], "enfants": []},
+      {"id": "adm", "nom": "Gravité uniforme", "type": null, "admis": true, "parents": [], "enfants": []},
+      {"id": "c_z", "nom": "Tension au sol", "type": "conjecture", "admis": false, "parents": [], "enfants": []}
+    ]
+  },
+  "vue": {
+    "groupes": [
+      {"id": "g1", "nom": "Hypothèses", "parent_id": null, "genre": "etape", "couleur": null, "replie": false, "ordre": 0},
+      {"id": "g2", "nom": "Étape intermédiaire", "parent_id": "g1", "genre": "etape", "couleur": null, "replie": false, "ordre": 0},
+      {"id": "g3", "nom": "Conséquences", "parent_id": null, "genre": "sous_probleme", "couleur": null, "replie": false, "ordre": 0},
+      {"id": "g4", "nom": "Vide", "parent_id": null, "genre": "libre", "couleur": null, "replie": false, "ordre": 0}
+    ],
+    "placements": [
+      {"noeud_id": "h_a", "groupe_id": "g1", "colonne": 0, "ligne": 0, "largeur": 1, "hauteur": 1, "fixe": false},
+      {"noeud_id": "d_x", "groupe_id": "g1", "colonne": 0, "ligne": 1, "largeur": 1, "hauteur": 1, "fixe": false},
+      {"noeud_id": "h_b", "groupe_id": "g2", "colonne": 0, "ligne": 2, "largeur": 1, "hauteur": 1, "fixe": false},
+      {"noeud_id": "l_1", "groupe_id": "g2", "colonne": 1, "ligne": 0, "largeur": 1, "hauteur": 1, "fixe": false},
+      {"noeud_id": "t_1", "groupe_id": null, "colonne": 3, "ligne": 0, "largeur": 1, "hauteur": 1, "fixe": false},
+      {"noeud_id": "p_2", "groupe_id": "g3", "colonne": 6, "ligne": 0, "largeur": 1, "hauteur": 1, "fixe": false},
+      {"noeud_id": "fig:f_plot", "groupe_id": null, "colonne": 4, "ligne": 0, "largeur": 2, "hauteur": 2, "fixe": true}
+    ],
+    "figures": [
+      {"id": "f_plot", "noeud_id": "t_1", "titre": "Profil du jet", "legende": null, "trace": null, "image": false, "image_largeur": null, "image_hauteur": null, "source": null, "modifie_le": "2026-09-27T00:00:00Z"},
+      {"id": "f_img", "noeud_id": "l_1", "titre": "Photographie", "legende": null, "trace": null, "image": false, "image_largeur": null, "image_hauteur": null, "source": null, "modifie_le": "2026-09-27T00:00:00Z"}
+    ]
+  },
+  "attendu": {
+    "noeuds": {
+      "h_a": "Hypothèse (i)",
+      "d_x": "Définition 1",
+      "h_b": "Hypothèse (ii)",
+      "l_1": "Lemme 3",
+      "t_1": "Théorème 5",
+      "p_2": "Proposition 6",
+      "adm": "Fait admis 2",
+      "c_z": "Conjecture 4"
+    },
+    "figures": {"f_img": "Figure 1", "f_plot": "Figure 2"},
+    "cadres": {"g1": "§1", "g2": "§1.1", "g3": "§2", "g4": "§3"}
+  }
+}
