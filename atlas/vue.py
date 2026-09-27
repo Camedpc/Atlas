@@ -203,9 +203,10 @@ def _ligne_souhaitee(etat: EtatVue, noeud: NoeudVue, groupe_id: str | None) -> i
         return min(max(mediane, r.l0), r.l1) if r is not None else mediane
     if r is not None:
         return r.l0
-    # Premier nœud d'un cadre vide (ou hors cadre sans prémisse) : sous tout ce qui existe.
-    bas = max((rect_de(p).l1 for p in etat.placements.values()), default=-2)
-    return bas + 2
+    # Premier nœud d'un cadre vide : sous tout ce qui existe, une case d'écart pour la barre de titre ;
+    # hors cadre sans prémisse : juste en dessous.
+    bas = max((rect_de(p).l1 for p in etat.placements.values()), default=-1)
+    return bas + (2 if groupe_id is not None else 1)
 
 
 def placer_auto(
@@ -272,12 +273,15 @@ def _verificateur(etat: EtatVue, groupe_id: str | None):
 
 
 def reorganiser(etat: EtatVue, groupe_id: str | None = None) -> EtatVue:
-    """Replace, dans l'ordre logique (prémisses d'abord), les nœuds non fixés (d'un cadre, ou de toute la vue)."""
+    """Replace, dans l'ordre logique (prémisses d'abord), les nœuds non fixés (d'un cadre, ou de toute la vue ;
+    dans ce cas les nœuds encore non placés le sont aussi)."""
     cibles = {
         nid
         for nid, p in etat.placements.items()
         if not p.fixe and (groupe_id is None or p.groupe_id in {groupe_id} | descendants(etat, groupe_id))
     }
+    # Sur toute la vue, les nœuds jamais placés (graphe écrit avant la vue) sont placés aussi, hors cadre.
+    non_places = set(etat.noeuds) - set(etat.placements) if groupe_id is None else set()
     nouvel = etat.copie()
     for nid in cibles:
         nouvel.placements.pop(nid)
@@ -304,6 +308,8 @@ def reorganiser(etat: EtatVue, groupe_id: str | None = None) -> EtatVue:
         for nid in ordre_logique(etat, ids, cle_position):
             ancien = etat.placements[nid]
             nouvel.placements[nid] = placer_auto(nouvel, nid, ancien.groupe_id, ancien.largeur, ancien.hauteur)
+    for nid in ordre_logique(etat, non_places):
+        nouvel.placements[nid] = placer_auto(nouvel, nid, None)
     return nouvel
 
 
