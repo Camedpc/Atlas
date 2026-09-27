@@ -33,7 +33,7 @@ const LIBELLES_VALIDITE = { valide: 'vérifiée', a_verifier: 'à vérifier', in
 
 // Développement : `?synthetique=1000` remplace le graphe par un jeu synthétique (lecture seule) pour éprouver la vue.
 const SYNTHETIQUE = import.meta.env.DEV ? Number(new URLSearchParams(location.search).get('synthetique')) || 0 : 0
-document.body.classList.toggle('demo', DEMO)
+document.body.classList.toggle('page-demo', DEMO)
 
 document.querySelector<HTMLElement>('#app')!.innerHTML = `
   <aside class="panneau-sessions"></aside>

@@ -1510,11 +1510,11 @@ button.menu-ligne:focus-visible,
 
 /* ── Page de démo (/demo) : l'espace est imposé, un bandeau propose de le réinitialiser ── */
 
-body.demo .selecteur-espace {
+body.page-demo .selecteur-espace {
   pointer-events: none;
 }
 
-body.demo .selecteur-espace > svg:last-child {
+body.page-demo .selecteur-espace > svg:last-child {
   display: none;
 }
 
