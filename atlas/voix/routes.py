@@ -5,6 +5,7 @@ import contextlib
 import json
 import logging
 import secrets
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket
 from pydantic import BaseModel, Field
@@ -121,24 +122,52 @@ async def consigner(appel_id: str, tache: int, corps: Message) -> dict:
     return {"transmis": await _session(appel_id).taches.orienter(tache, corps.message)}
 
 
-class Affichage(BaseModel):
-    demande: str = Field(min_length=1)
-    extrait: str = ""
-    titre: str = ""
+class Montrer(BaseModel):
+    references: list[str] = []
+    etendue: Literal["seul", "premisses", "consequences", "lignee"] = "seul"
+    garder_seulement: bool = False
+    fiche: bool = False
+    statuts: list[str] = []
 
 
-class Reponse(BaseModel):
-    reponse: str = Field(min_length=1)
+class Zoom(BaseModel):
+    facteur: float
 
 
-@routeur_outils.post("/affichage")
-async def afficher(appel_id: str, corps: Affichage) -> dict:
-    return await _session(appel_id).affichages.lancer(corps.demande, corps.extrait, corps.titre)
+class Deplacements(BaseModel):
+    deplacements: list[dict[str, Any]] = Field(min_length=1)
 
 
-@routeur_outils.post("/affichage/{tache}/reponse")
-async def repondre_affichage(appel_id: str, tache: int, corps: Reponse) -> dict:
-    return await _session(appel_id).affichages.repondre(tache, corps.reponse)
+@routeur_outils.get("/ecran")
+async def lire_ecran(appel_id: str) -> dict:
+    return await _session(appel_id).ecran.lire()
+
+
+@routeur_outils.post("/ecran/montrer")
+async def montrer(appel_id: str, corps: Montrer) -> dict:
+    return await _session(appel_id).ecran.montrer(
+        corps.references, corps.etendue, corps.garder_seulement, corps.fiche, corps.statuts
+    )
+
+
+@routeur_outils.post("/ecran/ensemble")
+async def vue_d_ensemble(appel_id: str) -> dict:
+    return await _session(appel_id).ecran.ensemble()
+
+
+@routeur_outils.post("/ecran/effacer")
+async def effacer_ecran(appel_id: str) -> dict:
+    return await _session(appel_id).ecran.effacer()
+
+
+@routeur_outils.post("/ecran/zoomer")
+async def zoomer(appel_id: str, corps: Zoom) -> dict:
+    return await _session(appel_id).ecran.zoomer(corps.facteur)
+
+
+@routeur_outils.post("/ecran/deplacer")
+async def deplacer(appel_id: str, corps: Deplacements) -> dict:
+    return await _session(appel_id).ecran.deplacer(corps.deplacements)
 
 
 @routeur_outils.post("/taches/{tache}/arreter")

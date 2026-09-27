@@ -8,7 +8,7 @@
 // d'origine (le cadre s'agrandit). Pour sortir un nœud de son cadre : clic droit → « Sortir du cadre ».
 
 import './graphe.css'
-import { api, RefusVue, type Graphe, type Noeud, type OperationVue, type Vue } from './api'
+import { api, RefusVue, type Graphe, type Noeud, type OperationVue, type PlacementVue, type Vue } from './api'
 import { animer, type Animation } from './graphe-animation'
 import { instantane, operationsVers, type Entree, type Instantane } from './graphe-annuler'
 import { Contenu } from './graphe-contenu'
@@ -28,6 +28,8 @@ const ZOOMS: [number, string][] = [
 const INDEX_1_1 = ZOOMS.findIndex(([z]) => z === 1)
 /** Déplacement (px d'écran) au-delà duquel un clic devient un glisser. */
 const SEUIL_GLISSER = 4
+/** Au-delà, une relecture qui change beaucoup de cases (réorganisation) n'est pas animée. */
+const DEPLACES_ANIMES_MAX = 60
 /** Délai qui distingue un clic sur une barre de titre (réduire) d'un double-clic (renommer). */
 const DELAI_DOUBLE_CLIC = 260
 /** Au doigt : seuil de glisser plus large (le doigt tremble), appui long et double toucher. */
@@ -143,6 +145,11 @@ export class VueGraphe {
   private titreSurvole: string | null = null
   private hypothese: Bloc | null = null
   private surcharges: Map<string, Surcharge> | null = null
+  /** Nœuds déplacés en base par quelqu'un d'autre (voix, agent), animés de leur ancienne case à la nouvelle. */
+  private transition: Map<string, Surcharge> | null = null
+  private animTransition: Animation | null = null
+  /** Espace des données affichées : un changement d'espace n'est jamais animé. */
+  private projetAffiche: string | null = null
   private conflits: Set<string> | null = null
   private cadreCible: string | null = null
   private geste: Geste | null = null
@@ -280,11 +287,14 @@ export class VueGraphe {
 
   /** Nouvelles données (lecture périodique pendant qu'un agent travaille, ou après une opération). */
   afficher(graphe: Graphe, vue: Vue, conversationId: string | null): number {
+    const avant = this.projetAffiche === this.projetId ? this.vue.placements : []
+    this.projetAffiche = this.projetId
     this.graphe = graphe
     this.vue = vue
     this.conversationFiltre = conversationId
     this.calculerEstompes()
     this.reconstruire()
+    this.animerDeplaces(avant)
     for (const id of [...this.selection]) if (!this.base.blocs.has(id)) this.selection.delete(id)
     if (this.aCadrer && graphe.noeuds.length && this.largeur) {
       this.aCadrer = false
@@ -477,8 +487,38 @@ export class VueGraphe {
 
   private reconstruire(): void {
     this.base = construireModele(this.graphe, this.vue)
-    this.modele = this.surcharges ? construireModele(this.graphe, this.vue, this.surcharges) : this.base
+    const surcharges = this.surcharges ?? this.transition
+    this.modele = surcharges ? construireModele(this.graphe, this.vue, surcharges) : this.base
     this.demander()
+  }
+
+  /** Les nœuds que la relecture a changés de case glissent de l'ancienne à la nouvelle (pas après une opération
+   * faite ici : le nœud lâché est déjà à sa place). */
+  private animerDeplaces(avant: readonly PlacementVue[]): void {
+    this.animTransition?.fin()
+    if (this.enCours || this.surcharges || document.hidden || !this.largeur) return
+    const anciens = new Map(avant.map((p) => [p.noeud_id, p]))
+    const deplaces: [string, PlacementVue, PlacementVue][] = []
+    for (const p of this.vue.placements) {
+      const a = anciens.get(p.noeud_id)
+      if (a && (a.colonne !== p.colonne || a.ligne !== p.ligne)) deplaces.push([p.noeud_id, a, p])
+    }
+    if (!deplaces.length || deplaces.length > DEPLACES_ANIMES_MAX) return
+    const poser = (u: number) => {
+      this.transition = new Map(deplaces.map(([id, a, p]) => [id, {
+        colonne: a.colonne + (p.colonne - a.colonne) * u, ligne: a.ligne + (p.ligne - a.ligne) * u, groupe: p.groupe_id,
+      }]))
+      this.reconstruire()
+    }
+    poser(0)
+    const anim = animer(poser, () => {
+      this.transition = null
+      this.reconstruire()
+    })
+    this.animTransition = anim
+    void anim.promesse.then(() => {
+      if (this.animTransition === anim) this.animTransition = null
+    })
   }
 
   // ─── Caméra ────────────────────────────────────────────────────────────────

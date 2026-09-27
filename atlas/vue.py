@@ -47,6 +47,8 @@ class NoeudVue:
     statut: str | None = None
     premisses: tuple[tuple[str, str], ...] = ()
     """(id, rôle) de toutes les démonstrations, sans doublon ; le rôle le plus fort l'emporte."""
+    admis: bool = False
+    """Fait admis (sans démonstration) : « Fait admis 3 » dans la numérotation d'un nœud sans type."""
 
 
 @dataclass(frozen=True)

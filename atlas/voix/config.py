@@ -64,11 +64,5 @@ ENREGISTRER = os.environ.get("ATLAS_VOIX_ENREGISTRER") == "1"
 # Contexte donné à la voix au décroché : derniers messages de la conversation.
 CONTEXTE_MESSAGES = int(_texte("ATLAS_VOIX_CONTEXTE_MESSAGES", "30"))
 
-# Affichage : registre d'AtlasVoice, où la voix crée les tâches de l'agent navigateur (atlas/voix/affichage.py).
-AFFICHAGE_URL = os.environ.get("ATLAS_AFFICHAGE_URL", "")
-"""Adresse d'AtlasVoice (ex. http://127.0.0.1:8001). Vide : l'outil `afficher` répond qu'il est indisponible."""
-AFFICHAGE_JETON = os.environ.get("ATLAS_AFFICHAGE_JETON", "")
-"""JWT Supabase de l'utilisateur dont l'écran est piloté. Vide : « anonyme » (AtlasVoice sans SUPABASE_JWT_SECRET)."""
-
 # Adresse à laquelle le serveur MCP de la voix rappelle atlas.serveur (même machine, même conteneur).
 URL_INTERNE = _texte("ATLAS_URL_INTERNE", "http://127.0.0.1:8000")

@@ -22,7 +22,7 @@
     "placements": [
       {"noeud_id": "h_a", "groupe_id": "g1", "colonne": 0, "ligne": 0, "largeur": 1, "hauteur": 1, "fixe": false},
       {"noeud_id": "d_x", "groupe_id": "g1", "colonne": 0, "ligne": 1, "largeur": 1, "hauteur": 1, "fixe": false},
-      {"noeud_id": "h_b", "groupe_id": "g2", "colonne": 0, "ligne": 2, "largeur": 1, "hauteur": 1, "fixe": false},
+      {"noeud_id": "h_b", "groupe_id": "g2", "colonne": 1, "ligne": 2, "largeur": 1, "hauteur": 1, "fixe": false},
       {"noeud_id": "l_1", "groupe_id": "g2", "colonne": 1, "ligne": 0, "largeur": 1, "hauteur": 1, "fixe": false},
       {"noeud_id": "t_1", "groupe_id": null, "colonne": 3, "ligne": 0, "largeur": 1, "hauteur": 1, "fixe": false},
       {"noeud_id": "p_2", "groupe_id": "g3", "colonne": 6, "ligne": 0, "largeur": 1, "hauteur": 1, "fixe": false},

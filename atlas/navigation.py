@@ -15,11 +15,13 @@ from __future__ import annotations
 
 import re
 import unicodedata
+import uuid
 from collections.abc import Collection
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from typing import Literal
 
-from .vue import PREFIXE_FIGURE, TAILLE_FIGURE, EtatVue, est_figure
+from .vue import PREFIXE_FIGURE, TAILLE_FIGURE, ErreurVue, EtatVue, appliquer, est_figure
 
 LIBELLES_TYPE = {
     "hypothese": "Hypothèse",
@@ -98,8 +100,8 @@ class Reperes:
     """id de cadre → ses nœuds, sous-cadres compris (hors figures), triés."""
 
 
-def reperer(etat: EtatVue, admis: Collection[str] = ()) -> Reperes:
-    """Mêmes règles que `construireModele` (graphe-modele.ts). `admis` : ids des nœuds admis sans type."""
+def reperer(etat: EtatVue) -> Reperes:
+    """Mêmes règles que `construireModele` (graphe-modele.ts)."""
     noeuds = {i: n for i, n in etat.noeuds.items() if not est_figure(i)}
     figures = sorted(i for i in etat.noeuds if est_figure(i))
     places = {i: p for i, p in etat.placements.items() if i in etat.noeuds}
@@ -130,7 +132,7 @@ def reperer(etat: EtatVue, admis: Collection[str] = ()) -> Reperes:
         else:
             k += 1
             r.numeros[i] = str(k)
-        r.noeuds[i] = f"{libelle(n.type, i in admis)} {r.numeros[i]}"
+        r.noeuds[i] = f"{libelle(n.type, n.admis)} {r.numeros[i]}"
     for k, i in enumerate(sorted(figures, key=lambda i: (*case(i), i)), 1):
         r.figures[i.removeprefix(PREFIXE_FIGURE)] = f"Figure {k}"
 
@@ -190,6 +192,12 @@ def normaliser(texte: str) -> str:
 _NOMBRE_ROMAIN = re.compile(r"^\(?([ivxlcdm]+)\)?$")
 _ENTIER = re.compile(r"^\d+$")
 _MOTS_CADRE = ("cadre", "section", "paragraphe", "partie")
+_ARTICLES = ("le", "la", "l", "du", "de")
+_LIBELLES = {" ".join(normaliser(v).split()) for v in LIBELLES_TYPE.values()} | {
+    "fait admis",
+    "enonce",
+    "choix de modelisation",
+}
 
 
 def resoudre(etat: EtatVue, reperes: Reperes, reference: str) -> Cible:
@@ -226,8 +234,10 @@ def resoudre(etat: EtatVue, reperes: Reperes, reference: str) -> Cible:
         raise ErreurNavigation(f"Aucune {voulu} : il y a {len(reperes.figures)} figure(s).")
 
     # « Lemme 7 », « 7 », « Hypothèse (ii) », « hypothèse 2 », « (ii) ».
-    numero = reste[-1] if len(reste) == 1 else tete if not reste else None
-    hypothese = tete.startswith("hypothes") or tete.startswith("choix")
+    sans_article = mots[1:] if len(mots) > 1 and mots[0] in _ARTICLES else mots
+    prefixe = " ".join(sans_article[:-1])
+    numero = sans_article[-1] if sans_article and (not prefixe or prefixe in _LIBELLES) else None
+    hypothese = prefixe.startswith("hypothes") or prefixe.startswith("choix")
     if numero is not None:
         voulu: str | None = None
         if _ENTIER.match(numero):
@@ -238,7 +248,7 @@ def resoudre(etat: EtatVue, reperes: Reperes, reference: str) -> Cible:
             for i, n in reperes.numeros.items():
                 if n == voulu:
                     return Cible("noeud", i, decrire(etat, reperes, "noeud", i))
-            if reste or voulu.startswith("("):
+            if prefixe or voulu.startswith("("):
                 quoi = "hypothèse" if voulu.startswith("(") else "énoncé"
                 raise ErreurNavigation(f"Aucun(e) {quoi} numéroté(e) {voulu}.")
 
@@ -284,3 +294,206 @@ def lignee(etat: EtatVue, noeud: str, etendue: Etendue = "lignee") -> list[str]:
     if etendue in ("consequences", "lignee"):
         garder |= parcours(enfants)
     return sorted(garder)
+
+
+# ── Commandes d'écran (P3, protocoles/p3-lot-commandes.schema.json) ──────────
+
+STATUTS = ("etabli", "suspendu", "a_verifier", "invalide", "ouvert")
+COTES = ("droite", "gauche", "dessous", "dessus")
+PAS_MAX_DEPLACEMENT = 40
+FACTEUR_ZOOM_MAX = 100.0
+
+
+@dataclass
+class Selection:
+    """Ce que désignent des références, développé : nœuds (lignées, cadres) et figures, dans l'ordre."""
+
+    noeuds: list[str] = field(default_factory=list)
+    figures: list[str] = field(default_factory=list)
+    reperes: list[str] = field(default_factory=list)
+    """Ce qui a été compris, référence par référence (« Lemme 3 (Tension au point de prise) »)."""
+    principal: str | None = None
+    """Le premier nœud désigné directement : sélectionné, et sa fiche si on la demande."""
+
+
+def selectionner(
+    etat: EtatVue,
+    reperes: Reperes,
+    references: list[str],
+    etendue: Etendue = "seul",
+    statuts: Collection[str] = (),
+) -> Selection:
+    """Nœuds et figures que désignent `references` (un nœud avec sa lignée selon `etendue`, un cadre avec tous
+    ses nœuds, une figure), plus les nœuds dont le statut est dans `statuts`."""
+    if inconnus := [s for s in statuts if s not in STATUTS]:
+        raise ErreurNavigation(f"Statut inconnu : {', '.join(inconnus)} (attendu : {', '.join(STATUTS)}).")
+    sel = Selection()
+    vus: set[str] = set()
+
+    def ajouter(ids: Collection[str]) -> None:
+        for i in ids:
+            if i not in vus:
+                vus.add(i)
+                sel.noeuds.append(i)
+
+    for reference in references:
+        cible = resoudre(etat, reperes, reference)
+        sel.reperes.append(cible.repere)
+        if cible.genre == "noeud":
+            sel.principal = sel.principal or cible.id
+            ajouter(lignee(etat, cible.id, etendue))
+        elif cible.genre == "cadre":
+            if not reperes.membres[cible.id]:
+                raise ErreurNavigation(f"Le cadre {cible.repere} ne contient aucun nœud.")
+            ajouter(reperes.membres[cible.id])
+        elif cible.id not in sel.figures:
+            sel.figures.append(cible.id)
+    if statuts:
+        garder = [i for i in reperes.noeuds if etat.noeuds[i].statut in statuts]
+        sel.reperes.append(f"{len(garder)} nœud(s) {' ou '.join(statuts)}")
+        ajouter(garder)
+    return sel
+
+
+def commandes_montrer(sel: Selection, *, garder_seulement: bool = False, fiche: bool = False) -> list[dict]:
+    """Montrer une sélection : la sélectionner (un seul nœud) ou la surligner, l'isoler (les autres nœuds sont
+    estompés) si demandé, la cadrer, et ouvrir la fiche du nœud principal si demandé."""
+    if not sel.noeuds and not sel.figures:
+        raise ErreurNavigation("Rien à montrer.")
+    commandes: list[dict] = []
+    if garder_seulement:
+        commandes.append({"op": "filtres", "patch": {"noeuds": sel.noeuds}})
+    seul = len(sel.noeuds) == 1 and sel.principal is not None
+    commandes.append({"op": "surligner", "cibles": [] if seul else [{"noeud": i} for i in sel.noeuds]})
+    commandes.append({"op": "selectionner", "cible": {"noeud": sel.principal} if seul else None})
+    cibles = [{"noeud": i} for i in sel.noeuds] + [{"figure": f} for f in sel.figures]
+    commandes.append({"op": "cadrer", "cibles": cibles})
+    if fiche and sel.principal is not None:
+        commandes.append({"op": "fiche", "cible": {"noeud": sel.principal}})
+    return commandes
+
+
+def commandes_ensemble() -> list[dict]:
+    return [{"op": "cadrer", "cibles": "tout"}]
+
+
+def commandes_effacer() -> list[dict]:
+    """Revenir à l'écran neutre : ni filtre, ni surlignage, ni sélection, ni fiche (la caméra ne bouge pas)."""
+    return [
+        {"op": "effacer_filtres"},
+        {"op": "surligner", "cibles": []},
+        {"op": "selectionner", "cible": None},
+        {"op": "fiche", "cible": None},
+    ]
+
+
+def commandes_zoomer(facteur: float) -> list[dict]:
+    if not 0 < facteur <= FACTEUR_ZOOM_MAX:
+        raise ErreurNavigation("Facteur de zoom entre 0 et 100 : 1,5 rapproche, 0,6 éloigne.")
+    return [{"op": "zoomer", "facteur": facteur}]
+
+
+# Paliers de zoom affichés par la vue (ZOOMS de graphe.ts) et seuils des niveaux de détail (graphe-dessin.ts).
+ZOOMS = (
+    (0.04, "−15"), (0.06, "−14"), (0.08, "−13"), (0.1, "−12"), (0.125, "−11"), (0.15, "−10"), (0.175, "−9"),
+    (0.2, "−8"), (0.225, "−7"), (0.25, "−6"), (0.375, "−5"), (0.5, "−4"), (0.675, "−3"), (0.75, "−2"), (0.875, "−1"),
+    (1.0, "1:1"), (1.25, "+1"), (1.375, "+2"), (1.5, "+3"), (1.675, "+4"), (1.75, "+5"), (1.875, "+6"), (2.0, "+7"),
+)  # fmt: skip
+SEUIL_POINT = 0.175
+SEUIL_CONTENU = 0.6
+
+
+def palier(z: float) -> str:
+    """« −13 (des carrés, sans texte) » : le palier affiché le plus proche et ce qu'on lit à ce zoom."""
+    proche = min(ZOOMS, key=lambda p: abs(p[0] - z) / p[0])[1]
+    lisible = "des carrés, sans texte" if z < SEUIL_POINT else "les titres" if z < SEUIL_CONTENU else "les énoncés"
+    return f"{proche} ({lisible})"
+
+
+def lot(commandes: list[dict], ecran: str, origine: str = "voix") -> dict:
+    """Lot de commandes P3 pour l'écran `ecran`, exécuté tout ou rien par le pilote du front."""
+    return {
+        "version": 1,
+        "lot_id": str(uuid.uuid4()),
+        "ecran": ecran,
+        "origine": origine,
+        "emis_le": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+        "commandes": commandes,
+    }
+
+
+# ── Déplacements enregistrés (opérations `placer` de la vue) ────────────────
+
+
+def _element(etat: EtatVue, reperes: Reperes, reference: str) -> tuple[str, str]:
+    """(id dans la vue — « fig:<id> » pour une figure —, repère) d'un nœud ou d'une figure."""
+    cible = resoudre(etat, reperes, reference)
+    if cible.genre == "cadre":
+        raise ErreurNavigation(f"{cible.repere} est un cadre : seuls les nœuds et les figures se déplacent ici.")
+    return (PREFIXE_FIGURE + cible.id if cible.genre == "figure" else cible.id), cible.repere
+
+
+def cote_texte(cote: str) -> str:
+    return {"droite": "à droite de", "gauche": "à gauche de", "dessous": "sous", "dessus": "au-dessus de"}[cote]
+
+
+def operations_deplacement(etat: EtatVue, reperes: Reperes, demandes: list[dict]) -> tuple[list[dict], list[str]]:
+    """Opérations `placer` (vue.py) pour des déplacements demandés à la voix, validées ensemble sur `etat`.
+
+    Chaque demande : {"quoi", "colonne", "ligne"} (case absolue ; le nœud reste dans son cadre), ou {"quoi",
+    "a_cote_de", "cote": droite | gauche | dessous | dessus} (première case libre de ce côté, en s'éloignant ;
+    le nœud rejoint le cadre de son voisin). Renvoie aussi, pour chaque demande, ce qui a été fait."""
+    if not demandes:
+        raise ErreurNavigation("Aucun déplacement demandé.")
+    operations: list[dict] = []
+    faits: list[str] = []
+    for d in demandes:
+        if not isinstance(d, dict) or not isinstance(d.get("quoi"), str):
+            raise ErreurNavigation("Chaque déplacement désigne ce qu'il faut déplacer (« quoi »).")
+        id_, repere = _element(etat, reperes, d["quoi"])
+        if d.get("a_cote_de"):
+            voisin, repere_voisin = _element(etat, reperes, str(d["a_cote_de"]))
+            cote = d.get("cote") or "droite"
+            if cote not in COTES:
+                raise ErreurNavigation(f"Côté inconnu : {cote} (attendu : {', '.join(COTES)}).")
+            op = _a_cote(etat, operations, id_, voisin, cote)
+            if op is None:
+                raise ErreurNavigation(f"Pas de case libre {cote_texte(cote)} {repere_voisin}.")
+            faits.append(f"{repere} {cote_texte(cote)} {repere_voisin}")
+        else:
+            colonne, ligne = d.get("colonne"), d.get("ligne")
+            if not (isinstance(colonne, int) and isinstance(ligne, int) and colonne >= 0 and ligne >= 0):
+                raise ErreurNavigation("Donne une case (colonne et ligne, entiers ≥ 0) ou un voisin (a_cote_de).")
+            op = {"op": "placer", "noeud": id_, "colonne": colonne, "ligne": ligne}
+            faits.append(f"{repere} en colonne {colonne}, ligne {ligne}")
+        operations.append(op)
+    try:
+        appliquer(etat, operations)
+    except ErreurVue as e:
+        raise ErreurNavigation(f"Déplacement refusé : {e}") from None
+    return operations, faits
+
+
+def _a_cote(etat: EtatVue, avant: list[dict], id_: str, voisin: str, cote: str) -> dict | None:
+    """Première case libre à côté du voisin, en s'éloignant de lui ; None s'il n'y en a pas."""
+    p = etat.placements.get(voisin)
+    if p is None:
+        raise ErreurNavigation("Le voisin n'est pas encore placé dans la vue : donne une case.")
+    moi = etat.placements.get(id_)
+    largeur, hauteur = (moi.largeur, moi.hauteur) if moi else (TAILLE_FIGURE if est_figure(id_) else (1, 1))
+    dc, dl, c, lg = {
+        "droite": (1, 0, p.colonne + p.largeur, p.ligne),
+        "gauche": (-1, 0, p.colonne - largeur, p.ligne),
+        "dessous": (0, 1, p.colonne, p.ligne + p.hauteur),
+        "dessus": (0, -1, p.colonne, p.ligne - hauteur),
+    }[cote]
+    for _ in range(PAS_MAX_DEPLACEMENT):
+        if c < 0 or lg < 0:
+            return None
+        op = {"op": "placer", "noeud": id_, "colonne": c, "ligne": lg, "groupe": p.groupe_id or ""}
+        try:
+            appliquer(etat, [*avant, op])
+            return op
+        except ErreurVue:
+            c, lg = c + dc, lg + dl
+    return None

@@ -22,6 +22,7 @@ import { echapper, rendre } from './rendu'
 import { SelecteurModele } from './reglages'
 import { PanneauSessions } from './sessions'
 import { Pastille } from './pastille'
+import type { Pilote } from './pilotage/pilote'
 import { Appel, optionsVoix, VOIX_GRADIUM, type MessageVoix } from './voix'
 
 const INTERVALLE_SUIVI_MS = 700
@@ -144,6 +145,9 @@ export class PanneauConversation {
   private boutonOptions: HTMLButtonElement
   private appel: Appel
   private pastille: Pastille
+  /** Écran du graphe, piloté par Atlas voix pendant un appel (main.ts le branche). */
+  private ecran: Pilote | null = null
+  private avantCommandes: () => Promise<void> = async () => {}
   /** La saisie montre ce que Camille est en train de dire (et non un texte tapé). */
   private dictee = false
   /** Camille tape pendant l'appel : la dictée n'écrase plus la saisie. */
@@ -259,6 +263,8 @@ export class PanneauConversation {
       },
       surInfo: (texte, erreur) => this.ajouterVoix(`<div class="msg systeme${erreur ? ' erreur' : ''}">${echapper(texte)}</div>`),
       reglagesOrchestrateur: () => this.selecteur.reglages,
+      ecran: () => this.ecran,
+      avantCommandes: () => this.avantCommandes(),
     })
     this.micro.addEventListener('click', () => void this.appeler())
     this.stop.addEventListener('click', () => this.appel.raccrocher())
@@ -361,6 +367,12 @@ export class PanneauConversation {
   }
 
   /** Range ou ressort la barre des sessions (poignée de redimensionnement). */
+  /** Écran du graphe que la voix pilote pendant un appel ; `avant` le rend visible avant chaque lot. */
+  brancherEcran(pilote: Pilote, avant: () => Promise<void>) {
+    this.ecran = pilote
+    this.avantCommandes = avant
+  }
+
   replierSessions(replie: boolean) {
     this.sessions.replier(replie)
   }

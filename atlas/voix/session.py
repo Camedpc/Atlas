@@ -1,10 +1,11 @@
 """Un appel vocal avec Atlas voix, relié au navigateur par WebSocket, dans une conversation d'Atlas.
 
 Navigateur → serveur : trames binaires = micro en PCM 24 kHz 16 bits mono (80 ms) ; messages JSON `texte`,
-`interrompre`, `consignes`, `reglages`, `lecture` (avancement de la lecture audio).
+`interrompre`, `consignes`, `reglages`, `lecture` (avancement de la lecture audio), `ecran` (état de l'écran du
+graphe, P4) et `compte_rendu` (P3).
 Serveur → navigateur : trames binaires = 4 octets de génération + PCM 48 kHz 16 bits mono ; messages JSON
 `etat`, `partiel`, `utilisateur`, `agent_delta`, `agent_fin`, `outil`, `couper`, `taches`, `mesure`, `info`,
-`erreur`.
+`erreur`, `commandes` (lot de commandes pour l'écran du graphe, P3 : voir ecran.py).
 
 Tours de parole : le VAD sémantique de Gradium dit quand Camille a fini (on vide le STT et le texte part à
 Codex) et quand Camille parle pendant que la voix parle (on la coupe, et le tour Codex s'il écrit encore).
@@ -37,9 +38,9 @@ from ..orchestrateur.gestionnaire import Reglages, gestionnaire, titre_depuis
 from ..orchestrateur.suivi_agents import Agent
 from ..orchestrateur.traduction import traduire
 from . import config
-from .affichage import Affichages, client_par_defaut
 from .cerveau import Cerveau, Tache, Taches
 from .contexte import VOIX, annonce, contexte_decroche, pont
+from .ecran import Ecran
 from .gradium import Transcripteur
 from .parleur import Parleur, Prechauffe
 from .texte import est_echo
@@ -70,7 +71,7 @@ class Session:
         self.conversation = conversation
         self.cerveau = Cerveau(conversation.id, self.id, dossier, projet_id)
         self.taches = Taches(self.cerveau, self._tache_changee)
-        self.affichages = Affichages(self.annoncer, client_par_defaut())
+        self.ecran = Ecran(self.envoyer, projet_id or "defaut")
         self.prechauffe = Prechauffe()
         self.stt: Transcripteur | None = None
         self._attente_stt = bytearray()
@@ -226,7 +227,7 @@ class Session:
     async def fermer(self) -> None:
         for tache in self._fond:
             tache.cancel()
-        self.affichages.fermer()
+        self.ecran.fermer()
         if self.parleur is not None:
             await self.parleur.arreter()
         if self.tour is not None:
@@ -304,6 +305,10 @@ class Session:
                 }
             case "reglages":
                 await self._reglages(message)
+            case "ecran":
+                self.ecran.recevoir_etat(message.get("etat"))
+            case "compte_rendu":
+                self.ecran.recevoir_compte_rendu(message.get("compte_rendu"))
             case "auth":
                 pass  # déjà vérifié à l'ouverture (ou pas de jeton sur ce serveur)
 
@@ -421,7 +426,6 @@ class Session:
             await self.envoyer({"type": "info", "message": f"Écho ignoré : « {texte} »"})
             return
         await self.envoyer({"type": "utilisateur", "texte": texte, "source": source})
-        self.affichages.derniere_demande = texte
         asyncio.create_task(self.enregistrer("utilisateur", texte, {"source": source}))
         if self.tour is not None and not self.tour.done():
             if self.cerveau.outil_actif and await self.cerveau.orienter(f"(Camille ajoute : « {texte} »)"):
@@ -572,10 +576,6 @@ class Session:
                 f"[Système] Tâche #{tache.id} « {tache.titre} » {etat}. Réponse du sous-agent :\n"
                 f"{tache.resultat[:3000]}\n\nAnnonce-le à Camille en une ou deux phrases."
             )
-
-    def annoncer(self, texte: str) -> None:
-        """Message annoncé au prochain blanc (affichage : question de l'agent navigateur, résultat, échec)."""
-        self.annonces.append(texte)
 
     async def _boucle_annonces(self) -> None:
         """Annonce ce qui arrive (orchestrateur, tâches) dès que la conversation laisse un blanc."""

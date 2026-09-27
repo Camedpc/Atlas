@@ -10,9 +10,9 @@ from atlas.modeles import Conversation, Execution, Message
 from atlas.orchestrateur import agent, pipeline
 from atlas.orchestrateur.gestionnaire import Gestionnaire
 from atlas.orchestrateur.suivi_agents import RACINE, SuiviAgents
-from atlas.voix.affichage import Affichages, ErreurAffichage, annonce_affichage, corps_tache
 from atlas.voix.appels import Appels, DernierAppel, fusionner
 from atlas.voix.contexte import VOIX, annonce, contexte_decroche, pont
+from atlas.voix.ecran import Ecran
 from atlas.voix.texte import Decoupeur, est_echo, nettoyer
 
 T0 = datetime(2026, 9, 27, 14, 0)
@@ -236,103 +236,151 @@ def test_decoupe_et_nettoyage_pour_la_synthese():
     assert est_echo("trois commits récents", texte) and not est_echo("attends arrête", texte)
 
 
-# ── Affichage : tâches de l'agent navigateur d'AtlasVoice ──
+# ── Écran du graphe piloté par la voix (lots P3 par la WebSocket de l'appel) ──
 
 
-def test_corps_de_la_tache_navigateur():
-    corps = corps_tache(
-        "montrer la lignée du lemme 3",
-        "euh montre-moi la lignée du lemme 3 et lance la vérif",
-        "montre-moi la lignée du lemme 3",
-        "lignée du lemme 3",
-    )
-    assert corps == {
-        "type_agent": "navigateur",
-        "titre": "lignée du lemme 3",
-        "demande_brute": "euh montre-moi la lignée du lemme 3 et lance la vérif",
-        "reformulation": "montrer la lignée du lemme 3",
-        "canal": "vocal",
-        "extrait": "montre-moi la lignée du lemme 3",
+def _vue_ecran():
+    from atlas.vue import EtatVue, Groupe, NoeudVue, Placement
+
+    noeuds = {
+        "h_a": NoeudVue("h_a", "Régime stationnaire", "hypothese", "ouvert"),
+        "l_1": NoeudVue("l_1", "Tension au point de prise", "lemme", "ouvert", (("h_a", "principale"),)),
+        "t_1": NoeudVue("t_1", "Loi de la fontaine", "theoreme", "ouvert", (("l_1", "principale"),)),
     }
-    # Sans phrase transcrite (message tapé par l'outil seul) : la demande sert de demande brute, pas d'extrait vide.
-    assert corps_tache("zoome", titre="  ") == {
-        "type_agent": "navigateur",
-        "titre": "zoome",
-        "demande_brute": "zoome",
-        "reformulation": "zoome",
-        "canal": "vocal",
+    placements = {
+        "h_a": Placement("h_a", 0, 0, "g1"),
+        "l_1": Placement("l_1", 1, 0, "g1"),
+        "t_1": Placement("t_1", 3, 0),
     }
+    return EtatVue(noeuds=noeuds, groupes={"g1": Groupe("g1", "Départ")}, placements=placements)
 
 
-def test_annonces_de_l_affichage():
-    assert "C'est affiché." in annonce_affichage(
-        {"statut": "terminee", "titre": "t", "resultat_oral": "C'est affiché."}
-    )
-    question = annonce_affichage({"id": 7, "statut": "besoin_precision", "question": "Quel lemme ?"})
-    assert "Quel lemme ?" in question and "repondre_affichage" in question and "id 7" in question
-    assert "pas d'écran" in annonce_affichage({"statut": "echouee", "titre": "t", "erreur": "pas d'écran"})
-    for statut in ("en_attente", "en_cours", "annulee"):
-        assert annonce_affichage({"statut": statut}) is None
+class _Navigateur:
+    """Navigateur simulé : répond à chaque lot par un compte rendu (refusé si `refus`)."""
+
+    def __init__(self, refus: str | None = None, muet: bool = False):
+        self.lots: list[dict] = []
+        self.refus = refus
+        self.muet = muet
+        self.ecran: Ecran | None = None
+
+    async def envoyer(self, message: dict) -> None:
+        assert message["type"] == "commandes"
+        lot = message["lot"]
+        self.lots.append(lot)
+        if self.muet:
+            return
+        erreur = {"code": "etat_invalide", "message": self.refus} if self.refus else None
+        resultats = [{"index": 0, "ok": False, "erreur": erreur}] if erreur else []
+        cr = {"version": 1, "lot_id": lot["lot_id"], "ok": erreur is None, "resultats": resultats}
+        asyncio.get_running_loop().call_soon(self.ecran.recevoir_compte_rendu, cr)
 
 
-class _FauxAtlasVoice:
-    """Registre d'AtlasVoice simulé : la tâche suit les états donnés, un par lecture."""
+def _ecran(monkeypatch, navigateur: _Navigateur, projet: str = "p1") -> Ecran:
+    from atlas import lecture
 
-    def __init__(self, etats):
-        self.etats = list(etats)
-        self.crees: list[dict] = []
-        self.reponses: list[tuple[int, str]] = []
-
-    async def creer(self, corps):
-        self.crees.append(corps)
-        return {"id": 1, "statut": "en_attente", **corps}
-
-    async def lire(self, tache_id):
-        return self.etats.pop(0) if len(self.etats) > 1 else self.etats[0]
-
-    async def repondre(self, tache_id, reponse):
-        self.reponses.append((tache_id, reponse))
-        return {"id": tache_id, "statut": "en_cours"}
+    monkeypatch.setattr(lecture, "charger_etat_vue", lambda projet_id: _vue_ecran())
+    ecran = Ecran(navigateur.envoyer, "p1")
+    navigateur.ecran = ecran
+    ecran.recevoir_etat({"ecran": "ecran_1a2b3c4d", "projet": projet, "camera": {"distance": 2.0}})
+    return ecran
 
 
-def test_affichage_suivi_question_puis_resultat():
+def test_ecran_montrer_resout_et_attend_le_compte_rendu(monkeypatch):
     async def scenario():
-        base = {"id": 1, "titre": "lignée"}
-        faux = _FauxAtlasVoice(
-            [
-                {**base, "statut": "en_attente"},
-                {**base, "statut": "en_cours"},
-                {**base, "statut": "besoin_precision", "question": "Lequel des deux lemmes ?"},
-            ]
-        )
-        annonces: list[str] = []
-        affichages = Affichages(annonces.append, faux, intervalle=0)
-        affichages.derniere_demande = "montre la lignée du lemme"
-        assert (await affichages.lancer("montrer la lignée du lemme"))["id"] == 1
-        assert faux.crees[0]["demande_brute"] == "montre la lignée du lemme"
-        await asyncio.gather(*affichages._suivis.values())
-        assert len(annonces) == 1 and "Lequel des deux lemmes ?" in annonces[0]  # le suivi s'arrête sur la question
-
-        faux.etats = [{**base, "statut": "en_cours"}, {**base, "statut": "terminee", "resultat_oral": "C'est affiché."}]
-        assert (await affichages.repondre(1, "le premier"))["transmis"]
-        await asyncio.gather(*affichages._suivis.values())
-        assert faux.reponses == [(1, "le premier")]
-        assert len(annonces) == 2 and "C'est affiché." in annonces[1]
-        assert affichages._suivis == {}
+        nav = _Navigateur()
+        ecran = _ecran(monkeypatch, nav)
+        r = await ecran.montrer(["Lemme 1"], etendue="premisses")
+        assert r == {"ok": True, "compris": ["Lemme 1 (Tension au point de prise)"], "noeuds": 2}
+        lot = nav.lots[0]
+        assert lot["ecran"] == "ecran_1a2b3c4d" and lot["origine"] == "voix"
+        assert {"op": "cadrer", "cibles": [{"noeud": "h_a"}, {"noeud": "l_1"}]} in lot["commandes"]
+        assert ecran._attentes == {}
 
     asyncio.run(scenario())
 
 
-def test_affichage_sans_atlasvoice():
+def test_ecran_refus_ambiguite_et_silence(monkeypatch):
     async def scenario():
-        affichages = Affichages(lambda _: None, None)
-        assert "ATLAS_AFFICHAGE_URL" in (await affichages.lancer("zoome"))["erreur"]
+        nav = _Navigateur(refus="Non pris en charge")
+        ecran = _ecran(monkeypatch, nav)
+        assert await ecran.zoomer(1.5) == {"ok": False, "erreur": "Non pris en charge"}
+        r = await ecran.montrer(["de"])
+        assert r["ok"] is False and len(r["candidats"]) == 3  # deux nœuds et le cadre « Départ »
+        assert (await ecran.montrer(["Lemme 9"]))["ok"] is False
+        assert len(nav.lots) == 1  # une référence introuvable n'envoie rien à l'écran
 
-        class Injoignable(_FauxAtlasVoice):
-            async def creer(self, corps):
-                raise ErreurAffichage("AtlasVoice injoignable")
+        monkeypatch.setattr("atlas.voix.ecran.DELAI_COMPTE_RENDU_S", 0.01)
+        muet = _Navigateur(muet=True)
+        assert (await _ecran(monkeypatch, muet).ensemble()) == {"ok": False, "erreur": "L'écran n'a pas répondu."}
 
-        affichages = Affichages(lambda _: None, Injoignable([]))
-        assert (await affichages.lancer("zoome")) == {"erreur": "AtlasVoice injoignable"}
+    asyncio.run(scenario())
+
+
+def test_ecran_absent_ou_autre_espace(monkeypatch):
+    async def scenario():
+        nav = _Navigateur()
+        assert "autre espace" in (await _ecran(monkeypatch, nav, projet="p2").effacer())["erreur"]
+        sans = Ecran(nav.envoyer, "p1")
+        assert "pas annoncé" in (await sans.montrer(["Lemme 1"]))["erreur"]
+        assert nav.lots == []
+
+    asyncio.run(scenario())
+
+
+def test_ecran_deplacer_enregistre_puis_montre(monkeypatch):
+    from atlas import ecriture
+
+    ecrit: list[dict] = []
+    monkeypatch.setattr(ecriture, "organiser_vue", lambda **kw: ecrit.append(kw) or {})
+
+    async def scenario():
+        nav = _Navigateur()
+        ecran = _ecran(monkeypatch, nav)
+        r = await ecran.deplacer([{"quoi": "Théorème 2", "a_cote_de": "Lemme 1", "cote": "dessous"}])
+        assert r == {
+            "ok": True,
+            "enregistre": ["Théorème 2 (Loi de la fontaine) sous Lemme 1 (Tension au point de prise)"],
+            "affiche": True,
+        }
+        assert ecrit == [
+            {
+                "projet_id": "p1",
+                "operations": [{"op": "placer", "noeud": "t_1", "colonne": 1, "ligne": 1, "groupe": "g1"}],
+                "auteur": "voix",
+            }
+        ]
+        assert nav.lots[0]["commandes"][0] == {"op": "recharger_donnees"}
+        # Refusé : rien n'est écrit.
+        assert (await ecran.deplacer([{"quoi": "Théorème 2", "colonne": 0, "ligne": 0}]))["ok"] is False
+        assert len(ecrit) == 1
+
+    asyncio.run(scenario())
+
+
+def test_ecran_lire(monkeypatch):
+    async def scenario():
+        ecran = _ecran(monkeypatch, _Navigateur())
+        ecran.recevoir_etat(
+            {
+                "ecran": "ecran_1a2b3c4d",
+                "projet": "p1",
+                "camera": {"distance": 2.0},
+                "selection": {"noeud": "l_1"},
+                "fiche": None,
+                "surlignes": [],
+                "filtres": {"noeuds": [], "statuts": [], "texte": ""},
+                "visibles": [{"noeud": "l_1"}, {"noeud": "h_a"}],
+            }
+        )
+        assert await ecran.lire() == {
+            "ok": True,
+            "zoom": "−4 (les titres)",
+            "selection": "Lemme 1",
+            "fiche": None,
+            "surlignes": 0,
+            "filtre_actif": False,
+            "au_centre": ["Lemme 1", "Hypothèse (i)"],
+        }
 
     asyncio.run(scenario())

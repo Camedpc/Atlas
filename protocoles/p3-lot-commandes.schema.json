@@ -8,7 +8,7 @@
     "version": { "$ref": "commun.schema.json#/$defs/Version" },
     "lot_id": { "$ref": "commun.schema.json#/$defs/Uuid" },
     "ecran": { "$ref": "commun.schema.json#/$defs/IdEcran" },
-    "origine": { "enum": ["navigateur", "interface", "test"] },
+    "origine": { "enum": ["navigateur", "voix", "interface", "test"] },
     "tache_id": { "type": "integer", "minimum": 1 },
     "atomique": { "type": "boolean", "default": true, "description": "Tout ou rien : le lot est validé entièrement avant la première action." },
     "emis_le": { "$ref": "commun.schema.json#/$defs/DateHeure" },
