@@ -151,6 +151,53 @@ export interface Vue {
   marques: [string, string][]
   /** Figures (graphiques et images) rattachées aux nœuds ; absent d'un serveur plus ancien. */
   figures?: FigureVue[]
+  /** Fichiers et dossiers du projet mis dans le graphe (« doc:<id> ») ; absent d'un serveur plus ancien. */
+  documents?: DocumentVue[]
+  /** Liens nommés entre un document et un nœud, une figure ou un autre document. */
+  liens_documents?: LienDocumentVue[]
+}
+
+/** Aperçu d'un document, calculé par le serveur à l'écriture (atlas/documents.py). */
+export interface ApercuDocument {
+  nature?: 'script' | 'donnees' | 'document' | 'image' | 'fichier' | 'dossier'
+  taille?: number
+  lignes?: number
+  /** Premières lignes utiles (script, texte). */
+  extrait?: string[]
+  /** CSV : en-tête. */
+  colonnes?: string[]
+  /** JSON : clés du premier niveau. */
+  cles?: string[]
+  pages?: number
+  titre_pdf?: string
+  /** Dossier : premier niveau (« resultats/ » pour un sous-dossier), le reste compté dans `autres`. */
+  entrees?: string[]
+  autres?: number
+  fichiers?: number
+  dossiers?: number
+}
+
+/** Un fichier ou un dossier du projet, avec sa case dans la grille (« doc:<id> »). */
+export interface DocumentVue {
+  id: string
+  /** Relatif au dossier du projet : « scripts_projet/double-pendule/simulation.py ». */
+  chemin: string
+  genre: 'fichier' | 'dossier'
+  titre: string
+  description: string | null
+  apercu: ApercuDocument
+  /** Vu sur le disque à la dernière vérification. */
+  present: boolean
+  modifie_le: string
+}
+
+export type RelationDocument = 'source' | 'implemente' | 'produit' | 'ecrit_dans' | 'entree'
+
+export interface LienDocumentVue {
+  /** Id de nœud, « fig:<id> » ou « doc:<id> ». */
+  de: string
+  vers: string
+  relation: RelationDocument
 }
 
 /** Axe d'un tracé (atlas/figures.py). */
@@ -200,6 +247,8 @@ export interface FigureVue {
   image_largeur: number | null
   image_hauteur: number | null
   source: string | null
+  /** Fichier d'origine de l'image, relatif au dossier du projet. */
+  fichier?: string | null
   modifie_le: string
 }
 

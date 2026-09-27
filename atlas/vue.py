@@ -11,6 +11,10 @@ Règles de la grille :
 
 Une figure occupe ses propres cases : elle entre dans la vue comme un pseudo-nœud `fig:<id>`, de type « figure »,
 dont la seule prémisse est le nœud qu'elle illustre ; elle se place donc par défaut juste à droite de lui.
+
+Un document (fichier ou dossier du projet) aussi : pseudo-nœud `doc:<id>`, d'une case, de type « document », dont les
+prémisses (auxiliaires) sont les bouts de départ de ses liens entrants (le nœud qu'un script implémente…) ; un
+document sans lien entrant (un article source) se place au bord gauche de son cadre.
 """
 
 from __future__ import annotations
@@ -26,6 +30,7 @@ GENRES = ("sous_probleme", "etape", "piste_abandonnee", "libre")
 ROLES = ("principale", "auxiliaire", "technique", "contexte")
 TAILLE_MAX = 8
 PREFIXE_FIGURE = "fig:"
+PREFIXE_DOCUMENT = "doc:"
 TAILLE_FIGURE = (2, 2)
 FORMATS_FIGURE = ((1, 1), (2, 1), (1, 2), (2, 2))
 """Formats d'une figure (largeur × hauteur, en cases) : une case, deux côte à côte, deux l'une sur l'autre, ou 2 × 2."""
@@ -51,6 +56,8 @@ class NoeudVue:
     """(id, rôle) de toutes les démonstrations, sans doublon ; le rôle le plus fort l'emporte."""
     admis: bool = False
     """Fait admis (sans démonstration) : « Fait admis 3 » dans la numérotation d'un nœud sans type."""
+    detail: str | None = None
+    """Document : son chemin (montré dans le rendu texte)."""
 
 
 @dataclass(frozen=True)
@@ -125,6 +132,15 @@ def verifier_format(largeur: int, hauteur: int) -> None:
 
 def est_figure(noeud_id: str) -> bool:
     return noeud_id.startswith(PREFIXE_FIGURE)
+
+
+def est_document(noeud_id: str) -> bool:
+    return noeud_id.startswith(PREFIXE_DOCUMENT)
+
+
+def est_pseudo(noeud_id: str) -> bool:
+    """Figure ou document : a sa case dans la vue, mais n'est pas un nœud du raisonnement."""
+    return est_figure(noeud_id) or est_document(noeud_id)
 
 
 def rect_de(p: Placement) -> Rect:
@@ -356,10 +372,11 @@ def reorganiser(etat: EtatVue, groupe_id: str | None = None) -> EtatVue:
             ancien = etat.placements[nid]
             nouvel.placements[nid] = placer_auto(nouvel, nid, ancien.groupe_id, ancien.largeur, ancien.hauteur)
     for nid in ordre_logique(etat, non_places):
-        if est_figure(nid):
-            # Près de son nœud, dans son cadre s'il y a la place.
+        if est_figure(nid) or est_document(nid):
+            # Près de son nœud (ou de ce qui pointe vers le document), dans son cadre s'il y a la place.
             noeud = nouvel.placements.get(etat.noeuds[nid].premisses[0][0]) if etat.noeuds[nid].premisses else None
-            nouvel.placements[nid] = placer_figure(nouvel, nid, noeud.groupe_id if noeud else None, *TAILLE_FIGURE)
+            taille = TAILLE_FIGURE if est_figure(nid) else (1, 1)
+            nouvel.placements[nid] = placer_figure(nouvel, nid, noeud.groupe_id if noeud else None, *taille)
         else:
             nouvel.placements[nid] = placer_auto(nouvel, nid, None)
     return nouvel
@@ -678,6 +695,8 @@ def _appliquer_une(etat: EtatVue, op: dict[str, Any], renommages: dict[str, str]
         hauteur = _taille(op.get("hauteur", defaut[1]), "Hauteur")
         if est_figure(nid):
             verifier_format(largeur, hauteur)
+        if est_document(nid) and (largeur, hauteur) != (1, 1):
+            raise ErreurVue("Un document occupe une seule case (1 × 1).")
         if "colonne" in op or "ligne" in op:
             if "colonne" not in op or "ligne" not in op:
                 raise ErreurVue("Donne colonne et ligne ensemble (ou aucune des deux pour un placement automatique).")
@@ -727,8 +746,8 @@ def _appliquer_une(etat: EtatVue, op: dict[str, Any], renommages: dict[str, str]
         etat.etiquettes[eid] = Etiquette(eid, nom, _couleur(op.get("couleur")))
     elif genre in ("etiqueter", "retirer_etiquette"):
         nid = _noeud_existant(etat, op.get("noeud"))
-        if est_figure(nid):
-            raise ErreurVue("Les étiquettes se posent sur les nœuds, pas sur les figures.")
+        if est_figure(nid) or est_document(nid):
+            raise ErreurVue("Les étiquettes se posent sur les nœuds, pas sur les figures ni les documents.")
         eid = op.get("etiquette")
         if eid not in etat.etiquettes:
             raise ErreurVue(f"Étiquette inexistante : {eid}. Crée-la avec creer_etiquette.")
@@ -762,7 +781,9 @@ LEGENDE = (
     "[c,l] = case du nœud (+LxH s'il est plus grand) ; statut ✓ établi, ? à vérifier, ✗ invalide, ⊘ suspendu, "
     "○ ouvert ; ⟵ prémisses (a principale, +a auxiliaire, #a technique, ~a contexte) ; #étiquette ; "
     "« fixe » = placé à la main. Un cadre = ▸ id « nom » (genre) et son rectangle de cases. "
-    "fig:<id> = une figure (graphique ou image) qui illustre le nœud indiqué ; lire_figure pour la voir."
+    "fig:<id> = une figure (graphique ou image) qui illustre le nœud indiqué ; lire_figure pour la voir. "
+    "doc:<id> = un document (fichier ou dossier du projet, chemin entre parenthèses) ; ⟵ ce qui pointe vers lui ; "
+    "lister_documents pour ses liens."
 )
 
 
@@ -777,6 +798,9 @@ def _ligne_noeud(etat: EtatVue, p: Placement, retrait: str) -> str:
     texte = " · ".join(morceaux) + f" — {n.nom}"
     if est_figure(n.id):
         texte += f" (illustre {n.premisses[0][0]})" if n.premisses else ""
+    elif est_document(n.id):
+        texte += f" ({n.detail})" if n.detail else ""
+        texte += " ⟵ " + " ".join(i for i, _ in n.premisses) if n.premisses else ""
     elif n.premisses:
         texte += " ⟵ " + " ".join(PREFIXES_ROLE.get(r, "") + i for i, r in n.premisses)
     marques = sorted(e for nid, e in etat.marques if nid == n.id)

@@ -6,9 +6,10 @@ Les refus métier lèvent `ErreurGraphe`, dont le message est renvoyé tel quel 
 
 import re
 from dataclasses import replace
+from pathlib import Path
 from typing import Any
 
-from . import figures, lecture, vue
+from . import documents, figures, lecture, vue
 from .client import supabase
 from .modeles import Action, TypeNoeud, Validite
 
@@ -230,21 +231,19 @@ def _ligne_placement(projet_id: str, p: vue.Placement) -> dict:
 
 
 def _ecrire_placements(projet_id: str, placements: list[vue.Placement]) -> None:
-    lignes = [_ligne_placement(projet_id, p) for p in placements if not vue.est_figure(p.noeud_id)]
+    lignes = [_ligne_placement(projet_id, p) for p in placements if not vue.est_pseudo(p.noeud_id)]
     if lignes:
         supabase().table("placements").upsert(lignes, on_conflict="projet_id,noeud_id").execute()
-    # La case d'une figure est rangée dans sa propre ligne de `figures`.
+    # La case d'une figure ou d'un document est rangée dans sa propre ligne de `figures` ou `documents`.
     for p in placements:
+        if not vue.est_pseudo(p.noeud_id):
+            continue
+        case = {k: v for k, v in _ligne_placement(projet_id, p).items() if k not in ("projet_id", "noeud_id")}
         if vue.est_figure(p.noeud_id):
-            case = {k: v for k, v in _ligne_placement(projet_id, p).items() if k not in ("projet_id", "noeud_id")}
-            (
-                supabase()
-                .table("figures")
-                .update(case)
-                .eq("projet_id", projet_id)
-                .eq("id", p.noeud_id.removeprefix(vue.PREFIXE_FIGURE))
-                .execute()
-            )
+            table, id_ = "figures", p.noeud_id.removeprefix(vue.PREFIXE_FIGURE)
+        else:
+            table, id_ = "documents", p.noeud_id.removeprefix(vue.PREFIXE_DOCUMENT)
+        supabase().table(table).update(case).eq("projet_id", projet_id).eq("id", id_).execute()
 
 
 def _ecrire_groupes(projet_id: str, etat: vue.EtatVue, groupes: list[vue.Groupe]) -> None:
@@ -310,6 +309,9 @@ def organiser_vue(*, projet_id: str, operations: list[dict[str, Any]], auteur: s
         if vue.est_figure(nid):
             fid = nid.removeprefix(vue.PREFIXE_FIGURE)
             base.table("figures").update({"titre": nom}).eq("projet_id", projet_id).eq("id", fid).execute()
+        elif vue.est_document(nid):
+            did = nid.removeprefix(vue.PREFIXE_DOCUMENT)
+            base.table("documents").update({"titre": nom}).eq("projet_id", projet_id).eq("id", did).execute()
         else:
             base.table("noeuds").update({"nom": nom}).eq("projet_id", projet_id).eq("id", nid).execute()
     for nid, eid in diff["marques_ajoutees"]:
@@ -346,6 +348,7 @@ def creer_figure(
     trace: dict | None = None,
     image: bytes | None = None,
     source: str | None = None,
+    fichier: str | None = None,
     groupe: str | None = None,
     largeur: int | None = None,
     hauteur: int | None = None,
@@ -353,7 +356,8 @@ def creer_figure(
     remplacer: bool = False,
 ) -> dict:
     """Crée (ou remplace) une figure qui illustre `noeud_id`, puis la place dans la vue : dans `groupe` s'il est
-    donné, sinon dans le cadre de son nœud, juste à droite de lui. Remplacer garde sa case et son cadre."""
+    donné, sinon dans le cadre de son nœud, juste à droite de lui. Remplacer garde sa case et son cadre.
+    `fichier` : chemin de l'image d'origine, relatif au dossier du projet (suivi par deplacer_document)."""
     verifier_id(id)
     if not titre.strip():
         raise ErreurGraphe("Une figure a besoin d'un titre.")
@@ -387,6 +391,7 @@ def creer_figure(
         "legende": (legende or "").strip() or None,
         "trace": trace,
         "source": (source or "").strip() or None,
+        "fichier": fichier,
         "conversation_id": conversation_id,
         "image_chemin": None,
         "image_type": None,
@@ -424,6 +429,206 @@ def creer_figure(
             return ligne  # la vue la montrera « non placée » ; une réorganisation la rattrapera
         _ecrire_placements(projet_id, [place])
     return ligne
+
+# ── Documents ────────────────────────────────────────────────────────────────
+
+
+def _bouts_inexistants(projet_id: str, bouts: list[str]) -> list[str]:
+    """Parmi des bouts de liens (id de nœud, fig:<id>, doc:<id>), ceux qui n'existent pas dans le projet."""
+    noeuds = [b for b in bouts if not vue.est_pseudo(b)]
+    trouves = _existants(projet_id, noeuds)
+    manquants = [b for b in noeuds if b not in trouves]
+    for b in bouts:
+        if vue.est_figure(b) and lecture.lire_figure(projet_id, b.removeprefix(vue.PREFIXE_FIGURE)) is None:
+            manquants.append(b)
+        elif vue.est_document(b) and lecture.lire_document(projet_id, b.removeprefix(vue.PREFIXE_DOCUMENT)) is None:
+            manquants.append(b)
+    return manquants
+
+
+def rafraichir_documents(projet_id: str, racine: Path) -> list[str]:
+    """Relit sur le disque chaque document du projet (présence, aperçu) et écrit ceux qui ont changé. Renvoie les
+    ids des documents introuvables."""
+    absents: list[str] = []
+    for d in lecture.lister_documents(projet_id):
+        try:
+            examen = documents.examiner(racine, d["chemin"])
+        except documents.ErreurDocument:
+            examen = None
+        if examen is None:
+            absents.append(d["id"])
+            champs: dict[str, Any] = {"present": False}
+        else:
+            champs = {"present": True, "genre": examen[0], "apercu": examen[1]}
+        if any(d.get(k) != v for k, v in champs.items()):
+            supabase().table("documents").update(champs).eq("projet_id", projet_id).eq("id", d["id"]).execute()
+    return absents
+
+
+def poser_document(
+    *,
+    projet_id: str,
+    racine: Path,
+    chemin: str,
+    id: str,
+    titre: str,
+    auteur: str,
+    description: str | None = None,
+    liens: list[dict[str, str]] | None = None,
+    groupe: str | None = None,
+    conversation_id: str | None = None,
+    remplacer: bool = False,
+) -> dict:
+    """Met un fichier ou un dossier du projet dans le graphe (`chemin` relatif au projet), avec ses liens, puis le
+    place dans la vue : dans `groupe`, sinon dans le cadre de ce qui pointe vers lui, juste à droite.
+
+    `liens` : {"vers": bout, "relation": r} (du document vers un nœud, une figure ou un document) ou {"de": bout,
+    "relation": r} (vers le document). Remplacer garde la case, et ajoute les liens donnés à ceux qui existent."""
+    verifier_id(id)
+    if not titre.strip():
+        raise ErreurGraphe("Un document a besoin d'un titre.")
+    did = vue.PREFIXE_DOCUMENT + id
+    try:
+        examen = documents.examiner(racine, chemin)
+        a_lier: list[tuple[str, str, str]] = []
+        for lien in liens or []:
+            relation = str(lien.get("relation", ""))
+            if ("de" in lien) == ("vers" in lien):
+                raise documents.ErreurDocument(f"Lien {lien} : donne « de » ou « vers », pas les deux.")
+            de, vers = (lien["de"], did) if "de" in lien else (did, lien["vers"])
+            documents.verifier_lien(de, vers, relation)
+            a_lier.append((de, vers, relation))
+    except documents.ErreurDocument as e:
+        raise ErreurGraphe(str(e)) from None
+    if examen is None:
+        raise ErreurGraphe(f"Introuvable dans le projet : {chemin}. Écris le fichier d'abord.")
+    ancien = lecture.lire_document(projet_id, id)
+    if ancien is not None and not remplacer:
+        raise ErreurGraphe(f"Le document {did} existe déjà : passe remplacer=true pour le mettre à jour.")
+    for d in lecture.lister_documents(projet_id, colonnes="id, chemin"):
+        if d["chemin"] == chemin and d["id"] != id:
+            raise ErreurGraphe(f"{chemin} est déjà dans le graphe sous doc:{d['id']} : lie ce document-là.")
+    autres = [b for de, vers, _ in a_lier for b in (de, vers) if b != did]
+    if manquants := _bouts_inexistants(projet_id, list(dict.fromkeys(autres))):
+        raise ErreurGraphe(f"Bouts de liens inexistants : {', '.join(manquants)} (nœud, fig:<id> ou doc:<id>).")
+    etat = lecture.charger_etat_vue(projet_id)
+    if groupe and groupe not in etat.groupes:
+        raise ErreurGraphe(f"Cadre inexistant : {groupe}. Crée-le avec organiser_vue (creer_groupe), ou omets groupe.")
+
+    genre, apercu = examen
+    ligne: dict[str, Any] = {
+        "projet_id": projet_id,
+        "id": id,
+        "chemin": chemin,
+        "genre": genre,
+        "titre": titre.strip(),
+        "description": (description or "").strip() or None,
+        "apercu": apercu,
+        "present": True,
+        "conversation_id": conversation_id,
+    }
+    if ancien is None:
+        supabase().table("documents").insert(ligne).execute()
+    else:
+        ligne["version"] = ancien["version"] + 1
+        supabase().table("documents").update(ligne).eq("projet_id", projet_id).eq("id", id).execute()
+    if a_lier:
+        supabase().table("liens_documents").upsert(
+            [{"projet_id": projet_id, "de": de, "vers": vers, "relation": r} for de, vers, r in a_lier],
+            on_conflict="projet_id,de,vers,relation",
+        ).execute()
+    journal = {k: v for k, v in ligne.items() if k != "apercu"} | {"liens": [list(x) for x in a_lier]}
+    _journaliser("document", projet_id=projet_id, auteur=auteur, noeud_id=None, apres=journal)
+
+    if did not in etat.placements:
+        entrants = tuple((de, "auxiliaire") for de, vers, _ in a_lier if vers == did)
+        etat.noeuds[did] = vue.NoeudVue(did, ligne["titre"], "document", None, entrants, detail=chemin)
+        # Son cadre : celui demandé, sinon celui de ce qui pointe vers lui, sinon celui de ce vers quoi il pointe.
+        voisins = [de for de, vers, _ in a_lier if vers == did] + [vers for de, vers, _ in a_lier if de == did]
+        cadre = groupe or next((p.groupe_id for v in voisins if (p := etat.placements.get(v))), None)
+        try:
+            place = vue.placer_figure(etat, did, cadre, 1, 1)
+        except vue.ErreurVue:
+            return ligne  # la vue le montrera « non placé » ; une réorganisation le rattrapera
+        _ecrire_placements(projet_id, [place])
+    return ligne
+
+
+def lier_document(*, projet_id: str, de: str, vers: str, relation: str, auteur: str, retirer: bool = False) -> None:
+    """Ajoute (ou retire) un lien nommé ; l'un des deux bouts est un document."""
+    try:
+        documents.verifier_lien(de, vers, relation)
+    except documents.ErreurDocument as e:
+        raise ErreurGraphe(str(e)) from None
+    if manquants := _bouts_inexistants(projet_id, [de, vers]):
+        raise ErreurGraphe(f"Bouts inexistants : {', '.join(manquants)} (nœud, fig:<id> ou doc:<id>).")
+    table = supabase().table("liens_documents")
+    if retirer:
+        table.delete().eq("projet_id", projet_id).eq("de", de).eq("vers", vers).eq("relation", relation).execute()
+    else:
+        table.upsert(
+            {"projet_id": projet_id, "de": de, "vers": vers, "relation": relation},
+            on_conflict="projet_id,de,vers,relation",
+        ).execute()
+    _journaliser(
+        "document",
+        projet_id=projet_id,
+        auteur=auteur,
+        noeud_id=None,
+        apres={"lien": [de, vers, relation], "retire": retirer},
+    )
+
+
+def retirer_document(*, projet_id: str, id: str, auteur: str) -> None:
+    """Retire un document du graphe (sa case et ses liens) ; le fichier reste sur le disque."""
+    id = id.removeprefix(vue.PREFIXE_DOCUMENT)
+    ancien = lecture.lire_document(projet_id, id)
+    if ancien is None:
+        raise ErreurGraphe(f"Document inexistant : doc:{id}. lister_documents les donne tous.")
+    supabase().table("documents").delete().eq("projet_id", projet_id).eq("id", id).execute()
+    _journaliser(
+        "document",
+        projet_id=projet_id,
+        auteur=auteur,
+        noeud_id=None,
+        apres={"retire": id, "chemin": ancien["chemin"]},
+    )
+
+
+def deplacer_document(*, projet_id: str, racine: Path, de: str, vers: str, auteur: str) -> dict:
+    """Déplace (ou renomme) un fichier ou un dossier du projet, qu'il soit dans le graphe ou non, puis réécrit tous
+    les chemins qui en dépendent : documents (lui et ce qu'il contient), fichiers et sources des figures. Tout ou
+    rien : si la base refuse, le fichier revient à sa place."""
+    try:
+        plan = documents.planifier_deplacement(
+            de,
+            vers,
+            lecture.lister_documents(projet_id, colonnes="id, chemin"),
+            lecture.lister_figures(projet_id, colonnes="id, fichier, source"),
+        )
+        documents.deplacer_sur_disque(racine, de, vers)
+    except documents.ErreurDocument as e:
+        raise ErreurGraphe(str(e)) from None
+    anciens = {d["id"]: d["chemin"] for d in lecture.lister_documents(projet_id, colonnes="id, chemin")}
+    faits: list[str] = []
+    try:
+        for did, chemin in plan.documents.items():
+            supabase().table("documents").update({"chemin": chemin}).eq("projet_id", projet_id).eq("id", did).execute()
+            faits.append(did)
+        for fid, champs in plan.figures.items():
+            supabase().table("figures").update(champs).eq("projet_id", projet_id).eq("id", fid).execute()
+    except Exception:
+        for did in faits:
+            supabase().table("documents").update({"chemin": anciens[did]}).eq("projet_id", projet_id).eq(
+                "id", did
+            ).execute()
+        documents.deplacer_sur_disque(racine, vers, de)
+        raise
+    resume = {"de": de, "vers": vers, "documents": plan.documents, "figures": sorted(plan.figures)}
+    _journaliser("document", projet_id=projet_id, auteur=auteur, noeud_id=None, apres={"deplacement": resume})
+    rafraichir_documents(projet_id, racine)
+    return resume
+
 
 # ── Graphe entier d'un coup ──────────────────────────────────────────────────
 

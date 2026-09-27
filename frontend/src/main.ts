@@ -78,6 +78,11 @@ let adaptateur: AdaptateurVue | undefined
 
 const vueGraphe = new VueGraphe(document.querySelector<HTMLElement>('.graphe')!, {
   surOuvrir: afficherDetail,
+  // Un document du graphe s'ouvre dans la vue Documents, sur son aperçu.
+  surDocument: (chemin) => {
+    montrer('documents')
+    void documents.ouvrir(chemin)
+  },
   recharger: () => chargerGraphe(),
   surChangement: () => adaptateur?.apresImage(),
 })

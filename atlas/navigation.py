@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Literal
 
-from .vue import PREFIXE_FIGURE, TAILLE_FIGURE, ErreurVue, EtatVue, appliquer, est_figure
+from .vue import PREFIXE_FIGURE, TAILLE_FIGURE, ErreurVue, EtatVue, appliquer, est_figure, est_pseudo
 
 LIBELLES_TYPE = {
     "hypothese": "Hypothèse",
@@ -102,7 +102,7 @@ class Reperes:
 
 def reperer(etat: EtatVue) -> Reperes:
     """Mêmes règles que `construireModele` (graphe-modele.ts)."""
-    noeuds = {i: n for i, n in etat.noeuds.items() if not est_figure(i)}
+    noeuds = {i: n for i, n in etat.noeuds.items() if not est_pseudo(i)}
     figures = sorted(i for i in etat.noeuds if est_figure(i))
     places = {i: p for i, p in etat.placements.items() if i in etat.noeuds}
 
@@ -149,7 +149,7 @@ def reperer(etat: EtatVue) -> Reperes:
         g, profondeur = (p.groupe_id if p.groupe_id in groupes else None), 0
         c, lg = case(i)
         while g is not None and profondeur < 50:
-            if not est_figure(i):
+            if not est_pseudo(i):
                 membres[g].append(i)
             c0, l0 = coins.get(g, (c, lg))
             coins[g] = (min(c0, c), min(l0, lg))
@@ -273,7 +273,7 @@ def lignee(etat: EtatVue, noeud: str, etendue: Etendue = "lignee") -> list[str]:
     """Le nœud et ses prémisses (transitivement), ses conséquences, ou les deux ; jamais les figures."""
     if etendue not in ETENDUES:
         raise ErreurNavigation(f"Étendue inconnue : {etendue} (attendu : {', '.join(ETENDUES)}).")
-    parents = {i: [p for p, _ in n.premisses if p in etat.noeuds] for i, n in etat.noeuds.items() if not est_figure(i)}
+    parents = {i: [p for p, _ in n.premisses if p in etat.noeuds] for i, n in etat.noeuds.items() if not est_pseudo(i)}
     enfants: dict[str, list[str]] = {i: [] for i in parents}
     for i, ps in parents.items():
         for p in ps:

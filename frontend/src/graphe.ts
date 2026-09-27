@@ -14,7 +14,7 @@ import { instantane, operationsVers, type Entree, type Instantane } from './grap
 import { Contenu } from './graphe-contenu'
 import { dansCadre, dessiner, niveauDe, oublierMesures, PALETTE, positionsRenvois, referenceDe, rgba, type Camera, type EtatDessin } from './graphe-dessin'
 import { ImagesFigures, ouvrirFenetre } from './graphe-figures'
-import { CADRE, CLE_FONCTION, construireModele, dansRect, FORMATS_FIGURE, GRILLE, PREFIXE_FIGURE, rectBloc, TEINTES, union, type Bloc, type Modele, type Rect, type Surcharge } from './graphe-modele'
+import { CADRE, CLE_FONCTION, construireModele, dansRect, estPseudo, FORMATS_FIGURE, GRILLE, PREFIXE_DOCUMENT, PREFIXE_FIGURE, rectBloc, TEINTES, union, type Bloc, type Modele, type Rect, type Surcharge } from './graphe-modele'
 import { echapper } from './rendu'
 
 /** Paliers de zoom de l'éditeur Blueprint d'UE5 (−12 à +7), plus trois paliers lointains ; le pincement
@@ -100,6 +100,8 @@ type Geste =
 export interface OptionsVueGraphe {
   /** Double-clic sur un nœud (null : fermer la fiche). */
   surOuvrir: (noeud: Noeud | null) => void
+  /** Double-clic sur un document : son aperçu dans la vue Documents (chemin relatif au projet). */
+  surDocument?: (chemin: string) => void
   /** Relit le graphe et la vue de l'espace (puis appelle `afficher`). */
   recharger: () => Promise<void>
   /** Après chaque image : le pilotage compare l'écran à son dernier état exporté (P4). */
@@ -339,7 +341,7 @@ export class VueGraphe {
     const r = this.rectRepresentant(this.modele.representant.get(id) ?? id)
     if (r) this.centrerSur((r.x0 + r.x1) / 2, (r.y0 + r.y1) / 2)
     const b = this.base.blocs.get(id)!
-    this.options.surOuvrir(b.figure ? null : b.noeud)
+    this.options.surOuvrir(estPseudo(b) ? null : b.noeud)
     this.demander()
   }
 
@@ -369,14 +371,14 @@ export class VueGraphe {
 
   /** Nœud sélectionné (le premier, s'il y en a plusieurs). */
   get noeudSelectionne(): string | null {
-    for (const id of this.selection) if (this.base.blocs.get(id)?.noeud && !this.base.blocs.get(id)?.figure) return id
+    for (const id of this.selection) if (this.base.blocs.get(id)?.noeud && !estPseudo(this.base.blocs.get(id))) return id
     return null
   }
 
   /** Nœud survolé (null : rien, ou un cadre, une figure). */
   get noeudSurvole(): string | null {
     const b = this.survol ? this.base.blocs.get(this.survol) : undefined
-    return b && !b.figure ? b.id : null
+    return b && !estPseudo(b) ? b.id : null
   }
 
   /** Sélectionne un nœud (sa lignée est mise en évidence), sans déplacer la caméra ni ouvrir sa fiche. */
@@ -476,7 +478,7 @@ export class VueGraphe {
   visibles(max: number): NoeudVisible[] {
     const r: (NoeudVisible & { d: number })[] = []
     for (const b of this.modele.blocs.values()) {
-      if (b.cache || b.figure || !b.noeud) continue
+      if (b.cache || estPseudo(b) || !b.noeud) continue
       const x = (b.x + b.w / 2) * this.cam.z + this.cam.x, y = (b.y + b.h / 2) * this.cam.z + this.cam.y
       if (x < 0 || y < 0 || x > this.largeurUtile || y > this.hauteur) continue
       r.push({ id: b.id, nom: b.noeud.nom, x, y, d: Math.hypot(x - this.largeurUtile / 2, y - this.hauteur / 2) })
@@ -977,8 +979,17 @@ export class VueGraphe {
     } else if (c.genre === 'bloc') {
       const b = this.base.blocs.get(c.id)
       if (b?.figure) this.ouvrirFigure(b.id)
+      else if (b?.document) this.ouvrirDocument(b.id)
       else this.options.surOuvrir(b?.noeud ?? null)
     } else if (c.genre === 'fonction') void this.basculerRepli(c.cadre)
+  }
+
+  /** Ouvre l'aperçu d'un document dans la vue Documents. */
+  ouvrirDocument(id: string): void {
+    const d = this.base.blocs.get(id)?.document
+    if (!d) return
+    if (this.options.surDocument) this.options.surDocument(d.chemin)
+    else this.avis(`Fichier : ${d.chemin}`)
   }
 
   /** Ouvre une figure en grand (tracé agrandi ou image, légende complète, nœud illustré). */
@@ -1028,6 +1039,7 @@ export class VueGraphe {
     const b = this.selection.size === 1 ? this.base.blocs.get([...this.selection][0]!) : undefined
     if (!b) this.avis('Sélectionnez un seul nœud pour ouvrir sa fiche.')
     else if (b.figure) this.ouvrirFigure(b.id)
+    else if (b.document) this.ouvrirDocument(b.id)
     else this.options.surOuvrir(b.noeud)
   }
 
@@ -1080,6 +1092,7 @@ export class VueGraphe {
   private instantane(): Instantane {
     const noms: [string, string][] = this.graphe.noeuds.map((n) => [n.id, n.nom])
     for (const f of this.vue.figures ?? []) noms.push([PREFIXE_FIGURE + f.id, f.titre])
+    for (const d of this.vue.documents ?? []) noms.push([PREFIXE_DOCUMENT + d.id, d.titre])
     return instantane(this.vue, noms)
   }
 
@@ -1237,7 +1250,7 @@ export class VueGraphe {
     if (!b || b.cache) return this.avis('Sélectionne un seul nœud visible pour le renommer (F2).')
     // Une figure se renomme par la même opération : son titre.
     this.ouvrirSaisie(b.x, b.y, b.x + b.w, b.y + 26, b.noeud.nom, (nom) => {
-      if (nom !== b.noeud.nom) void this.executer([{ op: 'renommer_noeud', id: b.id, nom }], b.figure ? 'Renommer la figure' : 'Renommer le nœud')
+      if (nom !== b.noeud.nom) void this.executer([{ op: 'renommer_noeud', id: b.id, nom }], b.figure ? 'Renommer la figure' : b.document ? 'Renommer le document' : 'Renommer le nœud')
     })
   }
 
@@ -1297,6 +1310,8 @@ export class VueGraphe {
         articles.push(this.base.blocs.has(illustre)
           ? { libelle: `Montrer le nœud illustré (${referenceDe(this.base, illustre)})`, action: () => this.montrer(illustre) }
           : { libelle: 'Montrer le nœud illustré', inactif: 'absent du graphe' })
+      } else if (b.document) {
+        articles.push({ libelle: 'Voir le fichier', raccourci: 'double-clic', action: () => this.ouvrirDocument(id) })
       } else articles.push({ libelle: 'Ouvrir la fiche', raccourci: 'double-clic', action: () => this.options.surOuvrir(b.noeud) })
       articles.push({ libelle: 'Cadrer la sélection', raccourci: 'F', action: () => this.cadrerSelection() })
     } else if (c.genre === 'titre' || c.genre === 'cadre' || c.genre === 'fonction') {

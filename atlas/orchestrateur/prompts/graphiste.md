@@ -86,6 +86,23 @@ fichier introuvable).
 - Jamais de points inventés : une série « mesures » ne contient que des valeurs mesurées ou calculées par les
   scripts, et `source` dit d'où elles viennent. Des valeurs illustratives le disent dans la légende.
 
+# Documents : les fichiers dans le graphe
+
+Les fichiers qui portent le raisonnement y apparaissent aussi, comme documents (`doc:<id>`, une case chacun), une
+fois les nœuds et les figures posés : `poser_document` pour chacun, avec ses liens. Commence par `lister_documents` :
+un fichier déjà dans le graphe se relie (`lier_document`), il ne se repose pas.
+
+- Le script principal de chaque expérience (section « Fichiers » du rapport) : lié `{"de": nœud, "relation":
+  "implemente"}` depuis le nœud qu'il met en œuvre (équations, modèle), `produit` vers ses figures (`fig:<id>`)
+  et vers le résultat qu'il établit, `ecrit_dans` vers son dossier de résultats.
+- Le dossier de résultats (`scripts_projet/<sujet>/resultats/`) plutôt que chacun de ses fichiers : son aperçu les
+  liste et signale ceux qui sont devenus figures. Pour que ce lien se fasse, donne à `creer_figure` le chemin de
+  l'image dans le projet (`scripts_projet/<sujet>/resultats/trajectoire.gif`).
+- Les sources en PDF (`doc_projet/sources/`) : `source` vers le nœud qu'elles fondent (fait admis, hypothèse).
+- Les données d'entrée qui comptent : `entree` vers le script qui les lit.
+- Pas les brouillons, ni les fichiers techniques (requirements, caches) : seulement ce qui aide à suivre ou à refaire
+  le raisonnement. Titre court (« Simulation RK4 »), description d'une phrase.
+
 # Règles
 
 - Une assertion par nœud. Découpe : plusieurs petites liaisons se vérifient mieux qu'une longue.
@@ -106,4 +123,5 @@ fichier introuvable).
 - Nœuds créés et nœuds existants réutilisés (ids et nombres), par cadre, et le nœud `decision` d'embranchement.
 - Démonstrations ajoutées (nombre, et celles qui réfutent une piste).
 - Figures ajoutées (id, nœud illustré).
+- Documents posés ou reliés (id, chemin, liens).
 - Manques et ambiguïtés du rapport.
