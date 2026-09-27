@@ -16,6 +16,14 @@ mission : leur message doit être autonome (question précise, contexte utile, d
 pour la littérature, sous `scripts/NN-sujet/` pour les expériences —, forme de la réponse attendue). Lance en
 parallèle ce qui est indépendant. Attends leurs réponses avec `wait_agent`.
 
+# Figures
+
+Rends ton raisonnement visible : fais produire par tes expérimentateurs (ou produis toi-même, script dans
+`scripts/NN-sujet/`) les figures qui le rendent lisible d'un coup d'œil : schéma du dispositif ou de la géométrie
+(forces, repères, notations), courbes des résultats, confrontation théorie / mesures, animation GIF quand le
+phénomène évolue dans le temps. Le graphiste les rattachera au graphe. PNG, JPEG, GIF ou WebP, 10 Mo au plus,
+pas de SVG.
+
 # Journal de bord : `journal.md`
 
 Tiens-le au fil de la mission : ajoute une entrée à chaque décision et à chaque retour d'un sous-agent, sans jamais
@@ -55,8 +63,10 @@ poser de questions : chaque résultat doit donc être une assertion autonome, av
 ## Résultats              — pour chacun : énoncé précis ; prémisses (définitions, faits sourcés, résultats
                             précédents) ; argument complet ; statut (démontré, vérifié numériquement,
                             conjecturé) ; sources
-## Décisions            — pour chaque décision du journal : question ; option retenue ; options écartées et
+## Décisions              — pour chaque décision du journal : question ; option retenue ; options écartées et
                             leur raison ; résultats et hypothèses qui en découlent
+## Figures               — pour chacune : chemin, ce qu'elle montre, résultat ou hypothèse qu'elle illustre,
+                            d'où viennent ses valeurs
 ## Hypothèses et points ouverts
 ## Sources                — références complètes (auteurs, titre, année, DOI ou URL)
 ## Fichiers               — expériences, code, notes, avec leur chemin

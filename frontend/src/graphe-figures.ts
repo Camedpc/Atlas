@@ -573,9 +573,9 @@ export function texteCanevas(t: string): string {
 // ─── Image ───────────────────────────────────────────────────────────────────
 
 /** Dessine l'image dans la zone de `g` en gardant ses proportions ; un aplat gris clair tant qu'elle n'est pas là. */
-export function dessinerImage(ctx: CanvasRenderingContext2D, f: FigureVue, g: Geometrie, img: HTMLImageElement | null): void {
-  const lw = img?.naturalWidth || f.image_largeur || 4
-  const lh = img?.naturalHeight || f.image_hauteur || 3
+export function dessinerImage(ctx: CanvasRenderingContext2D, f: FigureVue, g: Geometrie, img: CanvasImageSource | null): void {
+  const lw = f.image_largeur || 4
+  const lh = f.image_hauteur || 3
   const s = Math.min(g.iw / lw, g.ih / lh)
   const w = lw * s, h = lh * s
   const x = g.ix + (g.iw - w) / 2, y = g.iy + (g.ih - h) / 2
@@ -612,9 +612,47 @@ export function dessinerIcone(ctx: CanvasRenderingContext2D, cx: number, cy: num
   ctx.restore()
 }
 
-/** Cache des images de figures : chargées à la demande, gardées (les plus anciennes oubliées au-delà de 40). */
+/** GIF ou WebP animé, décodé une image à la fois (ImageDecoder) : seule l'image courante est gardée en mémoire. */
+interface Animation {
+  decodeur: ImageDecoder
+  nombre: number
+  indice: number
+  courante: VideoFrame | null
+  /** Instant (performance.now) où passer à l'image suivante. */
+  echeance: number
+  enCours: boolean
+}
+
+/** L'animation d'une image, ou null (image fixe, format non animable, navigateur sans ImageDecoder). */
+async function ouvrirAnimation(blob: Blob): Promise<Animation | null> {
+  if (typeof ImageDecoder === 'undefined' || !/^image\/(gif|webp)$/.test(blob.type)) return null
+  const decodeur = new ImageDecoder({ data: await blob.arrayBuffer(), type: blob.type })
+  try {
+    // Sans tracks.ready, selectedTrack peut être encore vide même une fois les données lues.
+    await decodeur.tracks.ready
+    await decodeur.completed
+    const piste = decodeur.tracks.selectedTrack
+    if (!piste?.animated || piste.frameCount < 2) {
+      decodeur.close()
+      return null
+    }
+    return { decodeur, nombre: piste.frameCount, indice: -1, courante: null, echeance: 0, enCours: false }
+  } catch {
+    decodeur.close()
+    return null
+  }
+}
+
+/** Durée d'affichage d'une image d'animation en ms ; un délai nul ou minuscule vaut 100 ms, comme dans les navigateurs. */
+function dureeImage(image: VideoFrame): number {
+  const ms = (image.duration ?? 0) / 1000
+  return ms < 20 ? 100 : ms
+}
+
+/** Cache des images de figures : chargées à la demande, gardées (les plus anciennes oubliées au-delà de 40). Une image
+ * animée avance seulement quand elle est dessinée : hors écran, elle ne coûte ni décodage ni dessin. */
 export class ImagesFigures {
-  private cache = new Map<string, { etat: 'chargement' | 'pret' | 'erreur'; img: HTMLImageElement | null; url: string | null }>()
+  private cache = new Map<string, { etat: 'chargement' | 'pret' | 'erreur'; img: HTMLImageElement | null; url: string | null; anim: Animation | null }>()
   private charger: (f: FigureVue) => Promise<Blob> | null
   private rappel: () => void
 
@@ -624,18 +662,22 @@ export class ImagesFigures {
     this.rappel = rappel
   }
 
-  /** L'image si elle est prête ; sinon lance son chargement (une fois) et renvoie null. */
-  obtenir(f: FigureVue): HTMLImageElement | null {
+  /** L'image à dessiner (l'image courante si elle est animée) si elle est prête ; sinon lance son chargement (une
+   * fois) et renvoie null. */
+  obtenir(f: FigureVue): CanvasImageSource | null {
     const cle = `${f.id}|${f.modifie_le}`
     const e = this.cache.get(cle)
-    if (e) return e.img
+    if (e) {
+      if (e.anim) this.avancer(e.anim)
+      return e.anim?.courante ?? e.img
+    }
     const promesse = this.charger(f)
     if (!promesse) return null
-    const entree = { etat: 'chargement' as 'chargement' | 'pret' | 'erreur', img: null as HTMLImageElement | null, url: null as string | null }
+    const entree = { etat: 'chargement' as 'chargement' | 'pret' | 'erreur', img: null as HTMLImageElement | null, url: null as string | null, anim: null as Animation | null }
     this.cache.set(cle, entree)
     if (this.cache.size > 40) {
       const [ancienne, v] = this.cache.entries().next().value!
-      if (v.url) URL.revokeObjectURL(v.url)
+      liberer(v)
       this.cache.delete(ancienne)
     }
     void promesse
@@ -647,6 +689,7 @@ export class ImagesFigures {
         entree.url = url
         entree.img = img
         entree.etat = 'pret'
+        entree.anim = await ouvrirAnimation(blob).catch(() => null)
       })
       .catch(() => {
         entree.etat = 'erreur'
@@ -668,9 +711,42 @@ export class ImagesFigures {
     return null
   }
 
+  /** Passe à l'image suivante si son heure est venue, puis redemande un dessin à l'échéance de la nouvelle. */
+  private avancer(a: Animation): void {
+    if (a.enCours || performance.now() < a.echeance) return
+    a.enCours = true
+    const indice = (a.indice + 1) % a.nombre
+    void a.decodeur
+      .decode({ frameIndex: indice })
+      .then(({ image }) => {
+        a.courante?.close()
+        a.courante = image
+        a.indice = indice
+        const duree = dureeImage(image)
+        a.echeance = performance.now() + duree
+        setTimeout(() => this.rappel(), duree)
+      })
+      .catch(() => {
+        a.echeance = Infinity
+      })
+      .finally(() => {
+        a.enCours = false
+        this.rappel()
+      })
+  }
+
   vider(): void {
-    for (const e of this.cache.values()) if (e.url) URL.revokeObjectURL(e.url)
+    for (const e of this.cache.values()) liberer(e)
     this.cache.clear()
+  }
+}
+
+function liberer(e: { url: string | null; anim: Animation | null }): void {
+  if (e.url) URL.revokeObjectURL(e.url)
+  if (e.anim) {
+    e.anim.courante?.close()
+    e.anim.decodeur.close()
+    e.anim.echeance = Infinity
   }
 }
 

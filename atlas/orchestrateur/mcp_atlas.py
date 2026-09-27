@@ -303,12 +303,15 @@ def creer_figure(
     hauteur: int = 0,
     remplacer: bool = False,
 ) -> str:
-    """Ajoute au graphe une figure qui illustre le nœud noeud_id (en général une observation, un calcul ou un
-    résultat) : un tracé vectoriel, une image, ou les deux (l'image produite par ton script et les données qu'elle
-    trace). Elle prend sa propre place dans la vue, par défaut juste à droite de son nœud (fig:<id> dans lire_vue).
+    """Ajoute au graphe une figure qui illustre le nœud noeud_id : un tracé vectoriel, une image, ou les deux
+    (l'image produite par ton script et les données qu'elle trace). Tout nœud peut en avoir : schéma du dispositif
+    ou de la géométrie sur une hypothèse ou une définition, courbe sur un calcul, mesures sur une observation,
+    animation d'une simulation sur un résultat. Elle prend sa propre place dans la vue, par défaut juste à droite de
+    son nœud (fig:<id> dans lire_vue). Un GIF ou un WebP animé est joué dans le graphe.
 
     - id : minuscules, chiffres et _ ; titre : court ; legende : ce que montre la figure, Markdown + LaTeX.
-    - image : chemin d'un PNG, JPEG, GIF ou WebP (relatif au dossier de la session, ex. docs_session/v_t.png).
+    - image : chemin d'un PNG, JPEG, GIF ou WebP, 10 Mo au plus (relatif au dossier de la session, ex.
+      docs_session/v_t.png). Pas de SVG : exporte les schémas en PNG (dpi 200, fond blanc).
     - trace : {"x": {"titre": "$t$", "unite": "s", "echelle": "lin" | "log", "min"?, "max"?}, "y": {…},
       "series": [
         {"genre": "mesures", "nom": …, "points": [[x, y], [x, y, σy], [x, y, σy, σx]], "source"?: fichier},

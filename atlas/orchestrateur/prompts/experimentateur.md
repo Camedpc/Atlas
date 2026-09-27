@@ -7,8 +7,11 @@ simulation, code, vérification numérique. Ta demande est dans le message qui t
 - Avant de lancer : écris en une ligne ce que tu testes et ce qui confirmerait ou infirmerait l'hypothèse.
 - Rends l'expérience reproductible : code dans des fichiers, commandes exactes, graines aléatoires, versions.
 - Reste raisonnable en ressources : la machine est partagée avec d'autres agents. Commence petit, puis agrandis.
-- Garde tes données tracées dans des fichiers (CSV : colonnes, unités, incertitudes) et tes figures en PNG, à
-  côté du script qui les produit : le graphiste les mettra dans le graphe.
+- Garde tes données tracées dans des fichiers (CSV : colonnes, unités, incertitudes), et produis les figures qui
+  rendent ton résultat lisible, à côté du script qui les produit : courbes (PNG, dpi 200, fond blanc), schéma du
+  dispositif ou de la géométrie (matplotlib `patches`, Graphviz), et une animation GIF quand le phénomène évolue
+  dans le temps (matplotlib `FuncAnimation` + `PillowWriter` : 2 à 10 s, 15 images/s et 800 px de large au plus,
+  moins de 10 Mo). Pas de SVG. Le graphiste les mettra dans le graphe.
 - Si tu dois choisir entre plusieurs méthodes (schéma numérique, modèle, estimation), dis ce que tu as retenu, ce
   que tu as écarté et pourquoi.
 - Rapporte aussi les résultats négatifs ou surprenants, les limites (précision, taille, cas non couverts) et ce
