@@ -1,0 +1,38 @@
+{
+  "name": "atlas-film",
+  "version": "1.0.0",
+  "description": "Film de présentation d'Atlas (Remotion)",
+  "main": "index.js",
+  "scripts": {
+    "serveur": "http-server . -p 9123 --cors -c-1 -s",
+    "studio": "remotion studio src/index.ts --props=props-local.json",
+    "stills": "node stills.mjs",
+    "rendu-x": "bash outils/rendu-x.sh",
+    "final": "bash outils/final.sh"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@remotion/cli": "^4.0.529",
+    "@remotion/google-fonts": "^4.0.529",
+    "@remotion/media-utils": "^4.0.529",
+    "@remotion/renderer": "^4.0.529",
+    "@remotion/transitions": "^4.0.529",
+    "@types/react": "^19.3.0",
+    "d3-ease": "^3.0.1",
+    "d3-interpolate": "^3.0.1",
+    "playwright": "^1.63.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "remotion": "^4.0.529",
+    "typescript": "^7.0.2"
+  },
+  "allowScripts": {
+    "esbuild@0.28.1": true
+  },
+  "devDependencies": {
+    "http-server": "^14.1.1"
+  }
+}

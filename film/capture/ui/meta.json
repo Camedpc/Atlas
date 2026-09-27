@@ -1,0 +1,39 @@
+{
+ "saisie": {
+  "x": 285,
+  "y": 967,
+  "width": 686.765625,
+  "height": 48
+ },
+ "envoyer": {
+  "x": 931.765625,
+  "y": 1021,
+  "width": 32,
+  "height": 32
+ },
+ "nouvelle": {
+  "x": 10,
+  "y": 54,
+  "width": 239,
+  "height": 31
+ },
+ "nbFrappe": 68,
+ "defile": {
+  "h": 3743,
+  "ch": 914,
+  "cls": "fil film-defile"
+ },
+ "defileBoite": {
+  "x": 260,
+  "y": 52,
+  "width": 736.765625,
+  "height": 914
+ },
+ "filMorceaux": 5,
+ "micro": {
+  "x": 875.765625,
+  "y": 1021,
+  "width": 48,
+  "height": 32
+ }
+}

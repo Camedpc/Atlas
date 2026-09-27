@@ -1,0 +1,22 @@
+import { chromium } from 'playwright'
+const [P, C, tag] = process.argv.slice(2)
+const b = await chromium.launch()
+const ctx = await b.newContext({ viewport: { width: 1920, height: 1080 } })
+await ctx.addInitScript((p) => { localStorage.setItem('atlas.projet', p); localStorage.setItem('atlas.vue','raisonnement') }, P)
+const pg = await ctx.newPage()
+await pg.goto('http://localhost:5173/#' + C)
+await pg.waitForTimeout(7000)
+await pg.screenshot({ path: `capture/explore/${tag}-conv.png` })
+await pg.evaluate(() => { const s = document.querySelector('.panneau-conversation .messages, .fil, main'); })
+await pg.click('.onglets [data-vue=agents]'); await pg.waitForTimeout(3000)
+await pg.screenshot({ path: `capture/explore/${tag}-agents.png` })
+await pg.click('.onglets [data-vue=raisonnement]'); await pg.waitForTimeout(1000)
+const info = await pg.evaluate(() => { const g = window.atlasGraphe; return { cam: g.cam, bornes: g.modele.bornes, n: g.modele.blocs.size, larg: g.largeur, haut: g.hauteur } })
+console.log(JSON.stringify(info))
+for (const z of [0.35, 0.8]) {
+  await pg.evaluate((z) => { const g = window.atlasGraphe; const B = g.modele.bornes; g.fixerZoom(z); g.centrerSur(B.x0 + (B.x1-B.x0)*0.3, B.y0 + (B.y1-B.y0)*0.4); for (let i=0;i<20;i++) g.dessinerMaintenant() }, z)
+  await pg.waitForTimeout(1500)
+  await pg.evaluate(() => { for (let i=0;i<30;i++) window.atlasGraphe.dessinerMaintenant() })
+  await pg.screenshot({ path: `capture/explore/${tag}-z${z}.png` })
+}
+await b.close()

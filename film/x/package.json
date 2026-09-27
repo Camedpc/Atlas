@@ -1,0 +1,1 @@
+{ "name": "atlas-film-rendu", "private": true, "type": "module", "dependencies": { "@remotion/renderer": "4.0.529", "remotion": "4.0.529", "react": "19.3.0", "react-dom": "19.3.0" } }

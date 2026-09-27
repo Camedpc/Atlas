@@ -1,0 +1,5 @@
+{"projet":"2de61c07-396f-4fc6-bf3c-f9db5942749b","fps":60,"plans":[
+ {"nom":"g6-echelle","cles":[
+   {"t":0,"cx":2200,"cy":1900,"z":0.62},
+   {"t":7.0,"cx":3618,"cy":2686,"z":0.13,"ease":"easeCubicInOut"}]}
+]}
