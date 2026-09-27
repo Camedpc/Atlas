@@ -22,6 +22,7 @@ import { echapper, rendre } from './rendu'
 import { SelecteurModele } from './reglages'
 import { PanneauSessions } from './sessions'
 import { Pastille } from './pastille'
+import { choisirSon, ecouterSon, sonChoisi, SONS } from './sons'
 import type { Pilote } from './pilotage/pilote'
 import { Appel, optionsVoix, VOIX_GRADIUM, type MessageVoix } from './voix'
 
@@ -80,18 +81,10 @@ function rendreMessage(m: Message): string {
     case 'outil':
       return rendreOutil(m)
     case 'systeme':
-      return m.donnees?.type === 'parcours' ? rendreParcours(m.donnees) : `<div class="msg systeme">${echapper(m.contenu)}</div>`
+      return `<div class="msg systeme">${echapper(m.contenu)}</div>`
   }
 }
 
-/** Parcours préparé par l'agent navigateur (atlas/parcours.py) : une carte qui le lance sur le graphe. */
-function rendreParcours(d: Record<string, unknown>): string {
-  const n = Number(d.etapes) || 0
-  return `<div class="msg parcours"><span class="etiquette">Parcours</span>
-    <span class="parcours-titre">${echapper(String(d.titre ?? ''))}</span>
-    <span class="parcours-etapes">${n} étape${n > 1 ? 's' : ''}</span>
-    <button type="button" class="lancer-parcours" data-parcours="${echapper(String(d.chemin ?? ''))}">Dérouler</button></div>`
-}
 
 interface Bilan {
   nb_outils: number
@@ -157,8 +150,6 @@ export class PanneauConversation {
   /** Écran du graphe, piloté par Atlas voix pendant un appel (main.ts le branche). */
   private ecran: Pilote | null = null
   private avantCommandes: () => Promise<void> = async () => {}
-  /** Carte « Parcours » du fil : main.ts le déroule sur le graphe. */
-  private surParcours: (chemin: string) => void = () => {}
   /** La saisie montre ce que Camille est en train de dire (et non un texte tapé). */
   private dictee = false
   /** Camille tape pendant l'appel : la dictée n'écrase plus la saisie. */
@@ -166,6 +157,8 @@ export class PanneauConversation {
   /** Fil de la voix chargé au début de l'appel ; ensuite il se remplit en direct, sans relire la base. */
   private filVoixCharge = false
   private elementsVoix = new Map<string, HTMLElement>()
+  /** Raison de la fin d'appel, à afficher dans le fil de l'orchestrateur une fois rechargé. */
+  private avisFin = ''
   private racine: HTMLElement
   private projets: Projet[] = []
   private projet: Projet | null = null
@@ -199,6 +192,7 @@ export class PanneauConversation {
       surNouvelle: () => void this.nouvelle(),
       surProjet: (id) => void this.entrerProjet(id),
       surCreerProjet: (nom) => this.creerProjet(nom),
+      surSupprimerProjet: (id) => this.supprimerProjet(id),
     })
     racine.innerHTML = `
       <header class="conv-tete">
@@ -206,10 +200,13 @@ export class PanneauConversation {
           <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2.5" y="3" width="13" height="12" rx="2"/><path d="M7 3v12"/></svg>
         </button>
         <div class="conv-titres">
-          <h1 class="conv-titre">Nouvelle recherche</h1>
+          <h1 class="conv-titre">Nouvelle session</h1>
           <nav class="ariane" hidden></nav>
         </div>
         <span class="conv-etat"></span>
+        <button type="button" class="icone ranger-conversation" title="Masquer la conversation" aria-label="Masquer la conversation">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2.5" y="3" width="13" height="12" rx="2"/><path d="M7 3v12"/></svg>
+        </button>
       </header>
       <div class="fil"><div class="fil-contenu"></div></div>
       <div class="bas">
@@ -278,11 +275,19 @@ export class PanneauConversation {
       avantCommandes: () => this.avantCommandes(),
     })
     this.micro.addEventListener('click', () => void this.appeler())
+    this.micro.addEventListener('pointerenter', () => this.preparerVoix())
     this.stop.addEventListener('click', () => this.appel.raccrocher())
     this.boutonOptions.addEventListener('click', () => this.basculerMenuVoix())
     this.menuVoix.addEventListener('click', (e) => {
-      const el = (e.target as HTMLElement).closest<HTMLElement>('[data-voix], [data-option]')
+      const el = (e.target as HTMLElement).closest<HTMLElement>('[data-voix], [data-option], [data-son]')
       if (!el) return
+      if (el.dataset.son) {
+        // Choisir un son le fait entendre : ouverture puis fermeture.
+        choisirSon(el.dataset.son)
+        ecouterSon(el.dataset.son)
+        this.dessinerMenuVoix()
+        return
+      }
       if (el.dataset.voix) optionsVoix.voix = el.dataset.voix
       if (el.dataset.option === 'casque') optionsVoix.casque = !optionsVoix.casque
       this.appel.envoyerReglages()
@@ -337,8 +342,6 @@ export class PanneauConversation {
       if (lien) etat.selectionner(lien.dataset.chemin!)
       const session = (e.target as HTMLElement).closest<HTMLElement>('[data-session]')
       if (session) void this.ouvrir(session.dataset.session!)
-      const parcours = (e.target as HTMLElement).closest<HTMLElement>('[data-parcours]')
-      if (parcours) this.surParcours(parcours.dataset.parcours!)
     })
     this.ariane.addEventListener('click', (e) => {
       const lien = (e.target as HTMLElement).closest<HTMLElement>('[data-chemin]')
@@ -381,10 +384,9 @@ export class PanneauConversation {
 
   /** Range ou ressort la barre des sessions (poignée de redimensionnement). */
   /** Écran du graphe que la voix pilote pendant un appel ; `avant` le rend visible avant chaque lot. */
-  brancherEcran(pilote: Pilote, avant: () => Promise<void>, surParcours: (chemin: string) => void) {
+  brancherEcran(pilote: Pilote, avant: () => Promise<void>) {
     this.ecran = pilote
     this.avantCommandes = avant
-    this.surParcours = surParcours
   }
 
   replierSessions(replie: boolean) {
@@ -419,6 +421,13 @@ export class PanneauConversation {
     await this.entrerProjet(projet.id)
   }
 
+  private async supprimerProjet(id: string) {
+    await api.supprimerProjet(id)
+    this.projets = this.projets.filter((p) => p.id !== id)
+    if (this.projet?.id === id) await this.entrerProjet(this.projets[0]?.id ?? null)
+    else this.sessions.afficherProjets(this.projets, this.projet?.id ?? null, this.utilisateur)
+  }
+
   private majSessions() {
     this.sessions.afficher(this.conversations, this.courante, this.enCours ? this.courante : null)
   }
@@ -443,7 +452,7 @@ export class PanneauConversation {
     this.courante = null
     this.generation++
     this.enCours = this.actif = false
-    this.titre.textContent = this.projet?.nom ?? 'Nouvelle recherche'
+    this.titre.textContent = this.projet?.nom ?? 'Nouvelle session'
     this.racine.classList.add('accueil-projet')
     this.contenu.innerHTML = this.accueil()
     this.etatTexte.textContent = ''
@@ -459,7 +468,7 @@ export class PanneauConversation {
     const p = this.projet
     if (!p) {
       return `<div class="accueil"><h2>Quelle question veux-tu explorer ?</h2>
-        <p>Crée un espace depuis le menu en haut à gauche pour ranger tes recherches.</p></div>`
+        <p>Crée un espace depuis le menu en haut à gauche pour ranger tes sessions.</p></div>`
     }
     const recentes = this.conversations.slice(0, 4)
     const description = p.description
@@ -498,6 +507,7 @@ export class PanneauConversation {
     etat.vider()
     this.majSessions()
     this.surChangement(id)
+    this.preparerVoix()
     await this.rechargerFil()
   }
 
@@ -557,7 +567,7 @@ export class PanneauConversation {
       : this.enCours
         ? 'Ajouter une consigne : il la lira à sa prochaine étape…'
         : !this.courante && this.projet
-          ? `Nouvelle recherche dans « ${this.projet.nom} »…`
+          ? `Nouvelle session dans « ${this.projet.nom} »…`
           : 'Pose une question de recherche…'
     this.majAriane()
   }
@@ -669,7 +679,9 @@ export class PanneauConversation {
     this.filVoixCharge = false
     etat.selectionner(ouvert ? VOIX : RACINE)
     this.majCible()
-    if (raison) this.contenu.insertAdjacentHTML('beforeend', `<div class="msg systeme">${echapper(raison)}</div>`)
+    // Le fil se recharge sur celui de l'orchestrateur : la raison (« Atlas voix a raccroché ») s'y affiche ensuite.
+    this.avisFin = raison ?? ''
+    if (!ouvert) this.preparerVoix() // prêt pour le prochain appel
     window.clearTimeout(this.suivi)
     void this.rafraichir()
   }
@@ -723,8 +735,18 @@ export class PanneauConversation {
         ([id, nom]) => `<button type="button" role="menuitemradio" aria-checked="${id === voix}" class="menu-ligne" data-voix="${id}">
           <span class="menu-texte"><b>${nom}</b></span>${coche(id === voix)}</button>`,
       ).join('') +
+      '<hr><p class="menu-titre">Son de l’appel <small>(clic pour écouter)</small></p>' +
+      SONS.map(
+        (s) => `<button type="button" role="menuitemradio" aria-checked="${s.id === sonChoisi()}" class="menu-ligne" data-son="${s.id}">
+          <span class="menu-texte"><b>${s.nom}</b><span>${s.description}</span></span>${coche(s.id === sonChoisi())}</button>`,
+      ).join('') +
       `<hr><button type="button" role="menuitemcheckbox" aria-checked="${optionsVoix.casque}" class="menu-ligne" data-option="casque">
         <span class="menu-texte"><b>Coupure immédiate</b><span>Atlas se tait dès que tu parles</span></span>${coche(optionsVoix.casque)}</button>`
+  }
+
+  /** Prépare Atlas voix à l'avance pour la conversation ouverte (sans effet si c'est déjà fait). */
+  private preparerVoix() {
+    if (this.courante && !this.appel.ouvert) void api.preparerVoix(this.courante).catch(() => {})
   }
 
   private async appeler() {
@@ -805,6 +827,13 @@ export class PanneauConversation {
         agent
           ? `<p class="vide">${echapper(nomAgent(etat.get(agent), agent))} n’a encore rien produit.</p>`
           : '<p class="vide">Session vide.</p>'
+    }
+
+    // Fil de l'orchestrateur chargé (messages ou « Session vide ») : la raison de la fin d'appel s'y ajoute.
+    const filCharge = this.dernierId !== undefined || this.contenu.querySelector(':scope > .vide')
+    if (this.avisFin && !estVoix(etat.selection) && filCharge) {
+      this.contenu.insertAdjacentHTML('beforeend', `<div class="msg systeme">${echapper(this.avisFin)}</div>`)
+      this.avisFin = ''
     }
 
     const changement = conv.en_cours !== this.enCours

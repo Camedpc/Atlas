@@ -1,9 +1,9 @@
 # Serveur longue durée d'Atlas (lecture du graphe + orchestrateur Codex). Voir deploiement/README.md.
 FROM python:3.13-slim
 
-# Outils que l'orchestrateur utilise dans ses commandes (git, recherche, téléchargements).
+# Outils que les agents utilisent dans leurs commandes (git, recherche, téléchargements, schémas Graphviz).
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends git curl ca-certificates ripgrep \
+    && apt-get install -y --no-install-recommends git curl ca-certificates ripgrep graphviz \
     && rm -rf /var/lib/apt/lists/*
 
 # L'agent a un accès complet… au conteneur seulement, et sans être root.
@@ -13,9 +13,10 @@ RUN useradd --create-home --uid 1000 atlas \
 WORKDIR /app
 COPY requirements.txt requirements-agents.txt ./
 RUN pip install --no-cache-dir -r requirements-agents.txt
-# Paquets scientifiques courants, visibles depuis le Python partagé des agents (espace/partage/python) ; plotly sert
-# aux scripts des figures 3D, qu'Atlas exécute avec ce Python (atlas/orchestrateur/figure3d.py).
-RUN pip install --no-cache-dir numpy scipy sympy pandas matplotlib networkx plotly
+# Paquets scientifiques courants, visibles depuis le Python partagé des agents (espace/partage/python).
+# pillow : animations GIF de matplotlib (PillowWriter) ; graphviz : schémas (binaire dot installé plus haut) ;
+# plotly : scripts des figures 3D, qu'Atlas exécute avec ce Python (atlas/orchestrateur/figure3d.py).
+RUN pip install --no-cache-dir numpy scipy sympy pandas matplotlib networkx pillow graphviz plotly
 
 COPY atlas ./atlas
 COPY api ./api

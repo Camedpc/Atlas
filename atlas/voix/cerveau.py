@@ -1,5 +1,4 @@
-"""Le cerveau d'Atlas voix : un thread Codex éphémère par appel (modèle rapide), et ses petites tâches de fond
-(dont l'agent navigateur, qui prépare les parcours du graphe).
+"""Le cerveau d'Atlas voix : un thread Codex éphémère par appel (modèle rapide), et ses petites tâches de fond.
 
 Même connexion Codex que l'orchestrateur (son CODEX_HOME), même bunker de session. Le thread a le terminal, le
 serveur MCP `atlas` (lecture du graphe) et le serveur MCP `voix` (atlas/voix/mcp_voix.py), qui rappelle
@@ -79,7 +78,7 @@ class Evenement:
 
 
 def serveur_atlas(conversation_id: str, session: Path, projet_id: str | None) -> dict[str, Any]:
-    """Le serveur MCP `atlas` (lecture du graphe, parcours) pour les threads de l'appel."""
+    """Le serveur MCP `atlas` (lecture du graphe) pour le thread de l'appel."""
     graphe = {"ATLAS_PROJET_ID": projet_id} if projet_id else {}
     return {
         "command": sys.executable,
@@ -237,12 +236,6 @@ class Cerveau:
 # ── Petites tâches de fond ──
 
 
-def modele_tache(genre: str) -> tuple[str, str]:
-    if genre == "navigateur":
-        return config.MODELE_NAVIGATEUR, config.EFFORT_NAVIGATEUR
-    return config.MODELE_TACHES, config.EFFORT_TACHES
-
-
 def _slug(texte: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", texte.lower()).strip("_")[:40] or "tache"
 
@@ -253,8 +246,6 @@ class Tache:
     titre: str
     consigne: str
     chemin: str
-    genre: str = "tache_vocale"
-    """tache_vocale (petite tâche pratique) ou navigateur (prépare un parcours du graphe)."""
     statut: str = "en_cours"  # en_cours | terminee | erreur | arretee
     resultat: str = ""
     etapes: list[str] = field(default_factory=list)
@@ -285,9 +276,9 @@ class Taches:
         self._compteur = itertools.count(1)
         self._en_vol: set[asyncio.Task[None]] = set()
 
-    def lancer(self, titre: str, consigne: str, genre: str = "tache_vocale") -> Tache:
+    def lancer(self, titre: str, consigne: str) -> Tache:
         id_ = next(self._compteur)
-        tache = Tache(id_, titre or consigne[:60], consigne, f"{VOIX}/{id_}_{_slug(titre or consigne)}", genre)
+        tache = Tache(id_, titre or consigne[:60], consigne, f"{VOIX}/{id_}_{_slug(titre or consigne)}")
         self.liste[id_] = tache
         t = asyncio.create_task(self._executer(tache))
         self._en_vol.add(t)
@@ -297,24 +288,20 @@ class Taches:
     async def _executer(self, tache: Tache) -> None:
         await self.sur_changement(tache)
         c = self.cerveau
-        navigateur = tache.genre == "navigateur"
         reglages: dict[str, Any] = {
             "project_root_markers": [],
             "features": {"hooks": False},
-            "web_search": "disabled" if navigateur else "live",
+            "web_search": "live",
             "shell_environment_policy": bunker.environnement_shell(c.session),
         }
-        if navigateur:
-            reglages["mcp_servers"] = {"atlas": serveur_atlas(c.conversation_id, c.session, c.projet_id)}
         if config_orchestrateur.BUNKER:
             reglages |= bunker.permissions_session(c.session)
-        modele, effort = modele_tache(tache.genre)
         try:
             thread = await c.codex.thread_start(
-                **parametres(c.session, modele, consigne_complete(tache.genre), reglages)
+                **parametres(c.session, config.MODELE_TACHES, consigne_complete("tache_vocale"), reglages)
             )
             tache.thread_id = thread.id
-            tache.handle = await thread.turn(tache.consigne, effort=ReasoningEffort(effort))
+            tache.handle = await thread.turn(tache.consigne, effort=ReasoningEffort(config.EFFORT_TACHES))
             dernier_message = ""
             statut = "erreur"
             async for notification in tache.handle.stream():

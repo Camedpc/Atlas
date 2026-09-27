@@ -6,7 +6,7 @@
         python/                             environnement Python : `pip install` sert à tout le monde
         pip/                                cache pip
       utilisateurs/<utilisateur>/<projet>/     un dossier par projet (`projets.dossier` dans Supabase)
-        doc_projet/  scripts_projet/        ressources du projet (les agents ne font que les lire)
+        doc_projet/  scripts_projet/        livrables du projet, rangés par sujet (écrits par les agents)
         sessions/<conversation>/            dossier de travail de la session
           conv/  docs_session/  scripts/  .tmp/
 
@@ -16,8 +16,9 @@ un choix, la consigne suffit. `shell_environment_policy` retire les secrets du s
 mais Codex l'ignore sur la VM (même `inherit = "none"`) ; sans sandbox, l'agent a de toute façon le même utilisateur
 Unix que le serveur (il pourrait lire /proc/1/environ).
 
-Avec ATLAS_BUNKER=1, le sandbox de Codex confine en plus l'écriture à la session et au partage, pour toutes les
-commandes des agents et leurs descendants (les serveurs MCP, lancés par Codex, y échappent). Il marche sous Windows,
+Avec ATLAS_BUNKER=1, le sandbox de Codex confine en plus l'écriture à la session, à doc_projet/ et scripts_projet/
+du projet et au partage, pour toutes les commandes des agents et leurs descendants (les serveurs MCP, lancés par
+Codex, y échappent). Il marche sous Windows,
 mais pas sur la VM : sous Linux, tout sandbox Codex passe par bubblewrap, qui a besoin de user namespaces que Docker
 et le durcissement d'Ubuntu (kernel.apparmor_restrict_unprivileged_userns) refusent. La VM tourne donc à 0.
 """
@@ -60,14 +61,22 @@ def binaires_python() -> Path:
 
 
 def permissions_session(session: Path, windows: bool = os.name == "nt") -> dict[str, Any]:
-    """Sandbox de l'écriture : lecture partout, écriture dans la session et le partage ; réseau ouvert."""
+    """Sandbox de l'écriture : lecture partout, écriture dans la session, dans doc_projet/ et scripts_projet/ du
+    projet, et dans le partage ; réseau ouvert."""
+    projet = session.parent.parent
     plateforme = {"windows": {"sandbox": "unelevated"}} if windows else {}  # sinon « blocked by policy »
     return plateforme | {
         "default_permissions": "bunker",
         "permissions": {
             "bunker": {
-                "description": "Session Atlas : écrit dans sa session et dans le partage.",
-                "filesystem": {":root": "read", str(session): "write", str(dossier_partage()): "write"},
+                "description": "Session Atlas : écrit dans sa session, les livrables du projet et le partage.",
+                "filesystem": {
+                    ":root": "read",
+                    str(session): "write",
+                    str(projet / "doc_projet"): "write",
+                    str(projet / "scripts_projet"): "write",
+                    str(dossier_partage()): "write",
+                },
                 "network": {"enabled": True},
             }
         },

@@ -1,0 +1,27 @@
+{"projet":"67900866-5415-4cf4-9262-4cd1cd16e06c","fps":60,"plans":[
+ {"nom":"g1-apercu","cles":[
+   {"t":0,"cx":2218,"cy":2771,"z":0.16},
+   {"t":6.2,"cx":1150,"cy":1520,"z":0.34,"ease":"easeSinInOut"}]},
+ {"nom":"g2-premisses","cles":[
+   {"t":0,"cx":1150,"cy":1520,"z":0.34},
+   {"t":2.6,"cx":1238,"cy":1600,"z":1.05,"ease":"easeCubicInOut"},
+   {"t":7.4,"cx":1150,"cy":1560,"z":0.8,"ease":"easeSinInOut","etat":{"selection":["prop_exacte"]}}]},
+ {"nom":"g3-lecture","cles":[
+   {"t":0,"cx":330,"cy":150,"z":1.15},
+   {"t":2.6,"cx":520,"cy":430,"z":1.1,"ease":"easeSinInOut"},
+   {"t":5.0,"cx":700,"cy":760,"z":1.0,"ease":"easeSinInOut"},
+   {"t":8.2,"cx":800,"cy":1000,"z":0.42,"ease":"easeCubicInOut"}]},
+ {"nom":"g5-figure","cles":[
+   {"t":0,"cx":958,"cy":3330,"z":1.1},
+   {"t":2.8,"cx":1800,"cy":4020,"z":0.62,"ease":"easeCubicInOut"},
+   {"t":6.4,"cx":2250,"cy":4040,"z":0.7,"ease":"easeSinInOut"}]},
+ {"nom":"g7a-verdict","cles":[
+   {"t":0,"cx":1238,"cy":1620,"z":1.9},
+   {"t":2.6,"cx":1250,"cy":1628,"z":2.3,"ease":"easeSinInOut"}]},
+ {"nom":"g7b-verdict","cles":[
+   {"t":0,"cx":1798,"cy":2470,"z":1.9},
+   {"t":2.6,"cx":1790,"cy":2476,"z":2.3,"ease":"easeSinInOut"}]},
+ {"nom":"g7c-verdict","cles":[
+   {"t":0,"cx":958,"cy":3310,"z":1.9},
+   {"t":2.6,"cx":966,"cy":3304,"z":2.3,"ease":"easeSinInOut"}]}
+]}

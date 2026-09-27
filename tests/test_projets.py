@@ -72,3 +72,27 @@ def test_conversations_d_un_projet(monkeypatch, tmp_path):
     assert client.get("/api/conversations", params={"projet_id": "p1"}).json() == []
     assert appels == [(("p1",), {"avec_sans_projet": False})]
     assert client.get("/api/conversations", params={"projet_id": "p2"}).status_code == 404
+
+
+def test_supprimer_un_projet(monkeypatch, tmp_path):
+    from atlas.orchestrateur.gestionnaire import gestionnaire
+
+    client = _client(monkeypatch, tmp_path)
+    supprimes = []
+    monkeypatch.setattr(projets, "supprimer_projet", supprimes.append)
+    monkeypatch.setattr(conversations, "lister_conversations", lambda *a, **kw: [])
+    assert client.delete("/api/projets/p1").status_code == 204
+    assert supprimes == [PROJET]
+    assert client.delete("/api/projets/p2").status_code == 404
+
+    session = type("C", (), {"id": "c1"})()
+    monkeypatch.setattr(conversations, "lister_conversations", lambda *a, **kw: [session])
+    monkeypatch.setattr(gestionnaire, "en_cours", lambda cid: cid == "c1")
+    assert client.delete("/api/projets/p1").status_code == 409
+    assert supprimes == [PROJET]
+
+
+def test_le_projet_par_defaut_ne_se_supprime_pas():
+    defaut = PROJET.model_copy(update={"dossier": projets.DOSSIER_PAR_DEFAUT})
+    with pytest.raises(projets.ProjetNonSupprimable):
+        projets.supprimer_projet(defaut)

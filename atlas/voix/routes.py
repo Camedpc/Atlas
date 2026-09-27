@@ -17,6 +17,7 @@ from ..orchestrateur.gestionnaire import TourIndisponible
 from ..orchestrateur.routes import verifier_jeton
 from . import config
 from .appels import appels
+from .prechauffage import prechauffages
 from .session import Session
 
 log = logging.getLogger(__name__)
@@ -24,6 +25,7 @@ log = logging.getLogger(__name__)
 DELAI_AUTH = 5.0
 
 routeur_appel = APIRouter(tags=["voix"])
+routeur_preparation = APIRouter(prefix="/api/conversations", tags=["voix"], dependencies=[Depends(verifier_jeton)])
 routeur_outils = APIRouter(prefix="/api/voix/appels/{appel_id}", tags=["voix"], dependencies=[Depends(verifier_jeton)])
 
 
@@ -56,7 +58,12 @@ async def appel(ws: WebSocket, conversation_id: str) -> None:
     projet = await asyncio.to_thread(projets.dossier_de, conversation.projet_id)
     projet_id = await asyncio.to_thread(projets.id_ou_defaut, conversation.projet_id)
     dossier = await asyncio.to_thread(bunker.preparer_session, conversation.id, projet)
-    session = Session(ws, conversation, dossier, projet_id)
+    # Atlas voix préparé à l'avance pour cette conversation (sinon, l'appel démarre à froid).
+    prepare = prechauffages.prendre(conversation.id)
+    if prepare is not None and not await prepare.attendre():
+        await prepare.fermer()
+        prepare = None
+    session = Session(ws, conversation, dossier, projet_id, prepare)
     appels.ouvrir(session)
     log.info("appel %s ouvert (conversation %s)", session.id, conversation.id)
     try:
@@ -64,6 +71,17 @@ async def appel(ws: WebSocket, conversation_id: str) -> None:
     finally:
         appels.fermer(session)
         log.info("appel %s fermé", session.id)
+
+
+@routeur_preparation.post("/{conversation_id}/voix/preparer")
+async def preparer(conversation_id: str) -> dict:
+    """Prépare Atlas voix pour le prochain appel dans cette conversation (processus Codex, contexte, échauffement)."""
+    if appels.en_cours(conversation_id):
+        return {"etat": "appel_en_cours"}
+    conversation = await asyncio.to_thread(conversations.lire_conversation, conversation_id)
+    if conversation is None:
+        raise HTTPException(404, "Conversation inexistante.")
+    return {"etat": await prechauffages.demander(conversation)}
 
 
 def _session(appel_id: str) -> Session:
@@ -80,7 +98,6 @@ class Consigne(BaseModel):
 class NouvelleTache(BaseModel):
     titre: str = ""
     consigne: str = Field(min_length=1)
-    genre: Literal["tache_vocale", "navigateur"] = "tache_vocale"
 
 
 class Message(BaseModel):
@@ -114,7 +131,7 @@ def lister_taches(appel_id: str) -> list[dict]:
 
 @routeur_outils.post("/taches")
 async def lancer_tache(appel_id: str, corps: NouvelleTache) -> dict:
-    tache = _session(appel_id).taches.lancer(corps.titre, corps.consigne, corps.genre)
+    tache = _session(appel_id).taches.lancer(corps.titre, corps.consigne)
     return {"id": tache.id, "statut": "lancée", "note": "Le résultat arrivera dans un message [Système]."}
 
 
@@ -133,6 +150,15 @@ class Montrer(BaseModel):
 
 class Zoom(BaseModel):
     facteur: float
+
+
+class Fin(BaseModel):
+    raison: str = ""
+
+
+@routeur_outils.post("/terminer")
+async def terminer(appel_id: str, corps: Fin) -> dict:
+    return await _session(appel_id).demander_fin(corps.raison)
 
 
 class Deplacements(BaseModel):
@@ -164,21 +190,6 @@ async def effacer_ecran(appel_id: str) -> dict:
 @routeur_outils.post("/ecran/zoomer")
 async def zoomer(appel_id: str, corps: Zoom) -> dict:
     return await _session(appel_id).ecran.zoomer(corps.facteur)
-
-
-class Etape(BaseModel):
-    parcours: str = Field(min_length=1)
-    etape: int = 1
-
-
-@routeur_outils.post("/ecran/parcours")
-async def jouer_etape(appel_id: str, corps: Etape) -> dict:
-    return await _session(appel_id).ecran.jouer_etape(corps.parcours, corps.etape)
-
-
-@routeur_outils.post("/ecran/parcours/derouler")
-async def derouler_parcours(appel_id: str, corps: Etape) -> dict:
-    return await _session(appel_id).derouler(corps.parcours, corps.etape)
 
 
 @routeur_outils.post("/ecran/deplacer")

@@ -16,7 +16,9 @@ import type { Statut } from './api'
 import type { Contenu } from './graphe-contenu'
 import { echapper, enLigne, formulesAffichees, rendreTex, texConfiance, texteBrut } from './formules'
 import { COULEURS_FIGURE, dessinerCaseScene, dessinerIcone, dessinerIcone3D, dessinerImage, dessinerTrace, geometrieBloc, htmlFigure, TETE_FIGURE, type ImagesFigures } from './graphe-figures'
-import { CADRE, CLE_FONCTION, FONCTION, type Bloc, type Cadre, type Modele, type Rect } from './graphe-modele'
+import { cleDocument, COULEURS_DOCUMENT, detailSilhouette, htmlDocument, silhouette, TETE_DOCUMENT, titreDocument } from './graphe-documents'
+import { contourDecision } from './graphe-decision'
+import { CADRE, CLE_FONCTION, estPseudo, FONCTION, LIBELLES_RELATION, type Bloc, type Cadre, type Modele, type Rect } from './graphe-modele'
 
 export const SERIF = `'CMU Serif Atlas', KaTeX_Main, 'Latin Modern Roman', 'CMU Serif', 'Computer Modern', 'Times New Roman', serif`
 
@@ -81,7 +83,7 @@ export interface EtatDessin {
   titreSurvole: string | null
   /** Nœuds estompés (filtre « Cette conversation », filtres du pilotage). */
   estompes: Set<string> | null
-  /** Nœuds surlignés par le pilotage (voix, parcours) : même accent que la sélection, sans leur lignée. */
+  /** Nœuds surlignés par le pilotage (voix) : même accent que la sélection, sans leur lignée. */
   surlignes?: Set<string> | null
   /** Nœuds glissés posés sur une case occupée. */
   conflits: Set<string> | null
@@ -222,15 +224,24 @@ export function dessiner(ctx: CanvasRenderingContext2D, e: EtatDessin, contenu: 
 
   // 3. Blocs et nœuds-fonctions.
   const actifs = e.hypothese?.portee ?? null
+  const losanges = new Map<string, number[]>()
   if (niveau === 'point') {
     const parCouleur = new Map<string, number[]>()
+    const documents: Bloc[] = []
     for (const b of m.blocs.values()) {
       if (b.cache || b.x > vue.x1 || b.x + b.w < vue.x0 || b.y > vue.y1 || b.y + b.h < vue.y0) continue
-      const cote = b.figure ? Math.max(3, Math.min(9, b.h * z * 0.3)) : Math.max(3, Math.min(7, b.w * z * 0.18))
+      if (b.document) {
+        documents.push(b)
+        continue
+      }
+      const cote = b.figure ? Math.max(3, Math.min(9, b.h * z * 0.3)) : b.decision ? Math.max(10, Math.min(16, b.h * z * 0.45))
+        : Math.max(3, Math.min(7, b.w * z * 0.18))
       const couleur = e.selection.has(b.id) || e.survol === b.id || e.surlignes?.has(b.id) ? PALETTE.accent
         : b.figure ? COULEURS_FIGURE.cadre : b.groupe ? m.cadres.get(b.groupe)!.teinte : PALETTE.encre
       const cle = e.estompes?.has(b.id) ? `${couleur}|e` : couleur
-      const liste = parCouleur.get(cle) ?? parCouleur.set(cle, []).get(cle)!
+      // Une décision reste un losange de loin, centré sur son losange.
+      const tas = b.decision ? losanges : parCouleur
+      const liste = tas.get(cle) ?? tas.set(cle, []).get(cle)!
       liste.push(X(b.x + b.w / 2) - cote / 2, Y(b.y + b.h / 2) - cote / 2, cote)
     }
     for (const c of m.cadres.values()) {
@@ -248,6 +259,8 @@ export function dessiner(ctx: CanvasRenderingContext2D, e: EtatDessin, contenu: 
       for (let i = 0; i < liste.length; i += 3) ctx.rect(liste[i]!, liste[i + 1]!, liste[i + 2]!, liste[i + 2]!)
       ctx.fill()
     }
+    // Documents : leur silhouette seule (coin corné, onglet), qui se lit même en petit.
+    for (const b of documents) dessinerSilhouetteLointaine(ctx, e, b, X, Y)
   } else {
     for (const b of m.blocs.values()) {
       if (b.cache || b.x > vue.x1 || b.x + b.w < vue.x0 || b.y > vue.y1 || b.y + b.h < vue.y0) continue
@@ -259,7 +272,21 @@ export function dessiner(ctx: CanvasRenderingContext2D, e: EtatDessin, contenu: 
         if (!pose) dessinerTitreFigure(ctx, b, X, Y, z, estompe)
         continue
       }
+      if (b.document) {
+        dessinerDocument(ctx, e, b, X, Y, estompe)
+        const figures = figuresParFichier(m)
+        const pose = niveau === 'contenu'
+          && contenu.placer(b.id, cleDocument(b, figures), () => htmlDocument(b, figures), X(b.x), Y(b.y), z, b.w, b.h, estompe)
+        if (!pose) dessinerTitreDocument(ctx, b, X, Y, z, estompe)
+        continue
+      }
       const sous = actifs?.has(b.id) ?? false
+      if (b.decision) {
+        dessinerDecision(ctx, e, b, X, Y, estompe)
+        const pose = niveau === 'contenu' && contenu.placer(b.id, cleBloc(b), () => htmlBloc(b), X(b.x), Y(b.y), z, b.w, b.h, estompe)
+        if (!pose) dessinerTitreDecision(ctx, b, X, Y, z, estompe)
+        continue
+      }
       dessinerBloc(ctx, e, b, X, Y, estompe, sous)
       let pose = false
       if (niveau === 'contenu') {
@@ -278,8 +305,28 @@ export function dessiner(ctx: CanvasRenderingContext2D, e: EtatDessin, contenu: 
       if (!pose) dessinerTitreFonction(ctx, c, X, Y, z)
     }
   }
+  if (niveau !== 'point') dessinerRelations(ctx, e, vue, X, Y)
   // 4. De très loin, les noms des cadres par-dessus tout : c'est ce qu'on lit d'abord.
   if (niveau === 'point') dessinerTitresDeLoin(ctx, e, vue, X, Y)
+  // Les décisions restent visibles de très loin, par-dessus les noms des cadres.
+  for (const [cle, liste] of losanges) {
+    const [couleur, estompe] = cle.split('|')
+    // Plein, de la couleur du cadre, cerné de blanc : lisible par-dessus le nom d'un cadre.
+    ctx.fillStyle = estompe ? rgba(couleur!, 0.3) : couleur!
+    ctx.strokeStyle = PALETTE.surface
+    ctx.lineWidth = 2
+    ctx.beginPath()
+    for (let i = 0; i < liste.length; i += 3) {
+      const r = liste[i + 2]! * 0.6, cx = liste[i]! + liste[i + 2]! / 2, cy = liste[i + 1]! + liste[i + 2]! / 2
+      ctx.moveTo(cx, cy - r)
+      ctx.lineTo(cx + r, cy)
+      ctx.lineTo(cx, cy + r)
+      ctx.lineTo(cx - r, cy)
+      ctx.closePath()
+    }
+    ctx.stroke()
+    ctx.fill()
+  }
   contenu.finImage()
 }
 
@@ -470,17 +517,20 @@ function dessinerLiens(ctx: CanvasRenderingContext2D, e: EtatDessin, vue: Rect, 
     if (!coupe(l.bbox, vue)) continue
     const accent = lignee(l.de) || lignee(l.vers)
     const estompe = !!e.estompes && (e.estompes.has(l.de) || e.estompes.has(l.vers))
-    const cle = `${accent ? 'a' : l.role === 'auxiliaire' ? 'x' : 'p'}|${l.validite === 'invalide' ? 'i' : 'v'}|${estompe && !accent ? 'e' : ''}`
+    // Lien de document (« l ») : gris et nommé ; les autres selon leur rôle.
+    const genre = l.relation ? 'l' : l.role === 'auxiliaire' ? 'x' : l.role === 'decision' ? 'd' : l.role === 'ecartee' ? 'r' : 'p'
+    const cle = `${accent ? 'a' : genre}|${l.validite === 'invalide' ? 'i' : 'v'}|${estompe && !accent ? 'e' : ''}|${genre}`
     ;(styles.get(cle) ?? styles.set(cle, []).get(cle)!).push(l)
   }
   // Les liaisons de la lignée en dernier (par-dessus).
   const cles = [...styles.keys()].sort((a, b) => (a[0] === 'a' ? 1 : 0) - (b[0] === 'a' ? 1 : 0))
   for (const cle of cles) {
-    const [genre, validite, estompe] = cle.split('|')
-    const couleur = genre === 'a' ? PALETTE.accent : genre === 'x' ? PALETTE.gris : PALETTE.encre
+    const [genre, validite, estompe, sorte] = cle.split('|')
+    const couleur = genre === 'a' ? PALETTE.accent : genre === 'l' ? COULEURS_FIGURE.cadre : genre === 'x' || genre === 'r' ? PALETTE.gris : PALETTE.encre
     ctx.strokeStyle = rgba(couleur, estompe ? 0.3 : 1)
-    ctx.lineWidth = genre === 'a' ? epaisseur + 0.5 : genre === 'x' ? Math.max(0.6, epaisseur - 0.15) : epaisseur
-    ctx.setLineDash(validite === 'i' ? [1, 2.2] : [])
+    // Flèche d'une décision vers une option écartée : tireté gris et croix.
+    ctx.lineWidth = genre === 'a' ? epaisseur + 0.5 : genre === 'x' || genre === 'l' ? Math.max(0.6, epaisseur - 0.15) : epaisseur
+    ctx.setLineDash(sorte === 'r' ? [3, 3] : validite === 'i' ? [1, 2.2] : [])
     ctx.beginPath()
     for (const l of styles.get(cle)!) {
       const p = l.points
@@ -494,9 +544,104 @@ function dessinerLiens(ctx: CanvasRenderingContext2D, e: EtatDessin, vue: Rect, 
       const p = l.points
       const n = p.length
       pointe(ctx, X(p[n - 2]!), Y(p[n - 1]!), X(p[n - 2]!) - X(p[n - 4]!), Y(p[n - 1]!) - Y(p[n - 3]!), tPointe)
+      // Option écartée : une croix sur la liaison, juste après le losange.
+      if (sorte === 'r') {
+        const cx = X(p[0]!) + 12 * z, cy = Y(p[1]!), r = Math.max(2.5, 4.5 * z)
+        ctx.moveTo(cx - r, cy - r)
+        ctx.lineTo(cx + r, cy + r)
+        ctx.moveTo(cx + r, cy - r)
+        ctx.lineTo(cx - r, cy + r)
+      }
     }
     ctx.stroke()
   }
+  ctx.restore()
+}
+
+/** Relation écrite sur les liens de documents, par-dessus les blocs (elle peut mordre sur leur bord : un fin
+ * détourage blanc la garde lisible), dès que le texte se lit. */
+function dessinerRelations(ctx: CanvasRenderingContext2D, e: EtatDessin, vue: Rect, X: (x: number) => number, Y: (y: number) => number): void {
+  const z = e.cam.z
+  const liens = e.modele.liens
+  const lignee = (id: string) => e.survol === id || e.selection.has(id)
+  const fs = 11 * z
+  if (fs < 6) return
+  ctx.save()
+  ctx.font = `italic 400 ${fs}px ${SERIF}`
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'alphabetic'
+  ctx.strokeStyle = PALETTE.surface
+  ctx.lineWidth = 3
+  ctx.lineJoin = 'round'
+  for (const l of liens) {
+    if (!l.relation || !coupe(l.bbox, vue)) continue
+    const accent = lignee(l.de) || lignee(l.vers)
+    const estompe = !!e.estompes && (e.estompes.has(l.de) || e.estompes.has(l.vers)) && !accent
+    ctx.fillStyle = accent ? PALETTE.accent : rgba(PALETTE.gris, estompe ? 0.3 : 1)
+    // Sur le plus long segment horizontal, juste au-dessus du trait.
+    const p = l.points
+    let meilleur = 0, xm = p[0]!, ym = p[1]!
+    for (let i = 0; i + 3 < p.length; i += 2) {
+      if (Math.abs(p[i + 1]! - p[i + 3]!) > 0.5) continue
+      const long = Math.abs(p[i + 2]! - p[i]!)
+      if (long > meilleur) {
+        meilleur = long
+        xm = (p[i]! + p[i + 2]!) / 2
+        ym = p[i + 1]!
+      }
+    }
+    // Centrée sur l'intervalle, comme dans la maquette : elle peut mordre sur le bord vertical des blocs voisins.
+    ctx.strokeText(LIBELLES_RELATION[l.relation], X(xm), Y(ym) - 2.5 * z)
+    ctx.fillText(LIBELLES_RELATION[l.relation], X(xm), Y(ym) - 2.5 * z)
+  }
+  ctx.restore()
+}
+
+/** Losange d'une décision : il remplit son bloc. Une décision est toujours établie : trait plein ; sélection et survol
+ * en bleu. */
+function dessinerDecision(ctx: CanvasRenderingContext2D, e: EtatDessin, b: Bloc, X: (x: number) => number, Y: (y: number) => number, estompe: boolean): void {
+  const contour = contourDecision(b.w, b.h)
+  const choisi = e.selection.has(b.id) || !!e.surlignes?.has(b.id)
+  const conflit = !!e.conflits?.has(b.id)
+  const survole = e.survol === b.id
+  ctx.save()
+  if (estompe) ctx.globalAlpha = 0.3
+  ctx.beginPath()
+  for (let i = 0; i < contour.length; i += 2) {
+    const x = X(b.x + contour[i]!), y = Y(b.y + contour[i + 1]!)
+    if (i) ctx.lineTo(x, y)
+    else ctx.moveTo(x, y)
+  }
+  ctx.closePath()
+  ctx.fillStyle = PALETTE.surface
+  ctx.fill()
+  ctx.strokeStyle = conflit ? PALETTE.erreur : choisi || survole ? PALETTE.accent : PALETTE.encre
+  ctx.lineWidth = conflit || choisi ? 1.6 : survole ? 1.4 : 0.9
+  ctx.lineJoin = 'miter'
+  ctx.stroke()
+  ctx.restore()
+}
+
+/** Décision au niveau « titre » (ou en attendant la composition HTML) : « Décision D1 » et le nom, centrés dans le
+ * rectangle inscrit du losange ; de loin, le titre grossit (un losange, un mot). */
+function dessinerTitreDecision(ctx: CanvasRenderingContext2D, b: Bloc, X: (x: number) => number, Y: (y: number) => number, z: number, estompe: boolean): void {
+  const { fs, g } = corpsTitre(z)
+  const interligne = CORPS * 1.2 * g
+  const max = Math.max(0, Math.floor((b.h * 0.62) / interligne) - 1)
+  const suite = max ? lignes(texteBrut(b.noeud.nom), (b.w * 0.56) / g, max) : []
+  const cx = X(b.x + b.w / 2)
+  const y0 = Y(b.y + b.h / 2) - (suite.length * interligne * z) / 2
+  ctx.save()
+  if (estompe) ctx.globalAlpha = 0.3
+  ctx.fillStyle = PALETTE.encre
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.font = `700 ${fs}px ${SERIF}`
+  // De loin, « D1 » seul si « Décision D1 » déborderait du losange.
+  const tete = ctx.measureText(`${b.libelle} ${b.numero}`).width <= b.w * z * 0.7 ? `${b.libelle} ${b.numero}` : b.numero
+  ctx.fillText(tete, cx, y0)
+  ctx.font = `400 ${fs}px ${SERIF}`
+  suite.forEach((l, k) => ctx.fillText(l, cx, y0 + (k + 1) * interligne * z))
   ctx.restore()
 }
 
@@ -639,7 +784,7 @@ function calculerAgregat(c: Cadre, m: Modele): Agregat {
   let confiance: number | null = null
   let maillon: Bloc | null = null
   for (const b of m.blocs.values()) {
-    if (b.figure || !b.groupe || !dansCadre(m, b.groupe, c.id)) continue
+    if (estPseudo(b) || !b.groupe || !dansCadre(m, b.groupe, c.id)) continue
     const s = b.noeud.statut
     if (RANG_STATUT[s] < RANG_STATUT[statut]) statut = s
     if (s === 'a_verifier') aVerifier++
@@ -744,7 +889,7 @@ function dessinerTitreFonction(ctx: CanvasRenderingContext2D, c: Cadre, X: (x: n
 /** « Lemme 7 » : référence du nœud illustré par une figure (null s'il n'est pas dans le graphe). */
 export function referenceDe(m: Modele, noeudId: string): string | null {
   const b = m.blocs.get(noeudId)
-  return b && !b.figure ? `${b.libelle} ${b.numero}` : null
+  return b && !estPseudo(b) ? `${b.libelle} ${b.numero}` : null
 }
 
 function cleFigure(b: Bloc, m: Modele): string {
@@ -872,6 +1017,111 @@ function dessinerAttaches(ctx: CanvasRenderingContext2D, e: EtatDessin, vue: Rec
   ctx.restore()
 }
 
+// ─── Documents ───────────────────────────────────────────────────────────────
+
+const figuresEnCache = new WeakMap<Modele, Map<string, string>>()
+/** Fichier d'origine des images de figures (relatif au projet) → « Fig. 4 » : signalé dans l'aperçu d'un dossier. */
+function figuresParFichier(m: Modele): Map<string, string> {
+  let f = figuresEnCache.get(m)
+  if (!f) {
+    f = new Map()
+    for (const b of m.blocs.values()) if (b.figure?.fichier) f.set(b.figure.fichier, `Fig. ${b.numero}`)
+    figuresEnCache.set(m, f)
+  }
+  return f
+}
+
+function styleDocument(ctx: CanvasRenderingContext2D, e: EtatDessin, b: Bloc): void {
+  const choisi = e.selection.has(b.id) || !!e.surlignes?.has(b.id)
+  const conflit = !!e.conflits?.has(b.id)
+  const survole = e.survol === b.id
+  const perdu = !b.document!.present
+  ctx.strokeStyle = conflit || (perdu && !choisi) ? PALETTE.erreur : choisi || survole ? PALETTE.accent : COULEURS_DOCUMENT.trait
+  ctx.lineWidth = conflit || choisi ? 1.6 : survole ? 1.4 : 0.9
+  ctx.setLineDash(perdu && !choisi ? [4, 3] : [])
+}
+
+/** Silhouette du document (coin corné ou onglet), fond blanc ; le contenu vient du HTML ou du titre. */
+function dessinerDocument(ctx: CanvasRenderingContext2D, e: EtatDessin, b: Bloc, X: (x: number) => number, Y: (y: number) => number, estompe: boolean): void {
+  const z = e.cam.z
+  const x0 = Math.round(X(b.x)) + 0.5, y0 = Math.round(Y(b.y)) + 0.5
+  const w = Math.round(b.w * z) - 1, h = Math.round(b.h * z) - 1
+  const dossier = b.document!.genre === 'dossier'
+  ctx.save()
+  if (estompe) ctx.globalAlpha = 0.3
+  ctx.beginPath()
+  silhouette(ctx, x0, y0, w, h, dossier, z)
+  ctx.fillStyle = PALETTE.surface
+  ctx.fill()
+  styleDocument(ctx, e, b)
+  ctx.stroke()
+  ctx.setLineDash([])
+  ctx.lineWidth = 0.8
+  if (dossier) ctx.strokeStyle = COULEURS_DOCUMENT.filet
+  detailSilhouette(ctx, x0, y0, w, h, dossier, z)
+  // Filet sous la tête d'un fichier (l'onglet d'un dossier en tient lieu).
+  if (!dossier && z >= 0.3) {
+    const yf = Math.round(Y(b.y + TETE_DOCUMENT)) + 0.5
+    ctx.strokeStyle = COULEURS_DOCUMENT.filet
+    ctx.lineWidth = 0.6
+    ctx.beginPath()
+    ctx.moveTo(x0 + 6 * z, yf)
+    ctx.lineTo(x0 + w - 18 * z, yf)
+    ctx.stroke()
+  }
+  ctx.restore()
+}
+
+/** De très loin : une petite silhouette à la place du carré des nœuds. */
+function dessinerSilhouetteLointaine(ctx: CanvasRenderingContext2D, e: EtatDessin, b: Bloc, X: (x: number) => number, Y: (y: number) => number): void {
+  const z = e.cam.z
+  const cote = Math.max(4, Math.min(9, b.w * z * 0.2))
+  const x0 = X(b.x + b.w / 2) - cote / 2, y0 = Y(b.y + b.h / 2) - cote / 2
+  ctx.save()
+  if (e.estompes?.has(b.id)) ctx.globalAlpha = 0.3
+  ctx.beginPath()
+  silhouette(ctx, x0, y0, cote, cote, b.document!.genre === 'dossier', cote / 30)
+  ctx.fillStyle = PALETTE.surface
+  ctx.fill()
+  styleDocument(ctx, e, b)
+  ctx.lineWidth = 1
+  ctx.stroke()
+  ctx.restore()
+}
+
+/** Tête d'un document sur le canevas (vue intermédiaire, ou en attendant le HTML) : « Script 1 — simulation.py ». */
+function dessinerTitreDocument(ctx: CanvasRenderingContext2D, b: Bloc, X: (x: number) => number, Y: (y: number) => number, z: number, estompe: boolean): void {
+  const { fs } = corpsTitre(z)
+  const dossier = b.document!.genre === 'dossier'
+  ctx.save()
+  ctx.beginPath()
+  ctx.rect(X(b.x), Y(b.y), b.w * z, b.h * z)
+  ctx.clip()
+  if (estompe) ctx.globalAlpha = 0.3
+  ctx.textBaseline = 'middle'
+  ctx.textAlign = 'left'
+  ctx.fillStyle = b.document!.present ? PALETTE.encre : PALETTE.erreur
+  // De près, sur une ligne dans la tête ; de loin (titre grossi), sur deux lignes : la nature, puis le nom.
+  const deLoin = fs > TETE_DOCUMENT * z * 0.8
+  const x0 = X(b.x + 8)
+  const fin = X(b.x + b.w - (dossier ? 8 : 16))
+  const ym = deLoin ? Y(b.y + b.h / 2) - fs * 0.6 : Y(b.y + TETE_DOCUMENT / 2)
+  const mot = b.libelle
+  ctx.font = `400 ${fs}px ${SERIF}`
+  ctx.fillText(mot[0]!, x0, ym)
+  let x = x0 + ctx.measureText(mot[0]!).width
+  ctx.font = `400 ${fs * 0.78}px ${SERIF}`
+  ctx.fillText(mot.slice(1).toUpperCase(), x, ym)
+  x += ctx.measureText(mot.slice(1).toUpperCase()).width
+  ctx.font = `400 ${fs}px ${SERIF}`
+  if (deLoin) {
+    ctx.fillText(` ${b.numero}`, x, ym)
+    const nom = titreDocument(b).slice(` ${b.numero} — `.length)
+    ctx.fillText(tronquer(ctx, nom, fin - x0), x0, ym + fs * 1.2)
+  } else ctx.fillText(tronquer(ctx, titreDocument(b), fin - x), x, ym)
+  ctx.restore()
+}
+
 // ─── Composition HTML (niveau « contenu ») ───────────────────────────────────
 
 const VALIDITE_COURTE = { valide: 'vérifiée', a_verifier: 'à vérifier', invalide: 'refusée' } as const
@@ -889,6 +1139,7 @@ function texDe(enonce: string): string {
 
 export function cleBloc(b: Bloc): string {
   const n = b.noeud
+  if (b.decision) return `${b.id}|${b.numero}|${n.nom}|${b.w}|${b.h}|decision`
   return `${b.id}|${b.numero}|${b.libelle}|${n.nom}|${n.enonce}|${n.statut}|${b.w}|${b.h}|${b.validite}|${b.confiance}|${b.portee?.size ?? ''}|${JSON.stringify(n.details ?? '')}`
 }
 
@@ -903,6 +1154,10 @@ function piedBloc(b: Bloc): string {
 
 export function htmlBloc(b: Bloc): string {
   const n = b.noeud
+  if (b.decision) {
+    // Le losange ne porte que la tête et le nom ; le reste s'ouvre dans la fiche (double-clic).
+    return `<div class="gr-corps gr-dec-corps"><div class="gr-corps-int"><span class="gr-type">${echapper(b.libelle)} <span class="gr-num">${echapper(b.numero)}</span></span><br>${enLigne(n.nom)}</div></div>`
+  }
   if (b.hypothese) {
     // Présentation de R37 : un paragraphe \newtheorem, tête grasse, nom entre parenthèses, corps italique.
     const d = n.details as { hypothese?: unknown; portee?: unknown } | null

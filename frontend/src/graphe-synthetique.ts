@@ -4,7 +4,7 @@
 // pendule de tests/donnees/pendule3d.py, produit par Atlas dans graphe-synthetique-scene.json). Lecture seule : rien
 // n'est écrit en base.
 
-import type { Demonstration, FigureVue, Graphe, GroupeVue, Noeud, PlacementVue, RolePremisse, SceneFigure, Statut, TypeNoeud, Vue } from './api'
+import type { Demonstration, DocumentVue, FigureVue, Graphe, GroupeVue, LienDocumentVue, Noeud, PlacementVue, RolePremisse, SceneFigure, Statut, TypeNoeud, Vue } from './api'
 
 const TYPES: TypeNoeud[] = ['lemme', 'proposition', 'lemme', 'assertion', 'calcul', 'observation', 'theoreme', 'definition']
 const STATUTS: Statut[] = ['etabli', 'etabli', 'a_verifier', 'a_verifier', 'suspendu', 'invalide', 'ouvert']
@@ -79,6 +79,28 @@ export function jeuSynthetique(n: number): { graphe: Graphe; vue: Vue } {
       })
     }
   }
+  // Décisions (losanges) entre deux chapitres voisins, hors cadre : une branche = un cadre (le chapitre suivant, et
+  // celui du dessous suivi en parallèle), et une option écartée qui vise un nœud.
+  for (let k = 0; k + 1 < chapitres; k += 2) {
+    if (k % parLigne === parLigne - 1) continue
+    const id = `d${k}`
+    const c0 = (k % parLigne) * 9, l0 = Math.floor(k / parLigne) * 9
+    const dessous = k + 1 + parLigne < chapitres ? [`ch${k + 1 + parLigne}`] : []
+    noeuds.push({
+      projet_id: 'synthetique', id, nom: `Suite du chapitre ${k + 1}`, enonce: 'Décision synthétique.', admis: false,
+      type: 'decision', parents: [], enfants: [], conversation_id: null, statut: 'etabli', demonstrations: [],
+      details: {
+        question: `Après le chapitre ${k + 1}, quel modèle ? On suit les deux.`,
+        alternatives: [
+          { libelle: 'Modèle stationnaire', retenue: true, groupes: [`ch${k + 1}`] },
+          { libelle: 'Modèle transitoire', retenue: true, groupes: dessous },
+          { libelle: 'Modèle microscopique', retenue: false, raison: 'Trop coûteux pour ce qu’il apporte.', noeuds: [`n${(k + 1) * parChapitre + 20}`] },
+        ],
+        raison: 'Les deux régimes se confrontent aux mêmes mesures.',
+      },
+    })
+    placements.push({ noeud_id: id, groupe_id: null, colonne: c0 + 7, ligne: l0 + 7, largeur: 1, hauteur: 1, fixe: false })
+  }
   const parId = new Map(noeuds.map((x) => [x.id, x]))
   const aretes: Graphe['aretes'] = []
   for (const x of noeuds) {
@@ -104,17 +126,46 @@ export function jeuSynthetique(n: number): { graphe: Graphe; vue: Vue } {
       largeur: 3, hauteur: 2, fixe: false,
     })
   }
-  // Scène 3D : à droite de la première figure, dans le premier chapitre.
+  // Documents : un script, son dossier de résultats, un article, des données (dont une introuvable), au chapitre 1.
+  const documents: DocumentVue[] = []
+  const liens_documents: LienDocumentVue[] = []
+  if (parId.has('n7') && figures[0]) {
+    const doc = (id: string, chemin: string, genre: DocumentVue['genre'], apercu: DocumentVue['apercu'], colonne: number, ligne: number, present = true) => {
+      documents.push({ id, chemin, genre, titre: id, description: null, apercu, present, modifie_le: '2026-09-28T00:00:00Z' })
+      placements.push({ noeud_id: `doc:${id}`, groupe_id: 'ch0', colonne, ligne, largeur: 1, hauteur: 1, fixe: false })
+    }
+    doc('simulation', 'scripts_projet/double-pendule/simulation.py', 'fichier', {
+      nature: 'script', lignes: 142, extrait: [
+        '"""Double pendule : RK4, pas fixe."""', 'def derivees(etat, m1, m2, l1, l2, g):', '    t1, w1, t2, w2 = etat',
+        '    d = t2 - t1', '    ...', 'def integrer(etat0, dt=1e-3, T=30):',
+      ],
+    }, 3, 6)
+    doc('resultats', 'scripts_projet/double-pendule/resultats', 'dossier', {
+      nature: 'dossier', entrees: ['trajectoire.gif', 'energie.png', 'energie.csv', 'trajectoire.csv', 'params.json'],
+      autres: 3, fichiers: 9, dossiers: 0,
+    }, 4, 6)
+    doc('shinbrot', 'doc_projet/sources/shinbrot-1992.pdf', 'fichier', {
+      nature: 'document', pages: 12, titre_pdf: 'Chaos in a double pendulum',
+    }, 3, 7)
+    doc('mesures', 'scripts_projet/double-pendule/mesures.csv', 'fichier', { nature: 'donnees', colonnes: ['t', 'theta1'] }, 4, 7, false)
+    liens_documents.push(
+      { de: 'n7', vers: 'doc:simulation', relation: 'implemente' },
+      { de: 'doc:simulation', vers: 'doc:resultats', relation: 'ecrit_dans' },
+      { de: 'doc:simulation', vers: `fig:${figures[0].id}`, relation: 'produit' },
+      { de: 'doc:shinbrot', vers: 'doc:mesures', relation: 'source' },
+    )
+  }
+  // Scène 3D : à droite de la première figure et des documents, dans le premier chapitre.
   if (parId.has('n10')) {
     figures.push({
       id: 'synth_3d', noeud_id: 'n10', titre: 'Pendule simple, $\\theta_0 = 1$ rad (une période)',
       legende: 'Pendule non linéaire intégré par RK4, joué en boucle.', trace: null, image: false,
       image_largeur: null, image_hauteur: null, scene: true, source: 'tests/donnees/pendule3d.py',
-      modifie_le: '2026-09-27T00:00:00Z',
+      fichier: null, modifie_le: '2026-09-27T00:00:00Z',
     })
-    placements.push({ noeud_id: 'fig:synth_3d', groupe_id: 'ch0', colonne: 4, ligne: 6, largeur: 2, hauteur: 2, fixe: false })
+    placements.push({ noeud_id: 'fig:synth_3d', groupe_id: 'ch0', colonne: 5, ligne: 6, largeur: 2, hauteur: 2, fixe: false })
   }
-  return { graphe: { noeuds, aretes }, vue: { groupes, placements, etiquettes: [], marques: [], figures } }
+  return { graphe: { noeuds, aretes }, vue: { groupes, placements, etiquettes: [], marques: [], figures, documents, liens_documents } }
 }
 
 /** Scène de la figure 3D du jeu synthétique. Pour la refaire après un changement du format : voir

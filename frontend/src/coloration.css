@@ -1,0 +1,67 @@
+/* Coloration syntaxique (coloration.ts) : couleurs sourdes sur fond clair, dans l'esprit des listings LaTeX.
+   Les commentaires en gris italique ; aucune couleur vive. */
+
+.hl {
+  --hl-mot: #6b3d8f;
+  --hl-chaine: #2f6b3d;
+  --hl-nombre: #9a4f1c;
+  --hl-commentaire: #8a8a8a;
+  --hl-nom: #1d5fae;
+  --hl-interne: #17808b;
+  color: #1f1f1f;
+}
+
+.hl .hljs-keyword,
+.hl .hljs-literal,
+.hl .hljs-selector-tag,
+.hl .hljs-bullet {
+  color: var(--hl-mot);
+}
+
+.hl .hljs-string,
+.hl .hljs-regexp,
+.hl .hljs-template-string {
+  color: var(--hl-chaine);
+}
+
+.hl .hljs-number,
+.hl .hljs-meta,
+.hl .hljs-symbol,
+.hl .hljs-code {
+  color: var(--hl-nombre);
+}
+
+.hl .hljs-comment,
+.hl .hljs-quote {
+  color: var(--hl-commentaire);
+  font-style: italic;
+}
+
+.hl .hljs-title,
+.hl .hljs-title.function_,
+.hl .hljs-title.class_,
+.hl .hljs-attr,
+.hl .hljs-section,
+.hl .hljs-name {
+  color: var(--hl-nom);
+}
+
+.hl .hljs-built_in,
+.hl .hljs-type,
+.hl .hljs-link,
+.hl .hljs-variable.language_ {
+  color: var(--hl-interne);
+}
+
+.hl .hljs-params {
+  color: inherit;
+}
+
+.hl .hljs-section,
+.hl .hljs-strong {
+  font-weight: 600;
+}
+
+.hl .hljs-emphasis {
+  font-style: italic;
+}

@@ -4,6 +4,7 @@
 // leur conversation. Les fichiers passent par fetch (jeton d'accès en en-tête), puis par une URL blob.
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { api, type Conversation, type NoeudFichier, type Projet } from './api'
+import { colorer, langageDe } from './coloration'
 import { echapper, rendre } from './rendu'
 
 const IMAGES = new Set(['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'bmp'])
@@ -116,6 +117,20 @@ export class VueDocuments {
     this.ouverts.add('sessions').add(`sessions/${id}`)
     this.aJour = false
     if (this.visible) void this.charger()
+  }
+
+  /** Montre un fichier du projet (chemin relatif au projet) : déplie ses dossiers et ouvre son aperçu. */
+  async ouvrir(chemin: string) {
+    const parties = chemin.split('/')
+    for (let i = 1; i < parties.length; i++) this.ouverts.add(parties.slice(0, i).join('/'))
+    if (!this.aJour) await this.charger()
+    const n = this.noeud(chemin)
+    if (n?.type === 'dossier') {
+      this.ouverts.add(chemin)
+      this.choisi = chemin
+      this.dessiner()
+    } else await this.montrer(chemin)
+    this.arbreEl.querySelector(`[data-chemin="${CSS.escape(chemin)}"]`)?.scrollIntoView({ block: 'nearest' })
   }
 
   afficher(visible: boolean) {
@@ -242,7 +257,10 @@ export class VueDocuments {
       else if (g === 'tableau') corps.innerHTML = tableau(extrait, nom.endsWith('.tsv') ? '\t' : ',')
       else if (g === 'autre' && extrait.includes('\u0000')) {
         corps.innerHTML = '<div class="apercu-vide">Pas d’aperçu pour ce type de fichier. Il reste téléchargeable.</div>'
-      } else corps.innerHTML = `<pre class="apercu-texte">${echapper(extrait)}</pre>`
+      } else {
+        const langage = langageDe(nom)
+        corps.innerHTML = `<pre class="apercu-texte${langage ? ' hl' : ''}">${colorer(extrait, langage)}</pre>`
+      }
     }
   }
 

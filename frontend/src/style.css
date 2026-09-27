@@ -331,6 +331,11 @@ body.sessions-repliees .deplier-sessions {
   color: var(--texte-3);
 }
 
+.ranger-conversation {
+  flex: none;
+  margin-right: -6px;
+}
+
 .fil {
   flex: 1;
   min-height: 0;
@@ -820,7 +825,13 @@ body.sessions-repliees .deplier-sessions {
 }
 
 .menu-voix {
-  width: 240px;
+  width: 280px;
+  max-height: min(70vh, 560px);
+  overflow-y: auto;
+}
+
+.menu-titre small {
+  font-weight: 400;
 }
 
 .menu-titre {
@@ -1087,6 +1098,35 @@ body.sessions-repliees .deplier-sessions {
   margin: 0;
 }
 
+.fiche-question {
+  font-family: 'CMU Serif Atlas', KaTeX_Main, 'Latin Modern Roman', 'CMU Serif', serif;
+}
+
+.fiche-options {
+  list-style: none;
+  margin: 0.4rem 0 0.6rem;
+  padding: 0;
+}
+
+.fiche-options li {
+  display: flex;
+  gap: 0.4rem;
+  margin: 0 0 0.35rem;
+}
+
+.fiche-options .puce {
+  flex: none;
+  width: 1rem;
+}
+
+.fiche-options .ecartee {
+  color: var(--texte-2);
+}
+
+.fiche-cadre {
+  font-style: italic;
+}
+
 .detail .role {
   font-size: 0.75rem;
   font-style: italic;
@@ -1182,6 +1222,7 @@ body.sessions-repliees .deplier-sessions {
   }
 
   .poignee,
+  .ranger-conversation,
   body.conversation-rangee .deplier-conversation {
     display: none !important;
   }
@@ -1400,55 +1441,4 @@ button.menu-ligne:focus-visible,
 
 .menu-etat.erreur {
   color: var(--echec);
-}
-
-/* ── Parcours (agent navigateur) : carte du fil ──────────── */
-
-.msg.parcours {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  padding: 8px 10px;
-  border: 1px solid var(--trait);
-  border-radius: 8px;
-  background: var(--fond-lateral);
-  font-size: 13px;
-}
-
-.msg.parcours .etiquette {
-  flex: none;
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--texte-3);
-}
-
-.msg.parcours .parcours-titre {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-weight: 500;
-}
-
-.msg.parcours .parcours-etapes {
-  flex: none;
-  color: var(--texte-3);
-  font-size: 12px;
-}
-
-.lancer-parcours {
-  flex: none;
-  margin-left: auto;
-  padding: 3px 10px;
-  border: 1px solid var(--trait-fort);
-  border-radius: 6px;
-  background: var(--fond);
-  font: inherit;
-  font-size: 12.5px;
-  color: var(--texte);
-  cursor: pointer;
-}
-
-.lancer-parcours:hover {
-  background: var(--fond-2);
 }

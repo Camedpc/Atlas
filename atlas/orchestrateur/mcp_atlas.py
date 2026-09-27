@@ -14,7 +14,7 @@ from typing import Any, Literal
 from mcp.server.mcpserver import Image, MCPServer
 from pydantic import BaseModel, Field
 
-from .. import ecriture, figures, figures3d, lecture, navigation, parcours, vue
+from .. import decisions, documents, ecriture, figures, figures3d, lecture, vue
 from ..modeles import TypeNoeud
 from . import figure3d
 
@@ -47,27 +47,58 @@ def _projet() -> str:
     return projet_id
 
 
+def _session() -> Path:
+    return Path(os.environ.get("ATLAS_DOSSIER_SESSION") or ".").resolve()
+
+
+def _racine() -> Path:
+    """Le dossier de l'espace (projet) : sessions/<id>/ → <projet>/."""
+    return _session().parent.parent
+
+
+def _chemin(chemin: str) -> str:
+    """Chemin relatif au projet, donné relatif au projet (doc_projet/…, scripts_projet/…) ou à la session."""
+    try:
+        return documents.normaliser(chemin, f"sessions/{_session().name}")
+    except documents.ErreurDocument as e:
+        raise ecriture.ErreurGraphe(str(e)) from None
+
+
 @serveur.tool()
 def lire_graphe() -> str:
     """Vue compacte du graphe de l'espace de travail : pour chaque nœud, id, nom, énoncé (tronqué), statut effectif
-    (etabli | suspendu | a_verifier | invalide | ouvert), admis, parents (prémisses) et enfants."""
+    (etabli | suspendu | a_verifier | invalide | ouvert), admis, parents (prémisses) et enfants. Une décision
+    (losange) donne en plus sa question, ses alternatives retenues et écartées, et ce vers quoi elle pointe
+    (`commande` / `cadres_commandes` : nœuds et cadres de ses alternatives retenues ; `ecarte` / `cadres_ecartes` :
+    ceux des écartées)."""
     graphe = lecture.charger_graphe(_projet())
-    return json.dumps(
-        [
-            {
-                "id": n.id,
-                "nom": n.nom,
-                "type": n.type,
-                "enonce": n.enonce[:LONGUEUR_MAX_ENONCE],
-                "statut": n.statut,
-                "admis": n.admis,
-                "parents": n.parents,
-                "enfants": n.enfants,
+
+    def ligne(n) -> dict[str, Any]:
+        l = {
+            "id": n.id,
+            "nom": n.nom,
+            "type": n.type,
+            "enonce": n.enonce[:LONGUEUR_MAX_ENONCE],
+            "statut": n.statut,
+            "admis": n.admis,
+            "parents": n.parents,
+            "enfants": n.enfants,
+        }
+        if n.type == "decision" and isinstance(n.details, dict):
+            liens = decisions.commandes(n.details)
+            cadres = decisions.cadres(n.details)
+            l["decision"] = {
+                "question": n.details.get("question"),
+                "retenue": decisions.retenues(n.details),
+                "ecartees": [a.get("libelle") for a in decisions.ecartees(n.details)],
+                "commande": [c for c, retenue in liens if retenue],
+                "ecarte": [c for c, retenue in liens if not retenue],
+                "cadres_commandes": [c for c, retenue in cadres if retenue],
+                "cadres_ecartes": [c for c, retenue in cadres if not retenue],
             }
-            for n in graphe.noeuds
-        ],
-        ensure_ascii=False,
-    )
+        return l
+
+    return json.dumps([ligne(n) for n in graphe.noeuds], ensure_ascii=False)
 
 
 @serveur.tool()
@@ -102,8 +133,16 @@ def creer_noeud(
     - type : hypothese, definition, axiome, choix_modelisation, decision, lemme, proposition, theoreme,
       assertion, experience, calcul, observation, resultat, conjecture.
     - groupe : id du cadre de la vue où ranger le nœud (voir lire_vue / organiser_vue) ; vide = près de ses voisins.
-    - details : pour une décision {question, alternatives: [{libelle, retenue, raison}], raison} ; pour un choix
-      de modélisation {hypothese, portee, alternatives: [texte]}.
+    - details : pour un choix de modélisation {hypothese, portee, alternatives: [texte]} ; pour une décision, voir
+      ci-dessous.
+
+    Décision (type "decision", un losange dans la vue) : un choix de modélisation ou de méthode, avec ses
+    alternatives. Elle ne se démontre pas et elle est toujours établie. details = {"question": "…?",
+    "alternatives": [{"libelle": …, "retenue": true, "noeuds"?: [ids], "groupes"?: [ids de cadres]},
+    {"libelle": …, "retenue": false, "raison": "pourquoi écartée", "noeuds"?: [ids], "groupes"?: [ids]}],
+    "raison": "pourquoi ce choix"}. Le losange pointe vers les nœuds (`noeuds`) ou les cadres entiers (`groupes`)
+    de chaque alternative (flèche pleine si retenue, tiretée × si écartée) : ils doivent exister avant. Plusieurs
+    alternatives peuvent être retenues (pistes suivies en parallèle). enonce peut rester vide (il résume le choix).
     """
     if type and type not in TYPES:
         raise ecriture.ErreurGraphe(f"Type inconnu « {type} » : {', '.join(TYPES)}.")
@@ -166,12 +205,21 @@ class CadreAPoser(BaseModel):
 class NoeudAPoser(BaseModel):
     id: str = Field(description="slug avec préfixe (def_, hyp_, lemme_, prop_, thm_, obs_, res_…)")
     nom: str = Field(description="titre court lisible")
-    enonce: str = Field(description="assertion précise et autonome, Markdown + LaTeX ($…$)")
+    enonce: str = Field(
+        description="assertion précise et autonome, Markdown + LaTeX ($…$) ; vide pour une décision (résumé auto)"
+    )
     type: TypeNoeud = "assertion"
     groupe: str = Field("", description="id du cadre (déclaré dans cadres ou existant)")
     admis: bool = False
     raison_admis: str = Field("", description="source, si admis")
-    details: dict[str, Any] | None = Field(None, description="décision ou choix de modélisation (voir creer_noeud)")
+    details: dict[str, Any] | None = Field(
+        None,
+        description=(
+            "decision : {question, alternatives: [{libelle, retenue, raison si écartée, noeuds: [ids qui en "
+            "découlent], groupes: [ids des cadres de cette branche]}], raison} (nœuds et cadres du lot ou du "
+            "graphe) ; choix_modelisation : {hypothese, portee, alternatives}"
+        ),
+    )
 
 
 class DemonstrationAPoser(BaseModel):
@@ -198,8 +246,9 @@ def poser_graphe(
     Mise en page automatique : les cadres de premier niveau que tu crées se suivent de gauche à droite dans l'ordre
     du raisonnement (un cadre dont les nœuds s'appuient sur un autre va à sa droite ; à hauteur égale, dans l'ordre
     de la liste) ; dans chaque cadre, les nœuds vont à droite de leurs prémisses principales et auxiliaires.
-    Les démonstrations démarrent « à vérifier ». essai = vrai : valide et renvoie les avertissements (nœuds ni admis
-    ni démontrés, nœuds reliés à rien) sans rien écrire."""
+    Une décision (losange, type "decision", voir creer_noeud) se place à gauche des nœuds et des cadres de ses
+    alternatives et n'a pas de démonstration. Les démonstrations démarrent « à vérifier ». essai = vrai : valide et
+    renvoie les avertissements (nœuds ni admis ni démontrés, nœuds reliés à rien) sans rien écrire."""
     try:
         resultat = ecriture.poser_graphe(
             projet_id=_projet(),
@@ -246,19 +295,15 @@ def organiser_vue(operations: list[dict[str, Any]], essai: bool = False) -> str:
     return json.dumps({"ok": True, **resultat}, ensure_ascii=False)
 
 
-def _session() -> Path:
-    return Path(os.environ.get("ATLAS_DOSSIER_SESSION") or ".").resolve()
-
-
 def _lire_fichier_image(chemin: str) -> bytes:
-    """Un fichier de la session (chemin relatif à son dossier) ou de son espace : rien au-delà."""
-    session = _session()
-    fichier = (session / chemin).resolve()
-    permis = session.parent.parent  # le dossier de l'espace : sessions/<id>/ → <projet>/
-    if not fichier.is_relative_to(permis):
-        raise ecriture.ErreurGraphe(f"Image hors de l'espace de travail : {chemin}.")
+    """Un fichier de l'espace (chemin relatif au projet ou à la session) : rien au-delà."""
+    relatif = _chemin(chemin)
+    try:
+        fichier = documents.sur_disque(_racine(), relatif)
+    except documents.ErreurDocument as e:
+        raise ecriture.ErreurGraphe(str(e)) from None
     if not fichier.is_file():
-        raise ecriture.ErreurGraphe(f"Image introuvable : {fichier} (chemin relatif au dossier de la session).")
+        raise ecriture.ErreurGraphe(f"Image introuvable : {relatif} (chemin relatif au projet ou à la session).")
     return fichier.read_bytes()
 
 
@@ -276,12 +321,16 @@ def creer_figure(
     hauteur: int = 0,
     remplacer: bool = False,
 ) -> str:
-    """Ajoute au graphe une figure qui illustre le nœud noeud_id (en général une observation, un calcul ou un
-    résultat) : un tracé vectoriel, une image, ou les deux (l'image produite par ton script et les données qu'elle
-    trace). Elle prend sa propre place dans la vue, par défaut juste à droite de son nœud (fig:<id> dans lire_vue).
+    """Ajoute au graphe une figure qui illustre le nœud noeud_id : un tracé vectoriel, une image, ou les deux
+    (l'image produite par ton script et les données qu'elle trace). Tout nœud peut en avoir : schéma du dispositif
+    ou de la géométrie sur une hypothèse ou une définition, courbe sur un calcul, mesures sur une observation,
+    animation d'une simulation sur un résultat. Elle prend sa propre place dans la vue, par défaut juste à droite de
+    son nœud (fig:<id> dans lire_vue). Un GIF ou un WebP animé est joué dans le graphe.
 
     - id : minuscules, chiffres et _ ; titre : court ; legende : ce que montre la figure, Markdown + LaTeX.
-    - image : chemin d'un PNG, JPEG, GIF ou WebP (relatif au dossier de la session, ex. docs_session/v_t.png).
+    - image : chemin d'un PNG, JPEG, GIF ou WebP, 10 Mo au plus, relatif au projet (ex.
+      scripts_projet/chute/resultats/v_t.png) ou à la session. Pas de SVG : exporte les schémas en PNG (dpi 200,
+      fond blanc). Le fichier d'origine est retenu : deplacer_document le suit.
     - trace : {"x": {"titre": "$t$", "unite": "s", "echelle": "lin" | "log", "min"?, "max"?}, "y": {…},
       "series": [
         {"genre": "mesures", "nom": …, "points": [[x, y], [x, y, σy], [x, y, σy, σx]], "source"?: fichier},
@@ -306,6 +355,7 @@ def creer_figure(
         trace=trace,
         image=donnees,
         source=source,
+        fichier=_chemin(image) if image else None,
         groupe=groupe or None,
         largeur=largeur or None,
         hauteur=hauteur or None,
@@ -332,7 +382,8 @@ def creer_figure_3d(
     sinon, creer_figure. Atlas exécute lui-même ton script (processus à part, sans les secrets du serveur, durée
     bornée) et range la scène ; lire_figure t'en donne le résumé (tu ne la vois pas).
 
-    - script : chemin d'un .py dans le dossier de la session (ex. scripts/pendule3d.py). Il construit une figure
+    - script : chemin d'un .py, relatif au projet (ex. scripts_projet/pendule/scene3d.py) ou à la session ; il
+      s'exécute dans le dossier de la session. Il construit une figure
       Plotly `fig` (import plotly.graph_objects as go) avec ses `frames` pour l'animation (une image par pas de
       temps ; traces=[…] pour ne redonner que les tracés qui bougent), et peut définir `fps` (20 par défaut).
       N'exporte rien et n'appelle pas fig.show().
@@ -348,8 +399,9 @@ def creer_figure_3d(
     - Les boutons, curseurs et fonds de Plotly sont retirés : Atlas a ses propres commandes (lecture, vitesse).
     - id, noeud_id, titre, legende, groupe, largeur, hauteur, remplacer : comme creer_figure.
     En cas d'échec, la fin de la sortie d'erreur du script t'est renvoyée : corrige-le et rappelle l'outil."""
+    script = _chemin(script)
     try:
-        production = figure3d.produire(script, _session())
+        production = figure3d.produire(script, _session(), projet=_racine())
     except figures.ErreurFigure as e:
         raise ecriture.ErreurGraphe(str(e)) from None
     ecriture.creer_figure(
@@ -396,39 +448,112 @@ def lire_figure(id: str) -> list[str | Image]:
     return contenu
 
 
-# ── Parcours (agent navigateur) : une suite d'écrans, sans rien changer à la vue enregistrée ──
-
-
-@serveur.tool()
-def lire_reperes() -> str:
-    """Les repères de la vue tels que Camille les voit à l'écran : « Lemme 7 = id : nom [§1.2] », les cadres
-    « §1.2 » et les figures « Figure 2 ». Un parcours peut désigner un nœud par son repère ou par son id."""
-    etat = lecture.charger_etat_vue(_projet())
-    return navigation.texte_reperes(etat, navigation.reperer(etat))
-
-
-@serveur.tool()
-def poser_parcours(titre: str, etapes: list[dict[str, Any]]) -> str:
-    """Enregistre un parcours : une suite d'écrans que Camille déroule étape par étape (à la voix pendant un appel,
-    ou aux boutons suivant / précédent). Il ne déplace rien et ne change pas la vue enregistrée.
-
-    Chaque étape : {"phrase": ce qu'on dit à Camille pendant cet écran (une à trois phrases, les nœuds nommés
-    comme à l'écran, « Lemme 7 »), "montrer": [références : repère, id, « §2 », « Figure 1 »], "etendue": "seul" |
-    "premisses" | "consequences" | "lignee", "garder_seulement": estompe le reste, "fiche": ouvre la fiche du
-    premier nœud, "statuts": [etabli, suspendu, a_verifier, invalide, ouvert], "vue_d_ensemble": true (tout le
-    graphe, à la place de montrer), "zoomer": facteur (1.5 rapproche, 0.6 éloigne)}. Une étape repart d'un écran
-    sans filtre. Tout ou rien : une référence introuvable ou ambiguë refuse le parcours (rien n'est écrit)."""
-    etat = lecture.charger_etat_vue(_projet())
-    try:
-        pret = navigation.compiler_parcours(etat, navigation.reperer(etat), titre, etapes)
-    except navigation.ErreurNavigation as e:
-        refus = {"ok": False, "erreur": str(e), "rien_n_a_ete_ecrit": True}
-        return json.dumps(refus | ({"candidats": e.candidats} if e.candidats else {}), ensure_ascii=False)
-    session = Path(os.environ.get("ATLAS_DOSSIER_SESSION") or ".").resolve()
-    chemin = parcours.enregistrer(session, os.environ.get("ATLAS_CONVERSATION_ID"), pret)
-    etapes_comprises = [f"{i}. {', '.join(e['compris']) or '—'}" for i, e in enumerate(pret["etapes"], 1)]
-    return json.dumps({"ok": True, "chemin": chemin, "etapes": etapes_comprises}, ensure_ascii=False)
-
-
 if __name__ == "__main__":
     serveur.run("stdio")
+
+
+# ── Documents ────────────────────────────────────────────────────────────────
+
+
+class LienDocument(BaseModel):
+    """Un lien nommé du document : « vers » (du document vers un nœud, fig:<id> ou doc:<id>) ou « de » (vers le
+    document)."""
+
+    relation: Literal["source", "implemente", "produit", "ecrit_dans", "entree"]
+    vers: str | None = None
+    de: str | None = None
+
+
+@serveur.tool()
+def poser_document(
+    chemin: str,
+    id: str,
+    titre: str,
+    description: str = "",
+    liens: list[LienDocument] | None = None,
+    groupe: str = "",
+    remplacer: bool = False,
+) -> str:
+    """Met dans le graphe un fichier ou un dossier du projet déjà écrit (script, PDF, données, dossier de
+    résultats), sous l'id doc:<id>, avec ses liens nommés. Il prend une case de la vue, à droite de ce qui pointe
+    vers lui (dans `groupe` s'il est donné). Son aperçu (premières lignes, colonnes, pages, contenu du dossier) est
+    lu sur le disque.
+
+    - chemin : relatif au projet (doc_projet/…, scripts_projet/…) ou à ta session.
+    - id : minuscules, chiffres et _ ; titre : court (« Simulation RK4 ») ; description : à quoi il sert.
+    - liens : relations « source » (un article ou une donnée → le nœud qu'il fonde), « implemente » (nœud → le
+      script qui le met en œuvre : {"de": noeud}), « produit » (script → figure, résultat ou fichier qu'il
+      produit), « ecrit_dans » (script → dossier de sorties), « entree » (données → le script qui les lit).
+      Ex. pour un script : [{"de": "def_equations", "relation": "implemente"}, {"vers": "fig:trajectoire",
+      "relation": "produit"}, {"vers": "doc:resultats", "relation": "ecrit_dans"}].
+    - remplacer : vrai pour relire l'aperçu et changer titre ou description (les liens donnés s'ajoutent).
+    Ne déplace jamais un fichier du graphe à la main (mv) : utilise deplacer_document."""
+    ligne = ecriture.poser_document(
+        projet_id=_projet(),
+        racine=_racine(),
+        chemin=_chemin(chemin),
+        id=id.removeprefix(vue.PREFIXE_DOCUMENT),
+        titre=titre,
+        auteur=AUTEUR,
+        description=description,
+        liens=[lien.model_dump(exclude_none=True) for lien in liens or []],
+        groupe=groupe or None,
+        conversation_id=os.environ.get("ATLAS_CONVERSATION_ID") or None,
+        remplacer=remplacer,
+    )
+    reponse = {"ok": True, "document": vue.PREFIXE_DOCUMENT + ligne["id"], "chemin": ligne["chemin"]}
+    return json.dumps(reponse | {"apercu": ligne["apercu"]}, ensure_ascii=False)
+
+
+@serveur.tool()
+def lier_document(de: str, vers: str, relation: str, retirer: bool = False) -> str:
+    """Ajoute (ou retire, retirer=true) un lien nommé entre un document (doc:<id>) et un nœud, une figure
+    (fig:<id>) ou un autre document. Relations : source, implemente, produit, ecrit_dans, entree (voir
+    poser_document)."""
+    ecriture.lier_document(projet_id=_projet(), de=de, vers=vers, relation=relation, auteur=AUTEUR, retirer=retirer)
+    return json.dumps({"ok": True, "lien": [de, vers, relation], "retire": retirer}, ensure_ascii=False)
+
+
+@serveur.tool()
+def deplacer_document(de: str, vers: str) -> str:
+    """Déplace ou renomme un fichier ou un dossier du projet (dans le graphe ou non), et met à jour d'un coup tout
+    ce qui en dépend : chemins des documents (lui et ce qu'il contient), fichiers d'origine et sources des figures.
+    C'est la seule façon de réorganiser doc_projet/ et scripts_projet/ : jamais de mv à la main, qui casserait le
+    graphe. Refuse d'écraser ; les dossiers parents de la destination sont créés. Chemins relatifs au projet (ou à
+    ta session). Pense à corriger ensuite les chemins cités dans tes scripts et rapports."""
+    resume = ecriture.deplacer_document(
+        projet_id=_projet(), racine=_racine(), de=_chemin(de), vers=_chemin(vers), auteur=AUTEUR
+    )
+    return json.dumps({"ok": True, **resume}, ensure_ascii=False)
+
+
+@serveur.tool()
+def retirer_document(id: str) -> str:
+    """Retire un document du graphe (sa case et ses liens). Le fichier reste sur le disque."""
+    ecriture.retirer_document(projet_id=_projet(), id=id, auteur=AUTEUR)
+    return json.dumps({"ok": True, "retire": id})
+
+
+@serveur.tool()
+def lister_documents() -> str:
+    """Les documents du graphe : id (doc:<id>), chemin, genre, titre, présence sur le disque (relue maintenant),
+    aperçu, et leurs liens nommés [de, relation, vers]."""
+    projet = _projet()
+    ecriture.rafraichir_documents(projet, _racine())
+    liens = lecture.lister_liens_documents(projet)
+    resultat = []
+    for d in lecture.lister_documents(projet):
+        did = vue.PREFIXE_DOCUMENT + d["id"]
+        resultat.append(
+            {
+                "id": did,
+                "chemin": d["chemin"],
+                "genre": d["genre"],
+                "titre": d["titre"],
+                "description": d["description"],
+                "present": d["present"],
+                "apercu": d["apercu"],
+                "liens": [[x["de"], x["relation"], x["vers"]] for x in liens if did in (x["de"], x["vers"])],
+            }
+        )
+    return json.dumps(resultat, ensure_ascii=False)

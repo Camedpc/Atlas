@@ -1,0 +1,21 @@
+node_modules/
+out/
+stills/
+pack/
+vide/
+# images capturées : versionnées sous forme de vidéos dans media/ (outils/decoder-seq.sh pour les retrouver)
+capture/seq/
+capture/ui/frappe/
+capture/explore/
+# généré par outils/final.sh
+audio/mix.wav
+audio/mix_brut.wav
+# paquets Kenney d'origine (les sons utilisés sont dans audio/sfx/wav)
+audio/sfx/*.zip
+audio/sfx/ui-audio/Audio/
+audio/sfx/interface-sounds/Audio/
+audio/sfx/impact-sounds/
+# morceaux candidats non retenus (Mixkit, re-téléchargeables)
+audio/music/*.mp3
+!audio/music/552.mp3
+audio/music/*.npy

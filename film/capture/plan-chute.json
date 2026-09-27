@@ -1,0 +1,6 @@
+{"projet":"cbe94d42-92e9-4a6b-a912-ac2254d101d3","fps":60,"plans":[
+ {"nom":"g4-drop","cles":[
+   {"t":0,"cx":1238,"cy":1420,"z":1.3},
+   {"t":2.6,"cx":2640,"cy":1240,"z":0.3,"ease":"easeExpOut"},
+   {"t":3.8,"cx":2640,"cy":1240,"z":0.27,"ease":"easeSinOut"}]}
+]}

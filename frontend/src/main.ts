@@ -6,12 +6,13 @@ import { AgentGraph } from './agentgraph'
 import { api, type Graphe, type Noeud, type RolePremisse, type Statut, type Vue } from './api'
 import { PanneauConversation } from './conversations'
 import { VueDocuments } from './documents'
+import { cheminProjet, ressembleAUnChemin } from './liens-fichiers'
 import { enLigne, formulesAffichees, nombre, rendreTex } from './formules'
 import { VueGraphe } from './graphe'
+import { lireDecision, type DetailsDecision } from './graphe-decision'
 import { jeuSynthetique, sceneSynthetique } from './graphe-synthetique'
 import { AdaptateurVue } from './pilotage/adaptateurVue'
 import { nouvelId, Pilote } from './pilotage/pilote'
-import { chargerParcours, LecteurParcours, type Parcours } from './parcours'
 import type { CommandeBas } from './pilotage/protocole'
 import { installerPoignees } from './redimension'
 import { echapper, rendre } from './rendu'
@@ -79,6 +80,11 @@ let adaptateur: AdaptateurVue | undefined
 
 const vueGraphe = new VueGraphe(document.querySelector<HTMLElement>('.graphe')!, {
   surOuvrir: afficherDetail,
+  // Un document du graphe s'ouvre dans la vue Documents, sur son aperçu.
+  surDocument: (chemin) => {
+    montrer('documents')
+    void documents.ouvrir(chemin)
+  },
   recharger: () => chargerGraphe(),
   surChangement: () => adaptateur?.apresImage(),
   chargerScene: SYNTHETIQUE ? sceneSynthetique : undefined,
@@ -90,6 +96,24 @@ if (import.meta.env.DEV) (window as unknown as { atlasGraphe: VueGraphe }).atlas
 function reference(id: string): string {
   const r = vueGraphe.reference(id)
   return r ? `${r.libelle} ${r.numero}` : id
+}
+
+/** Fiche d'une décision : la question, chaque option (✓ retenue, × écartée) avec sa raison et ce vers quoi elle pointe
+ * (nœuds, cadres), puis la raison du choix. */
+function ficheDecision(d: DetailsDecision, liens: (ids: string[]) => string): string {
+  const cadres = (ids: string[]) => ids.map((id) => {
+    const c = vueGraphe.cadre(id)
+    return `<span class="fiche-cadre" title="${echapper(id)}">${c ? `${echapper(c.numero)} ${enLigne(c.nom)}` : echapper(id)}</span>`
+  }).join(' ')
+  const options = d.alternatives.map((a) => {
+    const vers = [a.noeuds.length ? liens(a.noeuds) : '', cadres(a.groupes)].filter(Boolean).join(' ')
+    return `<li class="${a.retenue ? 'retenue' : 'ecartee'}"><span class="puce">${a.retenue ? '✓' : '×'}</span>`
+      + `<div>${a.retenue ? enLigne(a.libelle) : `<s>${enLigne(a.libelle)}</s>`}`
+      + (a.raison ? ` — <i>${enLigne(a.raison)}</i>` : '')
+      + (vers ? `<div class="meta">→ ${vers}</div>` : '') + '</div></li>'
+  }).join('')
+  return `<p class="fiche-question"><i>${enLigne(d.question)}</i></p><ul class="fiche-options">${options}</ul>`
+    + (d.raison ? `<p><strong>Raison du choix :</strong> ${enLigne(d.raison)}</p>` : '')
 }
 
 /** Fiche d'un nœud (double-clic), composée comme un énoncé d'article (R41). */
@@ -107,7 +131,8 @@ function afficherDetail(n: Noeud | null) {
   const ref = vueGraphe.reference(n.id)
   const tex = formulesAffichees(n.enonce)
   const texte = (v: unknown) => echapper(typeof v === 'string' ? v : JSON.stringify(v))
-  const champs = n.details && typeof n.details === 'object'
+  const decision = n.type === 'decision' ? lireDecision(n.details) : null
+  const champs = decision ? '' : n.details && typeof n.details === 'object'
     ? Object.entries(n.details)
       .filter(([, v]) => v !== null && v !== '' && !(Array.isArray(v) && !v.length))
       .map(([k, v]) => `<dt>${echapper(k)}</dt><dd>${Array.isArray(v) ? v.map(texte).join(' ; ') : texte(v)}</dd>`)
@@ -117,11 +142,11 @@ function afficherDetail(n: Noeud | null) {
     <button type="button" class="fermer" aria-label="Fermer">×</button>
     <h2 class="fiche-titre"><b>${echapper(ref ? `${ref.libelle} ${ref.numero}` : 'Énoncé')}</b> (${enLigne(n.nom)}).</h2>
     <p class="meta"><em>${LIBELLES_STATUT[n.statut]}</em> · <code>${echapper(n.id)}</code>${n.admis ? ' · admis' : ''}</p>
-    ${tex ? `<div class="fiche-formule">${rendreTex(tex, n.enonce, true)}</div>` : ''}
+    ${decision ? ficheDecision(decision, liens) : `${tex ? `<div class="fiche-formule">${rendreTex(tex, n.enonce, true)}</div>` : ''}
     <div class="enonce">${rendre(n.enonce)}</div>
     ${champs ? `<dl class="fiche-details">${champs}</dl>` : ''}
     <p><strong>Prémisses :</strong> ${liens(n.parents)}</p>
-    <p><strong>Utilisé par :</strong> ${liens(n.enfants)}</p>
+    <p><strong>Utilisé par :</strong> ${liens(n.enfants)}</p>`}
     ${n.demonstrations
       .map(
         (d) => `<details class="demo" open>
@@ -231,6 +256,21 @@ const conversation = new PanneauConversation(
 
 const panneau = installerPoignees((replie) => conversation.replierSessions(replie))
 
+// Liens vers des fichiers du projet dans les messages (et chemins écrits en code) : ouverts dans la vue Documents
+// plutôt que suivis par le navigateur, qui ne mènerait nulle part.
+document.addEventListener('click', (e) => {
+  if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey) return
+  const cible = e.target as HTMLElement
+  const lien = cible.closest<HTMLAnchorElement>('a[href]')
+  const code = lien ? null : cible.closest<HTMLElement>('.msg code, .md code')
+  const texte = lien ? lien.getAttribute('href')! : code && ressembleAUnChemin(code.textContent ?? '') ? code.textContent! : null
+  const chemin = texte ? cheminProjet(texte, conversationId) : null
+  if (!chemin) return
+  e.preventDefault()
+  montrer('documents')
+  void documents.ouvrir(chemin)
+})
+
 // ─── Pilotage de l'écran (P3/P4) : Atlas voix, pendant un appel (voix.ts, atlas/voix/ecran.py) ───
 
 adaptateur = new AdaptateurVue(vueGraphe, {
@@ -248,21 +288,12 @@ async function montrerGraphe() {
   montrer('raisonnement')
   for (let i = 0; i < 2; i++) await new Promise((r) => requestAnimationFrame(r))
 }
-const lecteurParcours = new LecteurParcours(document.querySelector<HTMLElement>('.vue-raisonnement')!, pilote, montrerGraphe,
-  (px) => (vueGraphe.margeBas = px))
-conversation.brancherEcran(pilote, montrerGraphe, (chemin) => {
-  if (!projetId) return
-  chargerParcours(projetId, chemin)
-    .then((p) => lecteurParcours.ouvrir(p))
-    .catch((e) => (compteur.textContent = `Parcours illisible : ${e instanceof Error ? e.message : String(e)}`))
-})
-// Développement : pilotage à la main depuis la console, ex. atlasAffichage.commander({ op: 'zoomer', facteur: 2 }),
-// ou atlasAffichage.parcours({ version: 1, titre, etapes: [{ phrase, compris: [], commandes }] }).
+conversation.brancherEcran(pilote, montrerGraphe)
+// Développement : pilotage à la main depuis la console, ex. atlasAffichage.commander({ op: 'zoomer', facteur: 2 }).
 if (import.meta.env.DEV) {
   const atlasAffichage = {
     etat: () => pilote.etat(),
     commander: (...c: CommandeBas[]) => pilote.commander(...c),
-    parcours: (p: Parcours) => lecteurParcours.ouvrir(p),
     pilote,
   }
   Object.assign(window, { atlasAffichage })

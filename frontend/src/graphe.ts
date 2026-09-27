@@ -15,7 +15,7 @@ import { instantane, operationsVers, type Entree, type Instantane } from './grap
 import { Contenu } from './graphe-contenu'
 import { dansCadre, dessiner, niveauDe, oublierMesures, PALETTE, positionsRenvois, referenceDe, rgba, type Camera, type EtatDessin } from './graphe-dessin'
 import { ImagesFigures, ouvrirFenetre } from './graphe-figures'
-import { CADRE, CLE_FONCTION, construireModele, dansRect, FORMATS_FIGURE, GRILLE, PREFIXE_FIGURE, rectBloc, TEINTES, union, type Bloc, type Modele, type Rect, type Surcharge } from './graphe-modele'
+import { CADRE, CLE_FONCTION, construireModele, dansRect, estPseudo, FORMATS_FIGURE, GRILLE, PREFIXE_DOCUMENT, PREFIXE_FIGURE, rectBloc, TEINTES, union, type Bloc, type Modele, type Rect, type Surcharge } from './graphe-modele'
 import { echapper } from './rendu'
 
 /** Paliers de zoom de l'éditeur Blueprint d'UE5 (−12 à +7), plus trois paliers lointains ; le pincement
@@ -101,6 +101,8 @@ type Geste =
 export interface OptionsVueGraphe {
   /** Double-clic sur un nœud (null : fermer la fiche). */
   surOuvrir: (noeud: Noeud | null) => void
+  /** Double-clic sur un document : son aperçu dans la vue Documents (chemin relatif au projet). */
+  surDocument?: (chemin: string) => void
   /** Relit le graphe et la vue de l'espace (puis appelle `afficher`). */
   recharger: () => Promise<void>
   /** Après chaque image : le pilotage compare l'écran à son dernier état exporté (P4). */
@@ -130,14 +132,12 @@ export class VueGraphe {
   private estompes: Set<string> | null = null
   /** Conversation du filtre « Cette conversation » (null : pas de filtre). */
   private conversationFiltre: string | null = null
-  /** Filtre du pilotage (voix, parcours) : un nœud qui ne passe pas est estompé. */
+  /** Filtre du pilotage (voix) : un nœud qui ne passe pas est estompé. */
   private filtrePilotage: ((n: Noeud) => boolean) | null = null
   private surlignes: Set<string> | null = null
   private animCamera: Animation | null = null
   /** Largeur (px) couverte à droite par la fiche : les cadrages et le centre de l'écran l'évitent. */
   margeDroite = 0
-  /** Hauteur (px) couverte en bas par le lecteur de parcours : les cadrages et le centre de l'écran l'évitent. */
-  margeBas = 0
   private projetId: string | null = null
   private lectureSeule: string | null = null
   private cam: Camera = { x: 40, y: 40, z: 1 }
@@ -213,7 +213,9 @@ export class VueGraphe {
       .map(([t, d]) => `<tr><th>${echapper(t)}</th><td>${echapper(d)}</td></tr>`).join('')}</table>`
     this.aide.innerHTML = `<h3>Commandes</h3>${table(AIDE_COMMANDES)}<h3>Sur tablette</h3>${table(AIDE_TACTILE)}`
       + '<p>Un nœud déposé hors de tout cadre garde son cadre d’origine ; pour l’en sortir : clic droit → « Sortir du cadre ». '
-      + 'Seules les prémisses principales et auxiliaires sont des flèches ; les autres sont des renvois « cf. ».</p>'
+      + 'Seules les prémisses principales et auxiliaires sont des flèches ; les autres sont des renvois « cf. ». '
+      + 'Un losange est une décision : il pointe vers les nœuds ou les cadres de l’option retenue (tireté et × : '
+      + 'option écartée) ; sa fiche donne la question, les options et leurs raisons.</p>'
     this.avisEl = element(scene, 'div', 'gr-avis')
     this.avisEl.hidden = true
     this.avisEl.setAttribute('role', 'status')
@@ -328,6 +330,12 @@ export class VueGraphe {
     return b ? { libelle: b.libelle, numero: b.numero } : null
   }
 
+  /** Numéro et nom d'un cadre (« §2 »), pour la fiche d'une décision qui le vise. */
+  cadre(id: string): { numero: string; nom: string } | null {
+    const c = this.base.cadres.get(id)
+    return c ? { numero: c.numero, nom: c.nom } : null
+  }
+
   get nonPlaces(): number {
     return this.base.nonPlaces
   }
@@ -344,7 +352,7 @@ export class VueGraphe {
     const r = this.rectRepresentant(this.modele.representant.get(id) ?? id)
     if (r) this.centrerSur((r.x0 + r.x1) / 2, (r.y0 + r.y1) / 2)
     const b = this.base.blocs.get(id)!
-    this.options.surOuvrir(b.figure ? null : b.noeud)
+    this.options.surOuvrir(estPseudo(b) ? null : b.noeud)
     this.demander()
   }
 
@@ -356,7 +364,7 @@ export class VueGraphe {
     this.aide.hidden = !this.aide.hidden
   }
 
-  // ─── Pilotage (voix et parcours, pilotage/adaptateurVue.ts) ───────────────
+  // ─── Pilotage (voix, pilotage/adaptateurVue.ts) ─────────────────────────
   // Tout passe par les ids de nœud ; la vue (cases, cadres) n'est jamais modifiée.
 
   get noeuds(): readonly Noeud[] {
@@ -374,14 +382,14 @@ export class VueGraphe {
 
   /** Nœud sélectionné (le premier, s'il y en a plusieurs). */
   get noeudSelectionne(): string | null {
-    for (const id of this.selection) if (this.base.blocs.get(id)?.noeud && !this.base.blocs.get(id)?.figure) return id
+    for (const id of this.selection) if (this.base.blocs.get(id)?.noeud && !estPseudo(this.base.blocs.get(id))) return id
     return null
   }
 
   /** Nœud survolé (null : rien, ou un cadre, une figure). */
   get noeudSurvole(): string | null {
     const b = this.survol ? this.base.blocs.get(this.survol) : undefined
-    return b && !b.figure ? b.id : null
+    return b && !estPseudo(b) ? b.id : null
   }
 
   /** Sélectionne un nœud (sa lignée est mise en évidence), sans déplacer la caméra ni ouvrir sa fiche. */
@@ -404,7 +412,7 @@ export class VueGraphe {
 
   /** Centre de la partie visible de l'écran (coordonnées du monde, fiche exclue) et zoom. */
   get camera(): { x: number; y: number; z: number } {
-    const { x, y } = this.versMonde(this.largeurUtile / 2, this.hauteurUtile / 2)
+    const { x, y } = this.versMonde(this.largeurUtile / 2, this.hauteur / 2)
     return { x, y, z: this.cam.z }
   }
 
@@ -473,10 +481,6 @@ export class VueGraphe {
     return Math.max(80, this.largeur - this.margeDroite)
   }
 
-  private get hauteurUtile(): number {
-    return Math.max(80, this.hauteur - this.margeBas)
-  }
-
   private borneZoom(z: number): number {
     return Math.max(ZOOMS[0]![0], Math.min(ZOOMS[ZOOMS.length - 1]![0], z))
   }
@@ -485,10 +489,10 @@ export class VueGraphe {
   visibles(max: number): NoeudVisible[] {
     const r: (NoeudVisible & { d: number })[] = []
     for (const b of this.modele.blocs.values()) {
-      if (b.cache || b.figure || !b.noeud) continue
+      if (b.cache || estPseudo(b) || !b.noeud) continue
       const x = (b.x + b.w / 2) * this.cam.z + this.cam.x, y = (b.y + b.h / 2) * this.cam.z + this.cam.y
-      if (x < 0 || y < 0 || x > this.largeurUtile || y > this.hauteurUtile) continue
-      r.push({ id: b.id, nom: b.noeud.nom, x, y, d: Math.hypot(x - this.largeurUtile / 2, y - this.hauteurUtile / 2) })
+      if (x < 0 || y < 0 || x > this.largeurUtile || y > this.hauteur) continue
+      r.push({ id: b.id, nom: b.noeud.nom, x, y, d: Math.hypot(x - this.largeurUtile / 2, y - this.hauteur / 2) })
     }
     r.sort((a, b) => a.d - b.d || a.id.localeCompare(b.id))
     return r.slice(0, max).map(({ id, nom, x, y }) => ({ id, nom, x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 }))
@@ -558,17 +562,16 @@ export class VueGraphe {
   /** Comme UE : le plus grand palier qui fait tout tenir, sans dépasser `zoomMax` (1:1, sauf une figure seule). */
   private zoomPour(r: Rect, zoomMax = 1): number {
     const w = Math.max(1, r.x1 - r.x0), h = Math.max(1, r.y1 - r.y0)
-    const z = Math.min((this.largeurUtile - 80) / w, (this.hauteurUtile - 80) / h)
+    const z = Math.min((this.largeurUtile - 80) / w, (this.hauteur - 80) / h)
     let i = 0
     for (let k = 0; k < ZOOMS.length; k++) if (ZOOMS[k]![0] <= z && ZOOMS[k]![0] <= zoomMax) i = k
     return ZOOMS[i]![0]
   }
 
-  /** Centre (x, y) au milieu de la partie visible de l'écran (la fiche à droite et le lecteur de parcours en bas
-   * en sont exclus). */
+  /** Centre (x, y) au milieu de la partie visible de l'écran (la fiche, à droite, en est exclue). */
   private centrerSur(x: number, y: number): void {
     this.cam.x = this.largeurUtile / 2 - x * this.cam.z
-    this.cam.y = this.hauteurUtile / 2 - y * this.cam.z
+    this.cam.y = this.hauteur / 2 - y * this.cam.z
     this.demander()
   }
 
@@ -987,8 +990,17 @@ export class VueGraphe {
     } else if (c.genre === 'bloc') {
       const b = this.base.blocs.get(c.id)
       if (b?.figure) this.ouvrirFigure(b.id)
+      else if (b?.document) this.ouvrirDocument(b.id)
       else this.options.surOuvrir(b?.noeud ?? null)
     } else if (c.genre === 'fonction') void this.basculerRepli(c.cadre)
+  }
+
+  /** Ouvre l'aperçu d'un document dans la vue Documents. */
+  ouvrirDocument(id: string): void {
+    const d = this.base.blocs.get(id)?.document
+    if (!d) return
+    if (this.options.surDocument) this.options.surDocument(d.chemin)
+    else this.avis(`Fichier : ${d.chemin}`)
   }
 
   /** Ouvre une figure en grand (tracé agrandi ou image, légende complète, nœud illustré), ou en 3D (scène). */
@@ -1056,6 +1068,7 @@ export class VueGraphe {
     const b = this.selection.size === 1 ? this.base.blocs.get([...this.selection][0]!) : undefined
     if (!b) this.avis('Sélectionnez un seul nœud pour ouvrir sa fiche.')
     else if (b.figure) this.ouvrirFigure(b.id)
+    else if (b.document) this.ouvrirDocument(b.id)
     else this.options.surOuvrir(b.noeud)
   }
 
@@ -1108,6 +1121,7 @@ export class VueGraphe {
   private instantane(): Instantane {
     const noms: [string, string][] = this.graphe.noeuds.map((n) => [n.id, n.nom])
     for (const f of this.vue.figures ?? []) noms.push([PREFIXE_FIGURE + f.id, f.titre])
+    for (const d of this.vue.documents ?? []) noms.push([PREFIXE_DOCUMENT + d.id, d.titre])
     return instantane(this.vue, noms)
   }
 
@@ -1265,7 +1279,7 @@ export class VueGraphe {
     if (!b || b.cache) return this.avis('Sélectionne un seul nœud visible pour le renommer (F2).')
     // Une figure se renomme par la même opération : son titre.
     this.ouvrirSaisie(b.x, b.y, b.x + b.w, b.y + 26, b.noeud.nom, (nom) => {
-      if (nom !== b.noeud.nom) void this.executer([{ op: 'renommer_noeud', id: b.id, nom }], b.figure ? 'Renommer la figure' : 'Renommer le nœud')
+      if (nom !== b.noeud.nom) void this.executer([{ op: 'renommer_noeud', id: b.id, nom }], b.figure ? 'Renommer la figure' : b.document ? 'Renommer le document' : 'Renommer le nœud')
     })
   }
 
@@ -1325,6 +1339,8 @@ export class VueGraphe {
         articles.push(this.base.blocs.has(illustre)
           ? { libelle: `Montrer le nœud illustré (${referenceDe(this.base, illustre)})`, action: () => this.montrer(illustre) }
           : { libelle: 'Montrer le nœud illustré', inactif: 'absent du graphe' })
+      } else if (b.document) {
+        articles.push({ libelle: 'Voir le fichier', raccourci: 'double-clic', action: () => this.ouvrirDocument(id) })
       } else articles.push({ libelle: 'Ouvrir la fiche', raccourci: 'double-clic', action: () => this.options.surOuvrir(b.noeud) })
       articles.push({ libelle: 'Cadrer la sélection', raccourci: 'F', action: () => this.cadrerSelection() })
     } else if (c.genre === 'titre' || c.genre === 'cadre' || c.genre === 'fonction') {

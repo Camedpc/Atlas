@@ -57,12 +57,12 @@ TIER = _texte("ATLAS_VOIX_TIER", "fast")
 """Niveau de service Codex : « fast » ≈ 0,9 s au premier mot avec gpt-6-sol, mais consomme plus de quota."""
 MODELE_TACHES = config_orchestrateur.modele_agent("tache_vocale", "gpt-6-luna")
 EFFORT_TACHES = config_orchestrateur.effort_agent("tache_vocale", "medium")
-# Agent navigateur lancé par la voix : même modèle et même effort que le rôle `navigateur` de l'orchestrateur.
-MODELE_NAVIGATEUR = config_orchestrateur.modele_agent("navigateur", "gpt-6-astra")
-EFFORT_NAVIGATEUR = config_orchestrateur.effort_agent("navigateur", "medium")
 
 ENREGISTRER = os.environ.get("ATLAS_VOIX_ENREGISTRER") == "1"
 """Diagnostic : écrit le micro reçu et les tours transcrits dans le .tmp de la session (appel-<id>.wav/.json)."""
+
+PRECHAUFFAGE_S = float(_texte("ATLAS_VOIX_PRECHAUFFAGE_S", "600"))
+"""Atlas voix préparé à l'avance à l'ouverture d'une conversation, gardé prêt ce nombre de secondes (0 = jamais)."""
 
 # Contexte donné à la voix au décroché : derniers messages de la conversation.
 CONTEXTE_MESSAGES = int(_texte("ATLAS_VOIX_CONTEXTE_MESSAGES", "30"))

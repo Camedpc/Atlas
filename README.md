@@ -14,6 +14,7 @@ Harness de hackathon : des agents IA transforment leurs raisonnements scientifiq
 | `api/index.py` | Lecture seule, déployée comme fonction Python sur Vercel |
 | `frontend/` | Interface : espace et sessions à gauche, conversation et arbre des agents au centre, graphe de raisonnement (éditable à la souris, bouton « ? »), agent graph ou documents à droite |
 | `tests/` | Tests Python (sans réseau) |
+| `film/` | Film de présentation (Remotion, captures du vrai produit) : voir `film/README.md` |
 
 ## API
 
@@ -23,7 +24,7 @@ Harness de hackathon : des agents IA transforment leurs raisonnements scientifiq
 | `GET /api/graphe?projet_id=` | Tous les nœuds (avec statut et démonstrations) et toutes les arêtes du graphe d'un espace |
 | `GET /api/noeuds/{id}?projet_id=` | Un nœud, ses prémisses et les nœuds qui l'utilisent |
 | `GET /api/journal?projet_id=&noeud_id=&limite=&avant_id=` | Historique, le plus récent d'abord |
-| `GET /api/vue?projet_id=&format=json\|texte` | Vue de l'espace : cadres (et leur rectangle), placements en cases, étiquettes ; `texte` = ce que lit l'IA ; `figures` (graphiques et images, placés comme `fig:<id>`) |
+| `GET /api/vue?projet_id=&format=json\|texte` | Vue de l'espace : cadres (et leur rectangle), placements en cases, étiquettes ; `texte` = ce que lit l'IA ; `figures` (graphiques et images, placés comme `fig:<id>`) ; `documents` (fichiers et dossiers du projet, placés comme `doc:<id>`) et `liens_documents` |
 | `GET /api/figures/{id}/image?projet_id=` | Image d'une figure (bucket privé) |
 | `GET /api/docs` | Documentation interactive |
 
@@ -47,7 +48,7 @@ Servies seulement par `atlas.serveur` (pas sur Vercel) :
 | `POST /api/conversations/{id}/messages` | `{"contenu", "agent"?, "modele"?, "effort"?}` : lance un tour, ou s'injecte dans le tour en cours |
 | `POST /api/conversations/{id}/arreter` | `{"agent"?}` : arrête tout (orchestrateur et sous-agents), ou un seul sous-agent |
 | `WS /api/conversations/{id}/voix` | Appel vocal avec Atlas voix (premier message : `{"type": "auth", "jeton"}`) |
-| `/api/voix/appels/{appel}/…` | Outils du serveur MCP `voix` : confier à l'orchestrateur, son état, petites tâches, écran du graphe, parcours |
+| `/api/voix/appels/{appel}/…` | Outils du serveur MCP `voix` : confier à l'orchestrateur, son état, petites tâches, écran du graphe |
 | `GET /api/orchestrateur/modeles` | Modèles Codex proposés à l'orchestrateur, leurs efforts, et les réglages par défaut (avec `X-Atlas-Cle-OpenAI` : ceux de la clé) |
 | `POST /api/orchestrateur/compte` | Vérifie la clé OpenAI de l'en-tête `X-Atlas-Cle-OpenAI` et y connecte Codex ; agents dont le modèle manque |
 | `DELETE /api/orchestrateur/compte` | Oublie la clé de l'en-tête : supprime sa connexion et ses threads du serveur |
@@ -130,6 +131,12 @@ donne des consignes), cerveau Codex rapide (`gpt-6-sol`, effort bas, mode fast),
   l'orchestrateur.
 - Petites tâches pratiques : elle-même ou un petit sous-agent de fond (`lancer_tache`).
 - « Stop » la fait taire ; seule une demande explicite arrête la recherche.
+- Elle peut raccrocher (outil `terminer_appel`) : à la demande ou quand l'échange est conclu, toujours après un
+  au revoir joué en entier ; si Camille reprend la parole, l'appel continue.
+- Préparée à l'avance (`atlas/voix/prechauffage.py`) : dès qu'une conversation s'ouvre, un cerveau démarré et échauffé
+  attend l'appel (prêt en ~0,4 s au lieu de ~7 s), gardé `ATLAS_VOIX_PRECHAUFFAGE_S`.
+- Au clic, le micro est demandé tout de suite (Windows met ~1 s à l'ouvrir) ; le son d'ouverture, au choix dans le
+  menu du micro, finit quand il commence à capter. Ce qui est dit avant qu'Atlas voix soit prêt est rejoué à Gradium.
 - Au raccrochage, la transcription de l'appel (enregistrée sous l'agent `/voix`) est ajoutée en tête du
   prochain message que reçoit l'orchestrateur, sur le modèle choisi dans la saisie.
 - Dans l'arbre et l'agent graph, Atlas voix est un sommet (`/voix`) ; l'orchestrateur devient son enfant s'il

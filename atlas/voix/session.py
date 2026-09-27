@@ -38,12 +38,12 @@ from ..orchestrateur.gestionnaire import Reglages, gestionnaire, titre_depuis
 from ..orchestrateur.suivi_agents import Agent
 from ..orchestrateur.traduction import traduire
 from . import config
-from .cerveau import Cerveau, Tache, Taches, modele_tache
+from .cerveau import Cerveau, Tache, Taches
 from .contexte import VOIX, annonce, contexte_decroche, pont
-from .deroulement import Deroulement
-from .ecran import Ecran, ParcoursIntrouvable
+from .ecran import Ecran
 from .gradium import Transcripteur
 from .parleur import Parleur, Prechauffe
+from .prechauffage import CerveauPret, echauffement, messages_recents
 from .texte import est_echo
 
 log = logging.getLogger(__name__)
@@ -51,30 +51,42 @@ log = logging.getLogger(__name__)
 ATTENTE_MAX_STT = 10 * 48000
 """Micro gardé pendant qu'une session STT se rouvre (10 s en PCM 24 kHz 16 bits), rejoué dans la nouvelle."""
 
+ATTENTE_MAX_FIN = 30.0
+"""Au-delà (s), l'appel se ferme même si la fin de l'au revoir n'a pas été signalée par le navigateur."""
+GRACE_FIN = 1.2
+"""Délai (s) après l'au revoir pendant lequel Camille peut reprendre la parole et garder l'appel ouvert."""
+CODE_RACCROCHE = 4000
+"""Code de fermeture du WebSocket quand c'est Atlas voix qui raccroche."""
+
 PREFIXE_CONFIE = "[Transmis par Atlas voix, pendant un appel avec Camille]"
-DUREE_MAX_PHRASE_S = 90.0
-"""Au-delà, on n'attend plus la fin de la lecture d'une phrase de parcours (navigateur muet, onglet fermé)."""
 
 
 def consigne(texte: str) -> str:
     return f"[Consignes de Camille, à appliquer désormais pour toute la suite de l'appel : {texte}]"
 
 
-def echauffement(contexte: str) -> str:
-    return (
-        f"[Contexte : fin de la conversation au moment où Camille t'appelle]\n{contexte}\n[Fin du contexte]\n\n"
-        "[Système] Appel ouvert. Réponds uniquement « prêt », sans rien faire d'autre."
-    )
-
-
 class Session:
-    def __init__(self, ws: WebSocket, conversation: Conversation, dossier: Path, projet_id: str | None):
-        self.id = uuid.uuid4().hex[:12]
+    def __init__(
+        self,
+        ws: WebSocket,
+        conversation: Conversation,
+        dossier: Path,
+        projet_id: str | None,
+        prepare: CerveauPret | None = None,
+    ):
         self.ws = ws
         self.conversation = conversation
-        self.cerveau = Cerveau(conversation.id, self.id, dossier, projet_id)
+        # Cerveau préparé à l'avance (prechauffage.py) : déjà démarré et échauffé, l'appel est prêt tout de suite.
+        self.prepare = prepare if prepare is not None and prepare.cerveau is not None else None
+        if self.prepare is not None:
+            self.id = self.prepare.appel_id
+            self.cerveau = self.prepare.cerveau
+        else:
+            self.id = uuid.uuid4().hex[:12]
+            self.cerveau = Cerveau(conversation.id, self.id, dossier, projet_id)
+        self.complement_contexte = ""
         self.taches = Taches(self.cerveau, self._tache_changee)
-        self.ecran = Ecran(self.envoyer, projet_id or "defaut", dossier.parent.parent)
+        self.ecran = Ecran(self.envoyer, projet_id or "defaut")
         self.prechauffe = Prechauffe()
         self.stt: Transcripteur | None = None
         self._attente_stt = bytearray()
@@ -100,15 +112,16 @@ class Session:
         self.gen = 0
         self.lecture = {"gen": 0, "joue_s": 0.0, "fini": True, "t": 0.0}
         self.note_interruption = ""
-        self.deroulement: Deroulement | None = None
-        """Parcours qui s'enchaîne tout seul (outil `derouler_parcours`)."""
-        self.note_parcours = ""
-        self.parle_parcours = False
         self.consignes = ""
         self.dit_recemment = ""
         self.annonces: list[str] = []
         self.evenements_orchestrateur: list[dict[str, Any]] = []
         self.pret = False
+        self.dit_dans_tour = False
+        """Atlas voix a déjà parlé dans le tour en cours : il peut raccrocher (jamais sans un au revoir)."""
+        self.fin: asyncio.Task[None] | None = None
+        self.raison_fin = ""
+        self.note_fin = ""
         self.dossier = dossier
         self._micro = bytearray() if config.ENREGISTRER else None
         self._tours: list[dict[str, Any]] = []
@@ -129,9 +142,9 @@ class Session:
                     t.chemin,
                     t.thread_id,
                     VOIX,
-                    t.genre,
+                    "tache_vocale",
                     t.debut,
-                    modele=modele_tache(t.genre)[0],
+                    modele=config.MODELE_TACHES,
                     etat=etat,  # type: ignore[arg-type]
                     activite=t.etapes[-1] if t.etapes else "Démarre",
                     tokens=t.tokens,
@@ -187,13 +200,14 @@ class Session:
         self.prechauffe.lancer()
         file = gestionnaire.abonner(self.conversation.id)
         try:
-            await self.cerveau.demarrer()
+            if self.prepare is None:
+                await self.cerveau.demarrer()
             self._fond = [
                 asyncio.create_task(self._boucle_stt()),
                 asyncio.create_task(self._boucle_annonces()),
                 asyncio.create_task(self._ecouter_orchestrateur(file)),
                 asyncio.create_task(self.prechauffe.entretenir()),
-                asyncio.create_task(self._echauffer()),
+                asyncio.create_task(self._echauffer() if self.prepare is None else self._reprendre()),
             ]
             while True:
                 message = await self.ws.receive()
@@ -214,7 +228,7 @@ class Session:
         """Tour muet qui charge le contexte : le premier tour de Codex est le plus lent, il passe au décroché."""
         debut = time.perf_counter()
         try:
-            precedents = await asyncio.to_thread(self._messages_recents)
+            precedents = await asyncio.to_thread(messages_recents, self.conversation.id)
             texte = echauffement(contexte_decroche(precedents, config.CONTEXTE_MESSAGES))
             async for _ in self.cerveau.tour(texte):
                 pass
@@ -224,18 +238,21 @@ class Session:
         await self.mesurer("echauffement", debut)
         await self.etat("ecoute")
 
-    def _messages_recents(self) -> list[Message]:
-        n = config.CONTEXTE_MESSAGES
-        cid = self.conversation.id
-        return conversations.lister_messages(cid, limite=n, derniers=True) + conversations.lister_messages(
-            cid, limite=n, agent=VOIX, derniers=True
-        )
+    async def _reprendre(self) -> None:
+        """Cerveau préparé à l'avance : seulement les messages écrits depuis, ajoutés au premier tour."""
+        debut = time.perf_counter()
+        try:
+            assert self.prepare is not None
+            self.complement_contexte = await self.prepare.complement()
+        except Exception:
+            log.warning("messages récents pour la voix préparée", exc_info=True)
+        self.pret = True
+        await self.mesurer("echauffement", debut)
+        await self.etat("ecoute")
 
     async def fermer(self) -> None:
         for tache in self._fond:
             tache.cancel()
-        if self.deroulement is not None:
-            self.deroulement.suspendre()
         self.ecran.fermer()
         if self.parleur is not None:
             await self.parleur.arreter()
@@ -434,13 +451,9 @@ class Session:
         if source == "voix" and not self.casque and self.agent_parle() and est_echo(texte, self.dit_recemment):
             await self.envoyer({"type": "info", "message": f"Écho ignoré : « {texte} »"})
             return
+        if self.annuler_fin():
+            self.note_fin = "(Tu avais raccroché, mais Camille a repris la parole : l'appel continue.)"
         await self.envoyer({"type": "utilisateur", "texte": texte, "source": source})
-        if self.deroulement is not None:
-            # Camille parle : le parcours s'arrête là, et la voix apprend où il en est.
-            d, self.deroulement = self.deroulement, None
-            note = d.suspendre() if d.actif else d.note() if d.en_pause else None
-            if note:
-                self.note_parcours = note
         asyncio.create_task(self.enregistrer("utilisateur", texte, {"source": source}))
         if self.tour is not None and not self.tour.done():
             if self.cerveau.outil_actif and await self.cerveau.orienter(f"(Camille ajoute : « {texte} »)"):
@@ -461,9 +474,12 @@ class Session:
         if self.note_interruption:
             entetes.append(self.note_interruption)
             self.note_interruption = ""
-        if self.note_parcours:
-            entetes.append(self.note_parcours)
-            self.note_parcours = ""
+        if self.note_fin:
+            entetes.append(self.note_fin)
+            self.note_fin = ""
+        if self.complement_contexte:
+            entetes.insert(0, self.complement_contexte)
+            self.complement_contexte = ""
         return "\n".join([*entetes, texte])
 
     async def couper(self) -> None:
@@ -500,6 +516,7 @@ class Session:
         self.parleur = parleur
         await self.etat("reflexion")
         premier_texte = True
+        self.dit_dans_tour = False
         try:
             async for ev in self.cerveau.tour(message):
                 if gen != self.gen:
@@ -516,6 +533,7 @@ class Session:
                         self.dit_recemment = (self.dit_recemment + " " + ev.texte)[-800:]
                         await self.envoyer({"type": "agent_fin", "id": ev.id, "texte": ev.texte})
                         if ev.texte.strip():
+                            self.dit_dans_tour = True
                             asyncio.create_task(self.enregistrer("assistant", ev.texte))
                     case "outil_debut":
                         self._activite(ev.texte, "Outil")
@@ -538,71 +556,53 @@ class Session:
             if gen == self.gen:
                 await self.etat("ecoute")
 
-    # ── Parcours qui s'enchaîne tout seul ──
+    # ── Fin de l'appel (outil `terminer_appel`) ──
 
-    def libre(self) -> bool:
-        """Un blanc : personne ne parle et la voix n'a pas de tour en cours."""
-        repos = (self.tour is None or self.tour.done()) and not self.agent_parle()
-        return repos and not self.tampon and self.pas_parole == 0 and self.pret and not self.parle_parcours
+    async def demander_fin(self, raison: str) -> dict[str, Any]:
+        """Atlas voix raccroche : après son au revoir, joué en entier, et un court délai de grâce.
 
-    async def dire(self, texte: str) -> bool:
-        """Dit un texte tel quel, sans passer par le modèle, et attend que Camille l'ait entendu en entier ;
-        False si elle a coupé la parole."""
-        self.gen += 1
-        gen = self.gen
-        id_ = f"parcours-{uuid.uuid4().hex[:8]}"
-
-        async def premier_audio() -> None:
-            self._activite("Parle")
-
-        async def segment(sid: str, debut_s: float, t: str) -> None:
-            await self.envoyer({"type": "segment", "gen": gen, "id": sid, "debut_s": round(debut_s, 3), "texte": t})
-
-        parleur = Parleur(gen, self.prechauffe, self.envoyer_audio, premier_audio, segment)
-        self.parleur = parleur
-        self.parle_parcours = True
-        try:
-            await self.envoyer({"type": "agent_delta", "id": id_, "texte": texte})
-            await self.envoyer({"type": "agent_fin", "id": id_, "texte": texte})
-            self.dit_recemment = (self.dit_recemment + " " + texte)[-800:]
-            asyncio.create_task(self.enregistrer("assistant", texte))
-            parleur.texte(id_, texte)
-            parleur.fin_message(id_)
-            await parleur.terminer()
-            # Tout l'audio est parti : on attend que le navigateur ait fini de le jouer.
-            limite = time.monotonic() + DUREE_MAX_PHRASE_S
-            while gen == self.gen and time.monotonic() < limite:
-                if self.lecture["gen"] == gen and self.lecture["fini"]:
-                    break
-                await asyncio.sleep(0.1)
-            return gen == self.gen
-        finally:
-            self.parle_parcours = False
-            if gen == self.gen:
-                await self.etat("ecoute")
-
-    async def derouler(self, chemin: str, depuis: int) -> dict[str, Any]:
-        try:
-            p = await self.ecran.charger_parcours(chemin)
-        except ParcoursIntrouvable as e:
-            return {"ok": False, "erreur": str(e)}
-        total = len(p["etapes"])
-        if not 1 <= depuis <= total:
-            return {"ok": False, "erreur": f"Ce parcours a {total} étape(s)."}
-        if self.deroulement is not None:
-            self.deroulement.suspendre()
-        self.deroulement = Deroulement(
-            chemin, p, depuis, self.ecran.executer, self.dire, self.libre, self.annonces.append
-        )
-        self.deroulement.lancer()
+        Comme les agents vocaux qui raccrochent eux-mêmes (ElevenLabs, LiveKit, Pipecat) : jamais sans avoir dit
+        au revoir, jamais en coupant sa propre phrase, et Camille garde l'appel ouvert en reprenant la parole.
+        """
+        if not self.dit_dans_tour:
+            return {
+                "accepte": False,
+                "note": "Dis d'abord au revoir à Camille en une courte phrase, puis rappelle terminer_appel.",
+            }
+        if self.fin is None or self.fin.done():
+            self.raison_fin = raison.strip()
+            self.fin = asyncio.create_task(self._raccrocher_apres_au_revoir())
         return {
-            "ok": True,
-            "titre": p.get("titre"),
-            "depuis": depuis,
-            "total": total,
-            "note": "Les étapes s'enchaînent dès que tu te tais, leurs phrases dites telles quelles : ne dis rien de "
-            "plus maintenant.",
+            "accepte": True,
+            "note": "L'appel se ferme une fois ton au revoir joué, sauf si Camille reprend la parole. N'ajoute rien.",
         }
+
+    def annuler_fin(self) -> bool:
+        if self.fin is None or self.fin.done():
+            return False
+        self.fin.cancel()
+        self.fin = None
+        return True
+
+    def _camille_parle(self) -> bool:
+        return bool(self.tampon) or self.pas_parole >= config.COUPURE_PAS
+
+    async def _raccrocher_apres_au_revoir(self) -> None:
+        limite = time.monotonic() + ATTENTE_MAX_FIN
+        # Le tour qui a demandé la fin se termine, puis la voix finit d'être jouée chez Camille.
+        while time.monotonic() < limite and ((self.tour is not None and not self.tour.done()) or self.agent_parle()):
+            await asyncio.sleep(0.1)
+        fin_grace = time.monotonic() + GRACE_FIN
+        while time.monotonic() < fin_grace:
+            if self._camille_parle():
+                self.note_fin = "(Tu avais raccroché, mais Camille a repris la parole : l'appel continue.)"
+                return
+            await asyncio.sleep(0.05)
+        texte = "Atlas voix a raccroché" + (f" ({self.raison_fin})" if self.raison_fin else "") + "."
+        await self.enregistrer("systeme", texte)
+        log.info("appel %s : %s", self.id, texte)
+        with contextlib.suppress(Exception):
+            await self.ws.close(code=CODE_RACCROCHE, reason="Atlas voix a raccroché.")
 
     # ── Orchestrateur (appelé par le serveur MCP `voix`) ──
 
@@ -665,7 +665,7 @@ class Session:
         """Annonce ce qui arrive (orchestrateur, tâches) dès que la conversation laisse un blanc."""
         while True:
             await asyncio.sleep(0.4)
-            libre = (self.tour is None or self.tour.done()) and not self.agent_parle() and not self.parle_parcours
+            libre = (self.tour is None or self.tour.done()) and not self.agent_parle()
             if not (libre and not self.tampon and self.pas_parole == 0 and self.pret):
                 continue
             # Les événements s'accumulent jusqu'au blanc : la fin du tour rend alors les étapes inutiles.

@@ -170,6 +170,8 @@ def test_profil_du_bunker(monkeypatch, tmp_path):
     assert profil["permissions"]["bunker"]["filesystem"] == {
         ":root": "read",  # la lecture n'est pas restreinte : c'est la consigne qui confine
         str(session): "write",
+        str(session.parent.parent / "doc_projet"): "write",  # livrables du projet, rangés par sujet
+        str(session.parent.parent / "scripts_projet"): "write",
         str(tmp_path / "partage"): "write",
     }
     assert profil["permissions"]["bunker"]["network"] == {"enabled": True}

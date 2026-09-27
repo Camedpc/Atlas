@@ -3,7 +3,6 @@ et abonnement au gestionnaire. Sans réseau : ni Gradium, ni Codex, ni Supabase.
 
 import asyncio
 from datetime import datetime
-from pathlib import Path
 from types import SimpleNamespace
 
 from atlas import conversations
@@ -277,11 +276,11 @@ class _Navigateur:
         asyncio.get_running_loop().call_soon(self.ecran.recevoir_compte_rendu, cr)
 
 
-def _ecran(monkeypatch, navigateur: _Navigateur, projet: str = "p1", dossier: Path = Path(".")) -> Ecran:
+def _ecran(monkeypatch, navigateur: _Navigateur, projet: str = "p1") -> Ecran:
     from atlas import lecture
 
     monkeypatch.setattr(lecture, "charger_etat_vue", lambda projet_id: _vue_ecran())
-    ecran = Ecran(navigateur.envoyer, "p1", dossier)
+    ecran = Ecran(navigateur.envoyer, "p1")
     navigateur.ecran = ecran
     ecran.recevoir_etat({"ecran": "ecran_1a2b3c4d", "projet": projet, "camera": {"distance": 2.0}})
     return ecran
@@ -322,7 +321,7 @@ def test_ecran_absent_ou_autre_espace(monkeypatch):
     async def scenario():
         nav = _Navigateur()
         assert "autre espace" in (await _ecran(monkeypatch, nav, projet="p2").effacer())["erreur"]
-        sans = Ecran(nav.envoyer, "p1", Path("."))
+        sans = Ecran(nav.envoyer, "p1")
         assert "pas annoncé" in (await sans.montrer(["Lemme 1"]))["erreur"]
         assert nav.lots == []
 
@@ -387,121 +386,147 @@ def test_ecran_lire(monkeypatch):
     asyncio.run(scenario())
 
 
-def test_parcours_enregistre_annonce_puis_joue_a_la_voix(monkeypatch, tmp_path):
-    from atlas import navigation, parcours
+# ── Fin d'appel demandée par Atlas voix ──
 
-    messages: list[tuple] = []
-    monkeypatch.setattr(conversations, "ajouter_message", lambda *a, **kw: messages.append((a, kw)))
-    etat = _vue_ecran()
-    pret = navigation.compiler_parcours(
-        etat,
-        navigation.reperer(etat),
-        "Preuve de la loi",
-        [
-            {"phrase": "On part du régime stationnaire.", "montrer": ["Hypothèse (i)"]},
-            {"phrase": "Puis la loi.", "montrer": ["t_1"]},
+
+class FauxWS:
+    def __init__(self):
+        self.ferme = None
+
+    async def send_text(self, texte):
+        pass
+
+    async def close(self, code=1000, reason=""):
+        self.ferme = (code, reason)
+
+
+def _session_fin(monkeypatch, tmp_path):
+    from atlas.voix import session as module
+
+    monkeypatch.setattr(module, "GRACE_FIN", 0.1)
+    enregistres = []
+
+    async def enregistrer(self, role, contenu, donnees=None, agent=VOIX):
+        enregistres.append((role, contenu))
+
+    monkeypatch.setattr(module.Session, "enregistrer", enregistrer)
+    s = module.Session(FauxWS(), CONVERSATION, tmp_path, None)
+    return s, enregistres
+
+
+def test_pas_de_fin_d_appel_sans_au_revoir(monkeypatch, tmp_path):
+    s, _ = _session_fin(monkeypatch, tmp_path)
+
+    async def scenario():
+        return await s.demander_fin("demandé par Camille")
+
+    reponse = asyncio.run(scenario())
+    assert reponse["accepte"] is False and s.fin is None
+
+
+def test_raccroche_apres_l_au_revoir(monkeypatch, tmp_path):
+    s, enregistres = _session_fin(monkeypatch, tmp_path)
+    s.dit_dans_tour = True
+
+    async def scenario():
+        assert (await s.demander_fin("demandé par Camille"))["accepte"]
+        await s.fin
+
+    asyncio.run(scenario())
+    assert s.ws.ferme == (4000, "Atlas voix a raccroché.")
+    assert enregistres == [("systeme", "Atlas voix a raccroché (demandé par Camille).")]
+
+
+def test_l_appel_continue_si_camille_reprend_la_parole(monkeypatch, tmp_path):
+    s, enregistres = _session_fin(monkeypatch, tmp_path)
+    s.dit_dans_tour = True
+
+    async def scenario():
+        await s.demander_fin("conversation terminée")
+        s.tampon.append("attends")  # Camille parle pendant le délai de grâce
+        await s.fin
+
+    asyncio.run(scenario())
+    assert s.ws.ferme is None and enregistres == []
+    assert "l'appel continue" in s.note_fin
+
+
+# ── Atlas voix préparé à l'avance ──
+
+
+class FauxCerveau:
+    instances: list = []
+
+    def __init__(self, conversation_id, appel_id, dossier, projet_id):
+        self.appel_id = appel_id
+        self.tours: list[str] = []
+        self.ferme = False
+        FauxCerveau.instances.append(self)
+
+    async def demarrer(self):
+        pass
+
+    async def tour(self, texte):
+        self.tours.append(texte)
+        yield None
+
+    async def fermer(self):
+        self.ferme = True
+
+
+def _prechauffages(monkeypatch, tmp_path, messages):
+    from atlas import projets
+    from atlas.orchestrateur import bunker
+    from atlas.voix import config as config_voix
+    from atlas.voix import prechauffage
+
+    FauxCerveau.instances = []
+    monkeypatch.setattr(config_voix, "PRECHAUFFAGE_S", 600)
+    monkeypatch.setattr(projets, "dossier_de", lambda pid: "defaut")
+    monkeypatch.setattr(projets, "id_ou_defaut", lambda pid: "p1")
+    monkeypatch.setattr(bunker, "preparer_session", lambda cid, projet: tmp_path)
+    monkeypatch.setattr(
+        conversations,
+        "lister_messages",
+        lambda cid, apres_id=None, limite=500, agent=None, derniers=False: [
+            m for m in messages if m.agent == agent and (apres_id is None or m.id > apres_id)
         ],
     )
-    session = tmp_path / "sessions" / "c1"
-    chemin = parcours.enregistrer(session, "c1", pret)
-    assert chemin.startswith("sessions/c1/docs_session/parcours/preuve-de-la-loi-") and chemin.endswith(".json")
-    ((args, kw),) = messages
-    assert args[:2] == ("c1", "systeme") and kw["donnees"]["type"] == "parcours" and kw["donnees"]["etapes"] == 2
-    assert parcours.lire(tmp_path, chemin)["titre"] == "Preuve de la loi"
-    assert parcours.lire(tmp_path, Path(chemin).name)["titre"] == "Preuve de la loi"  # le nom du fichier suffit
+    return prechauffage.Prechauffages(fabrique=FauxCerveau)
+
+
+def test_prechauffage_puis_appel_reprend_le_cerveau_pret(monkeypatch, tmp_path):
+    messages = [_message(1, "utilisateur", "Étudie les hydrures."), _message(2, "assistant", "Rapport : Tc 250 K.")]
+    p = _prechauffages(monkeypatch, tmp_path, messages)
 
     async def scenario():
-        nav = _Navigateur()
-        ecran = _ecran(monkeypatch, nav, dossier=tmp_path)
-        r = await ecran.jouer_etape(chemin, 2)
-        assert r == {
-            "ok": True,
-            "titre": "Preuve de la loi",
-            "etape": 2,
-            "total": 2,
-            "phrase": "Puis la loi.",
-            "suite": "dernière étape",
-        }
-        assert {"op": "selectionner", "cible": {"noeud": "t_1"}} in nav.lots[0]["commandes"]
-        assert (await ecran.jouer_etape(chemin, 3))["ok"] is False
-        assert (await ecran.jouer_etape("../../ailleurs.json", 1))["ok"] is False
-        assert len(nav.lots) == 1
+        assert await p.demander(CONVERSATION) == "lance"
+        assert await p.demander(CONVERSATION) == "deja"  # une seule préparation par conversation
+        pret = p.prendre("c1")
+        assert pret is not None and await pret.attendre()
+        assert p.prendre("c1") is None  # retiré de la réserve
+        # Un message écrit après la préparation est ajouté au premier tour de l'appel.
+        messages.append(_message(3, "utilisateur", "Et à 200 GPa ?"))
+        return pret, await pret.complement()
 
-    asyncio.run(scenario())
+    pret, complement = asyncio.run(scenario())
+    [cerveau] = FauxCerveau.instances
+    assert pret.appel_id == cerveau.appel_id
+    assert "Rapport : Tc 250 K." in cerveau.tours[0] and "prêt" in cerveau.tours[0]
+    assert "Camille : Et à 200 GPa ?" in complement and "Étudie" not in complement
 
 
-# ── Parcours déroulé tout seul pendant l'appel ──
-
-
-def _parcours_3():
-    return {
-        "titre": "Preuve",
-        "etapes": [{"phrase": f"Phrase {i}.", "commandes": [{"op": "zoomer", "facteur": 1.5}]} for i in (1, 2, 3)],
-    }
-
-
-def _deroulement(monkeypatch, coupe_a: int | None = None, refus: bool = False):
-    from atlas.voix import deroulement
-
-    monkeypatch.setattr(deroulement, "PAUSE_ENTRE_ETAPES_S", 0)
-    journal: list[str] = []
-    annonces: list[str] = []
-
-    async def executer(commandes):
-        journal.append("ecran")
-        return {"ok": False, "erreur": "écran fermé"} if refus else {"ok": True}
-
-    async def dire(phrase):
-        journal.append(phrase)
-        return phrase != f"Phrase {coupe_a}."
-
-    d = deroulement.Deroulement("p.json", _parcours_3(), 1, executer, dire, lambda: True, annonces.append)
-    return d, journal, annonces
-
-
-def test_deroulement_enchaine_les_etapes(monkeypatch):
-    async def scenario():
-        d, journal, annonces = _deroulement(monkeypatch)
-        d.lancer()
-        await d.tache
-        assert journal == ["ecran", "Phrase 1.", "ecran", "Phrase 2.", "ecran", "Phrase 3."]
-        assert len(annonces) == 1 and "terminé" in annonces[0]
-        assert not d.en_pause
-
-    asyncio.run(scenario())
-
-
-def test_deroulement_en_pause_quand_camille_coupe(monkeypatch):
-    async def scenario():
-        d, journal, annonces = _deroulement(monkeypatch, coupe_a=2)
-        d.lancer()
-        await d.tache
-        assert journal == ["ecran", "Phrase 1.", "ecran", "Phrase 2."]
-        assert d.en_pause and annonces == []
-        assert "étape 2/3" in d.note() and "depuis=3" in d.note()
-
-    asyncio.run(scenario())
-
-
-def test_deroulement_suspendu_pendant_un_blanc_et_ecran_refuse(monkeypatch):
-    from atlas.voix import deroulement
+def test_un_seul_cerveau_prepare_a_la_fois(monkeypatch, tmp_path):
+    p = _prechauffages(monkeypatch, tmp_path, [])
+    autre = CONVERSATION.model_copy(update={"id": "c2"})
 
     async def scenario():
-        async def executer(_):
-            return {"ok": True}
-
-        async def dire(_):
-            return True
-
-        attente = deroulement.Deroulement("p.json", _parcours_3(), 2, executer, dire, lambda: False, lambda _: None)
-        attente.lancer()
-        await asyncio.sleep(0.05)
-        assert "étape 2/3" in attente.suspendre()
-        assert not attente.actif and attente.suspendre() is None
-
-        d, journal, annonces = _deroulement(monkeypatch, refus=True)
-        d.lancer()
-        await d.tache
-        assert journal == ["ecran"] and "écran fermé" in annonces[0]
+        await p.demander(CONVERSATION)
+        await p.courant.attendre()
+        await p.demander(autre)
+        await p.courant.attendre()
 
     asyncio.run(scenario())
+    premier, second = FauxCerveau.instances
+    assert premier.ferme and not second.ferme
+    assert p.prendre("c1") is None and p.prendre("c2") is not None

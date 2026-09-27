@@ -1,0 +1,142 @@
+[
+ {
+  "id": "prop_equation",
+  "w": 478,
+  "h": 254
+ },
+ {
+  "id": "prop_t0",
+  "w": 478,
+  "h": 254
+ },
+ {
+  "id": "prop_quadrature",
+  "w": 478,
+  "h": 254
+ },
+ {
+  "id": "prop_energie",
+  "w": 478,
+  "h": 254
+ },
+ {
+  "id": "prop_exacte",
+  "w": 478,
+  "h": 254
+ },
+ {
+  "id": "prop_croissance",
+  "w": 478,
+  "h": 254
+ },
+ {
+  "id": "prop_serie",
+  "w": 478,
+  "h": 254
+ },
+ {
+  "id": "prop_borda",
+  "w": 478,
+  "h": 254
+ },
+ {
+  "id": "prop_separatrice",
+  "w": 478,
+  "h": 254
+ },
+ {
+  "id": "obs_concordance",
+  "w": 478,
+  "h": 254
+ },
+ {
+  "id": "hyp_contrainte",
+  "w": 478,
+  "h": 254
+ },
+ {
+  "id": "choix_modele_ideal",
+  "w": 478,
+  "h": 254
+ },
+ {
+  "id": "def_elliptique",
+  "w": 478,
+  "h": 254
+ },
+ {
+  "id": "fait_agm",
+  "w": 478,
+  "h": 254
+ },
+ {
+  "id": "obs_convergence",
+  "w": 478,
+  "h": 254
+ },
+ {
+  "id": "prop_orbites",
+  "w": 478,
+  "h": 254
+ },
+ {
+  "id": "prop_rk4",
+  "w": 478,
+  "h": 254
+ },
+ {
+  "id": "obs_seuils",
+  "w": 478,
+  "h": 254
+ },
+ {
+  "id": "prop_impact_vertical",
+  "w": 478,
+  "h": 254
+ },
+ {
+  "id": "prop_projectile",
+  "w": 478,
+  "h": 254
+ },
+ {
+  "id": "prop_quadratique_t",
+  "w": 478,
+  "h": 254
+ },
+ {
+  "id": "prop_deviation_est",
+  "w": 478,
+  "h": 254
+ },
+ {
+  "id": "prop_orbite_circulaire",
+  "w": 478,
+  "h": 254
+ },
+ {
+  "id": "prop_estimateur_g",
+  "w": 478,
+  "h": 254
+ },
+ {
+  "id": "prop_lineaire",
+  "w": 478,
+  "h": 254
+ },
+ {
+  "id": "prop_champ_central",
+  "w": 478,
+  "h": 254
+ },
+ {
+  "id": "prop_tenseur_marees",
+  "w": 478,
+  "h": 254
+ },
+ {
+  "id": "prop_vitesse_radiale",
+  "w": 478,
+  "h": 254
+ }
+]

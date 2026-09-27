@@ -95,13 +95,13 @@ def _tuer(proc: subprocess.Popen) -> None:
         proc.kill()
 
 
-def _lire_script(script: str, session: Path) -> tuple[Path, str]:
-    racine = session.resolve()
+def _lire_script(script: str, racine: Path) -> tuple[Path, str]:
+    racine = racine.resolve()
     chemin = (racine / script).resolve()
     if not chemin.is_relative_to(racine):
-        raise ErreurScript(f"Le script doit être dans le dossier de la session : {script}.")
+        raise ErreurScript(f"Le script doit être dans le dossier du projet : {script}.")
     if chemin.suffix != ".py" or not chemin.is_file():
-        raise ErreurScript(f"Script introuvable : {script} (fichier .py, chemin relatif au dossier de la session).")
+        raise ErreurScript(f"Script introuvable : {script} (fichier .py, chemin relatif au projet ou à la session).")
     if chemin.stat().st_size > SCRIPT_OCTETS_MAX:
         raise ErreurScript(f"Script trop long : {SCRIPT_OCTETS_MAX // 1024} Ko au plus (lis les données d'un fichier).")
     try:
@@ -110,9 +110,10 @@ def _lire_script(script: str, session: Path) -> tuple[Path, str]:
         raise ErreurScript("Le script doit être en UTF-8.") from None
 
 
-def produire(script: str, session: Path, delai: int | None = None) -> Production:
-    """Exécute `script` (chemin relatif à `session`) et renvoie la scène vérifiée et le script."""
-    chemin, texte = _lire_script(script, session)
+def produire(script: str, session: Path, delai: int | None = None, projet: Path | None = None) -> Production:
+    """Exécute `script` (chemin relatif à `projet`, par défaut à `session`) dans le dossier de la session, et renvoie
+    la scène vérifiée et le script."""
+    chemin, texte = _lire_script(script, projet or session)
     delai = delai or config.DELAI_FIGURE3D
     sortie = session / ".tmp" / f"figure3d-{uuid.uuid4().hex}"
     sortie.mkdir(parents=True)

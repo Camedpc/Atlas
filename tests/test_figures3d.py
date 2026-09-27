@@ -158,7 +158,7 @@ def test_environnement_sans_secrets():
 
 def test_script_hors_session_ou_absent(session):
     (session.parent / "dehors.py").write_text("fig = 1", encoding="utf-8")
-    with pytest.raises(ErreurScript, match="dans le dossier de la session"):
+    with pytest.raises(ErreurScript, match="dans le dossier du projet"):
         figure3d.produire("../dehors.py", session)
     with pytest.raises(ErreurScript, match="introuvable"):
         figure3d.produire("scripts/absent.py", session)
@@ -303,25 +303,32 @@ def test_outil_mcp_execute_le_script_puis_ecrit_la_figure(monkeypatch, tmp_path)
     from atlas.orchestrateur import mcp_atlas
 
     monkeypatch.setenv("ATLAS_PROJET_ID", "p")
-    monkeypatch.setenv("ATLAS_DOSSIER_SESSION", str(tmp_path))
+    session = tmp_path / "projet" / "sessions" / "s1"
+    monkeypatch.setenv("ATLAS_DOSSIER_SESSION", str(session))
     scene = figures3d.valider_scene(_scene())
     appels = {}
     monkeypatch.setattr(
         figure3d,
         "produire",
-        lambda script, session: (
-            appels.setdefault("produire", (script, session)) and figure3d.Production(scene=scene, script="fig = …")
+        lambda script, session, projet: (
+            appels.setdefault("produire", (script, session, projet))
+            and figure3d.Production(scene=scene, script="fig = …")
         ),
     )
     monkeypatch.setattr(ecriture, "creer_figure", lambda **k: appels.setdefault("creer", k))
+    # Chemin relatif à la session, retenu relatif au projet (comme les images, pour deplacer_document).
     reponse = json.loads(mcp_atlas.creer_figure_3d("pendule", "obs", "Pendule", "scripts/p.py", groupe="exp"))
-    assert appels["produire"] == ("scripts/p.py", tmp_path.resolve())
+    racine = (tmp_path / "projet").resolve()
+    assert appels["produire"] == ("sessions/s1/scripts/p.py", session.resolve(), racine)
     k = appels["creer"]
-    assert (k["scene"], k["script"], k["source"], k["groupe"]) == (scene, "fig = …", "scripts/p.py", "exp")
+    assert (k["scene"], k["script"], k["source"], k["groupe"]) == (scene, "fig = …", "sessions/s1/scripts/p.py", "exp")
+    appels.clear()
+    mcp_atlas.creer_figure_3d("pendule", "obs", "Pendule", "scripts_projet/pendule/scene3d.py")
+    assert appels["produire"][0] == "scripts_projet/pendule/scene3d.py"
     assert "image" not in k
     assert reponse["vue"] == "fig:pendule" and reponse["scene"].startswith("Scène 3D animée")
 
-    def echoue(*_):
+    def echoue(*_, **__):
         raise ErreurScript("Le script a échoué (code 1) :\nValueError: raté")
 
     monkeypatch.setattr(figure3d, "produire", echoue)

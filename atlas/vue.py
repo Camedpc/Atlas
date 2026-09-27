@@ -9,8 +9,15 @@ Règles de la grille :
 - un nœud est dans un seul cadre ; le rectangle d'un cadre englobe les cases de ses nœuds et de ses sous-cadres ;
 - deux cadres frères laissent au moins une case d'écart (place pour la barre de titre, pas de chevauchement).
 
+Une décision (losange) se place avant les nœuds et les cadres qui en découlent, comme une prémisse (rôle interne
+« decision », tiré de ses détails, voir `decisions.py`).
+
 Une figure occupe ses propres cases : elle entre dans la vue comme un pseudo-nœud `fig:<id>`, de type « figure »,
 dont la seule prémisse est le nœud qu'elle illustre ; elle se place donc par défaut juste à droite de lui.
+
+Un document (fichier ou dossier du projet) aussi : pseudo-nœud `doc:<id>`, d'une case, de type « document », dont les
+prémisses (auxiliaires) sont les bouts de départ de ses liens entrants (le nœud qu'un script implémente…) ; un
+document sans lien entrant (un article source) se place au bord gauche de son cadre.
 """
 
 from __future__ import annotations
@@ -24,9 +31,16 @@ MOTIF_ID = re.compile(r"^[a-z0-9_]+$")
 MOTIF_COULEUR = re.compile(r"^#[0-9a-f]{6}$")
 GENRES = ("sous_probleme", "etape", "piste_abandonnee", "libre")
 ROLES = ("principale", "auxiliaire", "technique", "contexte")
+# Rôle interne (jamais écrit en base) : un nœud qui découle d'une décision la « cite » ainsi dans la vue.
+ROLE_DECISION = "decision"
+# Rôles qui placent un nœud à droite de sa prémisse (les flèches de la vue).
+ROLES_FLECHES = ("principale", "auxiliaire", ROLE_DECISION)
 TAILLE_MAX = 8
 PREFIXE_FIGURE = "fig:"
+PREFIXE_DOCUMENT = "doc:"
 TAILLE_FIGURE = (2, 2)
+TAILLE_DECISION = (1, 1)
+"""Losange d'une décision (largeur × hauteur, en cases) : « Décision D1 » et son nom ; le reste est dans sa fiche."""
 FORMATS_FIGURE = ((1, 1), (2, 1), (1, 2), (2, 2))
 """Formats d'une figure (largeur × hauteur, en cases) : une case, deux côte à côte, deux l'une sur l'autre, ou 2 × 2."""
 # Disposition : au-delà de cette hauteur (en cases), une colonne de départs se replie en plusieurs.
@@ -51,6 +65,10 @@ class NoeudVue:
     """(id, rôle) de toutes les démonstrations, sans doublon ; le rôle le plus fort l'emporte."""
     admis: bool = False
     """Fait admis (sans démonstration) : « Fait admis 3 » dans la numérotation d'un nœud sans type."""
+    resume: str = ""
+    """Décision : « question » → retenue (× écartées), pour lire_vue."""
+    detail: str | None = None
+    """Document : son chemin (montré dans le rendu texte)."""
 
 
 @dataclass(frozen=True)
@@ -127,6 +145,48 @@ def est_figure(noeud_id: str) -> bool:
     return noeud_id.startswith(PREFIXE_FIGURE)
 
 
+def taille_defaut(noeud: NoeudVue | None) -> tuple[int, int]:
+    """Cases d'un nœud jamais placé : une figure et une décision sont plus grandes qu'un énoncé."""
+    if noeud is not None and noeud.type == "figure":
+        return TAILLE_FIGURE
+    if noeud is not None and noeud.type == "decision":
+        return TAILLE_DECISION
+    return (1, 1)
+
+
+def relier_decisions(noeuds: dict[str, NoeudVue], commandes: dict[str, list[tuple[str, bool]]]) -> None:
+    """Ajoute chaque décision aux prémisses (rôle « decision ») des nœuds qu'elle commande, pour les placer à sa
+    droite. `commandes` : décision → [(nœud, retenue)] (`decisions.commandes`). Modifie `noeuds` sur place."""
+    for did, liens in commandes.items():
+        for nid, _ in liens:
+            n = noeuds.get(nid)
+            if n is None or nid == did or any(p == did for p, _ in n.premisses):
+                continue
+            noeuds[nid] = replace(n, premisses=(*n.premisses, (did, ROLE_DECISION)))
+
+
+def relier_cadres(
+    etat: EtatVue, cadres: dict[str, list[tuple[str, bool]]], groupe_de: dict[str, str | None] | None = None
+) -> None:
+    """Une décision qui vise un cadre entier (`decisions.cadres`) devient une prémisse (rôle « decision ») de tous les
+    nœuds du cadre et de ses sous-cadres : le cadre se place à sa droite. `groupe_de` complète les placements (nœuds
+    pas encore placés → leur cadre). Modifie `etat.noeuds` sur place."""
+    groupe_de = {nid: p.groupe_id for nid, p in etat.placements.items()} | (groupe_de or {})
+    for did, liens in cadres.items():
+        vises: set[str] = set()
+        for gid, _ in liens:
+            if gid in etat.groupes:
+                vises |= {gid} | descendants(etat, gid)
+        relier_decisions(etat.noeuds, {did: [(nid, True) for nid, g in groupe_de.items() if g in vises]})
+def est_document(noeud_id: str) -> bool:
+    return noeud_id.startswith(PREFIXE_DOCUMENT)
+
+
+def est_pseudo(noeud_id: str) -> bool:
+    """Figure ou document : a sa case dans la vue, mais n'est pas un nœud du raisonnement."""
+    return est_figure(noeud_id) or est_document(noeud_id)
+
+
 def rect_de(p: Placement) -> Rect:
     return Rect(p.colonne, p.ligne, p.colonne + p.largeur - 1, p.ligne + p.hauteur - 1)
 
@@ -197,7 +257,7 @@ def _groupe_prefere(etat: EtatVue, noeud: NoeudVue) -> str | None:
     compte: dict[str | None, int] = {}
     for pid, role in noeud.premisses:
         p = etat.placements.get(pid)
-        if p is not None and role in ("principale", "auxiliaire"):
+        if p is not None and role in ROLES_FLECHES:
             compte[p.groupe_id] = compte.get(p.groupe_id, 0) + 1
     return max(compte, key=lambda g: compte[g]) if compte else None
 
@@ -207,7 +267,7 @@ def _colonne_logique(etat: EtatVue, noeud: NoeudVue, groupe_id: str | None) -> i
     droites = [
         rect_de(p).c1
         for pid, role in noeud.premisses
-        if role in ("principale", "auxiliaire") and (p := etat.placements.get(pid)) is not None
+        if role in ROLES_FLECHES and (p := etat.placements.get(pid)) is not None
     ]
     if droites:
         return max(droites) + 1
@@ -356,12 +416,13 @@ def reorganiser(etat: EtatVue, groupe_id: str | None = None) -> EtatVue:
             ancien = etat.placements[nid]
             nouvel.placements[nid] = placer_auto(nouvel, nid, ancien.groupe_id, ancien.largeur, ancien.hauteur)
     for nid in ordre_logique(etat, non_places):
-        if est_figure(nid):
-            # Près de son nœud, dans son cadre s'il y a la place.
+        if est_figure(nid) or est_document(nid):
+            # Près de son nœud (ou de ce qui pointe vers le document), dans son cadre s'il y a la place.
             noeud = nouvel.placements.get(etat.noeuds[nid].premisses[0][0]) if etat.noeuds[nid].premisses else None
-            nouvel.placements[nid] = placer_figure(nouvel, nid, noeud.groupe_id if noeud else None, *TAILLE_FIGURE)
+            taille = TAILLE_FIGURE if est_figure(nid) else (1, 1)
+            nouvel.placements[nid] = placer_figure(nouvel, nid, noeud.groupe_id if noeud else None, *taille)
         else:
-            nouvel.placements[nid] = placer_auto(nouvel, nid, None)
+            nouvel.placements[nid] = placer_auto(nouvel, nid, None, *taille_defaut(etat.noeuds[nid]))
     return nouvel
 
 
@@ -502,12 +563,12 @@ def disposer(
         (p, n.id)
         for n in etat.noeuds.values()
         for p, role in n.premisses
-        if role in ("principale", "auxiliaire") and p in etat.noeuds
+        if role in ROLES_FLECHES and p in etat.noeuds
     }
 
     def boite_noeud(nid: str) -> _Boite:
         p = etat.placements.get(nid)
-        largeur, hauteur = (p.largeur, p.hauteur) if p is not None else TAILLE_FIGURE if est_figure(nid) else (1, 1)
+        largeur, hauteur = (p.largeur, p.hauteur) if p is not None else taille_defaut(etat.noeuds.get(nid))
         return _Boite(nid, largeur, hauteur, {nid: (0, 0, largeur, hauteur)}, False)
 
     def niveau(elements: list[_Boite]) -> _Boite:
@@ -673,11 +734,13 @@ def _appliquer_une(etat: EtatVue, op: dict[str, Any], renommages: dict[str, str]
         nid = _noeud_existant(etat, op.get("noeud"))
         ancien = etat.placements.get(nid)
         groupe = _groupe_existant(etat, op["groupe"]) if "groupe" in op else (ancien.groupe_id if ancien else ...)
-        defaut = (ancien.largeur, ancien.hauteur) if ancien else TAILLE_FIGURE if est_figure(nid) else (1, 1)
+        defaut = (ancien.largeur, ancien.hauteur) if ancien else taille_defaut(etat.noeuds[nid])
         largeur = _taille(op.get("largeur", defaut[0]), "Largeur")
         hauteur = _taille(op.get("hauteur", defaut[1]), "Hauteur")
         if est_figure(nid):
             verifier_format(largeur, hauteur)
+        if est_document(nid) and (largeur, hauteur) != (1, 1):
+            raise ErreurVue("Un document occupe une seule case (1 × 1).")
         if "colonne" in op or "ligne" in op:
             if "colonne" not in op or "ligne" not in op:
                 raise ErreurVue("Donne colonne et ligne ensemble (ou aucune des deux pour un placement automatique).")
@@ -727,8 +790,8 @@ def _appliquer_une(etat: EtatVue, op: dict[str, Any], renommages: dict[str, str]
         etat.etiquettes[eid] = Etiquette(eid, nom, _couleur(op.get("couleur")))
     elif genre in ("etiqueter", "retirer_etiquette"):
         nid = _noeud_existant(etat, op.get("noeud"))
-        if est_figure(nid):
-            raise ErreurVue("Les étiquettes se posent sur les nœuds, pas sur les figures.")
+        if est_figure(nid) or est_document(nid):
+            raise ErreurVue("Les étiquettes se posent sur les nœuds, pas sur les figures ni les documents.")
         eid = op.get("etiquette")
         if eid not in etat.etiquettes:
             raise ErreurVue(f"Étiquette inexistante : {eid}. Crée-la avec creer_etiquette.")
@@ -755,14 +818,17 @@ def differences(avant: EtatVue, apres: EtatVue) -> dict[str, Any]:
 # ─── Rendu texte (pour l'IA) ────────────────────────────────────────────────
 
 SYMBOLES_STATUT = {"etabli": "✓", "a_verifier": "?", "invalide": "✗", "suspendu": "⊘", "ouvert": "○"}
-PREFIXES_ROLE = {"principale": "", "auxiliaire": "+", "technique": "#", "contexte": "~"}
+PREFIXES_ROLE = {"principale": "", "auxiliaire": "+", "technique": "#", "contexte": "~", ROLE_DECISION: "◇"}
 
 LEGENDE = (
     "Grille : colonne vers la droite (des prémisses vers les conclusions), ligne vers le bas. "
     "[c,l] = case du nœud (+LxH s'il est plus grand) ; statut ✓ établi, ? à vérifier, ✗ invalide, ⊘ suspendu, "
-    "○ ouvert ; ⟵ prémisses (a principale, +a auxiliaire, #a technique, ~a contexte) ; #étiquette ; "
+    "○ ouvert ; ⟵ prémisses (a principale, +a auxiliaire, #a technique, ~a contexte, ◇a décision dont le nœud "
+    "découle) ; decision = losange : « question » → alternative retenue (× écartées) ; #étiquette ; "
     "« fixe » = placé à la main. Un cadre = ▸ id « nom » (genre) et son rectangle de cases. "
-    "fig:<id> = une figure (graphique ou image) qui illustre le nœud indiqué ; lire_figure pour la voir."
+    "fig:<id> = une figure (graphique ou image) qui illustre le nœud indiqué ; lire_figure pour la voir. "
+    "doc:<id> = un document (fichier ou dossier du projet, chemin entre parenthèses) ; ⟵ ce qui pointe vers lui ; "
+    "lister_documents pour ses liens."
 )
 
 
@@ -775,8 +841,13 @@ def _ligne_noeud(etat: EtatVue, p: Placement, retrait: str) -> str:
     if n.statut:
         morceaux.append(SYMBOLES_STATUT.get(n.statut, n.statut))
     texte = " · ".join(morceaux) + f" — {n.nom}"
+    if n.resume:
+        texte += f" ◇ {n.resume}"
     if est_figure(n.id):
         texte += f" (illustre {n.premisses[0][0]})" if n.premisses else ""
+    elif est_document(n.id):
+        texte += f" ({n.detail})" if n.detail else ""
+        texte += " ⟵ " + " ".join(i for i, _ in n.premisses) if n.premisses else ""
     elif n.premisses:
         texte += " ⟵ " + " ".join(PREFIXES_ROLE.get(r, "") + i for i, r in n.premisses)
     marques = sorted(e for nid, e in etat.marques if nid == n.id)

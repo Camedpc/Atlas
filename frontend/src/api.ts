@@ -151,6 +151,53 @@ export interface Vue {
   marques: [string, string][]
   /** Figures (graphiques et images) rattachées aux nœuds ; absent d'un serveur plus ancien. */
   figures?: FigureVue[]
+  /** Fichiers et dossiers du projet mis dans le graphe (« doc:<id> ») ; absent d'un serveur plus ancien. */
+  documents?: DocumentVue[]
+  /** Liens nommés entre un document et un nœud, une figure ou un autre document. */
+  liens_documents?: LienDocumentVue[]
+}
+
+/** Aperçu d'un document, calculé par le serveur à l'écriture (atlas/documents.py). */
+export interface ApercuDocument {
+  nature?: 'script' | 'donnees' | 'document' | 'image' | 'fichier' | 'dossier'
+  taille?: number
+  lignes?: number
+  /** Premières lignes utiles (script, texte). */
+  extrait?: string[]
+  /** CSV : en-tête. */
+  colonnes?: string[]
+  /** JSON : clés du premier niveau. */
+  cles?: string[]
+  pages?: number
+  titre_pdf?: string
+  /** Dossier : premier niveau (« resultats/ » pour un sous-dossier), le reste compté dans `autres`. */
+  entrees?: string[]
+  autres?: number
+  fichiers?: number
+  dossiers?: number
+}
+
+/** Un fichier ou un dossier du projet, avec sa case dans la grille (« doc:<id> »). */
+export interface DocumentVue {
+  id: string
+  /** Relatif au dossier du projet : « scripts_projet/double-pendule/simulation.py ». */
+  chemin: string
+  genre: 'fichier' | 'dossier'
+  titre: string
+  description: string | null
+  apercu: ApercuDocument
+  /** Vu sur le disque à la dernière vérification. */
+  present: boolean
+  modifie_le: string
+}
+
+export type RelationDocument = 'source' | 'implemente' | 'produit' | 'ecrit_dans' | 'entree'
+
+export interface LienDocumentVue {
+  /** Id de nœud, « fig:<id> » ou « doc:<id> ». */
+  de: string
+  vers: string
+  relation: RelationDocument
 }
 
 /** Axe d'un tracé (atlas/figures.py). */
@@ -203,6 +250,8 @@ export interface FigureVue {
   /** Vrai : une scène 3D animée est servie par GET /api/figures/{id}/scene (absent d'un serveur plus ancien). */
   scene?: boolean
   source: string | null
+  /** Fichier d'origine de l'image, relatif au dossier du projet. */
+  fichier?: string | null
   modifie_le: string
 }
 
@@ -382,6 +431,17 @@ export const api = {
   projets: () => appel<ListeProjets>('/api/projets'),
   creerProjet: (nom: string) =>
     appel<Projet>('/api/projets', { method: 'POST', body: JSON.stringify({ nom }) }),
+  /** Retire l'espace des listes (rien n'est effacé) ; l'erreur porte le message du serveur (409). */
+  supprimerProjet: async (projetId: string) => {
+    const entetes: Record<string, string> = {}
+    if (jetonEnMemoire) entetes.Authorization = `Bearer ${jetonEnMemoire}`
+    const r = await fetch(`${BASE}/api/projets/${encodeURIComponent(projetId)}`, { method: 'DELETE', headers: entetes })
+    if (r.status === 401) throw new JetonRequis()
+    if (!r.ok) {
+      const corps = await r.json().catch(() => null)
+      throw new Error(typeof corps?.detail === 'string' ? corps.detail : `Suppression refusée (${r.status})`)
+    }
+  },
   conversations: (projetId: string) =>
     appel<Conversation[]>(`/api/conversations?projet_id=${encodeURIComponent(projetId)}`),
   creerConversation: (projetId: string) =>
@@ -413,6 +473,8 @@ export const api = {
   /** Supprime du serveur la connexion et les threads de la clé. */
   oublierCle: (cle: string) => appel<{ ok: boolean }>('/api/orchestrateur/compte', { method: 'DELETE' }, true, cle),
   /** Tout arrêter, ou seulement le sous-agent `agent`. */
+  /** Prépare Atlas voix pour le prochain appel dans cette conversation (le clic n'attend plus que le son). */
+  preparerVoix: (id: string) => appel<{ etat: string }>(`/api/conversations/${id}/voix/preparer`, { method: 'POST' }),
   arreter: (id: string, agent?: string | null) =>
     appel<unknown>(`/api/conversations/${id}/arreter`, {
       method: 'POST',
