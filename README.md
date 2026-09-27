@@ -4,6 +4,11 @@
 lit, vérifie, corrige et réorganise.** Atlas ne remplace pas le chercheur : il lui donne une équipe qui travaille
 sous ses yeux, et le dernier mot lui revient.
 
+### ▶ Essayer Atlas : <https://atlas-nine-bay.vercel.app>
+
+Rien à installer : tout tourne sur notre serveur. Le site demande un **code d'accès**, donné au jury avec le dépôt
+du projet.
+
 ![Atlas : la conversation avec l'orchestrateur à gauche, le graphe de raisonnement à droite](docs/images/01-ensemble.jpg)
 
 ---
@@ -25,122 +30,52 @@ sous ses yeux, et le dernier mot lui revient.
   parler à la voix. Formules LaTeX, figures (courbes, images, animations, scènes 3D) et fichiers produits sont
   tous consultables.
 
-**Démo en ligne** : <https://atlas-nine-bay.vercel.app> (lancer une recherche demande un jeton d'accès, à
-demander à l'équipe). **Pour l'essayer chez soi** : [Démarrage rapide](#démarrage-rapide), une quinzaine de
-minutes.
-
 ---
 
 ## Sommaire
 
-1. [Démarrage rapide](#démarrage-rapide)
+1. [Essayer Atlas en 5 minutes](#essayer-atlas-en-5-minutes)
 2. [Visite guidée](#visite-guidée)
 3. [Comment ça marche](#comment-ça-marche)
-4. [Installation détaillée et réglages](#installation-détaillée-et-réglages)
-5. [Dépannage](#dépannage)
-6. [Organisation du dépôt](#organisation-du-dépôt)
-7. [Équipe](#équipe)
+4. [Organisation du dépôt](#organisation-du-dépôt)
+5. [Installer Atlas sur sa machine (facultatif)](#installer-atlas-sur-sa-machine-facultatif)
+6. [Équipe](#équipe)
 
 ---
 
-## Démarrage rapide
+## Essayer Atlas en 5 minutes
 
-Tout tourne sur votre machine : une base Supabase locale (dans Docker), le serveur Python et l'interface web.
-Rien ne touche la production.
+1. **Ouvrir <https://atlas-nine-bay.vercel.app>** et saisir le code d'accès. Un ordinateur avec Chrome ou Edge
+   est conseillé (le graphe marche aussi sur tablette).
+2. **Explorer une recherche déjà faite.** En haut à gauche, le sélecteur d'espace : choisir **« Pendule et
+   figures »** ou **« chute libre »**. Le graphe de raisonnement s'affiche à droite.
+   - Molette pour zoomer : de loin on voit les parties du raisonnement, de près les énoncés et leurs formules.
+   - **Double-clic sur une case** : sa fiche, avec ses prémisses et le verdict du vérificateur.
+   - **Double-clic sur une figure** : elle s'ouvre en grand.
+   - Dans la colonne de gauche, ouvrir une session : on relit la conversation, et l'onglet **Agent graph** montre
+     l'équipe d'agents qui y a travaillé.
+3. **Lancer sa propre recherche.** Dans le sélecteur d'espace, **+ Nouvel espace** (un nom, puis Entrée), puis
+   envoyer une question.
+   Un exemple court :
 
-### Il vous faut
+   > Montre que la somme de deux entiers pairs est paire, en construisant le raisonnement dans le graphe, en peu
+   > de nœuds.
 
-| Outil | Version | Vérifier |
-|---|---|---|
-| Git | toute | `git --version` |
-| Python | 3.10 minimum, 3.13 conseillé | `python --version` |
-| Node.js | 20 ou plus | `node --version` |
-| Docker Desktop | installé **et démarré** | `docker info` |
-| Un accès OpenAI | une clé API (<https://platform.openai.com/api-keys>) **ou** un abonnement ChatGPT | |
+   Les étapes de l'orchestrateur défilent au centre, les agents apparaissent dans **Agent graph**, puis les nœuds
+   arrivent dans le graphe et sont vérifiés un à un. Une vraie question de recherche (le pendule, par exemple)
+   prend de 15 à 30 minutes et mobilise plusieurs agents.
+4. **Intervenir pendant qu'ils travaillent** : cliquer sur un agent dans **Agent graph** pour lui écrire, ou le
+   bouton d'arrêt pour le stopper. Le bouton **micro** lance un appel vocal avec Atlas.
 
-### 1. Récupérer le code et les dépendances
-
-```bash
-git clone https://github.com/Camedpc/Atlas.git
-cd Atlas
-python -m venv .venv
-.venv/Scripts/pip install -r requirements-dev.txt   # macOS / Linux : .venv/bin/pip
-npm install                                          # outils Supabase
-npm install --prefix frontend                        # interface
-```
-
-Le paquet `openai-codex` installe aussi le moteur d'agents Codex : rien d'autre à installer.
-
-### 2. Démarrer la base locale
-
-```bash
-npm run db:local        # 1er lancement : quelques minutes (images Docker)
-npm run db:local:env    # affiche API_URL et la clé secrète locale
-```
-
-La base est créée avec toutes les tables et un petit graphe de démonstration.
-
-### 3. Remplir `.env`
-
-```bash
-cp .env.example .env
-```
-
-Dans `.env`, changez ou ajoutez ces lignes :
-
-```ini
-SUPABASE_URL=http://127.0.0.1:54321
-SUPABASE_SECRET_KEY=<SECRET_KEY, ou SERVICE_ROLE_KEY, affichée par npm run db:local:env>
-ATLAS_BASE_LOCALE=1            # garde-fou : refuse toute base qui n'est pas locale
-OPENAI_API_KEY=sk-...          # votre clé ; laissez vide si vous utilisez ChatGPT (voir ci-dessous)
-ATLAS_MAX_SOUS_AGENTS=2        # conseillé pour un premier essai : moins d'agents en parallèle, moins cher
-```
-
-Sans clé API, connectez votre compte ChatGPT (une fenêtre de navigateur s'ouvre) :
-
-```bash
-.venv/Scripts/python -m atlas.orchestrateur.connexion
-```
-
-> Si votre compte n'a pas accès aux modèles par défaut, renseignez `ATLAS_MODELE_ORCHESTRATEUR` et les
-> `ATLAS_MODELE_*` des agents avec des modèles disponibles (voir les commentaires de `.env.example`).
-
-### 4. Lancer
-
-Dans deux terminaux :
-
-```bash
-.venv/Scripts/python -m uvicorn atlas.serveur:app --port 8000 --reload --reload-dir atlas --reload-dir api
-```
-
-```bash
-npm run dev --prefix frontend
-```
-
-Ouvrez <http://localhost:5173>. Vous devez voir le graphe de démonstration (« une suite croissante et majorée
-converge »). Vérification rapide : `curl http://localhost:8000/api/health` répond `{"ok":true,"supabase":"ok"}`.
-
-### 5. Première recherche
-
-Cliquez sur **+ Nouvelle recherche** et envoyez par exemple :
-
-> Montre que la somme de deux entiers pairs est paire, en construisant le raisonnement dans le graphe, en peu de
-> nœuds.
-
-Les messages et les appels d'outils de l'orchestrateur défilent au centre, les agents apparaissent dans
-**Agent graph**, puis les nœuds arrivent dans **Graphe de raisonnement**. Un vrai tour d'agents consomme des
-crédits OpenAI (ou le quota de l'abonnement ChatGPT).
-
-Guide pas à pas, avec vérifications à chaque étape : [`docs/tester-en-local.md`](docs/tester-en-local.md).
+Le bouton **?** en haut à droite du graphe liste toutes les commandes.
 
 ---
 
 ## Visite guidée
 
 L'écran a trois colonnes : **les espaces et leurs sessions** à gauche, **la conversation** au centre, et à droite
-trois onglets : **Graphe de raisonnement**, **Agent graph** et **Documents**. Chaque *espace* (sélecteur en haut à
-gauche) a son propre graphe et son propre dossier de fichiers ; chaque *session* est une conversation avec
-l'orchestrateur.
+trois onglets : **Graphe de raisonnement**, **Agent graph** et **Documents**. Chaque *espace* a son propre graphe
+et son propre dossier de fichiers ; chaque *session* est une conversation avec l'orchestrateur.
 
 ### 1. Le graphe de raisonnement
 
@@ -151,7 +86,7 @@ Chaque case est un **énoncé**, numéroté comme dans un article (« Hypothèse
 apparaissent en renvoi (« cf. 3 ») pour ne pas surcharger le dessin. Les **cadres** colorés (§1, §2…) regroupent
 les énoncés d'une même partie du raisonnement ; on peut les réduire en un seul bloc.
 
-Le contour d'une case dit son **statut**, recalculé à chaque lecture à partir de tout le graphe :
+Le contour d'une case dit son **statut**, recalculé à partir de tout le graphe :
 
 | Contour | Statut | Signification |
 |---|---|---|
@@ -166,8 +101,8 @@ et le texte complet.
 
 **Se déplacer** : glisser le fond comme une carte, molette pour zoomer, `0` pour tout cadrer, `F` pour cadrer la
 sélection. **Réorganiser** : glisser un nœud (il se range case par case), `C` pour créer un cadre autour de la
-sélection, clic droit pour le menu, `Ctrl+Z` pour annuler. Le bouton **?** en haut à droite liste toutes les
-commandes, souris et tactile. La case **Cette conversation** n'affiche que les nœuds créés par la session ouverte.
+sélection, clic droit pour le menu, `Ctrl+Z` pour annuler. La case **Cette conversation** n'affiche que les nœuds
+créés par la session ouverte.
 
 ### 2. La fiche d'un énoncé et son verdict
 
@@ -185,8 +120,8 @@ puissant la rejuge et c'est son avis qui compte.
 
 Quand un raisonnement fait un **choix** (quel modèle, quelle convention, quelle méthode), le graphiste le pose
 comme un nœud *décision*, dessiné en losange : sa fiche donne la question, les options et les raisons du choix, et
-des flèches partent vers la branche de chaque option. Une décision n'a pas à être démontrée : elle est toujours
-établie, et tout ce qui en dépend l'est sous cette condition.
+des flèches partent vers la branche de chaque option. Le chercheur voit ainsi où le raisonnement aurait pu
+bifurquer, et peut demander d'explorer l'autre branche.
 
 ### 4. Les figures
 
@@ -199,7 +134,7 @@ diagrammes Graphviz, GIF et WebP animés joués dans le graphe). Double-clic pou
 
 ![Figure image : schéma et courbes du lâcher, produite par un agent](docs/images/06-schema.jpg)
 
-### 5. Les figures 3D animées (branche `visu/figures-3d`)
+### 5. Les figures 3D animées
 
 ![Scène 3D d'un pendule simple, avec les énergies et l'angle tracés en direct à côté](docs/images/07-figure-3d.jpg)
 
@@ -210,10 +145,7 @@ marquée d'un cube « 3D » ; **double-cliquer** fait plonger la caméra dans la
 
 ![La case d'une figure 3D dans le graphe, à droite](docs/images/08-case-3d.jpg)
 
-Cette fonction est sur la branche `visu/figures-3d`, pas encore fusionnée dans `main`. Pour l'essayer sans lancer
-d'agent : `git switch visu/figures-3d`, puis `npm run db:local:reset` (la branche ajoute une migration),
-relancez le serveur et ouvrez <http://localhost:5173/?synthetique=40> : un graphe synthétique en lecture seule,
-qui contient la scène du pendule.
+Cette fonction est terminée sur la branche `visu/figures-3d` mais pas encore en ligne sur le site.
 
 ### 6. Les agents au travail
 
@@ -221,27 +153,26 @@ qui contient la scène du pendule.
 
 L'onglet **Agent graph** montre en direct qui fait quoi : la question, l'orchestrateur, les directeurs de labo
 qu'il a lancés et leurs propres sous-agents (littérature, expérimentateur), le graphiste. Chaque bloc donne son
-état, sa durée, ses jetons et son résultat. **Cliquer sur un agent** en fait le destinataire de la saisie : votre
+état, sa durée, ses jetons et son résultat. **Cliquer sur un agent** en fait le destinataire de la saisie : le
 message lui est transmis pendant qu'il travaille. Le bouton d'arrêt stoppe tout, ou un seul agent.
 
 Au centre, la conversation affiche la réponse de l'orchestrateur (Markdown et LaTeX), ses étapes et chacun de
-ses appels d'outils, dépliables. Le sélecteur sous la saisie choisit le modèle et l'effort de raisonnement ; on
-peut y mettre sa propre clé OpenAI, gardée dans le navigateur.
+ses appels d'outils, dépliables. Le sélecteur sous la saisie choisit le modèle et l'effort de raisonnement.
 
 ### 7. Les documents
 
 L'onglet **Documents** montre le dossier de l'espace : rapports et journaux des directeurs de labo, scripts,
-données CSV, figures, PDF, avec un aperçu de chaque fichier.
+données CSV, figures, PDF, avec un aperçu de chaque fichier. Tout ce que les agents ont produit reste
+consultable par le chercheur.
 
 ### 8. Parler à Atlas
 
 ![Session lancée à la voix : la demande transmise par Atlas voix à l'orchestrateur](docs/images/10-voix.jpg)
 
-Le bouton **micro** de la saisie ouvre un appel avec **Atlas voix** (demande une clé
-[Gradium](https://gradium.ai) : `GRADIUM_API_KEY`). On parle en continu, on peut lui couper la parole ; elle
-confie les recherches à l'orchestrateur, annonce ses étapes clés dans les silences, et peut piloter l'écran du
-graphe (« montre-moi le lemme 7 », « vue d'ensemble »). Au raccrochage, la transcription est jointe au prochain
-message de la conversation.
+Le bouton **micro** de la saisie ouvre un appel avec **Atlas voix**. On parle en continu, on peut lui couper la
+parole ; elle confie les recherches à l'orchestrateur, annonce ses étapes clés dans les silences, et peut piloter
+l'écran du graphe (« montre-moi le lemme 7 », « vue d'ensemble »). Au raccrochage, la transcription est jointe au
+prochain message de la conversation.
 
 ---
 
@@ -252,7 +183,7 @@ Question ─► Orchestrateur ─┬─► Directeur de labo ─┬─► Litté
                            │   (journal, rapport)  └─► Expérimentateur  (code, simulations, figures)
                            ├─► Graphiste           rapport ─► nœuds, démonstrations, cadres, figures
                            ├─► Vérificateur        note chaque démonstration (validité, confiance)
-                           └─► Réponse à l'utilisateur
+                           └─► Réponse au chercheur
 ```
 
 - **Agents** : [Codex](https://github.com/openai/codex) piloté par son SDK Python, un thread par conversation,
@@ -263,54 +194,12 @@ Question ─► Orchestrateur ─┬─► Directeur de labo ─┬─► Litté
 - **Graphe** : stocké dans Supabase (Postgres). Le statut des nœuds n'est jamais stocké, il est recalculé à
   chaque lecture (`atlas/graphe.py`) ; un cycle de démonstrations ne peut pas s'auto-valider.
 - **Interface** : TypeScript sans framework (Vite), graphe dessiné sur canevas avec KaTeX.
-- **En production** : le site et la lecture du graphe sur Vercel, les agents sur une VM (Docker + Caddy),
-  Supabase entre les deux. Guide : [`deploiement/README.md`](deploiement/README.md).
+- **Voix** : transcription et synthèse Gradium en direct, cerveau Codex rapide (`atlas/voix/`).
+- **Hébergement** : le site sur Vercel, les agents sur notre serveur (VM Hetzner, Docker, HTTPS par Caddy),
+  Supabase entre les deux.
 
 Référence complète (routes de l'API, modèle de données, bunker des agents, voix) :
 [`docs/technique.md`](docs/technique.md).
-
----
-
-## Installation détaillée et réglages
-
-- **Pas à pas complet**, avec les règles de sécurité et la vérification de chaque étape :
-  [`docs/tester-en-local.md`](docs/tester-en-local.md).
-- **Tous les réglages** sont des variables d'environnement, commentées dans [`.env.example`](.env.example).
-  Les principales :
-
-| Variable | Rôle |
-|---|---|
-| `SUPABASE_URL`, `SUPABASE_SECRET_KEY` | la base (locale en développement) |
-| `OPENAI_API_KEY` | clé OpenAI ; vide = compte ChatGPT connecté par `atlas.orchestrateur.connexion` |
-| `ATLAS_MODELE_*`, `ATLAS_EFFORT_*` | modèle et effort de chaque agent (orchestrateur, directeur, littérature, expérimentateur, graphiste, vérificateur) |
-| `ATLAS_MAX_SOUS_AGENTS` | nombre de sous-agents simultanés |
-| `ATLAS_SEUIL_CONFIANCE` | en dessous, le verdict est rejugé par le modèle de recours |
-| `GRADIUM_API_KEY` | voix (facultatif) |
-| `ATLAS_BUNKER` | `1` : le sandbox de Codex limite les écritures des agents à leur dossier |
-
-**Au quotidien**
-
-| Besoin | Commande |
-|---|---|
-| Repartir d'une base propre | `npm run db:local:reset` |
-| Arrêter la base locale | `npm run db:local:stop` |
-| Tests (sans réseau ni base) | `.venv/Scripts/python -m pytest -q` et `npm test --prefix frontend` |
-| Lint | `.venv/Scripts/ruff check .` et `npm run lint --prefix frontend` |
-
----
-
-## Dépannage
-
-| Symptôme | Solution |
-|---|---|
-| `docker info` échoue | démarrer Docker Desktop, attendre qu'il soit prêt, relancer `npm run db:local` |
-| Ports 54321 à 54324 déjà pris | un autre projet Supabase tourne : `npx supabase stop --all` |
-| « ATLAS_BASE_LOCALE est activé mais SUPABASE_URL pointe vers… » | `.env` vise une base distante : remettre `SUPABASE_URL=http://127.0.0.1:54321` |
-| « Codex n'est pas connecté » | `OPENAI_API_KEY` vide ou mal collée, ou lancer `python -m atlas.orchestrateur.connexion` |
-| Modèle introuvable ou non autorisé | renseigner les `ATLAS_MODELE_*` avec des modèles de votre compte |
-| Le graphe reste vide | vérifier `curl http://localhost:8000/api/health` ; le front attend l'API sur le port 8000 |
-| Un changement Python semble ignoré (Windows) | arrêter tous les processus du port 8000 et relancer le serveur |
-| Erreur EPERM / EBUSY sur `node_modules` | dossier synchronisé (OneDrive…) : mettre la synchronisation en pause |
 
 ---
 
@@ -328,7 +217,16 @@ Référence complète (routes de l'API, modèle de données, bunker des agents, 
 | `tests/` | tests Python, sans réseau |
 | `deploiement/` | installation sur une VM (Docker, Caddy) |
 | `film/` | film de présentation (Remotion), voir `film/README.md` |
-| `docs/` | guide d'installation locale, référence technique, captures |
+| `docs/` | référence technique, guide d'installation locale, captures |
+
+---
+
+## Installer Atlas sur sa machine (facultatif)
+
+Pas nécessaire pour tester : le site suffit. Pour faire tourner Atlas chez soi, il faut Python 3.10+, Node.js 20+,
+Docker Desktop et un accès OpenAI (clé API ou abonnement ChatGPT). Le guide pas à pas, avec une base Supabase
+locale et une vérification à chaque étape, est dans [`docs/tester-en-local.md`](docs/tester-en-local.md) ;
+l'installation sur un serveur est dans [`deploiement/README.md`](deploiement/README.md).
 
 ---
 
