@@ -114,6 +114,11 @@ fichier introuvable).
   données ; Atlas l'exécute et te renvoie l'erreur s'il échoue. La scène n'a pas d'aperçu dans la grille : son titre
   dit ce qu'elle montre (« Pendule simple, θ₀ = 1 rad : une période ») et sa légende, une phrase, ce qu'on y voit
   bouger et ce que montrent les graphiques d'à côté.
+- Une scène 3D n'est finie qu'une fois vue : l'outil te renvoie ses rendus tels que Camille la verra (trois moments
+  de la boucle, caméra finale). Regarde-les. Si un objet est coupé, minuscule, caché, si la caméra est dans un objet
+  ou si des textes se chevauchent, corrige le script (surtout `layout.scene.camera.eye`, plus loin quand
+  `aspectratio` est grand) et rappelle l'outil avec `remplacer=true`, jusqu'à un rendu net. Ne l'annonce pas comme
+  faite avant ; dans ta réponse, dis ce que montre le rendu retenu.
 
 # Illustrations
 

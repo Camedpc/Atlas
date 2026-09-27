@@ -1,5 +1,7 @@
 -r requirements-agents.txt
 pytest>=8
 ruff>=0.6
-# Test complet des figures 3D (le serveur lui-même ne l'importe pas : seul le Python partagé des agents en a besoin).
+# Figures 3D : scripts des agents (Python partagé) et aperçu rendu par le serveur (Kaleido, Chrome installé, pillow).
 plotly>=6
+kaleido>=1
+pillow

@@ -3,7 +3,7 @@
 
 Contrat du script : il construit une figure Plotly `fig` (plotly.graph_objects.Figure, ou son dict), avec ses
 `frames` si elle est animée. Facultatif : `fps` (images par seconde, 20 par défaut). Le script n'exporte rien
-lui-même ; `fig.show()` est sans effet.
+lui-même ; `fig.show()` et les exports (`write_image`, `write_html`, `to_image`) sont sans effet.
 
 Sortie : `scene.json` ({atlas: {version, fps}, figure}). Autonome : ce fichier ne dépend que de la bibliothèque
 standard et de plotly, pas du paquet atlas, que le Python partagé ne voit pas.
@@ -29,9 +29,12 @@ def main() -> None:
         import plotly.io as pio
     except ImportError:
         echec("plotly n'est pas installé dans le Python partagé : pip install plotly")
-    # Pas de navigateur ni de fenêtre ouverts depuis le serveur.
-    go.Figure.show = lambda *_a, **_k: None  # type: ignore[method-assign]
-    pio.show = lambda *_a, **_k: None
+    # Pas de navigateur ni de fenêtre ouverts depuis le serveur, ni d'export : le rendu de contrôle que l'agent fait
+    # lui-même (fig.write_image) n'a pas lieu ici, Atlas rend la scène ensuite (apercu3d.py).
+    rien = lambda *_a, **_k: None  # noqa: E731
+    go.Figure.show = go.Figure.write_image = go.Figure.write_html = rien  # type: ignore[method-assign]
+    go.Figure.to_image = lambda *_a, **_k: b""  # type: ignore[method-assign]
+    pio.show = pio.write_image = pio.write_html = rien
 
     sys.path.insert(0, str(script.parent))
     sys.argv = [str(script)]

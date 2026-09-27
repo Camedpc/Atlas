@@ -48,6 +48,11 @@ prompts dans `atlas/orchestrateur/prompts/*.md` : c'est Camille qui les fait év
   `ATLAS_DELAI_FIGURE3D`), garde la seule scène 3D et les graphiques 2D vérifiés, la range en JSON dans le bucket
   (`/api/figures/{id}/scene`). Front : case avec un cube « 3D », double-clic = mode 3D (`graphe-3d.ts`, plotly.js
   chargé à la demande, boucle, vitesse, glisser pour tourner) ; `?synthetique=N` contient une scène (pendule).
+  Avant d'écrire, Atlas rend la scène telle que le front la montre (`figures3d.vue_du_front` : caméra finale =
+  `layout.scene.camera.eye` de l'agent, fond blanc, marges) en 3 PNG par Kaleido (`orchestrateur/apercu3d.py`,
+  Chrome dans `/opt/chrome` via `BROWSER_PATH` sur la VM) : une scène vide est refusée, sinon l'agent reçoit les
+  rendus et les prompts lui interdisent de conclure sans les avoir jugés nets. Front et serveur partagent l'œil par
+  défaut et les marges (à garder alignés).
 - Repères (`atlas/navigation.py`, pur) : la numérotation de l'écran (« Lemme 7 », « §1.2 », « Figure 2 ») recopie
   `construireModele` de `graphe-modele.ts` ; un jeu commun (`tests/donnees/reperes.json`) est vérifié des deux
   côtés, à garder à jour si l'une change. Rien de purement visuel (cadrage, zoom, filtres) n'est enregistré ; seul un
