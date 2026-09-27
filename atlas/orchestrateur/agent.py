@@ -89,8 +89,9 @@ def surcharges_thread(
                 "command": sys.executable,
                 "args": ["-m", "atlas.orchestrateur.mcp_atlas"],
                 "cwd": str(config.RACINE),
-                # Codex ne transmet pas tout l'environnement aux serveurs MCP : on nomme ce qu'il leur faut.
-                "env_vars": ["SUPABASE_URL", "SUPABASE_SECRET_KEY"],
+                # Codex ne transmet pas tout l'environnement aux serveurs MCP : on nomme ce qu'il leur faut
+                # (BROWSER_PATH : le Chrome de Kaleido, pour l'aperçu des figures 3D, sur la VM).
+                "env_vars": ["SUPABASE_URL", "SUPABASE_SECRET_KEY", "BROWSER_PATH"],
                 # Le dossier de la session : les images des figures y sont lues (chemins relatifs à lui). L'espace et
                 # le délai servent aux figures 3D (Python partagé, durée du script).
                 "env": {

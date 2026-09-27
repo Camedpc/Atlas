@@ -84,7 +84,7 @@ def serveur_atlas(conversation_id: str, session: Path, projet_id: str | None) ->
         "command": sys.executable,
         "args": ["-m", "atlas.orchestrateur.mcp_atlas"],
         "cwd": str(config_orchestrateur.RACINE),
-        "env_vars": ["SUPABASE_URL", "SUPABASE_SECRET_KEY"],
+        "env_vars": ["SUPABASE_URL", "SUPABASE_SECRET_KEY", "BROWSER_PATH"],
         "env": {"ATLAS_CONVERSATION_ID": conversation_id, "ATLAS_DOSSIER_SESSION": str(session), **graphe},
         # Sous un profil de permissions (ATLAS_BUNKER=1), Codex demanderait une approbation que personne ne peut
         # donner (approval never) : les outils de ces serveurs sont approuvés d'office.
