@@ -25,6 +25,7 @@
     "dompurify": "^3.4.16",
     "katex": "^0.18.9",
     "marked": "^18.0.14",
-    "pdfjs-dist": "^6.3.289"
+    "pdfjs-dist": "^6.3.289",
+    "plotly.js-gl3d-dist-min": "^4.1.1"
   }
 }

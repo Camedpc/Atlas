@@ -9,6 +9,7 @@
 
 import './graphe.css'
 import { api, RefusVue, type Graphe, type Noeud, type OperationVue, type Vue } from './api'
+import { ouvrir3d } from './graphe-3d'
 import { animer, type Animation } from './graphe-animation'
 import { instantane, operationsVers, type Entree, type Instantane } from './graphe-annuler'
 import { Contenu } from './graphe-contenu'
@@ -53,7 +54,7 @@ export const AIDE_COMMANDES: [string, string][] = [
   ['Clic sur une barre de titre, ou ▾', 'Réduire le cadre en nœud-fonction, ou le déployer'],
   ['Double-clic sur une barre de titre', 'Renommer le cadre'],
   ['Double-clic sur un nœud, ou Entrée', 'Ouvrir sa fiche'],
-  ['Double-clic sur une figure, ou Entrée', 'L’ouvrir en grand (Échap ou clic hors pour fermer)'],
+  ['Double-clic sur une figure, ou Entrée', 'L’ouvrir en grand, ou en 3D pour une scène animée (Échap pour fermer)'],
   ['Clic droit', 'Menu contextuel (nœud, cadre ou fond)'],
   ['F2', 'Renommer le nœud ou la figure sélectionnés'],
   ['C', 'Créer un cadre autour de la sélection'],
@@ -941,12 +942,33 @@ export class VueGraphe {
     } else if (c.genre === 'fonction') void this.basculerRepli(c.cadre)
   }
 
-  /** Ouvre une figure en grand (tracé agrandi ou image, légende complète, nœud illustré). */
+  /** Ouvre une figure en grand (tracé agrandi ou image, légende complète, nœud illustré), ou en 3D (scène). */
   ouvrirFigure(id: string): void {
     const b = this.base.blocs.get(id)
     if (!b?.figure) return
     this.fermerFenetre?.()
     const f = b.figure
+    const projetId = this.projetId
+    if (f.scene && projetId) {
+      this.fermerFenetre = ouvrir3d({
+        scene: this.scene,
+        calques: [this.canvas, this.contenu.couche],
+        figure: f,
+        numero: b.numero,
+        charger: () => api.sceneFigure(projetId, f.id, f.modifie_le),
+        cadrer: async () => {
+          await this.cadrerNoeuds([b.id])
+          const r = this.rectRepresentant(this.modele.representant.get(b.id) ?? b.id)
+          const { x, y, z } = this.cam
+          return r ? { x: ((r.x0 + r.x1) / 2) * z + x, y: ((r.y0 + r.y1) / 2) * z + y } : null
+        },
+        surFermer: () => {
+          this.fermerFenetre = null
+          this.scene.focus({ preventScroll: true })
+        },
+      })
+      return
+    }
     const cible = this.base.blocs.get(f.noeud_id)
     const reference = referenceDe(this.base, f.noeud_id)
     this.fermerFenetre = ouvrirFenetre({
