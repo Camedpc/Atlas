@@ -158,8 +158,9 @@ export interface Surcharge {
 export const CLE_FONCTION = 'cadre:'
 /** Préfixe des figures dans les placements et les opérations de vue. */
 export const PREFIXE_FIGURE = 'fig:'
-/** Taille par défaut d'une figure (cases). */
-export const TAILLE_FIGURE = { largeur: 3, hauteur: 2 }
+/** Taille par défaut d'une figure (cases), et ses formats possibles (atlas/vue.py, FORMATS_FIGURE). */
+export const TAILLE_FIGURE = { largeur: 2, hauteur: 2 }
+export const FORMATS_FIGURE: [number, number][] = [[1, 1], [2, 1], [1, 2], [2, 2]]
 
 const romains = (n: number) => {
   const t: [number, string][] = [[1000, 'm'], [900, 'cm'], [500, 'd'], [400, 'cd'], [100, 'c'], [90, 'xc'], [50, 'l'],
@@ -197,7 +198,7 @@ export function construireModele(graphe: Graphe, vue: Vue, surcharges?: Map<stri
   const nonPlaces = graphe.noeuds.filter((n) => !placements.has(n.id)).map((n) => n.id).sort()
   const colonnes = Math.max(6, maxC + 1)
   const provisoire = new Map(nonPlaces.map((id, k) => [id, { colonne: k % colonnes, ligne: maxL + 2 + Math.floor(k / colonnes) }]))
-  // Figures jamais placées : encore dessous, côte à côte (3 × 2 cases chacune).
+  // Figures jamais placées : encore dessous, côte à côte (2 × 2 cases chacune).
   const figuresNonPlacees = [...figures.keys()].filter((id) => !placements.has(id)).sort()
   const ligneFigures = maxL + 2 + Math.ceil(nonPlaces.length / colonnes) + (nonPlaces.length ? 1 : 0)
   const parRangee = Math.max(1, Math.floor(colonnes / TAILLE_FIGURE.largeur))

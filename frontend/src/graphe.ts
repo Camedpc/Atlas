@@ -8,14 +8,14 @@
 // d'origine (le cadre s'agrandit). Pour sortir un nœud de son cadre : clic droit → « Sortir du cadre ».
 
 import './graphe.css'
-import { api, RefusVue, type FigureVue, type Graphe, type Noeud, type OperationVue, type SceneFigure, type Vue } from './api'
+import { api, RefusVue, type FigureVue, type Graphe, type Noeud, type OperationVue, type PlacementVue, type SceneFigure, type Vue } from './api'
 import { ouvrir3d } from './graphe-3d'
 import { animer, type Animation } from './graphe-animation'
 import { instantane, operationsVers, type Entree, type Instantane } from './graphe-annuler'
 import { Contenu } from './graphe-contenu'
 import { dansCadre, dessiner, niveauDe, oublierMesures, PALETTE, positionsRenvois, referenceDe, rgba, type Camera, type EtatDessin } from './graphe-dessin'
 import { ImagesFigures, ouvrirFenetre } from './graphe-figures'
-import { CADRE, CLE_FONCTION, construireModele, dansRect, GRILLE, PREFIXE_FIGURE, rectBloc, TEINTES, union, type Bloc, type Modele, type Rect, type Surcharge } from './graphe-modele'
+import { CADRE, CLE_FONCTION, construireModele, dansRect, FORMATS_FIGURE, GRILLE, PREFIXE_FIGURE, rectBloc, TEINTES, union, type Bloc, type Modele, type Rect, type Surcharge } from './graphe-modele'
 import { echapper } from './rendu'
 
 /** Paliers de zoom de l'éditeur Blueprint d'UE5 (−12 à +7), plus trois paliers lointains ; le pincement
@@ -29,6 +29,8 @@ const ZOOMS: [number, string][] = [
 const INDEX_1_1 = ZOOMS.findIndex(([z]) => z === 1)
 /** Déplacement (px d'écran) au-delà duquel un clic devient un glisser. */
 const SEUIL_GLISSER = 4
+/** Au-delà, une relecture qui change beaucoup de cases (réorganisation) n'est pas animée. */
+const DEPLACES_ANIMES_MAX = 60
 /** Délai qui distingue un clic sur une barre de titre (réduire) d'un double-clic (renommer). */
 const DELAI_DOUBLE_CLIC = 260
 /** Au doigt : seuil de glisser plus large (le doigt tremble), appui long et double toucher. */
@@ -128,12 +130,14 @@ export class VueGraphe {
   private estompes: Set<string> | null = null
   /** Conversation du filtre « Cette conversation » (null : pas de filtre). */
   private conversationFiltre: string | null = null
-  /** Filtre du pilotage (agent navigateur) : un nœud qui ne passe pas est estompé. */
+  /** Filtre du pilotage (voix, parcours) : un nœud qui ne passe pas est estompé. */
   private filtrePilotage: ((n: Noeud) => boolean) | null = null
   private surlignes: Set<string> | null = null
   private animCamera: Animation | null = null
   /** Largeur (px) couverte à droite par la fiche : les cadrages et le centre de l'écran l'évitent. */
   margeDroite = 0
+  /** Hauteur (px) couverte en bas par le lecteur de parcours : les cadrages et le centre de l'écran l'évitent. */
+  margeBas = 0
   private projetId: string | null = null
   private lectureSeule: string | null = null
   private cam: Camera = { x: 40, y: 40, z: 1 }
@@ -146,6 +150,11 @@ export class VueGraphe {
   private titreSurvole: string | null = null
   private hypothese: Bloc | null = null
   private surcharges: Map<string, Surcharge> | null = null
+  /** Nœuds déplacés en base par quelqu'un d'autre (voix, agent), animés de leur ancienne case à la nouvelle. */
+  private transition: Map<string, Surcharge> | null = null
+  private animTransition: Animation | null = null
+  /** Espace des données affichées : un changement d'espace n'est jamais animé. */
+  private projetAffiche: string | null = null
   private conflits: Set<string> | null = null
   private cadreCible: string | null = null
   private geste: Geste | null = null
@@ -283,11 +292,14 @@ export class VueGraphe {
 
   /** Nouvelles données (lecture périodique pendant qu'un agent travaille, ou après une opération). */
   afficher(graphe: Graphe, vue: Vue, conversationId: string | null): number {
+    const avant = this.projetAffiche === this.projetId ? this.vue.placements : []
+    this.projetAffiche = this.projetId
     this.graphe = graphe
     this.vue = vue
     this.conversationFiltre = conversationId
     this.calculerEstompes()
     this.reconstruire()
+    this.animerDeplaces(avant)
     for (const id of [...this.selection]) if (!this.base.blocs.has(id)) this.selection.delete(id)
     if (this.aCadrer && graphe.noeuds.length && this.largeur) {
       this.aCadrer = false
@@ -344,7 +356,7 @@ export class VueGraphe {
     this.aide.hidden = !this.aide.hidden
   }
 
-  // ─── Pilotage (agent navigateur, pilotage/adaptateurVue.ts) ────────────────
+  // ─── Pilotage (voix et parcours, pilotage/adaptateurVue.ts) ───────────────
   // Tout passe par les ids de nœud ; la vue (cases, cadres) n'est jamais modifiée.
 
   get noeuds(): readonly Noeud[] {
@@ -392,7 +404,7 @@ export class VueGraphe {
 
   /** Centre de la partie visible de l'écran (coordonnées du monde, fiche exclue) et zoom. */
   get camera(): { x: number; y: number; z: number } {
-    const { x, y } = this.versMonde(this.largeurUtile / 2, this.hauteur / 2)
+    const { x, y } = this.versMonde(this.largeurUtile / 2, this.hauteurUtile / 2)
     return { x, y, z: this.cam.z }
   }
 
@@ -461,6 +473,10 @@ export class VueGraphe {
     return Math.max(80, this.largeur - this.margeDroite)
   }
 
+  private get hauteurUtile(): number {
+    return Math.max(80, this.hauteur - this.margeBas)
+  }
+
   private borneZoom(z: number): number {
     return Math.max(ZOOMS[0]![0], Math.min(ZOOMS[ZOOMS.length - 1]![0], z))
   }
@@ -471,8 +487,8 @@ export class VueGraphe {
     for (const b of this.modele.blocs.values()) {
       if (b.cache || b.figure || !b.noeud) continue
       const x = (b.x + b.w / 2) * this.cam.z + this.cam.x, y = (b.y + b.h / 2) * this.cam.z + this.cam.y
-      if (x < 0 || y < 0 || x > this.largeurUtile || y > this.hauteur) continue
-      r.push({ id: b.id, nom: b.noeud.nom, x, y, d: Math.hypot(x - this.largeurUtile / 2, y - this.hauteur / 2) })
+      if (x < 0 || y < 0 || x > this.largeurUtile || y > this.hauteurUtile) continue
+      r.push({ id: b.id, nom: b.noeud.nom, x, y, d: Math.hypot(x - this.largeurUtile / 2, y - this.hauteurUtile / 2) })
     }
     r.sort((a, b) => a.d - b.d || a.id.localeCompare(b.id))
     return r.slice(0, max).map(({ id, nom, x, y }) => ({ id, nom, x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 }))
@@ -480,8 +496,38 @@ export class VueGraphe {
 
   private reconstruire(): void {
     this.base = construireModele(this.graphe, this.vue)
-    this.modele = this.surcharges ? construireModele(this.graphe, this.vue, this.surcharges) : this.base
+    const surcharges = this.surcharges ?? this.transition
+    this.modele = surcharges ? construireModele(this.graphe, this.vue, surcharges) : this.base
     this.demander()
+  }
+
+  /** Les nœuds que la relecture a changés de case glissent de l'ancienne à la nouvelle (pas après une opération
+   * faite ici : le nœud lâché est déjà à sa place). */
+  private animerDeplaces(avant: readonly PlacementVue[]): void {
+    this.animTransition?.fin()
+    if (this.enCours || this.surcharges || document.hidden || !this.largeur) return
+    const anciens = new Map(avant.map((p) => [p.noeud_id, p]))
+    const deplaces: [string, PlacementVue, PlacementVue][] = []
+    for (const p of this.vue.placements) {
+      const a = anciens.get(p.noeud_id)
+      if (a && (a.colonne !== p.colonne || a.ligne !== p.ligne)) deplaces.push([p.noeud_id, a, p])
+    }
+    if (!deplaces.length || deplaces.length > DEPLACES_ANIMES_MAX) return
+    const poser = (u: number) => {
+      this.transition = new Map(deplaces.map(([id, a, p]) => [id, {
+        colonne: a.colonne + (p.colonne - a.colonne) * u, ligne: a.ligne + (p.ligne - a.ligne) * u, groupe: p.groupe_id,
+      }]))
+      this.reconstruire()
+    }
+    poser(0)
+    const anim = animer(poser, () => {
+      this.transition = null
+      this.reconstruire()
+    })
+    this.animTransition = anim
+    void anim.promesse.then(() => {
+      if (this.animTransition === anim) this.animTransition = null
+    })
   }
 
   // ─── Caméra ────────────────────────────────────────────────────────────────
@@ -512,16 +558,17 @@ export class VueGraphe {
   /** Comme UE : le plus grand palier qui fait tout tenir, sans dépasser `zoomMax` (1:1, sauf une figure seule). */
   private zoomPour(r: Rect, zoomMax = 1): number {
     const w = Math.max(1, r.x1 - r.x0), h = Math.max(1, r.y1 - r.y0)
-    const z = Math.min((this.largeurUtile - 80) / w, (this.hauteur - 80) / h)
+    const z = Math.min((this.largeurUtile - 80) / w, (this.hauteurUtile - 80) / h)
     let i = 0
     for (let k = 0; k < ZOOMS.length; k++) if (ZOOMS[k]![0] <= z && ZOOMS[k]![0] <= zoomMax) i = k
     return ZOOMS[i]![0]
   }
 
-  /** Centre (x, y) au milieu de la partie visible de l'écran (la fiche, à droite, en est exclue). */
+  /** Centre (x, y) au milieu de la partie visible de l'écran (la fiche à droite et le lecteur de parcours en bas
+   * en sont exclus). */
   private centrerSur(x: number, y: number): void {
     this.cam.x = this.largeurUtile / 2 - x * this.cam.z
-    this.cam.y = this.hauteur / 2 - y * this.cam.z
+    this.cam.y = this.hauteurUtile / 2 - y * this.cam.z
     this.demander()
   }
 
@@ -1253,6 +1300,7 @@ export class VueGraphe {
 
   private ouvrirMenu(c: Cible, sx: number, sy: number): void {
     type Article = { libelle: string; raccourci?: string; action?: () => void; inactif?: string } | 'sep' | { couleurs: string }
+      | { format: string }
     const articles: Article[] = []
     let titre = ''
     if (c.genre === 'bloc' || c.genre === 'renvoi') {
@@ -1278,6 +1326,7 @@ export class VueGraphe {
       if (b.figure) {
         const illustre = b.figure.noeud_id
         articles.push({ libelle: 'Ouvrir en grand', raccourci: 'double-clic', action: () => this.ouvrirFigure(id) })
+        articles.push({ format: id })
         articles.push(this.base.blocs.has(illustre)
           ? { libelle: `Montrer le nœud illustré (${referenceDe(this.base, illustre)})`, action: () => this.montrer(illustre) }
           : { libelle: 'Montrer le nœud illustré', inactif: 'absent du graphe' })
@@ -1320,6 +1369,23 @@ export class VueGraphe {
           b.addEventListener('click', () => {
             this.fermerMenu()
             void this.executer([{ op: 'modifier_groupe', id: a.couleurs, couleur: t ?? '' }], 'Changer la couleur du cadre')
+          })
+        }
+      } else if ('format' in a) {
+        // Format d'une figure (largeur × hauteur en cases) ; elle garde sa case, et la vue refuse un chevauchement.
+        const ligne = element(this.menu, 'div', 'gr-menu-couleurs')
+        ligne.innerHTML = '<span>Format</span>'
+        const f = this.base.blocs.get(a.format)!
+        for (const [largeur, hauteur] of FORMATS_FIGURE) {
+          const b = element(ligne, 'button', 'gr-format') as HTMLButtonElement
+          b.type = 'button'
+          b.title = `${largeur} × ${hauteur} case${largeur * hauteur > 1 ? 's' : ''} (largeur × hauteur)`
+          b.innerHTML = `<i style="width:${largeur * 7}px;height:${hauteur * 7}px"></i>`
+          if (f.largeur === largeur && f.hauteur === hauteur) b.classList.add('actif')
+          b.addEventListener('click', () => {
+            this.fermerMenu()
+            const ou = f.place ? { colonne: f.colonne, ligne: f.ligne, groupe: f.groupe ?? '', fixe: f.fixe } : {}
+            void this.executer([{ op: 'placer', noeud: a.format, ...ou, largeur, hauteur }], 'Changer le format de la figure')
           })
         }
       } else {

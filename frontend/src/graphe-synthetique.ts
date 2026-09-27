@@ -112,7 +112,7 @@ export function jeuSynthetique(n: number): { graphe: Graphe; vue: Vue } {
       image_largeur: null, image_hauteur: null, scene: true, source: 'tests/donnees/pendule3d.py',
       modifie_le: '2026-09-27T00:00:00Z',
     })
-    placements.push({ noeud_id: 'fig:synth_3d', groupe_id: 'ch0', colonne: 4, ligne: 6, largeur: 3, hauteur: 2, fixe: false })
+    placements.push({ noeud_id: 'fig:synth_3d', groupe_id: 'ch0', colonne: 4, ligne: 6, largeur: 2, hauteur: 2, fixe: false })
   }
   return { graphe: { noeuds, aretes }, vue: { groupes, placements, etiquettes: [], marques: [], figures } }
 }
