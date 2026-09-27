@@ -1044,12 +1044,12 @@ body.sessions-repliees .deplier-sessions {
   top: 12px;
   right: 12px;
   bottom: 12px;
-  width: min(26rem, 60%);
+  width: min(30rem, 60%);
   overflow-y: auto;
   background: var(--fond);
   border: 1px solid var(--trait);
   border-radius: 8px;
-  padding: 0.8rem 1rem;
+  padding: 1rem 1.3rem 1.2rem;
   box-shadow: 0 8px 24px -12px rgba(24, 24, 27, 0.25);
 }
 
@@ -1139,15 +1139,80 @@ body.sessions-repliees .deplier-sessions {
   font-size: 0.8rem;
 }
 
+/* Énoncé et démonstration composés comme un article : serif, interligne ample, une phrase par paragraphe. */
+.texte-article {
+  font: 400 1rem/1.6 'CMU Serif Atlas', KaTeX_Main, 'Latin Modern Roman', 'CMU Serif', serif;
+  font-variant-ligatures: no-common-ligatures;
+  /* Pas de justification : dans une colonne étroite, les formules insécables creusent des trous entre les mots. */
+  text-align: left;
+  hyphens: auto;
+}
+
+.texte-article p {
+  margin: 0 0 0.55rem;
+}
+
+.texte-article .katex {
+  font-size: 1.05em;
+}
+
+.texte-article .katex-display {
+  margin: 0.7rem 0;
+  padding: 0.1rem 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.enonce {
+  margin: 0.8rem 0 1rem;
+}
+
+.fiche-liens {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.35rem 0.8rem;
+  align-items: baseline;
+  margin: 0.8rem 0 0.4rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid var(--trait);
+  font-size: 0.85rem;
+}
+
+.fiche-liens dt {
+  color: var(--texte-2);
+}
+
+.fiche-liens dd {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin: 0;
+}
+
 .demo {
   border-top: 1px solid var(--trait);
-  padding-top: 0.5rem;
-  margin-top: 0.5rem;
+  padding-top: 0.7rem;
+  margin-top: 0.9rem;
 }
 
 .demo summary {
   cursor: pointer;
   font-weight: 600;
+}
+
+.preuve {
+  margin-top: 0.6rem;
+}
+
+.preuve p.preuve-titre {
+  margin-bottom: 0.3rem;
+}
+
+/* Fin de démonstration : ∎ au bout de la dernière ligne. */
+.preuve > :last-child::after {
+  content: '∎';
+  float: right;
+  margin-left: 0.5rem;
 }
 
 .scene-agents {

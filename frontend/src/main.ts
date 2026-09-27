@@ -7,7 +7,7 @@ import { api, type Graphe, type Noeud, type RolePremisse, type Statut, type Vue 
 import { PanneauConversation } from './conversations'
 import { VueDocuments } from './documents'
 import { cheminProjet, ressembleAUnChemin } from './liens-fichiers'
-import { enLigne, formulesAffichees, nombre, rendreTex } from './formules'
+import { enLigne, formulesAffichees, latexExplicite, nombre, rendreTex } from './formules'
 import { VueGraphe } from './graphe'
 import { lireDecision, type DetailsDecision } from './graphe-decision'
 import { jeuSynthetique, sceneSynthetique } from './graphe-synthetique'
@@ -129,7 +129,8 @@ function afficherDetail(n: Noeud | null) {
   const liens = (ids: string[], roles?: Record<string, RolePremisse>) =>
     ids.length ? ids.map((id) => lien(id, roles?.[id])).join(' ') : '—'
   const ref = vueGraphe.reference(n.id)
-  const tex = formulesAffichees(n.enonce)
+  // Un énoncé en LaTeX explicite montre lui-même ses formules (centrées en mode aéré) : pas de doublon en tête.
+  const tex = latexExplicite(n.enonce) === null ? formulesAffichees(n.enonce) : ''
   const texte = (v: unknown) => echapper(typeof v === 'string' ? v : JSON.stringify(v))
   const decision = n.type === 'decision' ? lireDecision(n.details) : null
   const champs = decision ? '' : n.details && typeof n.details === 'object'
@@ -143,17 +144,19 @@ function afficherDetail(n: Noeud | null) {
     <h2 class="fiche-titre"><b>${echapper(ref ? `${ref.libelle} ${ref.numero}` : 'Énoncé')}</b> (${enLigne(n.nom)}).</h2>
     <p class="meta"><em>${LIBELLES_STATUT[n.statut]}</em> · <code>${echapper(n.id)}</code>${n.admis ? ' · admis' : ''}</p>
     ${decision ? ficheDecision(decision, liens) : `${tex ? `<div class="fiche-formule">${rendreTex(tex, n.enonce, true)}</div>` : ''}
-    <div class="enonce">${rendre(n.enonce)}</div>
+    <div class="enonce texte-article">${rendre(n.enonce, true)}</div>
     ${champs ? `<dl class="fiche-details">${champs}</dl>` : ''}
-    <p><strong>Prémisses :</strong> ${liens(n.parents)}</p>
-    <p><strong>Utilisé par :</strong> ${liens(n.enfants)}</p>`}
+    <dl class="fiche-liens">
+      <dt>Prémisses</dt><dd>${liens(n.parents)}</dd>
+      <dt>Utilisé par</dt><dd>${liens(n.enfants)}</dd>
+    </dl>`}
     ${n.demonstrations
       .map(
         (d) => `<details class="demo" open>
           <summary>${echapper(d.nom_demonstration)} · <em>${LIBELLES_VALIDITE[d.validite]}</em>${
             d.confiance !== null ? ` · ${rendreTex(`c = ${nombre(d.confiance)}`, String(d.confiance))}` : ''} · ${echapper(d.auteur)}</summary>
           <p class="meta">Justifié par : ${liens(d.justifie_par, d.roles)}</p>
-          <div>${rendre(d.demonstration)}</div>
+          <div class="preuve texte-article"><p class="preuve-titre"><em>Démonstration.</em></p>${rendre(d.demonstration, true)}</div>
         </details>`,
       )
       .join('')}`
