@@ -9,11 +9,13 @@ l'orchestrateur, comme ATLAS_CONVERSATION_ID qui tague les nœuds créés) ; tou
 import json
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from mcp.server.mcpserver import Image, MCPServer
+from pydantic import BaseModel, Field
 
 from .. import ecriture, figures, lecture, vue
+from ..modeles import TypeNoeud
 
 LONGUEUR_MAX_ENONCE = 300
 TYPES = (
@@ -150,6 +152,66 @@ def ajouter_demonstration(
         roles=roles,
     )
     return json.dumps({"ok": True, "noeud_id": noeud_id, "nom_demonstration": nom_demonstration})
+
+
+class CadreAPoser(BaseModel):
+    id: str = Field(description="minuscules, chiffres et _, ex. sp_trainee")
+    nom: str = Field(description="titre du cadre, ex. « SP2 · Chute dans l'air »")
+    genre: Literal["sous_probleme", "etape", "piste_abandonnee", "libre"] = "sous_probleme"
+    parent: str = Field("", description="id du cadre parent (sous-cadre) ; vide = premier niveau")
+    couleur: str = Field("", description="#rrggbb ; vide = teinte automatique")
+
+
+class NoeudAPoser(BaseModel):
+    id: str = Field(description="slug avec préfixe (def_, hyp_, lemme_, prop_, thm_, obs_, res_…)")
+    nom: str = Field(description="titre court lisible")
+    enonce: str = Field(description="assertion précise et autonome, Markdown + LaTeX ($…$)")
+    type: TypeNoeud = "assertion"
+    groupe: str = Field("", description="id du cadre (déclaré dans cadres ou existant)")
+    admis: bool = False
+    raison_admis: str = Field("", description="source, si admis")
+    details: dict[str, Any] | None = Field(None, description="décision ou choix de modélisation (voir creer_noeud)")
+
+
+class DemonstrationAPoser(BaseModel):
+    noeud_id: str
+    nom_demonstration: str = Field(description="unique pour ce nœud, ex. « Par la loi de Newton »")
+    justifie_par: list[str] = Field(description="ids des prémisses (du lot ou déjà dans le graphe)")
+    demonstration: str = Field(description="argument complet, Markdown + LaTeX")
+    roles: dict[str, Literal["auxiliaire", "technique", "contexte"]] = Field(
+        default_factory=dict, description="rôle des prémisses non principales (absentes = principales)"
+    )
+
+
+@serveur.tool()
+def poser_graphe(
+    cadres: list[CadreAPoser],
+    noeuds: list[NoeudAPoser],
+    demonstrations: list[DemonstrationAPoser],
+    essai: bool = False,
+) -> str:
+    """Pose d'un coup tout un morceau de graphe : cadres, nœuds et démonstrations, dans n'importe quel ordre à
+    l'intérieur de chaque liste (une prémisse peut être un nœud du même lot). Tout est validé avant d'écrire :
+    au moindre problème rien n'est écrit et l'erreur dit quel élément corriger (« noeuds[3] … »).
+
+    Mise en page automatique : les cadres de premier niveau que tu crées se suivent de gauche à droite dans l'ordre
+    du raisonnement (un cadre dont les nœuds s'appuient sur un autre va à sa droite ; à hauteur égale, dans l'ordre
+    de la liste) ; dans chaque cadre, les nœuds vont à droite de leurs prémisses principales et auxiliaires.
+    Les démonstrations démarrent « à vérifier ». essai = vrai : valide et renvoie les avertissements (nœuds ni admis
+    ni démontrés, nœuds reliés à rien) sans rien écrire."""
+    try:
+        resultat = ecriture.poser_graphe(
+            projet_id=_projet(),
+            cadres=[c.model_dump() for c in cadres],
+            noeuds=[n.model_dump() for n in noeuds],
+            demonstrations=[d.model_dump() for d in demonstrations],
+            auteur=AUTEUR,
+            conversation_id=os.environ.get("ATLAS_CONVERSATION_ID") or None,
+            essai=essai,
+        )
+    except ecriture.ErreurGraphe as e:
+        return json.dumps({"ok": False, "erreur": str(e), "rien_n_a_ete_ecrit": True}, ensure_ascii=False)
+    return json.dumps({"ok": True, **resultat}, ensure_ascii=False)
 
 
 @serveur.tool()

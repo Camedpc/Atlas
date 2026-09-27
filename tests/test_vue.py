@@ -191,3 +191,53 @@ def test_placer_a_une_case_sans_fixer():
     assert etat2.placements["thm_loi"] == Placement("thm_loi", 9, 3, None, 1, 1, False)
     with pytest.raises(ErreurVue, match="fixe invalide"):
         vue.appliquer(etat, [{"op": "placer", "noeud": "thm_loi", "colonne": 9, "ligne": 3, "fixe": "oui"}])
+
+
+def test_disposer_les_cadres_de_gauche_a_droite():
+    etat = _fontaine()
+    etat, _ = vue.appliquer(
+        etat,
+        [
+            {"op": "creer_groupe", "id": "hyp", "nom": "Hypothèses", "genre": "etape"},
+            {"op": "creer_groupe", "id": "sp1", "nom": "Conditions", "genre": "sous_probleme"},
+            {"op": "creer_groupe", "id": "bords", "nom": "Bords", "parent": "sp1"},
+            {"op": "creer_groupe", "id": "sp2", "nom": "Loi", "genre": "sous_probleme"},
+        ],
+    )
+    nouveaux = {"h_stat": "hyp", "def_alpha": "hyp", "l_prise": "bords", "l_sol": "bords", "thm_loi": "sp2"}
+    etat = vue.disposer(etat, None, nouveaux)
+    assert not vue.conflits(etat)
+    r = {g: vue.rect_groupe(etat, g) for g in ("hyp", "sp1", "sp2")}
+    # Chaque cadre à droite de celui dont il dépend, avec une colonne d'écart.
+    assert r["hyp"].c1 + 1 < r["sp1"].c0 and r["sp1"].c1 + 1 < r["sp2"].c0
+    assert etat.placements["l_prise"].groupe_id == "bords" and not etat.placements["thm_loi"].fixe
+    # Disposer à nouveau ne change rien : le bloc garde son coin.
+    assert vue.disposer(etat).placements == etat.placements
+
+
+def test_une_longue_colonne_d_hypotheses_se_replie():
+    hypotheses = [NoeudVue(f"h{k:02}", f"Hypothèse {k}", "hypothese") for k in range(20)]
+    conclusion = NoeudVue("res", "Résultat", "resultat", None, tuple((h.id, "principale") for h in hypotheses))
+    etat = EtatVue(noeuds={n.id: n for n in [*hypotheses, conclusion]})
+    etat = vue.disposer(etat, None, {n: None for n in etat.noeuds})
+    assert not vue.conflits(etat)
+    assert max(p.ligne for p in etat.placements.values()) < vue.HAUTEUR_COLONNE
+    assert etat.placements["res"].colonne > max(etat.placements[h.id].colonne for h in hypotheses)
+
+
+def test_reorganiser_sans_noeud_fixe_dispose_les_cadres_de_gauche_a_droite():
+    etat = _fontaine()
+    etat, _ = vue.appliquer(
+        etat,
+        [
+            {"op": "creer_groupe", "id": "hyp", "nom": "Hypothèses"},
+            {"op": "creer_groupe", "id": "loi", "nom": "Loi"},
+            {"op": "placer", "noeud": "h_stat", "groupe": "hyp"},
+            {"op": "placer", "noeud": "def_alpha", "groupe": "hyp"},
+            {"op": "placer", "noeud": "l_prise", "groupe": "loi"},
+            {"op": "placer", "noeud": "l_sol", "groupe": "loi"},
+            {"op": "placer", "noeud": "thm_loi", "groupe": "loi"},
+            {"op": "reorganiser"},
+        ],
+    )
+    assert vue.rect_groupe(etat, "hyp").c1 < vue.rect_groupe(etat, "loi").c0

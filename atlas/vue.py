@@ -27,6 +27,8 @@ ROLES = ("principale", "auxiliaire", "technique", "contexte")
 TAILLE_MAX = 8
 PREFIXE_FIGURE = "fig:"
 TAILLE_FIGURE = (3, 2)
+# Disposition : au-delà de cette hauteur (en cases), une colonne de départs se replie en plusieurs.
+HAUTEUR_COLONNE = 8
 # Recherche d'une case libre : au-delà, on renonce plutôt que de boucler.
 LIGNES_CHERCHEES = 400
 
@@ -298,7 +300,17 @@ def _verificateur(etat: EtatVue, groupe_id: str | None):
 
 def reorganiser(etat: EtatVue, groupe_id: str | None = None) -> EtatVue:
     """Replace, dans l'ordre logique (prémisses d'abord), les nœuds non fixés (d'un cadre, ou de toute la vue ;
-    dans ce cas les nœuds encore non placés le sont aussi)."""
+    dans ce cas les nœuds encore non placés le sont aussi).
+
+    Sans aucun nœud fixé dans la zone (toute la vue, ou un cadre de premier niveau), c'est la disposition
+    d'ensemble (`disposer`) : cadres de gauche à droite ; sinon, nœud par nœud autour des nœuds fixés."""
+    zone = etat.placements.values()
+    if groupe_id is not None:
+        zone = [p for p in zone if p.groupe_id in {groupe_id} | descendants(etat, groupe_id)]
+    if not any(p.fixe for p in zone) and (groupe_id is None or etat.groupes[groupe_id].parent_id is None):
+        non_places = {nid: None for nid in etat.noeuds if nid not in etat.placements} if groupe_id is None else {}
+        racines = None if groupe_id is None else [groupe_id]
+        return disposer(etat, racines, non_places)
     cibles = {
         nid
         for nid, p in etat.placements.items()
@@ -354,6 +366,171 @@ def ordre_logique(etat: EtatVue, ids: Iterable[str], cle=None) -> list[str]:
         ordre.extend(suivant)
         restants -= set(suivant)
     return ordre
+
+
+# ─── Disposition d'ensemble ─────────────────────────────────────────────────
+#
+# `placer_auto` range un nœud à la fois ; `disposer` met en page d'un coup un ensemble de cadres (et de nœuds hors
+# cadre), niveau par niveau : à chaque niveau, les éléments (nœuds et sous-cadres déjà disposés) sont répartis en
+# colonnes selon la plus longue chaîne de prémisses qui y mène (lecture de gauche à droite), puis empilés dans leur
+# colonne au plus près de la hauteur de leurs prémisses. Un cadre est donc un bloc qui se place comme un nœud.
+
+
+@dataclass
+class _Boite:
+    """Élément d'un niveau : un nœud, ou un cadre déjà disposé. `cases` : nœud → (colonne, ligne, largeur, hauteur),
+    relatives au coin de la boîte."""
+
+    cle: str
+    largeur: int
+    hauteur: int
+    cases: dict[str, tuple[int, int, int, int]]
+    cadre: bool
+
+
+def _rangs(elements: list[str], arcs: set[tuple[str, str]]) -> dict[str, int]:
+    """Rang = longueur de la plus longue chaîne d'arcs qui mène à l'élément ; un cycle est rompu dans l'ordre donné."""
+    entrants: dict[str, set[str]] = {e: set() for e in elements}
+    for a, b in arcs:
+        entrants[b].add(a)
+    rang: dict[str, int] = {}
+    while len(rang) < len(elements):
+        prets = [e for e in elements if e not in rang and entrants[e] <= rang.keys()]
+        for e in prets or [next(e for e in elements if e not in rang)]:
+            rang[e] = 1 + max((rang[p] for p in entrants[e] if p in rang), default=-1)
+    return rang
+
+
+def _disposer_niveau(boites: list[_Boite], arcs: set[tuple[str, str]]) -> _Boite:
+    """Dispose les boîtes d'un niveau (en colonnes par rang, empilées au plus près de leurs prémisses) et renvoie la
+    boîte qui les contient."""
+    rang = _rangs([b.cle for b in boites], arcs)
+    colonnes: list[list[_Boite]] = [[] for _ in range(max(rang.values(), default=-1) + 1)]
+    for b in boites:
+        colonnes[rang[b.cle]].append(b)
+    entrants: dict[str, list[_Boite]] = {b.cle: [] for b in boites}
+    par_cle = {b.cle: b for b in boites}
+    for a, b in arcs:
+        entrants[b].append(par_cle[a])
+    # Une colonne de départs (sans prémisse dans le niveau, ex. les hypothèses) trop haute se replie en plusieurs.
+    repliees: list[list[_Boite]] = []
+    for colonne in colonnes:
+        if sum(b.hauteur for b in colonne) > HAUTEUR_COLONNE and not any(entrants[b.cle] for b in colonne):
+            morceau: list[_Boite] = []
+            for b in colonne:
+                if morceau and sum(x.hauteur for x in morceau) + b.hauteur > HAUTEUR_COLONNE:
+                    repliees.append(morceau)
+                    morceau = []
+                morceau.append(b)
+            repliees.append(morceau)
+        else:
+            repliees.append(colonne)
+    colonnes = repliees
+
+    coin: dict[str, tuple[int, int]] = {}
+
+    def souhait(b: _Boite) -> float | None:
+        """Ligne du coin qui centre la boîte sur ses prémisses déjà placées."""
+        centres = [coin[a.cle][1] + a.hauteur / 2 for a in entrants[b.cle] if a.cle in coin]
+        return sum(centres) / len(centres) - b.hauteur / 2 if centres else None
+
+    x = 0
+    for k, colonne in enumerate(colonnes):
+        if k and any(b.cadre for b in colonnes[k - 1] + colonne):
+            x += 1  # une colonne d'écart dès qu'un cadre borde l'intervalle
+        # Celles qui ont des prémisses d'abord, dans l'ordre de leur hauteur souhaitée ; les autres ensuite, dans
+        # l'ordre reçu.
+        souhaits = {b.cle: souhait(b) for b in colonne}
+        ordonnees = sorted(
+            enumerate(colonne), key=lambda ib: (souhaits[ib[1].cle] is None, souhaits[ib[1].cle] or 0, ib[0])
+        )
+        y, precedente = 0, None
+        for _, b in ordonnees:
+            if precedente is not None and (b.cadre or precedente.cadre):
+                y += 1  # une ligne d'écart autour d'un cadre (barre de titre)
+            if (voulu := souhaits[b.cle]) is not None:
+                y = max(y, round(voulu))
+            coin[b.cle] = (x, y)
+            y += b.hauteur
+            precedente = b
+        x += max(b.largeur for b in colonne)
+
+    cases = {
+        nid: (coin[b.cle][0] + c, coin[b.cle][1] + l, w, h) for b in boites for nid, (c, l, w, h) in b.cases.items()
+    }
+    largeur = max((c + w for c, _, w, _ in cases.values()), default=0)
+    hauteur = max((l + h for _, l, _, h in cases.values()), default=0)
+    return _Boite("", largeur, hauteur, cases, True)
+
+
+def disposer(
+    etat: EtatVue, racines: list[str] | None = None, nouveaux: dict[str, str | None] | None = None
+) -> EtatVue:
+    """Met en page d'un coup des cadres de premier niveau et des nœuds hors cadre (`racines`, ids ; par défaut toute
+    la vue) avec tout ce qu'ils contiennent. `nouveaux` : nœuds pas encore placés → leur cadre (None = hors cadre).
+
+    Les cadres se suivent de gauche à droite dans l'ordre du raisonnement ; les nœuds déplacés ne sont plus fixés.
+    Le bloc garde son coin s'il y tient, sinon il va sous le reste de la vue. Ne modifie pas `etat`."""
+    nouveaux = nouveaux or {}
+    groupe_de = {nid: p.groupe_id for nid, p in etat.placements.items()} | nouveaux
+    hors_cadre = [nid for nid in etat.noeuds if nid in groupe_de and groupe_de[nid] is None]
+    if racines is None:
+        racines = [g.id for g in sous_groupes(etat, None)] + sorted(hors_cadre)
+    for r in racines:
+        if r in etat.groupes:
+            if etat.groupes[r].parent_id is not None:
+                raise ErreurVue(f"{r} est un sous-cadre : dispose son cadre de premier niveau.")
+        elif r not in hors_cadre:
+            raise ErreurVue(f"{r} n'est ni un cadre de premier niveau ni un nœud hors cadre.")
+
+    membres: dict[str | None, list[str]] = {}
+    for nid in etat.noeuds:
+        if nid in groupe_de:
+            membres.setdefault(groupe_de[nid], []).append(nid)
+    arcs_noeuds = {
+        (p, n.id)
+        for n in etat.noeuds.values()
+        for p, role in n.premisses
+        if role in ("principale", "auxiliaire") and p in etat.noeuds
+    }
+
+    def boite_noeud(nid: str) -> _Boite:
+        p = etat.placements.get(nid)
+        largeur, hauteur = (p.largeur, p.hauteur) if p is not None else TAILLE_FIGURE if est_figure(nid) else (1, 1)
+        return _Boite(nid, largeur, hauteur, {nid: (0, 0, largeur, hauteur)}, False)
+
+    def niveau(elements: list[_Boite]) -> _Boite:
+        # Un arc entre deux nœuds relie les éléments du niveau qui les contiennent (eux-mêmes ou leur sous-cadre).
+        porteur = {nid: b.cle for b in elements for nid in b.cases}
+        arcs = {(porteur[a], porteur[b]) for a, b in arcs_noeuds if a in porteur and b in porteur}
+        return _disposer_niveau(elements, {(a, b) for a, b in arcs if a != b})
+
+    def boite_cadre(gid: str) -> _Boite:
+        elements = [b for s in sous_groupes(etat, gid) if (b := boite_cadre(s.id)).cases]
+        elements += [boite_noeud(nid) for nid in ordre_logique(etat, membres.get(gid, []))]
+        interieur = niveau(elements)
+        return _Boite("cadre:" + gid, interieur.largeur, interieur.hauteur, interieur.cases, True)
+
+    elements = [boite_cadre(r) if r in etat.groupes else boite_noeud(r) for r in racines]
+    bloc = niveau([b for b in elements if b.cases])
+
+    reste = etat.copie()
+    for nid in bloc.cases:
+        reste.placements.pop(nid, None)
+
+    def poser(c0: int, l0: int) -> EtatVue:
+        resultat = reste.copie()
+        for nid, (c, l, w, h) in bloc.cases.items():
+            resultat.placements[nid] = Placement(nid, c0 + c, l0 + l, groupe_de[nid], w, h, False)
+        return resultat
+
+    anciens = [etat.placements[n] for n in bloc.cases if n in etat.placements]
+    if anciens:
+        resultat = poser(min(p.colonne for p in anciens), min(p.ligne for p in anciens))
+        if not conflits(resultat):
+            return resultat
+    bas = max((rect_de(p).l1 for p in reste.placements.values()), default=-2)
+    return poser(0, bas + 2)
 
 
 # ─── Opérations ─────────────────────────────────────────────────────────────
@@ -416,6 +593,11 @@ def appliquer(etat: EtatVue, operations: list[dict[str, Any]]) -> tuple[EtatVue,
     if problemes := conflits(nouvel):
         raise ErreurVue("La vue obtenue a des conflits : " + " ; ".join(problemes[:6]))
     return nouvel, renommages
+
+
+def appliquer_une(etat: EtatVue, op: dict[str, Any]) -> None:
+    """Une opération appliquée sur place, sans contrôle final des conflits (à faire par l'appelant)."""
+    _appliquer_une(etat, op, {})
 
 
 def _appliquer_une(etat: EtatVue, op: dict[str, Any], renommages: dict[str, str]) -> None:
@@ -518,6 +700,11 @@ def _appliquer_une(etat: EtatVue, op: dict[str, Any], renommages: dict[str, str]
         cible = _groupe_existant(etat, op.get("groupe"))
         nouvel = reorganiser(etat, cible)
         etat.placements = nouvel.placements
+    elif genre == "disposer":
+        cadres = op.get("cadres")
+        if cadres is not None and (not isinstance(cadres, list) or not cadres):
+            raise ErreurVue("cadres : liste d'ids de cadres de premier niveau (ou de nœuds hors cadre), ou rien.")
+        etat.placements = disposer(etat, cadres).placements
     elif genre == "creer_etiquette":
         eid = _id(op.get("id"), "Id d'étiquette")
         nom = str(op.get("nom") or "").strip()
@@ -535,7 +722,7 @@ def _appliquer_une(etat: EtatVue, op: dict[str, Any], renommages: dict[str, str]
     else:
         raise ErreurVue(
             f"Opération inconnue « {genre} » : creer_groupe, modifier_groupe, supprimer_groupe, renommer_noeud, "
-            "placer, deplacer_groupe, reorganiser, creer_etiquette, etiqueter, retirer_etiquette."
+            "placer, deplacer_groupe, reorganiser, disposer, creer_etiquette, etiqueter, retirer_etiquette."
         )
 
 

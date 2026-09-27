@@ -5,6 +5,7 @@ Les refus métier lèvent `ErreurGraphe`, dont le message est renvoyé tel quel 
 """
 
 import re
+from dataclasses import replace
 from typing import Any
 
 from . import figures, lecture, vue
@@ -246,6 +247,32 @@ def _ecrire_placements(projet_id: str, placements: list[vue.Placement]) -> None:
             )
 
 
+def _ecrire_groupes(projet_id: str, etat: vue.EtatVue, groupes: list[vue.Groupe]) -> None:
+    """Cadres en une requête, parents avant enfants (la clé du parent existe à la fin de l'instruction)."""
+
+    def profondeur(g: vue.Groupe) -> int:
+        d = 0
+        while g.parent_id is not None and g.parent_id in etat.groupes:
+            d, g = d + 1, etat.groupes[g.parent_id]
+        return d
+
+    lignes = [
+        {
+            "projet_id": projet_id,
+            "id": g.id,
+            "nom": g.nom,
+            "parent_id": g.parent_id,
+            "genre": g.genre,
+            "couleur": g.couleur,
+            "replie": g.replie,
+            "ordre": g.ordre,
+        }
+        for g in sorted(groupes, key=profondeur)
+    ]
+    if lignes:
+        supabase().table("groupes").upsert(lignes, on_conflict="projet_id,id").execute()
+
+
 def organiser_vue(*, projet_id: str, operations: list[dict[str, Any]], auteur: str, essai: bool = False) -> dict:
     """Applique des opérations sur la vue, tout ou rien ; `essai` valide sans rien écrire.
 
@@ -272,27 +299,7 @@ def organiser_vue(*, projet_id: str, operations: list[dict[str, Any]], auteur: s
         return {"essai": True, **resume}
 
     base = supabase()
-    # Cadres : parents avant enfants, pour que la clé du parent existe.
-    profondeur = {}
-    for g in diff["groupes"]:
-        d, x = 0, g
-        while x.parent_id is not None and x.parent_id in apres.groupes:
-            d, x = d + 1, apres.groupes[x.parent_id]
-        profondeur[g.id] = d
-    for g in sorted(diff["groupes"], key=lambda g: profondeur[g.id]):
-        base.table("groupes").upsert(
-            {
-                "projet_id": projet_id,
-                "id": g.id,
-                "nom": g.nom,
-                "parent_id": g.parent_id,
-                "genre": g.genre,
-                "couleur": g.couleur,
-                "replie": g.replie,
-                "ordre": g.ordre,
-            },
-            on_conflict="projet_id,id",
-        ).execute()
+    _ecrire_groupes(projet_id, apres, diff["groupes"])
     for eid in [e.id for e in diff["etiquettes"]]:
         e = apres.etiquettes[eid]
         base.table("etiquettes").upsert(
@@ -419,3 +426,240 @@ def creer_figure(
             return ligne  # la vue la montrera « non placée » ; une réorganisation la rattrapera
         _ecrire_placements(projet_id, [place])
     return ligne
+
+# ── Graphe entier d'un coup ──────────────────────────────────────────────────
+
+# Types qui n'ont pas à être démontrés : un nœud d'un autre type, ni admis ni démontré, est signalé.
+TYPES_SANS_DEMONSTRATION = ("hypothese", "choix_modelisation", "conjecture", "decision")
+
+
+def planifier_graphe(
+    etat: vue.EtatVue,
+    demonstrations_existantes: set[tuple[str, str]],
+    *,
+    projet_id: str,
+    cadres: list[dict[str, Any]],
+    noeuds: list[dict[str, Any]],
+    demonstrations: list[dict[str, Any]],
+    conversation_id: str | None = None,
+) -> dict[str, Any]:
+    """Valide en mémoire un lot de cadres, nœuds et démonstrations, et calcule la vue qui en résulte (fonction
+    pure). `etat` : la vue actuelle (tous les nœuds de l'espace) ; `demonstrations_existantes` : couples
+    (noeud_id, nom_demonstration) déjà en base pour les nœuds visés.
+
+    Les cadres créés et leurs nœuds sont mis en page d'un coup (`vue.disposer`), à la suite du reste ; un nœud
+    rangé dans un cadre existant s'y place à droite de ses prémisses. Lève `ErreurGraphe` au premier problème, en
+    le situant (« noeuds[3] », « demonstrations[7] »)."""
+    apres = etat.copie()
+    operations = []
+    for i, c in enumerate(cadres):
+        op = {"ordre": i, **c, "op": "creer_groupe"}
+        try:
+            vue.appliquer_une(apres, op)
+        except vue.ErreurVue as e:
+            raise ErreurGraphe(f"cadres[{i}] ({c.get('id', '?')}) : {e}") from None
+        operations.append(op)
+
+    lignes_noeuds: list[dict[str, Any]] = []
+    raisons: dict[str, str | None] = {}
+    nouveaux: dict[str, str | None] = {}
+    for i, n in enumerate(noeuds):
+        ou = f"noeuds[{i}] ({n.get('id', '?')})"
+        nid = str(n.get("id") or "")
+        try:
+            verifier_id(nid)
+        except ErreurGraphe as e:
+            raise ErreurGraphe(f"{ou} : {e}") from None
+        if nid in apres.noeuds:
+            quoi = "figure deux fois dans le lot" if nid in nouveaux else "existe déjà : réutilise-le (lire_noeud)"
+            raise ErreurGraphe(f"{ou} : le nœud {nid} {quoi}.")
+        nom, enonce = str(n.get("nom") or "").strip(), str(n.get("enonce") or "").strip()
+        if not nom or not enonce:
+            raise ErreurGraphe(f"{ou} : nom et enonce sont obligatoires.")
+        admis = bool(n.get("admis", False))
+        raison = str(n.get("raison_admis") or "").strip() or None
+        if admis and raison is None:
+            raise ErreurGraphe(f"{ou} : un nœud admis doit avoir une raison_admis (définition, axiome, source…).")
+        groupe = n.get("groupe") or None
+        if groupe is not None and groupe not in apres.groupes:
+            raise ErreurGraphe(f"{ou} : cadre inexistant « {groupe} » ; déclare-le dans cadres.")
+        type_noeud = n.get("type") or None
+        lignes_noeuds.append(
+            {
+                "projet_id": projet_id,
+                "id": nid,
+                "nom": nom,
+                "enonce": enonce,
+                "admis": admis,
+                "conversation_id": conversation_id,
+                "type": type_noeud,
+                "details": n.get("details") or None,
+            }
+        )
+        raisons[nid] = raison
+        nouveaux[nid] = groupe
+        apres.noeuds[nid] = vue.NoeudVue(nid, nom, type_noeud)
+
+    lignes_demonstrations: list[dict[str, Any]] = []
+    deja = set(demonstrations_existantes)
+    for i, d in enumerate(demonstrations):
+        noeud_id = str(d.get("noeud_id") or "")
+        nom = str(d.get("nom_demonstration") or "").strip()
+        ou = f"demonstrations[{i}] ({noeud_id} / {nom or '?'})"
+        try:
+            premisses = normaliser_premisses(noeud_id, list(d.get("justifie_par") or []))
+            roles = vue.valider_roles(premisses, d.get("roles"))
+        except (ErreurGraphe, vue.ErreurVue) as e:
+            raise ErreurGraphe(f"{ou} : {e}") from None
+        if noeud_id not in apres.noeuds:
+            raise ErreurGraphe(f"{ou} : nœud inexistant ; ajoute-le à noeuds.")
+        if manquants := [p for p in premisses if p not in apres.noeuds]:
+            raise ErreurGraphe(f"{ou} : prémisses inexistantes {', '.join(manquants)} ; ajoute-les à noeuds.")
+        if not premisses:
+            raise ErreurGraphe(f"{ou} : justifie_par est vide ; un nœud sans prémisse est une hypothèse ou est admis.")
+        if not nom or not str(d.get("demonstration") or "").strip():
+            raise ErreurGraphe(f"{ou} : nom_demonstration et demonstration sont obligatoires.")
+        if (noeud_id, nom) in deja:
+            raise ErreurGraphe(f"{ou} : le nœud a déjà une démonstration de ce nom.")
+        deja.add((noeud_id, nom))
+        lignes_demonstrations.append(
+            {
+                "projet_id": projet_id,
+                "noeud_id": noeud_id,
+                "nom_demonstration": nom,
+                "justifie_par": premisses,
+                "roles": roles,
+                "demonstration": str(d["demonstration"]).strip(),
+                "validite": "a_verifier",
+                "auteur": "ia",
+            }
+        )
+        # Prémisses vues par la mise en page : le rôle le plus fort l'emporte, comme à la lecture.
+        noeud = apres.noeuds[noeud_id]
+        forts = dict(noeud.premisses)
+        for p in premisses:
+            role = roles.get(p, "principale")
+            if p not in forts or vue.ROLES.index(role) < vue.ROLES.index(forts[p]):
+                forts[p] = role
+        apres.noeuds[noeud_id] = replace(noeud, premisses=tuple(forts.items()))
+
+    # Mise en page : les cadres de premier niveau créés ici (avec leurs nœuds) et les nouveaux nœuds hors cadre
+    # d'un bloc ; les nouveaux nœuds des cadres existants un par un, dans l'ordre logique.
+    crees = {op["id"] for op in operations}
+
+    def racine(gid: str) -> str:
+        while (parent := apres.groupes[gid].parent_id) is not None:
+            gid = parent
+        return gid
+
+    racines = sorted((g for g in crees if apres.groupes[g].parent_id is None), key=lambda g: apres.groupes[g].ordre)
+    racines += [nid for nid, g in nouveaux.items() if g is None]
+    dans_le_bloc = {nid: g for nid, g in nouveaux.items() if g is None or racine(g) in crees}
+    try:
+        if racines:
+            apres = vue.disposer(apres, racines, dans_le_bloc)
+        for nid in vue.ordre_logique(apres, [n for n in nouveaux if n not in dans_le_bloc]):
+            apres.placements[nid] = vue.placer_auto(apres, nid, nouveaux[nid])
+    except vue.ErreurVue as e:
+        raise ErreurGraphe(f"Mise en page impossible : {e}") from None
+    if problemes := vue.conflits(apres):
+        raise ErreurGraphe("La vue obtenue a des conflits : " + " ; ".join(problemes[:6]))
+
+    demontres = {d["noeud_id"] for d in lignes_demonstrations}
+    utilises = {p for d in lignes_demonstrations for p in d["justifie_par"]}
+    avertissements = [
+        f"{l['id']} ({l['type'] or 'sans type'}) n'est ni admis ni démontré"
+        for l in lignes_noeuds
+        if not l["admis"] and l["id"] not in demontres and l["type"] not in TYPES_SANS_DEMONSTRATION
+    ]
+    avertissements += [
+        f"{l['id']} n'est relié à rien" for l in lignes_noeuds if l["id"] not in demontres | utilises
+    ]
+    return {
+        "etat": apres,
+        "operations": operations,
+        "noeuds": lignes_noeuds,
+        "raisons": raisons,
+        "demonstrations": lignes_demonstrations,
+        "avertissements": avertissements,
+    }
+
+
+def poser_graphe(
+    *,
+    projet_id: str,
+    cadres: list[dict[str, Any]],
+    noeuds: list[dict[str, Any]],
+    demonstrations: list[dict[str, Any]],
+    auteur: str,
+    conversation_id: str | None = None,
+    essai: bool = False,
+) -> dict[str, Any]:
+    """Écrit d'un coup des cadres, des nœuds et des démonstrations, et leur mise en page : tout est validé avant la
+    première écriture (`planifier_graphe`), puis écrit en une requête par table. `essai` valide sans rien écrire."""
+    if not (cadres or noeuds or demonstrations):
+        raise ErreurGraphe("Rien à poser : cadres, noeuds et demonstrations sont vides.")
+    avant = lecture.charger_etat_vue(projet_id)
+    cibles = sorted({str(d.get("noeud_id")) for d in demonstrations} & set(avant.noeuds))
+    existantes: set[tuple[str, str]] = set()
+    if cibles:
+        lignes = (
+            supabase()
+            .table("demonstrations")
+            .select("noeud_id, nom_demonstration")
+            .eq("projet_id", projet_id)
+            .in_("noeud_id", cibles)
+            .execute()
+            .data
+        )
+        existantes = {(r["noeud_id"], r["nom_demonstration"]) for r in lignes}
+    plan = planifier_graphe(
+        avant,
+        existantes,
+        projet_id=projet_id,
+        cadres=cadres,
+        noeuds=noeuds,
+        demonstrations=demonstrations,
+        conversation_id=conversation_id,
+    )
+    apres: vue.EtatVue = plan["etat"]
+    diff = vue.differences(avant, apres)
+    resume = {
+        "noeuds_crees": len(plan["noeuds"]),
+        "demonstrations_ajoutees": len(plan["demonstrations"]),
+        "cadres": {
+            g.id: [r.c0, r.l0, r.c1, r.l1] if (r := vue.rect_groupe(apres, g.id)) else None for g in diff["groupes"]
+        },
+        "avertissements": plan["avertissements"],
+    }
+    if essai:
+        return {"essai": True, **resume}
+
+    base = supabase()
+    _ecrire_groupes(projet_id, apres, diff["groupes"])
+    if plan["noeuds"]:
+        base.table("noeuds").insert(plan["noeuds"]).execute()
+    if plan["demonstrations"]:
+        base.table("demonstrations").insert(plan["demonstrations"]).execute()
+    _ecrire_placements(projet_id, diff["placements"])
+    commun = {"projet_id": projet_id, "auteur": auteur}
+    journal = [
+        {**commun, "action": "creation_noeud", "noeud_id": l["id"], "apres": l, "raison": plan["raisons"][l["id"]]}
+        for l in plan["noeuds"]
+    ]
+    journal += [
+        {
+            **commun,
+            "action": "ajout_demonstration",
+            "noeud_id": l["noeud_id"],
+            "nom_demonstration": l["nom_demonstration"],
+            "apres": l,
+        }
+        for l in plan["demonstrations"]
+    ]
+    if plan["operations"]:
+        journal.append({**commun, "action": "vue", "noeud_id": None, "apres": {"operations": plan["operations"]}})
+    # Une requête : toutes les lignes d'un insert groupé doivent avoir les mêmes clés.
+    cles = {"raison": None, "nom_demonstration": None}
+    base.table("journal").insert([cles | ligne for ligne in journal]).execute()
+    return resume

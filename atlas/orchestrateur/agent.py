@@ -80,6 +80,8 @@ def surcharges_thread(conversation_id: str, projet: str | None = None, projet_id
                 "env_vars": ["SUPABASE_URL", "SUPABASE_SECRET_KEY"],
                 # Le dossier de la session : les images des figures y sont lues (chemins relatifs à lui).
                 "env": {"ATLAS_CONVERSATION_ID": conversation_id, "ATLAS_DOSSIER_SESSION": str(session), **graphe},
+                # Plusieurs agents qui démarrent ensemble lancent chacun ce serveur : 10 s par défaut ne suffisent pas.
+                "startup_timeout_sec": 60,
             },
             "verificateur": {
                 "command": sys.executable,
