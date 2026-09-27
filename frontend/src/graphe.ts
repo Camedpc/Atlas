@@ -127,7 +127,7 @@ export class VueGraphe {
   private estompes: Set<string> | null = null
   /** Conversation du filtre « Cette conversation » (null : pas de filtre). */
   private conversationFiltre: string | null = null
-  /** Filtre du pilotage (agent navigateur) : un nœud qui ne passe pas est estompé. */
+  /** Filtre du pilotage (voix, parcours) : un nœud qui ne passe pas est estompé. */
   private filtrePilotage: ((n: Noeud) => boolean) | null = null
   private surlignes: Set<string> | null = null
   private animCamera: Animation | null = null
@@ -351,7 +351,7 @@ export class VueGraphe {
     this.aide.hidden = !this.aide.hidden
   }
 
-  // ─── Pilotage (agent navigateur, pilotage/adaptateurVue.ts) ────────────────
+  // ─── Pilotage (voix et parcours, pilotage/adaptateurVue.ts) ───────────────
   // Tout passe par les ids de nœud ; la vue (cases, cadres) n'est jamais modifiée.
 
   get noeuds(): readonly Noeud[] {

@@ -37,7 +37,14 @@ prompts dans `atlas/orchestrateur/prompts/*.md` : c'est Camille qui les fait év
   bande d'incertitude) et/ou une image (bucket privé Supabase Storage « figures », servie par
   `/api/figures/{id}/image`, renvoyée en bloc image par l'outil MCP `lire_figure` : Codex la montre au modèle).
   Sa case est dans sa propre ligne (`colonne`, `ligne`…) ; dans `vue.py` elle est un pseudo-nœud `fig:<id>` dont la
-  prémisse est son nœud, et elle remonte au cadre parent si le sien est trop serré (`placer_figure`).
+  prémisse est son nœud, et elle remonte au cadre parent si le sien est trop serré (`placer_figure`). Quatre formats
+  seulement (`FORMATS_FIGURE`) : 1 × 1, 2 × 1, 1 × 2 ou 2 × 2 cases, 2 × 2 par défaut.
+- Repères et parcours (`atlas/navigation.py`, pur) : la numérotation de l'écran (« Lemme 7 », « §1.2 »,
+  « Figure 2 ») recopie `construireModele` de `graphe-modele.ts` ; un jeu commun (`tests/donnees/reperes.json`) est
+  vérifié des deux côtés, à garder à jour si l'une change. Un parcours (`atlas/parcours.py`) est un fichier JSON
+  dans `docs_session/parcours/` de la session, annoncé par un message `systeme` (`donnees.type = "parcours"`) :
+  pas de table, et il ne déplace jamais rien. Rien de purement visuel (cadrage, zoom, filtres) n'est enregistré ;
+  seul un déplacement l'est (vue de l'espace, auteur `voix`).
 - `noeuds.parents` / `noeuds.enfants` (parents = prémisses) sont maintenus par trigger depuis `demonstrations` :
   ne jamais les écrire. `noeuds.conversation_id` dit seulement qui a créé le nœud.
 - Un graphe par espace : `noeuds`, `demonstrations` et `journal` portent `projet_id` (non nul, « defaut » pour
@@ -138,7 +145,15 @@ message), Gradium STT/TTS (`GRADIUM_API_KEY`, 3 sessions max en offre gratuite �
 conversation via le serveur MCP `voix` (qui rappelle `atlas.serveur`, `ATLAS_URL_INTERNE`) et reçoit ses étapes par
 `gestionnaire.abonner` ; au raccrochage, `gestionnaire.deposer_pont` ajoute la transcription au prochain tour.
 Sous `ATLAS_BUNKER=1`, un outil MCP sans `default_tools_approval_mode = "approve"` est refusé ou invisible
-(approval never) : la voix le pose sur ses serveurs. Transcription dans `messages` sous l'agent `/voix`. Affichage (`atlas/voix/affichage.py`) : l'outil `afficher` crée une tâche `navigateur` dans le registre d'AtlasVoice (`ATLAS_AFFICHAGE_URL`, P1) et la suit jusqu'à sa fin ; questions et résultats reviennent en messages [Affichage]. Côté front, `pilotage/` (actif seulement avec `VITE_AFFICHAGE_URL`) exécute les commandes P3 sur la vue et exporte son état P4 ; contrat commun dans `protocoles/`. Lecture de la voix par boucle WebRTC locale
+(approval never) : la voix le pose sur ses serveurs. Transcription dans `messages` sous l'agent `/voix`.
+Écran du graphe (`atlas/voix/ecran.py`) : la voix le pilote elle-même (outils `montrer`, `vue_d_ensemble`,
+`zoomer`, `effacer_ecran`, `lire_ecran`, `deplacer`) ; les références sont résolues côté serveur
+(`navigation.py`), et les lots de commandes (P3) comme l'état de l'écran (P4) passent par la WebSocket de l'appel
+(messages `commandes`, `compte_rendu`, `ecran`), exécutés par `pilotage/` (contrat dans `protocoles/`, origine
+`voix`). Parcours : l'agent navigateur (rôle `navigateur` de l'orchestrateur, ou tâche de la voix
+`preparer_parcours`, prompt `prompts/navigateur.md`) les pose par `poser_parcours` ; la voix les joue par
+`jouer_etape`, le front par la carte « Parcours » du fil (`parcours.ts`). Le registre et le relais d'AtlasVoice ne
+servent plus à Atlas. Lecture de la voix par boucle WebRTC locale
 (`voix.ts`) : en sortie Web Audio directe, l'annulation d'écho de Chrome décroche après des interruptions et la
 voix s'entend en boucle. Gradium : 300 s max par session STT (renouvelée au silence, `ATLAS_VOIX_STT_DUREE`).
 
@@ -181,8 +196,6 @@ L'ancien backend agents (chercheur, vérificateur) reste lisible via `git show 1
   sur des chemins (`git checkout -- atlas/`).
 - Une migration qui fait un `update` sur `conversations` déclenche `toucher_modifie_le` et brouille l'ordre des
   sessions : couper le trigger le temps de l'`update` (voir `20260927030000_projets_dates.sql`).
-- La migration `20260927000000_taches_navigation` (couche vocale) est dans Supabase mais pas dans ce dépôt : pour
-  `db push`, travailler dans une copie de `supabase/` qui contient un fichier vide portant ce nom (`--workdir`).
 - Le dépôt est sous OneDrive : en cas d'erreur EPERM/EBUSY sur `node_modules`, suspecter la synchro.
 - `prototypes/graphe-3d/` n'a pas de proxy `/api` : il tourne sur des données synthétiques. Lire
   `prototypes/graphe-3d/src/core/README.md` avant de toucher au moteur sigma.
