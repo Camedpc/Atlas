@@ -1,0 +1,14 @@
+{
+  "id": "r34-latex-tcolorbox",
+  "titre": "R34 · LaTeX · tcolorbox",
+  "resume": "Le schéma technique de R14 (fontaine de chaîne par défaut) tel qu'il serait composé en LaTeX : chaque énoncé est une tcolorbox de notes de cours (bandeau « Lemme 3 — Tension au point de prise », formule extraite de l'énoncé et composée par KaTeX, partie basse avec renvois, bornes et confiance), couleurs xcolor par famille sur fond !5, sous-problèmes en tcolorbox englobantes à titre attaché (les boîtes « Comment » de Blueprint), liaisons orthogonales fines de R14, en-tête des rangs façon booktabs, Latin Modern.",
+  "idees": [
+    "Nœud = tcolorbox : bandeau de titre numéroté par environnement (Lemme 3, Proposition 2, Hypothèse (H1)…), corps, partie basse (tcblower)",
+    "Formules extraites des énoncés Unicode par une règle générique et composées en display avec KaTeX (fractions, indices, gras, unités)",
+    "Familles xcolor : orange!70!black hypothèses, blue!50!black lemmes, red!50!black résultats, green!40!black observations, violet!60!black décisions ; fond !5",
+    "Sous-problèmes regroupés en bandes et encadrés par une tcolorbox englobante à titre attaché (boîtes « Comment » d'Unreal)",
+    "Statut par le trait du cadre comme R14 : continu validé, tireté à vérifier, barré réfuté, pointillé gris abandonné",
+    "En-tête des rangs et cartouche en tableaux booktabs (toprule, cmidrule, midrule), texte en Latin Modern"
+  ],
+  "ordre": 34
+}

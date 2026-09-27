@@ -1,0 +1,408 @@
+/* R38 · LaTeX classique : noir sur blanc, Computer Modern (CMU) et KaTeX, traits fins, un seul bleu. */
+
+/* Computer Modern Unicode (paquet npm « computer-modern », servi par jsDelivr). Déclarations propres :
+   celles du paquet utilisent « font-style: roman », qui n'est pas une valeur CSS valide. */
+@font-face {
+  font-family: 'R38 CMU Serif';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('https://cdn.jsdelivr.net/npm/computer-modern@0.1.2/fonts/cmu-serif-500-roman.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'R38 CMU Serif';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url('https://cdn.jsdelivr.net/npm/computer-modern@0.1.2/fonts/cmu-serif-500-italic.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'R38 CMU Serif';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('https://cdn.jsdelivr.net/npm/computer-modern@0.1.2/fonts/cmu-serif-700-roman.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'R38 CMU Serif';
+  font-style: italic;
+  font-weight: 700;
+  font-display: swap;
+  src: url('https://cdn.jsdelivr.net/npm/computer-modern@0.1.2/fonts/cmu-serif-700-italic.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'R38 CMU Typewriter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('https://cdn.jsdelivr.net/npm/computer-modern@0.1.2/fonts/cmu-typewriter-text-500-roman.woff2') format('woff2');
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: #ffffff;
+}
+#app {
+  position: fixed;
+  inset: 0;
+}
+.retour {
+  position: fixed;
+  top: 18px;
+  left: 56px;
+  font: 13px 'R38 CMU Serif', 'KaTeX_Main', serif;
+  color: #555555;
+  text-decoration: none;
+  z-index: 5;
+}
+.retour:hover {
+  color: #1f4aa8;
+}
+body:has(.rsn-vue.panneau-ouvert) .retour {
+  display: none;
+}
+
+/* Palette : l'information passe par le trait et la typographie ; tout le reste en gris neutres. */
+.rsn-vue {
+  --r38-serif: 'R38 CMU Serif', 'KaTeX_Main', 'Latin Modern Roman', 'Times New Roman', serif;
+  --police: var(--r38-serif);
+  --fond: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f2f2f2;
+  --bord: #d4d4d4;
+  --ombre: 0 1px 3px rgba(0, 0, 0, 0.12);
+  --texte: #111111;
+  --texte-doux: #5c5c5c;
+  --accent: #1f4aa8;
+  --arete: #1a1a1a;
+  --arete-complete: #bdbdbd;
+  --ancetre: #111111;
+  --descendant: #1f4aa8;
+  --contredit: #111111;
+  --statut-valide: #2b2b2b;
+  --statut-incertain: #7a7a7a;
+  --statut-refute: #111111;
+  --validation-aucune: #b3b3b3;
+  --validation-ia: #6b6b6b;
+  --validation-humain: #2b2b2b;
+  --validation-ia-humain: #111111;
+  --origine-humain: #2b2b2b;
+  --origine-ia: #6b6b6b;
+  --origine-ordinateur: #8c8c8c;
+  --role-principale: #111111;
+  --role-auxiliaire: #6b6b6b;
+  --role-technique: #8c8c8c;
+  --role-contexte: #bdbdbd;
+  --couche-0: #4d4d4d;
+  --couche-1: #7d7d7d;
+  --couche-2: #2e2e2e;
+  --couche-3: #3b3b3b;
+  --couche-4: #5c5c5c;
+  --couche-5: #6e6e6e;
+  --couche-6: #111111;
+  --sp-0: #4d4d4d;
+  --sp-1: #666666;
+  --sp-2: #7d7d7d;
+  --sp-3: #2e2e2e;
+  --sp-4: #8c8c8c;
+  font-family: var(--r38-serif);
+}
+
+/* Interface commune : angles vifs, filets fins. */
+.rsn-vue .rsn-fiche,
+.rsn-vue .rsn-barre,
+.rsn-vue .rsn-compteur,
+.rsn-vue .rsn-bouton,
+.rsn-vue .rsn-barre button {
+  border-radius: 0;
+}
+.rsn-vue .rsn-compteur-texte {
+  font-size: 12px;
+}
+
+/* ─── Couche de texte composé (au-dessus du canevas, sous l'interface) ─── */
+
+.r38-couche {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  font-family: var(--r38-serif, 'R38 CMU Serif', 'KaTeX_Main', serif);
+  color: #111111;
+  line-height: 1.22;
+  font-kerning: normal;
+  text-rendering: optimizeLegibility;
+}
+.r38-mesure {
+  position: absolute;
+  inset: auto;
+  left: -10000px;
+  top: 0;
+  visibility: hidden;
+  font-family: 'R38 CMU Serif', 'KaTeX_Main', 'Latin Modern Roman', 'Times New Roman', serif;
+  line-height: 1.22;
+}
+.r38-point {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  transform-origin: 0 0;
+}
+.r38-point > div {
+  position: absolute;
+  box-sizing: border-box;
+}
+.r38-mesure > div {
+  box-sizing: border-box;
+}
+.r38-couche .katex,
+.r38-mesure .katex,
+.r38-fiche .katex,
+.r38-panneau .katex {
+  font-size: 1em;
+  line-height: 1.2;
+  text-rendering: auto;
+}
+.r38-math-brut {
+  font-style: italic;
+}
+
+/* Bloc d'énoncé : environnement de théorème (amsthm, style « plain »). */
+.r38-corps {
+  padding: 5px 7px 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow: hidden;
+}
+.r38-tete {
+  hyphens: auto;
+  overflow-wrap: break-word;
+}
+.r38-env {
+  font-weight: 700;
+}
+.r38-note {
+  color: #5c5c5c;
+  font-size: 0.88em;
+}
+.r38-eq {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  min-height: 1.6em;
+  margin: 1px 0;
+  padding: 0 1.9em;
+  white-space: nowrap;
+}
+.r38-eq-f {
+  display: inline-block;
+}
+.r38-eq-n {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+}
+.r38-pied {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 6px;
+  margin-top: auto;
+  font-size: 0.8em;
+  color: #333333;
+  white-space: nowrap;
+}
+.r38-val {
+  color: #5c5c5c;
+  letter-spacing: 0.02em;
+}
+.r38-abandon .r38-corps,
+.r38-abandon .r38-dec-libelle {
+  color: #6b6b6b;
+}
+
+/* Hypothèse de modélisation : boîte grisée, énoncé en italique. */
+.r38-spec .r38-spec-texte {
+  font-style: italic;
+  font-size: 0.9em;
+  hyphens: auto;
+}
+.r38-spec .r38-spec-texte .katex {
+  font-style: normal;
+}
+.r38-spec .r38-pied {
+  justify-content: flex-end;
+  color: #5c5c5c;
+}
+.r38-actif .r38-env,
+.r38-cite .r38-env,
+.r38-choisi .r38-env {
+  color: #1f4aa8;
+}
+
+/* Décision : libellé au-dessus du losange, alternative non retenue en dessous. */
+.r38-dec-libelle {
+  text-align: center;
+  font-style: italic;
+  hyphens: auto;
+}
+.r38-dec-libelle .katex {
+  font-style: normal;
+}
+.r38-dec-rejet {
+  text-align: center;
+  font-size: 0.82em;
+  color: #6b6b6b;
+  hyphens: auto;
+}
+
+/* Légende de la figure, sous le schéma (\caption, corps \small). */
+.r38-legende-figure {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  font-size: 0.92em;
+  line-height: 1.3;
+  text-align: justify;
+  hyphens: auto;
+  color: #111111;
+}
+.r38-legende-figure[hidden] {
+  display: none;
+}
+.r38-legende-num {
+  font-weight: 400;
+}
+
+/* ─── Fiche de survol : corps de théorème ─── */
+
+.rsn-vue .r38-fiche {
+  font-family: var(--r38-serif);
+  font-size: 13.5px;
+}
+.r38-fiche .rsn-fiche-titre {
+  font-weight: 400;
+}
+.r38-fiche .rsn-fiche-enonce {
+  font-style: italic;
+  line-height: 1.35;
+}
+.r38-fiche .rsn-fiche-enonce .katex {
+  font-style: normal;
+}
+.r38-fiche .r38-affichee .katex-display {
+  margin: 0.45em 0;
+}
+.r38-fiche-bandeau {
+  margin: -2px 0 8px;
+  padding: 2px 0 3px;
+  border-bottom: 0.8px solid var(--texte);
+  color: var(--texte);
+  font-size: 12px;
+  font-style: italic;
+}
+
+/* ─── Panneau ☰ ─── */
+
+.r38-panneau {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13px;
+}
+.r38-niveaux {
+  display: flex;
+  gap: 4px;
+}
+.r38-niveaux .rsn-bouton {
+  margin: 0;
+  flex: 1;
+}
+.r38-niveaux .rsn-bouton.actif {
+  background: var(--texte);
+  border-color: var(--texte);
+  color: var(--surface);
+}
+/* Tableau à la booktabs : filets haut et bas plus épais, pas de filets verticaux. */
+.r38-tableau {
+  display: flex;
+  flex-direction: column;
+  border-top: 1.2px solid var(--texte);
+  border-bottom: 1.2px solid var(--texte);
+  padding: 2px 0;
+}
+.r38-ligne {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 0;
+  color: var(--texte);
+}
+.r38-valeur {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.r38-liste-hyp {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.r38-hyp {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.r38-ref {
+  font-weight: 700;
+  min-width: 30px;
+}
+.r38-hyp-nom {
+  flex: 1;
+  min-width: 0;
+}
+.r38-legende {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--texte-doux);
+  line-height: 1.4;
+}
+.r38-legende b {
+  color: var(--texte);
+  font-weight: 700;
+}
+
+/* Sélecteur de jeu : sous le lien « catalogue ». */
+.r38-jeu {
+  position: fixed;
+  top: 56px;
+  left: 12px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px 2px 8px;
+  border: 0.8px solid #111111;
+  background: #ffffff;
+  font-family: 'R38 CMU Serif', 'KaTeX_Main', serif;
+  font-size: 13px;
+  font-style: italic;
+  color: #111111;
+}
+.r38-jeu select {
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-style: normal;
+  color: inherit;
+  cursor: pointer;
+}

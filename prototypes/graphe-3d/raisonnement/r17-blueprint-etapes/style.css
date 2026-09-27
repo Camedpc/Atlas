@@ -1,0 +1,433 @@
+/* R17 · Blueprint · blocs de raisonnement : feuille de R14, couleurs par famille (en-têtes, broches), par rôle
+   (fils) et par genre de bloc (cadres « Comment ») ; orange pour la sélection. Pas de halo ni d'animation. */
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: #fcfcfb;
+}
+#app {
+  position: fixed;
+  inset: 0;
+}
+.retour {
+  position: fixed;
+  top: 18px;
+  left: 56px;
+  font: 12px system-ui, sans-serif;
+  color: #62676f;
+  text-decoration: none;
+  z-index: 5;
+}
+.retour:hover {
+  color: #e8590c;
+}
+body:has(.rsn-vue.panneau-ouvert) .retour {
+  display: none;
+}
+body:has(.rsn-vue[data-theme='sombre']) {
+  background: #121417;
+}
+
+/* Palette : familles (en-têtes, broches), rôles (fils), genres de blocs (cadres), sélection orange. */
+.rsn-vue {
+  --r17-mono: 'JetBrains Mono', ui-monospace, 'Cascadia Mono', 'SF Mono', Consolas, monospace;
+  --fond: #fcfcfb;
+  --surface: #ffffff;
+  --surface-2: #f2f3f4;
+  --bord: #d3d6da;
+  --ombre: 0 1px 2px rgba(20, 22, 26, 0.08);
+  --texte: #16181c;
+  --texte-doux: #62676f;
+  --accent: #e8590c;
+  --arete: #2d3440;
+  --arete-complete: #b9bdc4;
+  --ancetre: #16181c;
+  --descendant: #e8590c;
+  --contredit: #16181c;
+  --statut-valide: #2f855a;
+  --statut-incertain: #c27c0e;
+  --statut-refute: #c53030;
+  --validation-aucune: #b0b4ba;
+  --validation-ia: #62676f;
+  --validation-humain: #2e3238;
+  --validation-ia-humain: #16181c;
+  --origine-humain: #2e3238;
+  --origine-ia: #62676f;
+  --origine-ordinateur: #8a8f97;
+  --r17-texte-en-tete: #ffffff;
+  /* Familles de nœuds. */
+  --r17-f-modele: #6b46c1;
+  --r17-f-decision: #b83280;
+  --r17-f-deduction: #2b6cb0;
+  --r17-f-enonce: #1e3a8a;
+  --r17-f-empirique: #0f7c82;
+  --r17-f-calcul: #3f7d20;
+  --r17-f-resultat: #1f2430;
+  /* Rôles des prémisses (fils). */
+  --r17-r-principale: #2d3440;
+  --r17-r-auxiliaire: #c27c0e;
+  --r17-r-technique: #9c6b4e;
+  --r17-r-contexte: #a3aab4;
+  --role-principale: var(--r17-r-principale);
+  --role-auxiliaire: var(--r17-r-auxiliaire);
+  --role-technique: var(--r17-r-technique);
+  --role-contexte: var(--r17-r-contexte);
+  /* Genres de blocs (cadres « Comment »). */
+  --r17-e-modele: #6b46c1;
+  --r17-e-modelisation: #6b46c1;
+  --r17-e-decision: #b83280;
+  --r17-e-derivation: #2b6cb0;
+  --r17-e-conditions: #4c51bf;
+  --r17-e-prediction: #0e7490;
+  --r17-e-consequence: #0e7490;
+  --r17-e-confrontation: #2f855a;
+  --r17-e-calcul: #3f7d20;
+  --r17-e-conclusion: #1f2430;
+  --r17-e-abandon: #8a9099;
+  /* Couches de la vue 3D : couleurs des familles. */
+  --couche-0: #6b46c1;
+  --couche-1: #8b6fd0;
+  --couche-2: #b83280;
+  --couche-3: #2b6cb0;
+  --couche-4: #0f7c82;
+  --couche-5: #3f7d20;
+  --couche-6: #1f2430;
+  --sp-0: #4a4f57;
+  --sp-1: #62676f;
+  --sp-2: #7b8089;
+  --sp-3: #2e3238;
+  --sp-4: #8a8f97;
+}
+.rsn-vue[data-theme='sombre'] {
+  --fond: #121417;
+  --surface: #181b1f;
+  --surface-2: #20242a;
+  --bord: #33383f;
+  --texte: #e4e6ea;
+  --texte-doux: #9ba0a8;
+  --accent: #ff8a3d;
+  --arete: #c9ced6;
+  --arete-complete: #4a4f57;
+  --ancetre: #e4e6ea;
+  --descendant: #ff8a3d;
+  --contredit: #e4e6ea;
+  --validation-ia: #9ba0a8;
+  --validation-humain: #c9ced6;
+  --validation-ia-humain: #e4e6ea;
+  --r17-texte-en-tete: #101216;
+  --r17-f-modele: #a78bfa;
+  --r17-f-decision: #f472b6;
+  --r17-f-deduction: #6aa6f0;
+  --r17-f-enonce: #9db8ff;
+  --r17-f-empirique: #3cc8c0;
+  --r17-f-calcul: #8cc863;
+  --r17-f-resultat: #d7dbe2;
+  --r17-r-principale: #c9ced6;
+  --r17-r-auxiliaire: #f0b44c;
+  --r17-r-technique: #c79a7a;
+  --r17-r-contexte: #6b727c;
+  --r17-e-modele: #a78bfa;
+  --r17-e-modelisation: #a78bfa;
+  --r17-e-decision: #f472b6;
+  --r17-e-derivation: #6aa6f0;
+  --r17-e-conditions: #8f94f5;
+  --r17-e-prediction: #3fb8d6;
+  --r17-e-consequence: #3fb8d6;
+  --r17-e-confrontation: #5fc58a;
+  --r17-e-calcul: #8cc863;
+  --r17-e-conclusion: #d7dbe2;
+  --r17-e-abandon: #7b8089;
+  --couche-0: #a78bfa;
+  --couche-1: #c4b1fb;
+  --couche-2: #f472b6;
+  --couche-3: #6aa6f0;
+  --couche-4: #3cc8c0;
+  --couche-5: #8cc863;
+  --couche-6: #d7dbe2;
+}
+
+/* Interface commune : angles vifs, comme la feuille. */
+.rsn-vue .rsn-fiche,
+.rsn-vue .rsn-barre,
+.rsn-vue .rsn-compteur,
+.rsn-vue .rsn-bouton,
+.rsn-vue .rsn-barre button {
+  border-radius: 3px;
+}
+.rsn-vue .rsn-compteur-texte {
+  font-family: var(--r17-mono);
+  font-size: 11px;
+}
+
+/* Cartouche : bas droit, à gauche des réglages. */
+.r17-cartouche {
+  position: absolute;
+  right: 314px;
+  bottom: 12px;
+  width: 330px;
+  background: var(--surface);
+  border: 1.5px solid var(--texte);
+  color: var(--texte);
+  font-family: var(--r17-mono);
+  font-size: 10.5px;
+  line-height: 1.25;
+  pointer-events: none;
+}
+.r17-cartouche[hidden] {
+  display: none;
+}
+.r17-cartouche-titre {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 5px 7px 6px;
+  border-bottom: 1px solid var(--texte);
+}
+.r17-cartouche-nom {
+  font-family: var(--police);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.r17-cartouche-grille {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+.r17-champ {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 3px 7px 4px;
+  border-bottom: 1px solid var(--bord);
+  min-width: 0;
+}
+.r17-champ:nth-child(odd) {
+  border-right: 1px solid var(--bord);
+}
+.r17-champ:nth-last-child(-n + 2) {
+  border-bottom: none;
+}
+.r17-champ-nom {
+  font-size: 8.5px;
+  letter-spacing: 0.06em;
+  color: var(--texte-doux);
+}
+.r17-champ-valeur {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@media (max-width: 900px) {
+  .r17-cartouche {
+    display: none;
+  }
+}
+
+/* Panneau ☰. */
+.r17-panneau {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12px;
+}
+.r17-niveaux {
+  display: flex;
+  gap: 4px;
+}
+.r17-niveaux .rsn-bouton {
+  margin: 0;
+  flex: 1;
+}
+.r17-niveaux .rsn-bouton.actif {
+  background: var(--texte);
+  border-color: var(--texte);
+  color: var(--surface);
+}
+.r17-nomenclature {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--bord);
+}
+.r17-ligne {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 3px 0;
+  border-bottom: 1px solid var(--bord);
+  color: var(--texte-doux);
+}
+.r17-valeur {
+  font-family: var(--r17-mono);
+  font-size: 11px;
+  color: var(--texte);
+  white-space: nowrap;
+}
+.r17-liste-hyp {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.r17-hyp {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.r17-ref {
+  font-family: var(--r17-mono);
+  font-size: 11px;
+  font-weight: 700;
+  min-width: 22px;
+}
+.r17-hyp-nom {
+  flex: 1;
+  min-width: 0;
+}
+.r17-legende {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--texte-doux);
+  line-height: 1.45;
+}
+.r17-legende b {
+  color: var(--texte);
+  font-weight: 600;
+}
+.r17-fiche-bandeau {
+  --c: var(--texte);
+  margin: -2px 0 8px;
+  padding: 3px 6px;
+  border: 1px solid color-mix(in srgb, var(--c) 45%, transparent);
+  background: color-mix(in srgb, var(--c) 10%, var(--surface));
+  color: var(--texte);
+  font-family: var(--r17-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+  border-radius: 3px;
+}
+
+/* Blocs de raisonnement (panneau). */
+.r17-blocs {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.r17-bloc {
+  --c: var(--texte-doux);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 4px 6px;
+  border: 1px solid color-mix(in srgb, var(--c) 30%, transparent);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--c) 6%, var(--surface));
+  color: var(--texte);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.r17-bloc:hover {
+  border-color: color-mix(in srgb, var(--c) 70%, transparent);
+  background: color-mix(in srgb, var(--c) 12%, var(--surface));
+}
+.r17-pastille {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--c) 22%, transparent);
+  border: 1px solid var(--c);
+}
+.r17-bloc-ref {
+  flex: none;
+  min-width: 22px;
+  font-family: var(--r17-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--c);
+}
+.r17-bloc-texte {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.r17-bloc-genre {
+  font-family: var(--r17-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--c);
+}
+.r17-bloc-tete {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Légende des couleurs. */
+.r17-legende-titre {
+  margin-top: 2px;
+  font-family: var(--r17-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--texte-doux);
+}
+.r17-legende-grille {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2px 8px;
+  color: var(--texte);
+}
+.r17-legende-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.r17-broche {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--c);
+}
+.r17-fil {
+  flex: none;
+  width: 22px;
+  height: 0;
+  border-top: 2px solid var(--c);
+}
+.r17-fil.tirete {
+  border-top-style: dashed;
+}
+
+/* Sélecteur de jeu : sous le lien « catalogue », au style du cartouche. */
+.r17-jeu {
+  position: fixed;
+  top: 56px;
+  left: 12px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 4px 3px 8px;
+  border: 1px solid var(--texte);
+  background: var(--surface);
+  font-family: var(--r17-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  color: var(--texte);
+}
+.r17-jeu select {
+  border: 0;
+  background: transparent;
+  font: inherit;
+  letter-spacing: 0;
+  color: inherit;
+  cursor: pointer;
+}

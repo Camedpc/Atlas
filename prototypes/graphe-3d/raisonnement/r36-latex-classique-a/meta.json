@@ -1,0 +1,14 @@
+{
+  "id": "r36-latex-classique-a",
+  "titre": "R36 · LaTeX classique (essai A)",
+  "resume": "Le schéma R14 composé comme une figure d'article de physique : Computer Modern, en-têtes façon amsthm (« Lemme 7 (titre). »), énoncés physiques en vraies formules (extraites par une règle générique, composées par KaTeX), confiance en notation d'incertitude (c = 0,82 avec les bornes en exposant et en indice), traits fins et pointes LaTeX, axe des rangs logiques, accolades des zones, légende « Figure 1 – … » sous la figure. Noir sur blanc, un seul bleu pour l'interaction.",
+  "idees": [
+    "Formules affichées dans chaque bloc : v² = g h₂/(1 − α − β) devient une vraie fraction, par une règle générique (mots « forts » / « faibles », relation, conversion Unicode → LaTeX)",
+    "En-têtes amsthm (« Théorème 12 (Loi de la fontaine). »), compteur commun, hypothèses H1… et décisions D1…",
+    "Statut par le trait comme R14 : plein = validé, tireté = à vérifier, barré = réfuté ; double cadre pour un résultat",
+    "Confiance écrite comme une incertitude de physique : c = 0,82 avec les bornes en exposant et en indice",
+    "Figure complète : axe « rang logique r » gradué, accolades des zones (Modélisation, Prémisses, Déduction, Résultats), légende de figure qui remplace le cartouche",
+    "Fiche et panneau composés en Computer Modern, énoncé complet avec mathématiques en ligne, tableau façon booktabs"
+  ],
+  "ordre": 36
+}

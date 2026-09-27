@@ -1,0 +1,410 @@
+/* R33 · LaTeX · diagramme tikz-cd : noir sur blanc, Latin Modern, aucune boîte autour des nœuds. */
+
+@font-face {
+  font-family: 'Latin Modern Roman';
+  font-style: normal;
+  font-weight: normal;
+  font-display: swap;
+  src: url('https://cdn.jsdelivr.net/npm/latex.css@1.12.0/fonts/LM-regular.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Latin Modern Roman';
+  font-style: italic;
+  font-weight: normal;
+  font-display: swap;
+  src: url('https://cdn.jsdelivr.net/npm/latex.css@1.12.0/fonts/LM-italic.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Latin Modern Roman';
+  font-style: normal;
+  font-weight: bold;
+  font-display: swap;
+  src: url('https://cdn.jsdelivr.net/npm/latex.css@1.12.0/fonts/LM-bold.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Latin Modern Roman';
+  font-style: italic;
+  font-weight: bold;
+  font-display: swap;
+  src: url('https://cdn.jsdelivr.net/npm/latex.css@1.12.0/fonts/LM-bold-italic.woff2') format('woff2');
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: #ffffff;
+}
+#app {
+  position: fixed;
+  inset: 0;
+}
+.retour {
+  position: fixed;
+  top: 18px;
+  left: 56px;
+  font: 13px 'Latin Modern Roman', 'KaTeX_Main', Georgia, serif;
+  color: #6b6f76;
+  text-decoration: none;
+  z-index: 5;
+}
+.retour:hover {
+  color: #111111;
+  text-decoration: underline;
+}
+body:has(.rsn-vue.panneau-ouvert) .retour {
+  display: none;
+}
+
+/* Palette : noir, gris ; aucune couleur d'accent (la mise en évidence passe par la graisse). */
+.rsn-vue {
+  --r33-lm: 'Latin Modern Roman', 'KaTeX_Main', 'CMU Serif', 'Times New Roman', serif;
+  --fond: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f4f4f2;
+  --bord: #d9d9d5;
+  --ombre: none;
+  --texte: #111111;
+  --texte-doux: #6b6f76;
+  --accent: #111111;
+  --arete: #111111;
+  --arete-complete: #c4c6ca;
+  --ancetre: #111111;
+  --descendant: #111111;
+  --contredit: #111111;
+  --statut-valide: #2e3238;
+  --statut-incertain: #7a7f88;
+  --statut-refute: #111111;
+  --validation-aucune: #b0b4ba;
+  --validation-ia: #6b6f76;
+  --validation-humain: #2e3238;
+  --validation-ia-humain: #111111;
+  --origine-humain: #2e3238;
+  --origine-ia: #6b6f76;
+  --origine-ordinateur: #8a8f97;
+  --role-principale: #111111;
+  --role-auxiliaire: #6b6f76;
+  --role-technique: #8a8f97;
+  --role-contexte: #c4c6ca;
+  --couche-0: #4a4f57;
+  --couche-1: #7b8089;
+  --couche-2: #2e3238;
+  --couche-3: #3a3e45;
+  --couche-4: #5a5f68;
+  --couche-5: #6b7079;
+  --couche-6: #111111;
+  --sp-0: #4a4f57;
+  --sp-1: #62676f;
+  --sp-2: #7b8089;
+  --sp-3: #2e3238;
+  --sp-4: #8a8f97;
+}
+
+.rsn-vue .rsn-barre,
+.rsn-vue .rsn-compteur,
+.rsn-vue .rsn-bouton,
+.rsn-vue .rsn-barre button {
+  border-radius: 0;
+}
+
+/* ─── Calque typographique ─────────────────────────────────────────────────── */
+
+.r33-calque {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  font-family: var(--r33-lm);
+  font-size: var(--r33-corps, 15px);
+  color: var(--texte);
+  line-height: 1.2;
+}
+.r33-el {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  white-space: nowrap;
+  visibility: hidden;
+}
+.r33-calque .katex {
+  font-size: 1.1em;
+}
+.r33-noeud {
+  padding: 1px 2px;
+  text-align: center;
+}
+.r33-nom {
+  display: inline-block;
+  max-width: 11em;
+  white-space: normal;
+  text-align: center;
+}
+.r33-sc {
+  font-variant: small-caps;
+  letter-spacing: 0.02em;
+}
+.r33-noeud.majeur .r33-nom {
+  font-weight: bold;
+}
+.r33-noeud.abandon,
+.r33-entree.abandon {
+  color: var(--texte-doux);
+}
+.r33-noeud.refute .r33-nom,
+.r33-noeud.refute .r33-math {
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+.r33-replie {
+  margin-left: 0.15em;
+  font-size: 0.62em;
+  color: var(--texte-doux);
+}
+.r33-source {
+  font-style: italic;
+}
+/* Mise en gras au survol : épaississement du trait des glyphes (formules KaTeX comprises). */
+.r33-el.gras {
+  -webkit-text-stroke: 0.45px currentColor;
+}
+
+/* Étiquettes de flèches : \scriptstyle (≈ 0,7 du corps). */
+.r33-etiq {
+  max-width: 14em;
+  font-size: 0.72em;
+  line-height: 1.15;
+  text-align: center;
+  white-space: normal;
+}
+.r33-etiq .katex {
+  font-size: 1em;
+}
+.r33-reperes {
+  white-space: nowrap;
+  letter-spacing: 0.01em;
+}
+.r33-rejetees {
+  max-width: 12em;
+  color: var(--texte-doux);
+  font-style: italic;
+}
+.r33-rejetees > div + div {
+  margin-top: 0.15em;
+}
+.r33-lien {
+  font-style: italic;
+  color: var(--texte-doux);
+}
+
+/* Légende « où : » et légende de figure. */
+.r33-legende-titre {
+  font-style: italic;
+  font-size: 0.9em;
+}
+.r33-entree {
+  display: flex;
+  gap: 0.45em;
+  max-width: 22em;
+  font-size: 0.84em;
+  line-height: 1.25;
+  white-space: normal;
+}
+.r33-rep {
+  flex: none;
+  min-width: 2.4em;
+}
+.r33-entree .katex {
+  font-size: 1em;
+}
+.r33-figure {
+  max-width: 620px;
+  font-size: 0.8em;
+  line-height: 1.35;
+  white-space: normal;
+  text-align: justify;
+  hyphens: auto;
+}
+.r33-figure .katex {
+  font-size: 1em;
+}
+
+/* ─── Fiche (au clic) ──────────────────────────────────────────────────────── */
+
+.r33-fiche {
+  position: absolute;
+  width: 380px;
+  max-width: calc(100% - 24px);
+  max-height: calc(100% - 90px);
+  overflow: auto;
+  padding: 12px 16px 14px;
+  background: var(--surface);
+  border: 1px solid var(--texte);
+  color: var(--texte);
+  font-family: var(--r33-lm);
+  font-size: 14px;
+  line-height: 1.4;
+  z-index: 30;
+}
+.r33-fiche[hidden] {
+  display: none;
+}
+.r33-fiche-fermer {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  border: 0;
+  background: none;
+  font: 18px/1 var(--r33-lm);
+  color: var(--texte-doux);
+  cursor: pointer;
+}
+.r33-fiche-fermer:hover {
+  color: var(--texte);
+}
+.r33-fiche-type {
+  padding-right: 18px;
+  font-variant: small-caps;
+  letter-spacing: 0.03em;
+  color: var(--texte-doux);
+}
+.r33-fiche-titre {
+  margin-top: 2px;
+  font-size: 16px;
+  font-weight: bold;
+}
+.r33-fiche-formule {
+  display: block;
+  margin: 8px 0 4px;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.r33-fiche-enonce {
+  margin: 6px 0 8px;
+}
+.r33-fiche p {
+  margin: 4px 0;
+}
+.r33-fiche-section {
+  margin-top: 10px;
+  padding-top: 5px;
+  border-top: 0.5px solid var(--texte);
+  font-variant: small-caps;
+  letter-spacing: 0.02em;
+}
+.r33-attributs,
+.r33-roles {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 1px 12px;
+  margin: 6px 0;
+}
+.r33-attributs dt,
+.r33-roles dt {
+  font-style: italic;
+  color: var(--texte-doux);
+}
+.r33-attributs dd,
+.r33-roles dd {
+  margin: 0;
+}
+.r33-fiche-liste {
+  margin: 4px 0;
+  padding-left: 1.3em;
+}
+.r33-alternatives .rejetee {
+  color: var(--texte-doux);
+}
+.r33-doux {
+  color: var(--texte-doux);
+}
+.r33-fiche .katex {
+  font-size: 1.05em;
+}
+
+/* ─── Panneau ☰ ────────────────────────────────────────────────────────────── */
+
+.r33-panneau {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12px;
+}
+.r33-niveaux {
+  display: flex;
+  gap: 4px;
+}
+.r33-niveaux .rsn-bouton {
+  flex: 1;
+  margin: 0;
+}
+.r33-niveaux .rsn-bouton.actif {
+  background: var(--texte);
+  border-color: var(--texte);
+  color: var(--surface);
+}
+.r33-nomenclature {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--bord);
+}
+.r33-ligne {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 3px 0;
+  border-bottom: 1px solid var(--bord);
+  color: var(--texte-doux);
+}
+.r33-valeur {
+  color: var(--texte);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.r33-glyphe .katex {
+  font-size: 1.05em;
+  color: var(--texte);
+}
+.r33-legende-panneau {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  line-height: 1.45;
+  color: var(--texte-doux);
+}
+.r33-code {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  padding: 6px;
+  border: 1px solid var(--bord);
+  font: 10.5px/1.35 ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  font-style: normal;
+  color: var(--texte);
+  background: var(--surface-2);
+  white-space: pre;
+}
+
+/* Sélecteur de jeu, sous le lien « catalogue ». */
+.r33-jeu {
+  position: fixed;
+  top: 56px;
+  left: 12px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 4px 3px 8px;
+  border: 1px solid #111111;
+  background: #ffffff;
+  font: 13px 'Latin Modern Roman', 'KaTeX_Main', Georgia, serif;
+  font-variant: small-caps;
+  color: #111111;
+}
+.r33-jeu select {
+  border: 0;
+  background: transparent;
+  font: 13px 'Latin Modern Roman', 'KaTeX_Main', Georgia, serif;
+  color: inherit;
+  cursor: pointer;
+}

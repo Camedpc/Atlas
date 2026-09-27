@@ -1,0 +1,359 @@
+/* R30 · LaTeX · figure TikZ : noir sur blanc, Computer Modern, une seule couleur (blue!60!black). */
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: #ffffff;
+}
+#app {
+  position: fixed;
+  inset: 0;
+}
+.retour {
+  position: fixed;
+  top: 18px;
+  left: 56px;
+  font: 13px 'CMU Serif', KaTeX_Main, serif;
+  color: #555555;
+  text-decoration: none;
+  z-index: 5;
+}
+.retour:hover {
+  color: #000099;
+}
+body:has(.rsn-vue.panneau-ouvert) .retour {
+  display: none;
+}
+body:has(.rsn-vue[data-theme='sombre']) {
+  background: #121417;
+}
+
+/* Palette : xcolor. black, black!50, black!25, blue!60!black. */
+.rsn-vue {
+  --r30-serif: 'CMU Serif', 'Latin Modern Roman', KaTeX_Main, 'Times New Roman', serif;
+  --r30-gris-clair: #bfbfbf;
+  --fond: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f2f2f2;
+  --bord: #d9d9d9;
+  --ombre: 0 1px 2px rgba(0, 0, 0, 0.08);
+  --texte: #000000;
+  --texte-doux: #808080;
+  --accent: #000099;
+  --arete: #000000;
+  --arete-complete: #bfbfbf;
+  --ancetre: #000000;
+  --descendant: #000099;
+  --contredit: #000000;
+  --statut-valide: #333333;
+  --statut-incertain: #808080;
+  --statut-refute: #000000;
+  --validation-aucune: #bfbfbf;
+  --validation-ia: #808080;
+  --validation-humain: #333333;
+  --validation-ia-humain: #000000;
+  --origine-humain: #333333;
+  --origine-ia: #808080;
+  --origine-ordinateur: #999999;
+  --role-principale: #000000;
+  --role-auxiliaire: #666666;
+  --role-technique: #999999;
+  --role-contexte: #bfbfbf;
+  --couche-0: #4d4d4d;
+  --couche-1: #808080;
+  --couche-2: #333333;
+  --couche-3: #404040;
+  --couche-4: #595959;
+  --couche-5: #6b6b6b;
+  --couche-6: #000000;
+  --sp-0: #4d4d4d;
+  --sp-1: #666666;
+  --sp-2: #808080;
+  --sp-3: #333333;
+  --sp-4: #999999;
+}
+.rsn-vue[data-theme='sombre'] {
+  --fond: #121417;
+  --surface: #181b1f;
+  --surface-2: #20242a;
+  --bord: #33383f;
+  --texte: #e4e6ea;
+  --texte-doux: #9ba0a8;
+  --accent: #8fa8ff;
+  --arete: #d0d3d8;
+  --arete-complete: #4a4f57;
+  --ancetre: #e4e6ea;
+  --descendant: #8fa8ff;
+  --r30-gris-clair: #4a4f57;
+}
+
+/* ─── Texte composé (calque DOM et mesure) ─────────────────────────────────── */
+
+.r30-calque {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.r30-mesure {
+  position: absolute;
+  left: -10000px;
+  top: 0;
+  width: 2000px;
+  visibility: hidden;
+  pointer-events: none;
+}
+.r30-piece {
+  position: absolute;
+  left: 0;
+  top: 0;
+  box-sizing: border-box;
+  transform-origin: 0 0;
+  font-family: 'CMU Serif', 'Latin Modern Roman', KaTeX_Main, 'Times New Roman', serif;
+  font-size: var(--r30-taille, 12.5px);
+  line-height: 1.24;
+  color: #000000;
+  text-rendering: optimizeLegibility;
+  font-kerning: normal;
+  hyphens: auto;
+  -webkit-font-smoothing: antialiased;
+}
+.r30-piece .katex {
+  font-size: 1.06em;
+}
+.r30-piece b {
+  font-weight: 700;
+}
+.r30-sc {
+  font-variant: small-caps;
+  letter-spacing: 0.03em;
+}
+.r30-note {
+  font-style: italic;
+  font-size: 0.86em;
+  color: #666666;
+}
+
+/* Nœud d'énoncé : tête amsthm, formules centrées, pied (validation, confiance). */
+.r30-bloc {
+  padding: 4px 7px 0;
+}
+.r30-tete {
+  text-align: left;
+}
+.r30-eq {
+  margin: 4px -3px 1px;
+  text-align: center;
+  white-space: nowrap;
+}
+.r30-eq + .r30-eq {
+  margin-top: 2px;
+}
+.r30-corps {
+  margin-top: 3px;
+  font-style: italic;
+  text-align: left;
+}
+.r30-corps .katex {
+  font-style: normal;
+}
+.r30-pied {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  height: 15px;
+  margin-top: 4px;
+  border-top: 0.5px solid #bfbfbf;
+  font-size: 0.74em;
+  line-height: 15px;
+  color: #4d4d4d;
+  white-space: nowrap;
+}
+.r30-bloc.majeur .r30-tete b {
+  font-size: 1.04em;
+}
+
+/* Décision : libellé centré au-dessus du losange ; alternative rejetée en dessous. */
+.r30-decision {
+  text-align: center;
+}
+.r30-nom-decision {
+  font-weight: 700;
+}
+.r30-impasse {
+  text-align: center;
+  font-size: 0.84em;
+  line-height: 1.2;
+  color: #808080;
+}
+
+/* Hypothèse de modélisation : « (H1) Nom → n », hypothèse en italique. */
+.r30-spec {
+  padding: 4px 8px 5px 7px;
+}
+.r30-spec .r30-tete {
+  padding-right: 30px;
+}
+.r30-nom-spec {
+  font-weight: 700;
+}
+.r30-portee {
+  position: absolute;
+  top: 4px;
+  right: 11px;
+  font-size: 0.84em;
+  color: #808080;
+}
+.r30-spec .r30-corps {
+  font-size: 0.92em;
+}
+
+/* Légende de la figure. */
+.r30-legende {
+  font-size: calc(var(--r30-taille, 12.5px) * 0.96);
+  line-height: 1.32;
+  text-align: justify;
+}
+.r30-legende p {
+  margin: 0;
+}
+
+/* États : piste abandonnée (black!50), nœud cité par un renvoi survolé (accent). */
+.r30-gris,
+.r30-gris .r30-pied {
+  color: #808080;
+}
+.r30-cite .r30-tete b {
+  color: #000099;
+}
+
+/* ─── Interface ───────────────────────────────────────────────────────────── */
+
+.rsn-vue .rsn-fiche,
+.rsn-vue .rsn-barre,
+.rsn-vue .rsn-compteur,
+.rsn-vue .rsn-bouton,
+.rsn-vue .rsn-barre button {
+  border-radius: 2px;
+}
+.rsn-vue .rsn-fiche.r30-fiche .rsn-fiche-titre,
+.rsn-vue .rsn-fiche.r30-fiche .rsn-fiche-enonce {
+  font-family: var(--r30-serif);
+}
+.rsn-vue .rsn-fiche.r30-fiche .rsn-fiche-titre {
+  font-size: 15px;
+  font-weight: 700;
+}
+.rsn-vue .rsn-fiche.r30-fiche .rsn-fiche-enonce {
+  font-size: 14px;
+  line-height: 1.4;
+}
+.rsn-vue .rsn-fiche.r30-fiche .katex {
+  font-size: 1.05em;
+}
+.r30-fiche-bandeau {
+  margin: -2px 0 8px;
+  padding: 0 0 4px;
+  border-bottom: 0.5px solid var(--bord);
+  font-family: var(--r30-serif);
+  font-style: italic;
+  font-size: 13px;
+  color: var(--texte);
+}
+
+/* Panneau ☰. */
+.r30-panneau {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12px;
+}
+.r30-niveaux {
+  display: flex;
+  gap: 4px;
+}
+.r30-niveaux .rsn-bouton {
+  margin: 0;
+  flex: 1;
+}
+.r30-niveaux .rsn-bouton.actif {
+  background: var(--texte);
+  border-color: var(--texte);
+  color: var(--surface);
+}
+.r30-nomenclature {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--bord);
+}
+.r30-ligne {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 3px 0;
+  border-bottom: 1px solid var(--bord);
+  color: var(--texte-doux);
+}
+.r30-valeur {
+  font-variant-numeric: tabular-nums;
+  color: var(--texte);
+  white-space: nowrap;
+}
+.r30-liste-hyp {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.r30-hyp {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.r30-ref {
+  font-family: var(--r30-serif);
+  font-weight: 700;
+  min-width: 28px;
+}
+.r30-hyp-nom {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--r30-serif);
+  font-size: 13px;
+}
+.r30-legende-panneau {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--texte-doux);
+  line-height: 1.45;
+}
+.r30-legende-panneau b {
+  color: var(--texte);
+  font-weight: 600;
+}
+
+/* Sélecteur de jeu, sous le lien « catalogue ». */
+.r30-jeu {
+  position: fixed;
+  top: 56px;
+  left: 12px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px 2px 8px;
+  border: 0.5px solid #000000;
+  border-radius: 1.5px;
+  background: #ffffff;
+  font: italic 13px 'CMU Serif', KaTeX_Main, serif;
+  color: #000000;
+}
+.r30-jeu select {
+  border: 0;
+  background: transparent;
+  font: normal 13px 'CMU Serif', KaTeX_Main, serif;
+  color: inherit;
+  cursor: pointer;
+}

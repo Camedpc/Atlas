@@ -1,0 +1,14 @@
+{
+  "id": "r17-blueprint-etapes",
+  "titre": "R17 · Blueprint · blocs de raisonnement",
+  "resume": "Le schéma technique de R14 en couleurs, façon Blueprint d'Unreal : des boîtes « Comment » translucides, calculées depuis le graphe (phase du nœud, rang logique, voisinage), encadrent les étapes du raisonnement — modèle, dérivation, conditions, décision, prédictions, confrontation, piste abandonnée. Fils colorés par rôle de prémisse, broches par famille de la source, en-têtes par famille ; décisions en cartes à alternatives ; un choix issu d'une décision reste dans le flux.",
+  "idees": [
+    "Blocs de raisonnement calculés, pas déclarés : union par phase (modèle, lemme, énoncé, mesure…), chaîne contiguë ou prémisses parallèles au même rang, rattachement des résultats et des isolés",
+    "Titre de bloc générique : genre (Dérivation, Conditions, Prédictions, Confrontation…) et nom de la tête du bloc",
+    "Fils typés comme dans Unreal : couleur = rôle de la prémisse (principale, auxiliaire, technique, contexte)",
+    "Broches d'entrée colorées par la famille de la source (type de donnée reçu), en-têtes par famille, broche creuse = sortie non connectée",
+    "Décisions en cartes : une ligne par alternative, retenue connectée, rejetées en broches creuses",
+    "Correction de R14 : « Force de prise anormale » reste dans le flux, entre la décision et les conditions qu'elle fixe"
+  ],
+  "ordre": 17
+}

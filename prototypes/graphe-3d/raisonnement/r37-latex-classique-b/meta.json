@@ -1,0 +1,14 @@
+{
+  "id": "r37-latex-classique-b",
+  "titre": "R37 · LaTeX classique (essai B)",
+  "resume": "Le schéma technique de R14 composé comme une figure d'article de physique : Computer Modern, formules KaTeX extraites des énoncés par une règle générique, cadres TikZ au trait fin (plein, tireté, barré, pointillé), flèches « latex », énoncés numérotés comme des équations, contexte cité comme une bibliographie, légende « Figure 1 – … » sous la figure. Noir sur blanc, un seul bleu pour l'interaction.",
+  "idees": [
+    "Figure d'article : Computer Modern, cadres TikZ fins, pointes « latex », en-têtes de colonnes en petites capitales avec filets \\cmidrule",
+    "La formule principale de chaque énoncé, extraite des énoncés Unicode par une règle générique, composée hors texte avec KaTeX",
+    "Énoncés numérotés comme des équations (4), décisions D1, hypothèses de modélisation (i), (ii) composées comme des théorèmes",
+    "Contexte cité comme une bibliographie « cf. (3) [1, 4] », liste [n] dans la légende de la figure",
+    "Statut par le trait : plein validé, tireté à vérifier, barré réfuté, pointillé gris abandonné ; double cadre = résultat",
+    "Confiance écrite ĉ = 0,82 [0,72 ; 0,90] et validation en petites capitales ; même dérivation, survol et lignée que R14"
+  ],
+  "ordre": 37
+}

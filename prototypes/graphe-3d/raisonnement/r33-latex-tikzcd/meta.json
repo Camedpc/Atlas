@@ -1,0 +1,14 @@
+{
+  "id": "r33-latex-tikzcd",
+  "titre": "R33 · LaTeX · diagramme tikz-cd",
+  "resume": "Le squelette déductif de R14 composé comme un diagramme commutatif tikz-cd : plus aucune boîte, chaque nœud est sa formule (KaTeX, extraite de l'énoncé par une règle générique) ou son nom en romain, posé sur une matrice de rangs et de lignes. Chaque démonstration est une flèche étiquetée (argument au-dessus, prémisses non tracées au-dessous par leur repère) : → valide, ⇒ implication forte, ⇢ à vérifier, ↛ réfutée. Latin Modern, noir sur blanc, légende « où : » et légende de figure ; source tikz-cd exportable.",
+  "idees": [
+    "Pas de boîtes : le nœud est sa formule, ou à défaut son nom en romain ; décisions en petites capitales, résultats en gras",
+    "Flèche = démonstration : nom de l'argument en \\scriptstyle au-dessus, repères des prémisses non tracées (H1, D2…) au-dessous",
+    "Code de flèche tikz-cd : → valide, ⇒ implication vers un théorème, un résultat ou une proposition, ⇢ à vérifier, ↛ réfutée",
+    "Décisions en embranchements : branche retenue étiquetée, alternatives rejetées sous une flèche barrée",
+    "Légende « où : » numérotée (M choix, H hypothèses, A axiomes, D définitions, L lemmes, E mesures) et légende de figure",
+    "Survol : la flèche et ses extrémités en gras ; clic : fiche détaillée ; source tikz-cd du diagramme à copier"
+  ],
+  "ordre": 33
+}

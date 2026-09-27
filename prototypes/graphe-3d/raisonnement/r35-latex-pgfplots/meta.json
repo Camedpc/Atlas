@@ -1,0 +1,14 @@
+{
+  "id": "r35-latex-pgfplots",
+  "titre": "R35 · LaTeX · pgfplots",
+  "resume": "Le schéma technique de R14 composé en LaTeX (Latin Modern, petites capitales, pointes « latex », formules KaTeX dans les blocs) et enrichi des graphiques qu'un physicien tracerait avec pgfplots : sous le bloc qui énonce une loi, la prédiction (blue!60!black, bande ±1σ) contre les mesures avec barres d'erreur, construite à partir des énoncés et d'un champ optionnel de mesures. Confiance de chaque énoncé en barre d'erreur.",
+  "idees": [
+    "Formules extraites des énoncés par une règle générique (reprise de R18), converties en LaTeX (fractions, indices, unités en \\mathrm) et composées en KaTeX",
+    "Lois traçables détectées dans les énoncés (« Y / X = f », « Y = f(X) »), appariées aux séries du champ `mesures` et aux pentes déclarées",
+    "Paramètres de la prédiction lus dans des énoncés indépendants des mesures tracées (pas de confrontation circulaire)",
+    "Figures au style pgfplots par défaut : axe encadré, graduations intérieures, virgule décimale, légende en haut à gauche, légende « Figure n – … » avec renvois aux blocs",
+    "Confiance en barre d'erreur (point = estimation, moustaches = intervalle) au pied de chaque bloc",
+    "Même dérivation, mêmes ports, liaisons, code de trait et cartouche que R14 ; cartouche en tableau booktabs"
+  ],
+  "ordre": 35
+}

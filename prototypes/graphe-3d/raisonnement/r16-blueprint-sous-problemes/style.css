@@ -1,0 +1,382 @@
+/* R16 · Blueprint · sous-problèmes : feuille de plan en noir et gris, couleurs réservées aux familles
+   (en-têtes), aux sous-problèmes (boîtes « Comment ») et à la sélection (orange) ; angles vifs. */
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: #fcfcfb;
+}
+#app {
+  position: fixed;
+  inset: 0;
+}
+.retour {
+  position: fixed;
+  top: 18px;
+  left: 56px;
+  font: 12px system-ui, sans-serif;
+  color: #62676f;
+  text-decoration: none;
+  z-index: 5;
+}
+.retour:hover {
+  color: #c8630a;
+}
+body:has(.rsn-vue.panneau-ouvert) .retour {
+  display: none;
+}
+body:has(.rsn-vue[data-theme='sombre']) {
+  background: #121417;
+}
+
+/* Palette : l'information passe par le trait et la typographie, pas par la couleur. */
+.rsn-vue {
+  --r16-mono: 'JetBrains Mono', ui-monospace, 'Cascadia Mono', 'SF Mono', Consolas, monospace;
+  --fond: #fcfcfb;
+  --surface: #ffffff;
+  --surface-2: #f2f3f4;
+  --bord: #d3d6da;
+  --ombre: 0 1px 2px rgba(20, 22, 26, 0.08);
+  --texte: #16181c;
+  --texte-doux: #62676f;
+  --accent: #c8630a;
+  --arete: #3a3e45;
+  --arete-complete: #b9bdc4;
+  --ancetre: #16181c;
+  --descendant: #c8630a;
+  --contredit: #16181c;
+  --statut-valide: #2e3238;
+  --statut-incertain: #7a7f88;
+  --statut-refute: #16181c;
+  --validation-aucune: #b0b4ba;
+  --validation-ia: #62676f;
+  --validation-humain: #2e3238;
+  --validation-ia-humain: #16181c;
+  --origine-humain: #2e3238;
+  --origine-ia: #62676f;
+  --origine-ordinateur: #8a8f97;
+  --role-principale: #16181c;
+  --role-auxiliaire: #62676f;
+  --role-technique: #8a8f97;
+  --role-contexte: #b9bdc4;
+  /* Couches de type (fiche, 3D) : teintes des familles. */
+  --couche-0: #6a4c93;
+  --couche-1: #56616f;
+  --couche-2: #9e3b4a;
+  --couche-3: #2d5e9e;
+  --couche-4: #7f600f;
+  --couche-5: #16757c;
+  --couche-6: #25734a;
+  /* Familles (en-têtes pleins, texte blanc) : hypothèses et choix, définitions et axiomes, énoncés,
+     mesures, calculs, décisions, résultats. Teintes sourdes, contraste ≥ 4,5 avec le blanc. */
+  --r16-fam-0: #6a4c93;
+  --r16-fam-1: #56616f;
+  --r16-fam-2: #2d5e9e;
+  --r16-fam-3: #7f600f;
+  --r16-fam-4: #16757c;
+  --r16-fam-5: #9e3b4a;
+  --r16-fam-6: #25734a;
+  --r16-sur-entete: #ffffff;
+  /* Boîtes des sous-problèmes (remplissage ≈ 5 %, barre de titre ≈ 15 %, contour ≈ 60 %). */
+  --r16-sp-0: #5a6472;
+  --r16-sp-1: #2f6aa3;
+  --r16-sp-2: #2b8070;
+  --r16-sp-3: #7b5aa6;
+  --r16-sp-4: #a0692a;
+  --r16-sp-5: #a24b62;
+  --r16-abandon: #8d9299;
+  --sp-0: #4a4f57;
+  --sp-1: #62676f;
+  --sp-2: #7b8089;
+  --sp-3: #2e3238;
+  --sp-4: #8a8f97;
+}
+.rsn-vue[data-theme='sombre'] {
+  --fond: #121417;
+  --surface: #181b1f;
+  --surface-2: #20242a;
+  --bord: #33383f;
+  --texte: #e4e6ea;
+  --texte-doux: #9ba0a8;
+  --accent: #f0a050;
+  --arete: #b4b8bf;
+  --arete-complete: #4a4f57;
+  --ancetre: #e4e6ea;
+  --descendant: #f0a050;
+  --contredit: #e4e6ea;
+  --statut-valide: #c9ccd1;
+  --statut-incertain: #8a8f97;
+  --statut-refute: #e4e6ea;
+  --validation-ia: #9ba0a8;
+  --validation-humain: #c9ccd1;
+  --validation-ia-humain: #e4e6ea;
+  --couche-0: #9b82c4;
+  --couche-1: #8e99a8;
+  --couche-2: #cf7584;
+  --couche-3: #6f9ad6;
+  --couche-4: #c9a449;
+  --couche-5: #4fb0b6;
+  --couche-6: #5fb485;
+  --r16-fam-0: #5f4588;
+  --r16-fam-1: #4d5764;
+  --r16-fam-2: #2a5690;
+  --r16-fam-3: #735710;
+  --r16-fam-4: #136a70;
+  --r16-fam-5: #8f3643;
+  --r16-fam-6: #226942;
+  --r16-sp-0: #9aa4b2;
+  --r16-sp-1: #6f9ad6;
+  --r16-sp-2: #5fb0a0;
+  --r16-sp-3: #a98bd0;
+  --r16-sp-4: #cf9a55;
+  --r16-sp-5: #d07d93;
+  --r16-abandon: #7b8089;
+}
+
+/* Interface commune : angles vifs, comme la feuille. */
+.rsn-vue .rsn-fiche,
+.rsn-vue .rsn-barre,
+.rsn-vue .rsn-compteur,
+.rsn-vue .rsn-bouton,
+.rsn-vue .rsn-barre button {
+  border-radius: 2px;
+}
+.rsn-vue .rsn-compteur-texte {
+  font-family: var(--r16-mono);
+  font-size: 11px;
+}
+
+/* Cartouche : bas droit, à gauche des réglages. */
+.r16-cartouche {
+  position: absolute;
+  right: 314px;
+  bottom: 12px;
+  width: 330px;
+  background: var(--surface);
+  border: 1.5px solid var(--texte);
+  color: var(--texte);
+  font-family: var(--r16-mono);
+  font-size: 10.5px;
+  line-height: 1.25;
+  pointer-events: none;
+}
+.r16-cartouche[hidden] {
+  display: none;
+}
+.r16-cartouche-titre {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 5px 7px 6px;
+  border-bottom: 1px solid var(--texte);
+}
+.r16-cartouche-nom {
+  font-family: var(--police);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.r16-cartouche-grille {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+.r16-champ {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 3px 7px 4px;
+  border-bottom: 1px solid var(--bord);
+  min-width: 0;
+}
+.r16-champ:nth-child(odd) {
+  border-right: 1px solid var(--bord);
+}
+.r16-champ:nth-last-child(-n + 2) {
+  border-bottom: none;
+}
+.r16-champ-nom {
+  font-size: 8.5px;
+  letter-spacing: 0.06em;
+  color: var(--texte-doux);
+}
+.r16-champ-valeur {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@media (max-width: 900px) {
+  .r16-cartouche {
+    display: none;
+  }
+}
+
+/* Panneau ☰. */
+.r16-panneau {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12px;
+}
+.r16-niveaux {
+  display: flex;
+  gap: 4px;
+}
+.r16-niveaux .rsn-bouton {
+  margin: 0;
+  flex: 1;
+}
+.r16-niveaux .rsn-bouton.actif {
+  background: var(--texte);
+  border-color: var(--texte);
+  color: var(--surface);
+}
+.r16-nomenclature {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--bord);
+}
+.r16-ligne {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 3px 0;
+  border-bottom: 1px solid var(--bord);
+  color: var(--texte-doux);
+}
+.r16-valeur {
+  font-family: var(--r16-mono);
+  font-size: 11px;
+  color: var(--texte);
+  white-space: nowrap;
+}
+.r16-liste-hyp {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.r16-hyp {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.r16-ref {
+  font-family: var(--r16-mono);
+  font-size: 11px;
+  font-weight: 700;
+  min-width: 22px;
+}
+.r16-hyp-nom {
+  flex: 1;
+  min-width: 0;
+}
+.r16-legende {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--texte-doux);
+  line-height: 1.45;
+}
+.r16-legende b {
+  color: var(--texte);
+  font-weight: 600;
+}
+.r16-fiche-bandeau {
+  margin: -2px 0 8px;
+  padding: 3px 6px;
+  border: 1px solid var(--texte);
+  color: var(--texte);
+  font-family: var(--r16-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+}
+
+/* Sélecteur de jeu : sous le lien « catalogue », au style du cartouche. */
+.r16-jeu {
+  position: fixed;
+  top: 56px;
+  left: 12px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 4px 3px 8px;
+  border: 1px solid var(--texte);
+  background: var(--surface);
+  font-family: var(--r16-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  color: var(--texte);
+}
+.r16-jeu select {
+  border: 0;
+  background: transparent;
+  font: inherit;
+  letter-spacing: 0;
+  color: inherit;
+  cursor: pointer;
+}
+
+/* Cartouche réduit (il recouvrirait un bloc) : seule la ligne de titre reste. */
+.r16-cartouche.reduit .r16-cartouche-grille,
+.r16-cartouche.reduit .r16-cartouche-nom {
+  display: none;
+}
+.r16-cartouche.reduit .r16-cartouche-titre {
+  border-bottom: none;
+  padding: 3px 7px;
+}
+
+/* Pastille de teinte (sous-problème, famille) : petit carré à angles vifs. */
+.r16-pastille {
+  flex: none;
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border: 1px solid rgba(0, 0, 0, 0.18);
+}
+.r16-fiche-bande {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: -4px 0 8px;
+  font-size: 11.5px;
+  color: var(--texte-doux);
+}
+.r16-liste-sp,
+.r16-familles {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.r16-sp {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 4px;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  background: none;
+  font: inherit;
+  color: var(--texte);
+  text-align: left;
+  cursor: pointer;
+}
+.r16-sp:hover {
+  border-color: var(--bord);
+  background: var(--surface-2);
+}
+.r16-sp.abandon .r16-sp-nom {
+  color: var(--texte-doux);
+}
+.r16-sp-nom {
+  flex: 1;
+  min-width: 0;
+}
+.r16-famille {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--texte-doux);
+}

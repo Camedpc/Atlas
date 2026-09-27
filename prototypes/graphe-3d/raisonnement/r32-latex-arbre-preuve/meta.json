@@ -1,0 +1,14 @@
+{
+  "id": "r32-latex-arbre-preuve",
+  "titre": "R32 · LaTeX · arbre de preuve",
+  "resume": "Le schéma de R14 composé comme en LaTeX avec bussproofs : chaque démonstration est une règle d'inférence (prémisses sur une ligne, trait, conclusion dessous, nom de la règle en petites capitales, confiance en exposant). Lemmes partagés numérotés et cités par renvoi « ⋮ (k) », choix de modélisation en feuilles [Hₖ]ᵏ déchargées à la racine des résultats, formules extraites des énoncés et composées par KaTeX en Latin Modern. Noir sur blanc, un seul bleu.",
+  "idees": [
+    "Une unité de lecture = une règle d'inférence : prémisses alignées, trait, conclusion, étiquette « Bilan q.d.m. » à droite",
+    "Statut par le trait (\\dashedLine à vérifier, barré réfuté, \\doubleLine étapes repliées), confiance en exposant, validation en indice",
+    "Le DAG devient des dérivations numérotées de gauche à droite : un lemme partagé est cité par « ⋮ (k) », un petit est recopié",
+    "Choix de modélisation en feuilles [Hₖ]ᵏ, liste des hypothèses à gauche, décharge ᵏ à la racine des résultats",
+    "Formules extraites des énoncés par une règle générique (suite de mots mathématiques autour d'une relation) et composées par KaTeX",
+    "Légende de figure « Figure 1 – … » au lieu du cartouche ; même dérivation que R14 (squelette / + auxiliaires / tout)"
+  ],
+  "ordre": 32
+}

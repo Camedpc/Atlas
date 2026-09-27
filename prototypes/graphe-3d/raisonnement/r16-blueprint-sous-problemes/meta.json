@@ -1,0 +1,14 @@
+{
+  "id": "r16-blueprint-sous-problemes",
+  "titre": "R16 · Blueprint · sous-problèmes",
+  "resume": "Le schéma technique de R14 en couleurs, façon Blueprint d'Unreal Engine : chaque sous-problème est entouré d'une boîte « Comment » (rectangle teinté translucide, barre de titre colorée, nom en haut à gauche), la piste abandonnée a sa boîte grisée et hachurée ; les blocs ont un en-tête plein à la couleur de leur famille. Mise en page en bandes : les boîtes ne se chevauchent jamais, la progression gauche → droite par rangs logiques est conservée. Jeu par défaut : fontaine de chaîne.",
+  "idees": [
+    "Une boîte « Comment » par sous-problème, dans sa propre bande horizontale : aucune boîte ne chevauche une autre",
+    "Rangs logiques globaux : la progression gauche → droite traverse les bandes ; les pistes abandonnées se placent là où leurs liaisons sont les plus courtes",
+    "En-têtes pleins colorés par famille (hypothèses, définitions, énoncés, mesures, calculs, décisions, résultats), liaisons teintées par leur source",
+    "Statut toujours par le code de trait (continu, tireté, barré, pointillé gris) : la couleur ne code jamais le statut",
+    "Un choix de modélisation issu d'une décision reste dans le flux : observation → décision → hypothèse n'est plus coupé",
+    "Cartouche réservé au cadrage, réduit à une ligne dès qu'il recouvrirait un bloc"
+  ],
+  "ordre": 16
+}

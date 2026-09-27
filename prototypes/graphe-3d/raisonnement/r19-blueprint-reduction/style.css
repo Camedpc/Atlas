@@ -1,0 +1,361 @@
+/* R19 · Blueprint : schéma technique de R14 + couleurs par famille, boîtes « Comment » par groupe,
+   nœuds-fonctions ; angles vifs, chasse fixe pour les repères. Pas d'ombre portée ni de halo. */
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: #fcfcfb;
+}
+#app {
+  position: fixed;
+  inset: 0;
+}
+.retour {
+  position: fixed;
+  top: 18px;
+  left: 56px;
+  font: 12px system-ui, sans-serif;
+  color: #62676f;
+  text-decoration: none;
+  z-index: 5;
+}
+.retour:hover {
+  color: #1a5fd0;
+}
+body:has(.rsn-vue.panneau-ouvert) .retour {
+  display: none;
+}
+body:has(.rsn-vue[data-theme='sombre']) {
+  background: #121417;
+}
+
+/* Palette : l'information passe par le trait et la typographie, pas par la couleur. */
+.rsn-vue {
+  --r19-mono: 'JetBrains Mono', ui-monospace, 'Cascadia Mono', 'SF Mono', Consolas, monospace;
+  --fond: #fcfcfb;
+  --surface: #ffffff;
+  --surface-2: #f2f3f4;
+  --bord: #d3d6da;
+  --ombre: 0 1px 2px rgba(20, 22, 26, 0.08);
+  --texte: #16181c;
+  --texte-doux: #62676f;
+  --accent: #1a5fd0;
+  --arete: #3a3e45;
+  --arete-complete: #b9bdc4;
+  --ancetre: #16181c;
+  --descendant: #1a5fd0;
+  --contredit: #16181c;
+  --statut-valide: #2e3238;
+  --statut-incertain: #7a7f88;
+  --statut-refute: #16181c;
+  --validation-aucune: #b0b4ba;
+  --validation-ia: #62676f;
+  --validation-humain: #2e3238;
+  --validation-ia-humain: #16181c;
+  --origine-humain: #2e3238;
+  --origine-ia: #62676f;
+  --origine-ordinateur: #8a8f97;
+  --role-principale: #16181c;
+  --role-auxiliaire: #62676f;
+  --role-technique: #8a8f97;
+  --role-contexte: #b9bdc4;
+  --couche-0: #4a4f57;
+  --couche-1: #7b8089;
+  --couche-2: #2e3238;
+  --couche-3: #3a3e45;
+  --couche-4: #5a5f68;
+  --couche-5: #6b7079;
+  --couche-6: #16181c;
+  --sp-0: #4a4f57;
+  --sp-1: #62676f;
+  --sp-2: #7b8089;
+  --sp-3: #2e3238;
+  --sp-4: #8a8f97;
+}
+.rsn-vue[data-theme='sombre'] {
+  --fond: #121417;
+  --surface: #181b1f;
+  --surface-2: #20242a;
+  --bord: #33383f;
+  --texte: #e4e6ea;
+  --texte-doux: #9ba0a8;
+  --accent: #6e9bff;
+  --arete: #b4b8bf;
+  --arete-complete: #4a4f57;
+  --ancetre: #e4e6ea;
+  --descendant: #6e9bff;
+  --contredit: #e4e6ea;
+  --statut-valide: #c9ccd1;
+  --statut-incertain: #8a8f97;
+  --statut-refute: #e4e6ea;
+  --validation-ia: #9ba0a8;
+  --validation-humain: #c9ccd1;
+  --validation-ia-humain: #e4e6ea;
+  --couche-0: #a9adb4;
+  --couche-1: #8a8f97;
+  --couche-2: #c9ccd1;
+  --couche-3: #b4b8bf;
+  --couche-4: #9ba0a8;
+  --couche-5: #7b8089;
+  --couche-6: #e4e6ea;
+}
+
+/* Interface commune : angles vifs, comme la feuille. */
+.rsn-vue .rsn-fiche,
+.rsn-vue .rsn-barre,
+.rsn-vue .rsn-compteur,
+.rsn-vue .rsn-bouton,
+.rsn-vue .rsn-barre button {
+  border-radius: 2px;
+}
+.rsn-vue .rsn-compteur-texte {
+  font-family: var(--r19-mono);
+  font-size: 11px;
+}
+
+/* Panneau ☰. */
+.r19-panneau {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12px;
+}
+.r19-niveaux {
+  display: flex;
+  gap: 4px;
+}
+.r19-niveaux .rsn-bouton {
+  margin: 0;
+  flex: 1;
+}
+.r19-niveaux .rsn-bouton.actif {
+  background: var(--texte);
+  border-color: var(--texte);
+  color: var(--surface);
+}
+.r19-nomenclature {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--bord);
+}
+.r19-ligne {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 3px 0;
+  border-bottom: 1px solid var(--bord);
+  color: var(--texte-doux);
+}
+.r19-valeur {
+  font-family: var(--r19-mono);
+  font-size: 11px;
+  color: var(--texte);
+  white-space: nowrap;
+}
+.r19-liste-hyp {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.r19-hyp {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.r19-ref {
+  font-family: var(--r19-mono);
+  font-size: 11px;
+  font-weight: 700;
+  min-width: 22px;
+}
+.r19-hyp-nom {
+  flex: 1;
+  min-width: 0;
+}
+.r19-legende {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--texte-doux);
+  line-height: 1.45;
+}
+.r19-legende b {
+  color: var(--texte);
+  font-weight: 600;
+}
+.r19-fiche-bandeau {
+  margin: -2px 0 8px;
+  padding: 3px 6px;
+  border: 1px solid var(--texte);
+  color: var(--texte);
+  font-family: var(--r19-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+}
+
+/* Sélecteur de jeu : sous le lien « catalogue », au style du cartouche. */
+.r19-jeu {
+  position: fixed;
+  top: 56px;
+  left: 12px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 4px 3px 8px;
+  border: 1px solid var(--texte);
+  background: var(--surface);
+  font-family: var(--r19-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  color: var(--texte);
+}
+.r19-jeu select {
+  border: 0;
+  background: transparent;
+  font: inherit;
+  letter-spacing: 0;
+  color: inherit;
+  cursor: pointer;
+}
+
+/* Onglets de graphe et fil d'Ariane (sous la barre d'outils). */
+.r19-onglets {
+  position: absolute;
+  top: 52px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  max-width: calc(100% - 32px);
+  pointer-events: none;
+  z-index: 4;
+}
+.r19-onglets-liste {
+  display: flex;
+  gap: 2px;
+  pointer-events: auto;
+}
+.r19-onglet {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 340px;
+  padding: 3px 8px 4px;
+  border: 1px solid var(--bord);
+  border-top: 2px solid var(--bord);
+  border-radius: 2px;
+  background: var(--surface-2);
+  color: var(--texte-doux);
+  font: 500 12px var(--police);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.r19-onglet.actif {
+  background: var(--surface);
+  color: var(--texte);
+  border-top-color: var(--texte);
+}
+.r19-onglet-glyphe {
+  font-family: var(--r19-mono);
+  font-size: 11px;
+}
+.r19-onglet-fermer {
+  margin-left: 2px;
+  padding: 0 3px;
+  color: var(--texte-doux);
+}
+.r19-onglet-fermer:hover {
+  color: var(--texte);
+  background: var(--surface-2);
+}
+.r19-ariane {
+  display: flex;
+  gap: 6px;
+  padding: 1px 6px;
+  background: var(--surface);
+  font: 500 10.5px var(--r19-mono);
+  color: var(--texte);
+  pointer-events: auto;
+}
+.r19-ariane a {
+  color: var(--accent);
+  text-decoration: none;
+}
+.r19-ariane a:hover {
+  text-decoration: underline;
+}
+.r19-ariane-sep {
+  color: var(--texte-doux);
+}
+
+/* Panneau : groupes, familles, membres d'une fonction (fiche). */
+.r19-groupes {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.r19-groupe {
+  display: grid;
+  grid-template-columns: 10px 1fr auto auto auto;
+  align-items: center;
+  gap: 6px;
+}
+.r19-groupe .rsn-bouton {
+  margin: 0;
+  padding: 2px 6px;
+  font-size: 11px;
+}
+.r19-groupe-nom {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.r19-teinte {
+  width: 10px;
+  height: 10px;
+  opacity: 0.55;
+  border: 1px solid rgba(0, 0, 0, 0.25);
+}
+.r19-teinte-pleine {
+  opacity: 1;
+  width: 14px;
+  height: 8px;
+  flex: none;
+}
+.r19-familles {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  color: var(--texte-doux);
+}
+.r19-famille {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.r19-membres {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-top: 6px;
+  padding-top: 5px;
+  border-top: 1px solid var(--bord);
+  font-size: 11.5px;
+}
+.r19-membre {
+  display: grid;
+  grid-template-columns: 14px 1fr auto;
+  gap: 4px;
+}
+.r19-membre-statut {
+  font-family: var(--r19-mono);
+  color: var(--texte-doux);
+}

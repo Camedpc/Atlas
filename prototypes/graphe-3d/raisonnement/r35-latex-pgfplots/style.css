@@ -1,0 +1,342 @@
+/* R35 · LaTeX · pgfplots : page blanche, Latin Modern, noir et gris, un seul bleu (blue!60!black). */
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: #ffffff;
+}
+#app {
+  position: fixed;
+  inset: 0;
+}
+.retour {
+  position: fixed;
+  top: 18px;
+  left: 56px;
+  font: 13px 'Latin Modern Roman', 'Times New Roman', serif;
+  color: #5c5c5c;
+  text-decoration: none;
+  z-index: 5;
+}
+.retour:hover {
+  color: #000099;
+}
+body:has(.rsn-vue.panneau-ouvert) .retour {
+  display: none;
+}
+body:has(.rsn-vue[data-theme='sombre']) {
+  background: #121417;
+}
+
+/* Palette : l'information passe par le trait et la typographie ; le bleu est celui de xcolor blue!60!black.
+   Sélecteur renforcé (html body) : la feuille de base de la vue est injectée après celle-ci. */
+html body .rsn-vue {
+  --r35-roman: 'Latin Modern Roman', 'CMU Serif', 'Times New Roman', serif;
+  --r35-mono: 'Latin Modern Mono', 'CMU Typewriter Text', 'Courier New', monospace;
+  --police: 'Latin Modern Roman', 'CMU Serif', 'Times New Roman', serif;
+  --fond: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f4f4f4;
+  --bord: #cfcfcf;
+  --ombre: 0 1px 2px rgba(0, 0, 0, 0.08);
+  --texte: #111111;
+  --texte-doux: #5c5c5c;
+  --accent: #000099;
+  --arete: #222222;
+  --arete-complete: #bdbdbd;
+  --ancetre: #111111;
+  --descendant: #000099;
+  --contredit: #111111;
+  --statut-valide: #2a2a2a;
+  --statut-incertain: #7a7a7a;
+  --statut-refute: #111111;
+  --validation-aucune: #b0b0b0;
+  --validation-ia: #5c5c5c;
+  --validation-humain: #2a2a2a;
+  --validation-ia-humain: #111111;
+  --origine-humain: #2a2a2a;
+  --origine-ia: #5c5c5c;
+  --origine-ordinateur: #8a8a8a;
+  --role-principale: #111111;
+  --role-auxiliaire: #5c5c5c;
+  --role-technique: #8a8a8a;
+  --role-contexte: #bdbdbd;
+  --couche-0: #4a4a4a;
+  --couche-1: #7b7b7b;
+  --couche-2: #2e2e2e;
+  --couche-3: #3a3a3a;
+  --couche-4: #5a5a5a;
+  --couche-5: #6b6b6b;
+  --couche-6: #111111;
+  --sp-0: #4a4a4a;
+  --sp-1: #5c5c5c;
+  --sp-2: #7b7b7b;
+  --sp-3: #2e2e2e;
+  --sp-4: #8a8a8a;
+}
+/* Thème sombre : repris de R14 sans retouche (la vision vise le thème clair). */
+html body .rsn-vue[data-theme='sombre'] {
+  --fond: #121417;
+  --surface: #181b1f;
+  --surface-2: #20242a;
+  --bord: #33383f;
+  --texte: #e4e6ea;
+  --texte-doux: #9ba0a8;
+  --accent: #8fa8ff;
+  --arete: #b4b8bf;
+  --arete-complete: #4a4f57;
+  --ancetre: #e4e6ea;
+  --descendant: #8fa8ff;
+  --contredit: #e4e6ea;
+  --statut-valide: #c9ccd1;
+  --statut-incertain: #8a8f97;
+  --statut-refute: #e4e6ea;
+  --validation-ia: #9ba0a8;
+  --validation-humain: #c9ccd1;
+  --validation-ia-humain: #e4e6ea;
+  --couche-0: #a9adb4;
+  --couche-1: #8a8f97;
+  --couche-2: #c9ccd1;
+  --couche-3: #b4b8bf;
+  --couche-4: #9ba0a8;
+  --couche-5: #7b8089;
+  --couche-6: #e4e6ea;
+}
+
+/* Interface commune : angles vifs, texte en Latin Modern. */
+.rsn-vue .rsn-fiche,
+.rsn-vue .rsn-barre,
+.rsn-vue .rsn-compteur,
+.rsn-vue .rsn-bouton,
+.rsn-vue .rsn-barre button {
+  border-radius: 0;
+}
+.rsn-vue .rsn-fiche,
+.rsn-vue .rsn-compteur,
+.rsn-vue .rsn-panneau {
+  font-family: var(--r35-roman);
+}
+.rsn-vue .rsn-compteur-texte {
+  font-family: var(--r35-roman);
+  font-size: 12px;
+}
+
+/* Calque des formules KaTeX (suit la caméra ; ne capte pas la souris). */
+.r35-calque-formules {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.r35-formule {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  white-space: nowrap;
+  color: #111111;
+  line-height: 1;
+}
+.r35-formule .katex {
+  font-size: 11px;
+}
+.rsn-vue[data-theme='sombre'] .r35-formule {
+  color: #e4e6ea;
+}
+
+/* Fiche de survol : formules en display. */
+.r35-fiche-formules {
+  margin: 6px 0 4px;
+  padding: 2px 0;
+  border-top: 1px solid var(--bord);
+  border-bottom: 1px solid var(--bord);
+  overflow-x: auto;
+}
+.r35-fiche-formule .katex-display {
+  margin: 4px 0;
+}
+.r35-fiche-formule .katex {
+  font-size: 13px;
+}
+
+/* Cartouche : un tableau booktabs (filets haut et bas épais, filet médian fin, pas de filets verticaux). */
+.r35-cartouche {
+  position: absolute;
+  right: 314px;
+  bottom: 12px;
+  width: 340px;
+  background: var(--surface);
+  border-top: 1.4px solid var(--texte);
+  border-bottom: 1.4px solid var(--texte);
+  color: var(--texte);
+  font-family: var(--r35-roman);
+  font-size: 12px;
+  line-height: 1.25;
+  pointer-events: none;
+}
+.r35-cartouche[hidden] {
+  display: none;
+}
+.r35-cartouche-titre {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 5px 6px 5px;
+  border-bottom: 0.8px solid var(--texte);
+}
+.r35-cartouche-nom {
+  font-size: 13px;
+  font-style: italic;
+}
+.r35-cartouche-grille {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 14px;
+  padding: 3px 6px 4px;
+}
+.r35-champ {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 1px 0;
+  min-width: 0;
+}
+.r35-champ-nom {
+  font-variant: small-caps;
+  letter-spacing: 0.02em;
+  color: var(--texte-doux);
+}
+.r35-champ-valeur {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@media (max-width: 900px) {
+  .r35-cartouche {
+    display: none;
+  }
+}
+
+/* Panneau ☰. */
+.r35-panneau {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13px;
+}
+.r35-niveaux {
+  display: flex;
+  gap: 4px;
+}
+.r35-niveaux .rsn-bouton {
+  margin: 0;
+  flex: 1;
+}
+.r35-niveaux .rsn-bouton.actif {
+  background: var(--texte);
+  border-color: var(--texte);
+  color: var(--surface);
+}
+.r35-nomenclature,
+.r35-valeurs {
+  display: flex;
+  flex-direction: column;
+  border-top: 1.2px solid var(--texte);
+  border-bottom: 1.2px solid var(--texte);
+}
+.r35-ligne {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 0;
+  color: var(--texte-doux);
+}
+.r35-valeur {
+  font-size: 12.5px;
+  color: var(--texte);
+  white-space: nowrap;
+}
+.r35-doux {
+  color: var(--texte-doux);
+}
+.r35-liste-figures {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.r35-figure-ligne {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  line-height: 1.35;
+}
+.r35-liste-hyp {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.r35-hyp {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.r35-ref {
+  font-weight: 700;
+  min-width: 22px;
+}
+.r35-hyp-nom {
+  flex: 1;
+  min-width: 0;
+}
+.r35-legende {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--texte-doux);
+  line-height: 1.45;
+}
+.r35-legende b {
+  color: var(--texte);
+  font-weight: 700;
+}
+.r35-fiche-bandeau {
+  margin: -2px 0 8px;
+  padding: 2px 0;
+  border-top: 1px solid var(--texte);
+  border-bottom: 1px solid var(--texte);
+  color: var(--texte);
+  font-family: var(--r35-roman);
+  font-variant: small-caps;
+  font-size: 12.5px;
+}
+
+/* Sélecteur de jeu : sous le lien « catalogue ». */
+.r35-jeu {
+  position: fixed;
+  top: 56px;
+  left: 12px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px 2px 8px;
+  border-top: 1px solid #111111;
+  border-bottom: 1px solid #111111;
+  background: #ffffff;
+  font-family: 'Latin Modern Roman', 'Times New Roman', serif;
+  font-size: 13px;
+  color: #111111;
+}
+.r35-jeu > span {
+  font-variant: small-caps;
+  color: #5c5c5c;
+}
+.r35-jeu select {
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}

@@ -1,0 +1,14 @@
+{
+  "id": "r31-latex-article",
+  "titre": "R31 · LaTeX · article amsmath",
+  "resume": "Le schéma technique de R14 devient la figure 1 d'un article composé comme avec amsart / amsmath / amsthm : en regard, le raisonnement en environnements numérotés (Hypothèse 1.6, Lemme 2.3, Démonstration … ∎), équations numérotées « (3.2) » extraites des énoncés et composées par KaTeX, sections = sous-problèmes, notes marginales (statut, confiance, place dans la figure). Les blocs portent les numéros du texte ; survoler un renvoi met le bloc en évidence et inversement, cliquer fait défiler. Latin Modern, noir sur blanc, liens hyperref bleu sombre.",
+  "idees": [
+    "La figure et le texte partagent la numérotation : le bloc « Lem. 2.3 » est le lemme 2.3 de l'article",
+    "Environnements amsthm générés par type (plain : corps italique ; definition : corps droit), compteur partagé par section",
+    "Équations hors texte extraites des énoncés par une règle générique (relations, symboles, parenthèses), numérotées (s.k) à droite",
+    "Démonstrations générées depuis les prémisses et leurs rôles, avec renvois groupés façon \\cref et \\eqref ; ∎ validée, □ à vérifier, ✗ invalidée",
+    "Liens croisés vivants : survol d'un renvoi, d'une équation ou d'un énoncé → bloc en évidence ; survol d'un bloc → énoncés surlignés ; clic → défilement",
+    "Notes marginales \\marginpar : statut, validation, confiance [bas ; haut], et « fig. 1 : dans l'étape Prop. 3.2 » (cliquable, cadre la figure)"
+  ],
+  "ordre": 31
+}

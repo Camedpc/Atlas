@@ -1,0 +1,14 @@
+{
+  "id": "r38-latex-classique-c",
+  "titre": "R38 · LaTeX classique (essai C)",
+  "resume": "Le schéma technique R14 composé comme une figure d'article de physique : Computer Modern et KaTeX, chaque bloc est un énoncé à la amsthm « Lemme 3 (Nom). » avec sa formule centrée et numérotée « (4) », tirée de l'énoncé par une règle générique ; figure TikZ noir sur blanc (traits fins, pointes « to », jonctions), axe des rangs logiques et accolades des zones, légende « Figure 1 – … » sous le schéma.",
+  "idees": [
+    "Énoncés en environnements de théorème : compteur commun (Lemme 3, Proposition 4…), formule affichée numérotée (1), (2)…",
+    "Extraction générique des formules : passages mathématiques repérés dans le texte Unicode, convertis en LaTeX (grec, indices, \\frac en formule affichée), rendus par KaTeX",
+    "Statut par le motif du trait (plein, tireté, barré, pointillé), résultat en double trait, sous-argument replié en ombre recopiée",
+    "Confiance écrite ĉ = 0,82 [0,76 ; 0,90] au pied de chaque énoncé, validation H / IA / IA+H",
+    "Hypothèses de modélisation (H1)… en boîtes grisées dans la marge, « ⊢ (H1) » sur les énoncés dépendants ; décisions en losange, alternative non retenue terminée par ×",
+    "Axe « rang logique » gradué en haut, accolades nommant hypothèses, outils, étapes, résultats ; la légende de la figure remplace le cartouche"
+  ],
+  "ordre": 38
+}

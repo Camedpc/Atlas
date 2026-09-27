@@ -1,0 +1,465 @@
+/* R32 · LaTeX · arbre de preuve : noir sur blanc, Latin Modern, un seul bleu (survol, sélection, aval). */
+
+@font-face {
+  font-family: 'R32 Latin Modern';
+  src: url('https://cdn.jsdelivr.net/npm/latex.css@1.12.0/fonts/LM-regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'R32 Latin Modern';
+  src: url('https://cdn.jsdelivr.net/npm/latex.css@1.12.0/fonts/LM-italic.woff2') format('woff2');
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'R32 Latin Modern';
+  src: url('https://cdn.jsdelivr.net/npm/latex.css@1.12.0/fonts/LM-bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'R32 Latin Modern';
+  src: url('https://cdn.jsdelivr.net/npm/latex.css@1.12.0/fonts/LM-bold-italic.woff2') format('woff2');
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: #ffffff;
+}
+#app {
+  position: fixed;
+  inset: 0;
+}
+.retour {
+  position: fixed;
+  top: 18px;
+  left: 56px;
+  font: 12px system-ui, sans-serif;
+  color: #5c6068;
+  text-decoration: none;
+  z-index: 5;
+}
+.retour:hover {
+  color: #1a5fd0;
+}
+body:has(.rsn-vue.panneau-ouvert) .retour {
+  display: none;
+}
+body:has(.rsn-vue[data-theme='sombre']) {
+  background: #121417;
+}
+
+/* Palette de la vue commune ramenée au noir et au gris (fiche, compteur, liens complets). */
+.rsn-vue {
+  --r32-serif: 'R32 Latin Modern', 'Latin Modern Roman', 'CMU Serif', 'Computer Modern Serif', Georgia, serif;
+  --r32-encre: #111214;
+  --r32-gris: #5c6068;
+  --fond: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f3f3f2;
+  --bord: #d5d6d8;
+  --texte: #111214;
+  --texte-doux: #5c6068;
+  --accent: #1a5fd0;
+  --arete: #3a3d42;
+  --arete-complete: #b9bcc2;
+  --ancetre: #111214;
+  --descendant: #1a5fd0;
+  --contredit: #111214;
+  --statut-valide: #2e3136;
+  --statut-incertain: #7a7e86;
+  --statut-refute: #111214;
+  --validation-aucune: #b0b3b8;
+  --validation-ia: #5c6068;
+  --validation-humain: #2e3136;
+  --validation-ia-humain: #111214;
+  --origine-humain: #2e3136;
+  --origine-ia: #5c6068;
+  --origine-ordinateur: #8a8e95;
+  --role-principale: #111214;
+  --role-auxiliaire: #5c6068;
+  --role-technique: #8a8e95;
+  --role-contexte: #b9bcc2;
+  --couche-0: #4a4e55;
+  --couche-1: #7b7f87;
+  --couche-2: #2e3136;
+  --couche-3: #3a3d42;
+  --couche-4: #5a5e66;
+  --couche-5: #6b6f77;
+  --couche-6: #111214;
+  --sp-0: #4a4e55;
+  --sp-1: #5c6068;
+  --sp-2: #7b7f87;
+  --sp-3: #2e3136;
+  --sp-4: #8a8e95;
+}
+
+/* ─── Feuille : calque DOM qui suit la caméra 2D ─────────────────────────── */
+
+.r32-feuille {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 2;
+}
+.r32-contenu {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  font-family: var(--r32-serif);
+  font-size: var(--r32-taille, 15px);
+  line-height: 1.2;
+  color: var(--r32-encre);
+  font-kerning: normal;
+  text-rendering: optimizeLegibility;
+}
+.r32-contenu .katex {
+  font-size: 1.08em;
+}
+.r32-el {
+  position: absolute;
+  left: 0;
+  top: 0;
+  white-space: nowrap;
+}
+
+/* Conclusion : formule (KaTeX) ou nom en romain. */
+.r32-concl {
+  padding: 0 1px;
+}
+.r32-decision {
+  text-align: center;
+}
+.r32-ecartees,
+.r32-introduit {
+  font-size: 0.78em;
+  font-style: italic;
+  color: var(--r32-gris);
+  line-height: 1.25;
+}
+.r32-ecartees .katex,
+.r32-introduit .katex {
+  font-size: 1em;
+}
+.abandon,
+.r32-concl.abandon {
+  color: var(--r32-gris);
+}
+
+/* Trait d'inférence : plein, tireté (\dashedLine), double (\doubleLine), barré, pointillé. */
+.r32-barre {
+  height: 0;
+  border-top: 0.9px solid currentColor;
+  color: var(--r32-encre);
+}
+.r32-barre.tirete {
+  border-top-style: dashed;
+}
+.r32-barre.double {
+  height: 1.8px;
+  margin-top: -1.3px;
+  border-bottom: 0.9px solid currentColor;
+}
+.r32-barre.double.tirete {
+  border-bottom-style: dashed;
+}
+.r32-barre.abandon {
+  border-top-style: dotted;
+  border-bottom-style: dotted;
+  color: #8a8e95;
+}
+.r32-barre.refute i {
+  position: absolute;
+  top: -5px;
+  left: calc(50% - 2px);
+  width: 0.9px;
+  height: 10px;
+  background: currentColor;
+  transform: rotate(32deg);
+}
+.r32-barre.refute i + i {
+  left: calc(50% + 3px);
+}
+
+/* Étiquette : nom de la règle en petites capitales, confiance en exposant, validation en indice. */
+.r32-etiquette {
+  display: flex;
+  align-items: center;
+  font-size: 0.8em;
+  line-height: 1;
+}
+.r32-sc {
+  font-variant: small-caps;
+  letter-spacing: 0.02em;
+}
+.r32-sc .katex {
+  font-size: 1.05em;
+}
+.r32-mult {
+  margin-left: 0.25em;
+  font-size: 0.86em;
+  color: var(--r32-gris);
+}
+.r32-scripts {
+  display: inline-flex;
+  flex-direction: column;
+  margin-left: 0.28em;
+  font-size: 0.72em;
+  line-height: 1.05;
+  color: var(--r32-gris);
+}
+.r32-sup {
+  transform: translateY(-0.12em);
+}
+.r32-sub {
+  transform: translateY(0.12em);
+}
+.sans-exposants .r32-scripts {
+  display: none;
+}
+.r32-dech {
+  font-size: 0.92em;
+}
+
+/* Renvoi « ⋮ (k) » vers une dérivation numérotée, feuille d'hypothèse [Hₖ]ᵏ, numéro de dérivation. */
+.r32-renvoi {
+  text-align: center;
+}
+.r32-vdots {
+  position: relative;
+  line-height: 0.95;
+}
+.r32-ref {
+  position: absolute;
+  margin-left: 0.3em;
+  top: 0.12em;
+  font-size: 0.78em;
+  color: var(--r32-gris);
+}
+.r32-numero {
+  color: var(--r32-encre);
+}
+
+/* Liste des hypothèses de modélisation (environnement à gauche) et légende de figure. */
+.r32-liste-titre {
+  white-space: normal;
+  padding-bottom: 3px;
+  border-bottom: 0.6px solid var(--r32-encre);
+  font-variant: small-caps;
+  letter-spacing: 0.03em;
+}
+.r32-hyp-entree {
+  white-space: normal;
+  font-size: 0.8em;
+  line-height: 1.3;
+  text-align: justify;
+  hyphens: auto;
+}
+.r32-hyp-nom {
+  font-weight: 700;
+}
+.r32-hyp-texte {
+  font-style: italic;
+}
+.r32-hyp-intro {
+  color: var(--r32-gris);
+}
+.r32-legende {
+  white-space: normal;
+  font-size: 0.82em;
+  line-height: 1.35;
+  color: var(--r32-encre);
+}
+.r32-legende-num {
+  font-variant: small-caps;
+}
+
+/* États : amont en encre renforcée, sélection / aval / hypothèses actives / survol en bleu. */
+.r32-hors {
+  opacity: 0.24;
+}
+.r32-sel,
+.r32-aval,
+.r32-dep,
+.r32-survol,
+.r32-epingle {
+  color: var(--accent);
+}
+.r32-sel .r32-scripts,
+.r32-aval .r32-scripts,
+.r32-dep .r32-scripts,
+.r32-survol .r32-scripts {
+  color: inherit;
+}
+.r32-barre.r32-sel,
+.r32-barre.r32-amont,
+.r32-barre.r32-survol {
+  border-top-width: 1.6px;
+}
+.r32-barre.double.r32-sel,
+.r32-barre.double.r32-amont,
+.r32-barre.double.r32-survol {
+  border-bottom-width: 1.6px;
+}
+
+/* ─── Interface ──────────────────────────────────────────────────────────── */
+
+.rsn-vue .rsn-compteur-texte {
+  font-size: 11px;
+}
+.r32-fiche-bandeau {
+  margin: -2px 0 6px;
+  padding: 2px 0 4px;
+  border-bottom: 0.6px solid var(--texte);
+  font-family: var(--r32-serif);
+  font-size: 12.5px;
+  font-variant: small-caps;
+  letter-spacing: 0.02em;
+  color: var(--texte);
+}
+.r32-fiche-formule {
+  margin: 2px 0 8px;
+  overflow-x: auto;
+  font-size: 14px;
+  color: var(--texte);
+}
+
+.r32-panneau {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12px;
+}
+.r32-niveaux {
+  display: flex;
+  gap: 4px;
+}
+.r32-niveaux .rsn-bouton {
+  margin: 0;
+  flex: 1;
+}
+.r32-niveaux .rsn-bouton.actif {
+  background: var(--texte);
+  border-color: var(--texte);
+  color: var(--surface);
+}
+.r32-nomenclature {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--bord);
+}
+.r32-ligne {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 3px 0;
+  border-bottom: 1px solid var(--bord);
+  color: var(--texte-doux);
+}
+.r32-valeur {
+  font-variant-numeric: tabular-nums;
+  color: var(--texte);
+  white-space: nowrap;
+}
+.r32-liste-hyp {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.r32-hyp-panneau {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.r32-marque-panneau {
+  min-width: 36px;
+  font-size: 12px;
+}
+.r32-hyp-panneau-nom {
+  flex: 1;
+  min-width: 0;
+}
+.r32-legende-panneau {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--texte-doux);
+  line-height: 1.45;
+}
+.r32-legende-panneau b {
+  color: var(--texte);
+  font-weight: 600;
+}
+.r32-exemple {
+  display: inline-block;
+  width: 22px;
+  height: 0;
+  margin-right: 6px;
+  vertical-align: middle;
+  border-top: 1px solid var(--texte);
+}
+.r32-exemple.tirete {
+  border-top-style: dashed;
+}
+.r32-exemple.double {
+  height: 2px;
+  border-bottom: 1px solid var(--texte);
+}
+.r32-exemple.abandon {
+  border-top: 1px dotted var(--texte-doux);
+}
+.r32-exemple.refute {
+  position: relative;
+}
+.r32-exemple.refute::before,
+.r32-exemple.refute::after {
+  content: '';
+  position: absolute;
+  top: -5px;
+  left: 8px;
+  width: 1px;
+  height: 10px;
+  background: var(--texte);
+  transform: rotate(32deg);
+}
+.r32-exemple.refute::after {
+  left: 13px;
+}
+
+/* Sélecteur de jeu, sous le lien « catalogue ». */
+.r32-jeu {
+  position: fixed;
+  top: 56px;
+  left: 12px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 4px 3px 8px;
+  border: 1px solid var(--r32-encre, #111214);
+  background: #ffffff;
+  font-family: 'R32 Latin Modern', Georgia, serif;
+  font-size: 12px;
+  font-variant: small-caps;
+  color: #111214;
+}
+.r32-jeu select {
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-variant: normal;
+  color: inherit;
+  cursor: pointer;
+}

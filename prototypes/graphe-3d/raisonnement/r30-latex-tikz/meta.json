@@ -1,0 +1,14 @@
+{
+  "id": "r30-latex-tikz",
+  "titre": "R30 · LaTeX · figure TikZ",
+  "resume": "Le schéma technique de R14 composé comme une figure TikZ d'article : Computer Modern, nœuds au trait fin à coins arrondis, flèches Stealth, accolades des zones, énoncés numérotés façon amsthm (« Lemme 7 (…) ») avec leurs formules extraites et rendues par KaTeX, légende « Figure 1 : … » sous la figure. Noir sur blanc, une seule couleur : blue!60!black. Fontaine de chaîne par défaut.",
+  "idees": [
+    "Formules extraites des énoncés Unicode par une règle générique (mots mathématiques, relations, fractions) et composées par KaTeX : T₀ = (1 − α)λv² devient une vraie formule centrée",
+    "Nœuds TikZ `draw, rounded corners=1pt` au trait fin ; statut par le motif du trait (plein, dashed, barré, dotted gris) ; résultats en `double`, sous-arguments repliés en `copy shadow`",
+    "Tête façon amsthm : environnement et numéro partagé (Lemme 7, Proposition 8), nom entre parenthèses ; pied : validation en petites capitales et confiance c = 0,82 [0,74 ; 0,90]",
+    "Hypothèses de modélisation (H1)… en notes à coin replié, décisions en losange (D1) avec l'alternative non retenue ×, renvois en forme `signal` numérotée",
+    "Accolades nommées des zones et axe fin des rangs logiques ; légende « Figure 1 » qui tient lieu de légende du code de trait",
+    "Même dérivation et même mise en page que R14 ; seule la taille des nœuds vient du texte composé mesuré dans le DOM"
+  ],
+  "ordre": 30
+}

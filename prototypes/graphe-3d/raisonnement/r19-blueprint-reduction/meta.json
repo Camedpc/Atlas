@@ -1,0 +1,15 @@
+{
+  "id": "r19-blueprint-reduction",
+  "titre": "R19 · Blueprint · sous-graphes réductibles",
+  "resume": "Le schéma technique de R14 avec deux mécanismes du Blueprint d'Unreal Engine : chaque sous-problème est une boîte « Comment » colorée (bande sans chevauchement), et un clic sur sa barre de titre la réduit en un nœud-fonction à broches (entrées venant de l'extérieur, énoncés utilisés à l'extérieur, statut le plus faible, maillon le plus faible), ou l'ouvre dans un onglet avec ses nœuds Entrée et Sortie. En-têtes colorés par famille ; cartouche dessiné sur la feuille. Jeu par défaut : fontaine de chaîne.",
+  "idees": [
+    "Boîtes « Comment » par sous-problème : fond teinté translucide, barre de titre colorée, bandes empilées sans chevauchement",
+    "« Collapse to Function » : clic sur la barre de titre → un nœud-fonction avec broches d'entrée (liaisons extérieures) et de sortie (énoncés utilisés dehors)",
+    "Statut agrégé = le plus faible du groupe (code de trait), confiance = maillon le plus faible, compteur d'énoncés",
+    "Réduction faite dans la dérivation : liaisons, lignée et correspondance restent exactes ; refusée si elle créerait un cycle",
+    "Onglet de sous-graphe façon Unreal : fil d'Ariane « Fontaine › SP2 · … », nœuds Entrée et Sortie",
+    "En-têtes de blocs colorés par famille (déduction, empirique, calcul, conjecture, résultat), fonction en framboise",
+    "Cartouche dessiné sur la feuille, sous le schéma : ne recouvre plus aucun bloc"
+  ],
+  "ordre": 19
+}

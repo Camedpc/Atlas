@@ -1,0 +1,365 @@
+/* R37 (essai B) · LaTeX classique : Computer Modern, noir sur blanc, un seul bleu pour l'interaction. */
+
+@font-face {
+  font-family: 'CMU Serif';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('https://cdn.jsdelivr.net/npm/computer-modern@0.1.2/fonts/cmu-serif-500-roman.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'CMU Serif';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url('https://cdn.jsdelivr.net/npm/computer-modern@0.1.2/fonts/cmu-serif-500-italic.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'CMU Serif';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('https://cdn.jsdelivr.net/npm/computer-modern@0.1.2/fonts/cmu-serif-700-roman.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'CMU Serif';
+  font-style: italic;
+  font-weight: 700;
+  font-display: swap;
+  src: url('https://cdn.jsdelivr.net/npm/computer-modern@0.1.2/fonts/cmu-serif-700-italic.woff2') format('woff2');
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: #ffffff;
+}
+#app {
+  position: fixed;
+  inset: 0;
+}
+.retour {
+  position: fixed;
+  top: 18px;
+  left: 56px;
+  font: 13px 'CMU Serif', 'Times New Roman', serif;
+  color: #5f5f5f;
+  text-decoration: none;
+  z-index: 5;
+}
+.retour:hover {
+  color: #1f4bb4;
+}
+body:has(.rsn-vue.panneau-ouvert) .retour {
+  display: none;
+}
+
+/* Palette : noir, gris, un seul bleu (liens hyperref). */
+.rsn-vue {
+  --r37-serif: 'CMU Serif', 'Latin Modern Roman', 'Computer Modern Serif', 'Times New Roman', serif;
+  --police: var(--r37-serif);
+  --fond: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f4f4f4;
+  --bord: #d4d4d4;
+  --ombre: 0 1px 2px rgba(0, 0, 0, 0.08);
+  --texte: #000000;
+  --texte-doux: #5f5f5f;
+  --accent: #1f4bb4;
+  --arete: #000000;
+  --arete-complete: #bdbdbd;
+  --ancetre: #000000;
+  --descendant: #1f4bb4;
+  --contredit: #000000;
+  --statut-valide: #1a1a1a;
+  --statut-incertain: #7a7a7a;
+  --statut-refute: #000000;
+  --validation-aucune: #b3b3b3;
+  --validation-ia: #5f5f5f;
+  --validation-humain: #1a1a1a;
+  --validation-ia-humain: #000000;
+  --origine-humain: #1a1a1a;
+  --origine-ia: #5f5f5f;
+  --origine-ordinateur: #8a8a8a;
+  --role-principale: #000000;
+  --role-auxiliaire: #5f5f5f;
+  --role-technique: #8a8a8a;
+  --role-contexte: #bdbdbd;
+  --couche-0: #4a4a4a;
+  --couche-1: #7b7b7b;
+  --couche-2: #2e2e2e;
+  --couche-3: #3a3a3a;
+  --couche-4: #5a5a5a;
+  --couche-5: #6b6b6b;
+  --couche-6: #000000;
+  --sp-0: #4a4a4a;
+  --sp-1: #5f5f5f;
+  --sp-2: #7b7b7b;
+  --sp-3: #2e2e2e;
+  --sp-4: #8a8a8a;
+}
+
+/* KaTeX : même corps que le texte (les deux sont en Computer Modern). */
+.rsn-vue .katex {
+  font-size: 1em;
+  text-rendering: geometricPrecision;
+}
+
+/* Interface commune : angles vifs, filets fins. */
+.rsn-vue .rsn-fiche,
+.rsn-vue .rsn-barre,
+.rsn-vue .rsn-compteur,
+.rsn-vue .rsn-bouton,
+.rsn-vue .rsn-barre button {
+  border-radius: 0;
+}
+.rsn-vue .rsn-fiche {
+  font-size: 13px;
+  line-height: 1.35;
+}
+.rsn-vue .rsn-fiche-titre {
+  font-weight: 700;
+}
+.rsn-vue .rsn-compteur-texte {
+  font-size: 12px;
+}
+.r37-fiche-bandeau {
+  margin: -2px 0 8px;
+  padding: 0 0 4px;
+  border-bottom: 0.8px solid var(--texte);
+  color: var(--texte);
+  font-size: 12px;
+  font-variant: small-caps;
+  letter-spacing: 0.02em;
+}
+
+/* ─── Couche de composition (au-dessus des calques canvas, sans événements) ─── */
+
+/* La scène devient un contexte d'empilement : la couche de texte reste sous l'interface (fiche, panneau). */
+.rsn-vue .rsn-scene {
+  z-index: 0;
+}
+
+.r37-couche {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 3;
+  font-family: var(--r37-serif);
+  color: var(--texte);
+}
+.r37-c {
+  position: absolute;
+  left: 0;
+  top: 0;
+  box-sizing: border-box;
+  transform-origin: 0 0;
+  line-height: 1.22;
+  font-kerning: normal;
+  hyphens: auto;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Énoncé : type en petites capitales et numéro d'équation, titre, formule hors texte, confiance. */
+.r37-tete {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 0.82em;
+  color: var(--texte-doux);
+  margin-bottom: 1px;
+}
+.r37-type {
+  font-variant: small-caps;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.r37-num {
+  color: var(--texte);
+  white-space: nowrap;
+}
+.r37-titre {
+  text-align: left;
+}
+.r37-majeur .r37-titre {
+  font-weight: 700;
+}
+.r37-eq {
+  margin: 4px 0 2px;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.r37-pied {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 6px;
+  margin-top: 3px;
+  font-size: 0.75em;
+  color: var(--texte-doux);
+}
+.r37-conf {
+  white-space: nowrap;
+}
+.r37-valid {
+  font-variant: small-caps;
+  letter-spacing: 0.03em;
+}
+.r37-abandon {
+  color: var(--texte-doux);
+}
+.r37-cite .r37-num,
+.r37-selection .r37-num {
+  color: var(--accent);
+}
+
+/* Décision : libellé centré au-dessus du losange ; alternative rejetée dessous. */
+.r37-decision {
+  text-align: center;
+  font-style: italic;
+}
+.r37-nc {
+  text-align: center;
+  font-size: 0.8em !important;
+  color: var(--texte-doux);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.r37-plus {
+  text-decoration: none;
+}
+
+/* Hypothèse de modélisation, comme \newtheorem : tête grasse, nom entre parenthèses, corps italique. */
+.r37-hyp-corps {
+  margin: 0;
+  text-align: justify;
+}
+.r37-hyp-tete {
+  font-weight: 700;
+}
+.r37-hyp-tete .r37-num {
+  display: inline-block;
+  min-width: 1.6em;
+}
+.r37-hyp-texte {
+  font-style: italic;
+}
+.r37-hyp-pied {
+  margin-top: 3px;
+  font-size: 0.75em;
+  color: var(--texte-doux);
+  text-align: right;
+}
+.r37-actif .r37-hyp-tete {
+  color: var(--accent);
+}
+
+/* Légende de la figure : \small, justifiée, « Figure 1 – » en petites capitales. */
+.r37-legende {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  line-height: 1.3;
+  text-align: justify;
+  hyphens: auto;
+  color: var(--texte);
+}
+.r37-fig {
+  font-variant: small-caps;
+  letter-spacing: 0.02em;
+}
+.r37-sc {
+  font-variant: small-caps;
+}
+
+/* ─── Panneau ☰ ─── */
+
+.r37-panneau {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13px;
+}
+.r37-niveaux {
+  display: flex;
+  gap: 4px;
+}
+.r37-niveaux .rsn-bouton {
+  margin: 0;
+  flex: 1;
+}
+.r37-niveaux .rsn-bouton.actif {
+  background: var(--texte);
+  border-color: var(--texte);
+  color: var(--surface);
+}
+.r37-nomenclature {
+  display: flex;
+  flex-direction: column;
+  border-top: 0.8px solid var(--texte);
+  border-bottom: 0.8px solid var(--texte);
+}
+.r37-ligne {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 0;
+  color: var(--texte-doux);
+}
+.r37-valeur {
+  color: var(--texte);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.r37-liste-hyp {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.r37-hyp-liste {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  cursor: pointer;
+}
+.r37-ref {
+  min-width: 26px;
+}
+.r37-hyp-liste-nom {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Sélecteur de jeu : sous le lien « catalogue ». */
+.r37-jeu {
+  position: fixed;
+  top: 56px;
+  left: 12px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px 2px 8px;
+  border: 0.8px solid #000000;
+  background: #ffffff;
+  font-family: 'CMU Serif', 'Times New Roman', serif;
+  font-size: 13px;
+  font-variant: small-caps;
+  color: #000000;
+}
+.r37-jeu select {
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-variant: normal;
+  color: inherit;
+  cursor: pointer;
+}

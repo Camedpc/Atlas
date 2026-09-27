@@ -1,0 +1,531 @@
+/* R31 · LaTeX · article amsmath : noir sur blanc, Latin Modern, liens hyperref bleu sombre.
+   Figure 1 (schéma R14) à gauche, article amsart en regard ; empilés sur écran étroit. */
+
+@font-face {
+  font-family: 'Latin Modern';
+  font-style: normal;
+  font-weight: normal;
+  font-display: swap;
+  src: url('https://cdn.jsdelivr.net/npm/latex.css@1.14.0/fonts/LM-regular.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Latin Modern';
+  font-style: italic;
+  font-weight: normal;
+  font-display: swap;
+  src: url('https://cdn.jsdelivr.net/npm/latex.css@1.14.0/fonts/LM-italic.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Latin Modern';
+  font-style: normal;
+  font-weight: bold;
+  font-display: swap;
+  src: url('https://cdn.jsdelivr.net/npm/latex.css@1.14.0/fonts/LM-bold.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Latin Modern';
+  font-style: italic;
+  font-weight: bold;
+  font-display: swap;
+  src: url('https://cdn.jsdelivr.net/npm/latex.css@1.14.0/fonts/LM-bold-italic.woff2') format('woff2');
+}
+
+:root {
+  --r31-serif: 'Latin Modern', 'Latin Modern Roman', 'CMU Serif', 'Computer Modern', Georgia, serif;
+  --r31-encre: #000000;
+  --r31-gris: #555555;
+  --r31-filet: #d6d6d6;
+  /* hyperref : colorlinks, linkcolor = bleu sombre sobre. */
+  --r31-lien: #1f3a93;
+  /* Surlignage des liens croisés : teinte très légère, sans halo. */
+  --r31-lie: #e9edf7;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: #ffffff;
+}
+body {
+  display: grid;
+  grid-template-columns: minmax(0, 47fr) minmax(0, 53fr);
+  grid-template-rows: 100%;
+  overflow: hidden;
+}
+#app {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  border-right: 1px solid var(--r31-filet);
+}
+.retour {
+  position: fixed;
+  top: 18px;
+  left: 56px;
+  font: 13px var(--r31-serif);
+  color: var(--r31-gris);
+  text-decoration: none;
+  z-index: 5;
+}
+.retour:hover {
+  color: var(--r31-lien);
+}
+body:has(.rsn-vue.panneau-ouvert) .retour,
+body:has(.rsn-vue.panneau-ouvert) .r31-entete-figure {
+  display: none;
+}
+
+/* ─── Figure : palette de R14 (noir, gris, un seul bleu), en Latin Modern ─── */
+
+.rsn-vue {
+  --police: 'Latin Modern', 'Latin Modern Roman', 'CMU Serif', 'Computer Modern', Georgia, serif;
+  --fond: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f4f4f4;
+  --bord: #d6d6d6;
+  --ombre: none;
+  --texte: #111111;
+  --texte-doux: #5f6368;
+  --accent: #1f3a93;
+  --arete: #222222;
+  --arete-complete: #bdbdbd;
+  --ancetre: #111111;
+  --descendant: #1f3a93;
+  --contredit: #111111;
+  --statut-valide: #2a2a2a;
+  --statut-incertain: #7a7a7a;
+  --statut-refute: #111111;
+  --validation-aucune: #b0b0b0;
+  --validation-ia: #5f6368;
+  --validation-humain: #2a2a2a;
+  --validation-ia-humain: #111111;
+  --origine-humain: #2a2a2a;
+  --origine-ia: #5f6368;
+  --origine-ordinateur: #8a8a8a;
+  --role-principale: #111111;
+  --role-auxiliaire: #5f6368;
+  --role-technique: #8a8a8a;
+  --role-contexte: #bdbdbd;
+  --couche-0: #4a4a4a;
+  --couche-1: #7b7b7b;
+  --couche-2: #2e2e2e;
+  --couche-3: #3a3a3a;
+  --couche-4: #5a5a5a;
+  --couche-5: #6b6b6b;
+  --couche-6: #111111;
+  --sp-0: #4a4a4a;
+  --sp-1: #5f6368;
+  --sp-2: #7b7b7b;
+  --sp-3: #2e2e2e;
+  --sp-4: #8a8a8a;
+  font-size: 13.5px;
+}
+.rsn-vue .rsn-fiche,
+.rsn-vue .rsn-barre,
+.rsn-vue .rsn-compteur,
+.rsn-vue .rsn-bouton,
+.rsn-vue .rsn-barre button {
+  border-radius: 0;
+}
+.rsn-vue .rsn-barre,
+.rsn-vue .rsn-compteur {
+  box-shadow: none;
+}
+.rsn-vue .rsn-barre button.actif {
+  background: var(--texte);
+}
+
+/* En-tête de la figure : jeu et étiquette, sous le lien « catalogue ». */
+.r31-entete-figure {
+  position: fixed;
+  top: 50px;
+  left: 12px;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  font-family: var(--r31-serif);
+  color: var(--r31-encre);
+}
+.r31-jeu {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px 2px 8px;
+  border: 1px solid var(--r31-encre);
+  background: #ffffff;
+  font-size: 13px;
+  font-variant: small-caps;
+}
+.r31-jeu select {
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-variant: normal;
+  color: inherit;
+  cursor: pointer;
+}
+.r31-fig-etiquette {
+  font-size: 13px;
+  padding: 0 2px;
+  background: #ffffff;
+}
+
+/* Panneau ☰ (classes de R14). */
+.r14-panneau {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13px;
+}
+.r14-niveaux {
+  display: flex;
+  gap: 4px;
+}
+.r14-niveaux .rsn-bouton {
+  margin: 0;
+  flex: 1;
+}
+.r14-niveaux .rsn-bouton.actif {
+  background: var(--texte);
+  border-color: var(--texte);
+  color: var(--surface);
+}
+.r14-nomenclature {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--bord);
+}
+.r14-ligne {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 3px 0;
+  border-bottom: 1px solid var(--bord);
+  color: var(--texte-doux);
+}
+.r14-valeur {
+  font-variant-numeric: tabular-nums;
+  color: var(--texte);
+  white-space: nowrap;
+}
+.r14-liste-hyp {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.r14-hyp {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.r14-ref {
+  font-weight: 700;
+  min-width: 30px;
+}
+.r14-hyp-nom {
+  flex: 1;
+  min-width: 0;
+}
+.r14-legende {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--texte-doux);
+  line-height: 1.45;
+}
+.r14-legende b {
+  color: var(--texte);
+}
+
+/* ─── Article amsart ──────────────────────────────────────────────────────── */
+
+.r31-article {
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  background: #ffffff;
+  scroll-padding: 40px;
+}
+.page {
+  position: relative;
+  box-sizing: content-box;
+  max-width: 33em;
+  margin: 0 auto;
+  padding: 2.4em 9.6em 5em 2.8em;
+  font-family: var(--r31-serif);
+  font-size: 16px;
+  line-height: 1.36;
+  color: var(--r31-encre);
+  text-align: justify;
+  hyphens: auto;
+  font-kerning: normal;
+  font-variant-ligatures: common-ligatures;
+}
+.page p {
+  margin: 0;
+}
+.entete-courante {
+  display: flex;
+  justify-content: space-between;
+  gap: 1em;
+  margin-bottom: 3em;
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+}
+.titre {
+  margin: 0 0 1.1em;
+  font-size: 1.1em;
+  font-weight: bold;
+  line-height: 1.35;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.auteurs {
+  font-size: 0.86em;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.date {
+  margin: 0.5em 0 2.2em;
+  font-size: 0.86em;
+  font-style: italic;
+  text-align: center;
+}
+.resume {
+  margin: 0 2.4em 0.7em;
+  font-size: 0.86em;
+  line-height: 1.33;
+}
+.resume-tete,
+.fig-tete {
+  font-variant: small-caps;
+}
+.legende-figure {
+  margin: 1.6em 0 0.5em;
+  font-size: 0.86em;
+  line-height: 1.33;
+}
+.fig-ou::after {
+  content: ' (ci-contre)';
+}
+.section h2 {
+  margin: 2.2em 0 1em;
+  font-size: 1em;
+  font-weight: normal;
+  font-variant: small-caps;
+  letter-spacing: 0.03em;
+  text-align: center;
+}
+.sec-note {
+  margin-top: -0.6em !important;
+  margin-bottom: 0.8em !important;
+  font-size: 0.9em;
+  font-style: italic;
+  text-align: center;
+}
+.sec-resume {
+  text-indent: 1.5em;
+  margin-bottom: 0.4em !important;
+}
+
+/* Environnements amsthm : plain (corps italique) et definition (corps droit). */
+.env {
+  position: relative;
+  margin: 0.85em 0 0.3em;
+}
+.env-tete {
+  font-weight: bold;
+  font-style: normal;
+}
+.env-note {
+  font-style: normal;
+}
+.env-plain .env-corps {
+  font-style: italic;
+}
+.env-plain .env-corps .math,
+.env-plain .env-corps .env-note {
+  font-style: normal;
+}
+.env-abandon {
+  color: #4a4a4a;
+}
+.env-liste {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.1em 0.6em;
+  margin: 0.3em 0 0 1.5em;
+}
+.env-liste dt {
+  font-style: italic;
+}
+.env-liste dd {
+  margin: 0;
+}
+.alternatives {
+  counter-reset: alt;
+  list-style: none;
+  margin: 0.3em 0 0.2em;
+  padding-left: 2.4em;
+}
+.alternatives li {
+  position: relative;
+  counter-increment: alt;
+}
+.alternatives li::before {
+  content: '(' counter(alt, lower-roman) ')';
+  position: absolute;
+  left: -2.4em;
+  width: 2em;
+  text-align: right;
+}
+.verdict {
+  font-style: italic;
+}
+.suite {
+  text-indent: 0;
+}
+
+/* Équations hors texte, numéro à droite (amsmath). */
+.equation {
+  display: flex;
+  align-items: center;
+  margin: 0.6em 0;
+}
+.eq-corps {
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  text-align: center;
+  font-style: italic;
+}
+.eq-corps .katex-display {
+  margin: 0;
+}
+.eq-numero {
+  flex: none;
+  padding-left: 1em;
+  font-style: normal;
+}
+.math:not(.compose) {
+  font-style: italic;
+}
+.page .katex {
+  font-size: 1.08em;
+}
+
+/* Démonstrations et remarques. */
+.preuve,
+.remarque {
+  margin: 0.35em 0 0.2em !important;
+}
+.preuve.admis {
+  font-size: 0.93em;
+  color: #333333;
+}
+.qed {
+  float: right;
+  padding-left: 1em;
+}
+
+/* Liens hyperref et liens croisés. */
+.page a {
+  color: var(--r31-lien);
+  text-decoration: none;
+}
+.page a:hover {
+  text-decoration: underline;
+}
+.env.lie,
+.preuve.lie,
+.remarque.lie,
+.equation.lie,
+.page a.lie {
+  background: var(--r31-lie);
+}
+.env.cible,
+.equation.cible {
+  background: #f2f4fa;
+}
+
+/* Notes marginales (\marginpar). */
+.marge {
+  position: absolute;
+  top: 0.2em;
+  left: calc(100% + 1.2rem);
+  width: 8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: 12px;
+  font-style: normal;
+  line-height: 1.25;
+  text-align: left;
+  hyphens: manual;
+  color: #333333;
+}
+.marge-statut {
+  font-style: italic;
+}
+.statut-refute .marge-statut {
+  font-weight: bold;
+}
+.marge-conf {
+  font-variant-numeric: tabular-nums;
+  color: var(--r31-gris);
+}
+.page a.marge-fig.absent {
+  color: #8a8a8a;
+  cursor: default;
+  text-decoration: none;
+}
+.colophon {
+  margin-top: 3em !important;
+  font-size: 0.8em;
+  text-align: center;
+  color: var(--r31-gris);
+}
+
+/* ─── Écrans étroits : figure au-dessus, notes marginales en ligne ─────────── */
+
+@media (max-width: 1100px) {
+  body {
+    grid-template-columns: 100%;
+    grid-template-rows: 56vh minmax(0, 1fr);
+  }
+  #app {
+    border-right: 0;
+    border-bottom: 1px solid var(--r31-filet);
+  }
+  .fig-ou::after {
+    content: ' (ci-dessus)';
+  }
+}
+@media (max-width: 760px) {
+  .page {
+    padding: 1.6em 16px 4em;
+    font-size: 15px;
+  }
+  .resume {
+    margin-left: 0;
+    margin-right: 0;
+  }
+  .marge {
+    position: static;
+    width: auto;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 0 0.8em;
+    margin-bottom: 0.2em;
+  }
+  .rsn-reglages {
+    display: none;
+  }
+}

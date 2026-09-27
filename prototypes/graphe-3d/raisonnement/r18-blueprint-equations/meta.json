@@ -1,0 +1,14 @@
+{
+  "id": "r18-blueprint-equations",
+  "titre": "R18 · Blueprint · équations",
+  "resume": "Le schéma technique de R14 en couleurs, façon Blueprint d'Unreal Engine, pour un raisonnement de physique : chaque bloc montre l'équation extraite de son énoncé (composée en typographie mathématique), les sous-problèmes deviennent des boîtes de commentaire teintées avec des boîtes imbriquées, les en-têtes sont colorés par famille et les broches par grandeur physique transmise. Statut toujours codé par le trait ; cartouche dessiné sur la feuille.",
+  "idees": [
+    "Formule dans le corps du bloc, extraite de l'énoncé par une règle générique (relation et termes mathématiques autour, ou annotation $…$), variables en italique",
+    "Boîtes de commentaire par sous-problème (rectangle translucide, barre de titre colorée), boîtes imbriquées « parent.enfant » (ex. les trois conditions aux bords)",
+    "En-têtes colorés par famille (principes, hypothèses, lemmes, résultats, mesures, calculs, décisions)",
+    "Broches et liaisons colorées par la grandeur transmise (tension, vitesse, hauteur, coefficient…), symbole affiché à côté de la broche",
+    "Blocs à la taille de leur formule, colonnes de largeur variable, placement boîte par boîte",
+    "Cartouche dessiné dans le coin bas droit de la feuille, sous le schéma : il ne recouvre plus aucun bloc"
+  ],
+  "ordre": 18
+}
