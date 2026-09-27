@@ -1,0 +1,154 @@
+"""Figures 3D : Atlas exécute lui-même le script Python d'une scène (pas l'agent), dans un processus à part.
+
+- interpréteur : le Python partagé des agents (bunker.py), qui voit les paquets qu'ils ont installés ; à défaut
+  (tests, partage pas encore créé), celui du serveur ;
+- répertoire de travail : le dossier de la session, pour que le script lise les données de l'agent ;
+- environnement vidé : le minimum du système, sans aucun secret du serveur (clé Supabase, clé OpenAI…) ;
+- durée bornée (ATLAS_DELAI_FIGURE3D) : au-delà, le processus et ses descendants (le Chrome de kaleido) sont tués ;
+- sortie dans un dossier temporaire de la session, supprimé ensuite.
+
+Le lanceur (lanceur_figure3d.py) écrit `scene.json` et `vignette.png` ; la scène est vérifiée par atlas/figures3d.py.
+"""
+
+import os
+import shutil
+import signal
+import subprocess
+import sys
+import uuid
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+from .. import figures, figures3d
+from . import bunker, config
+
+LANCEUR = Path(__file__).with_name("lanceur_figure3d.py")
+SCRIPT_OCTETS_MAX = 200 * 1024
+# Variables du système transmises au script (chemins et réglages régionaux, jamais de secret). Le reste est retiré.
+SYSTEME = frozenset(
+    {
+        "PATH",
+        "LANG",
+        "LC_ALL",
+        "TZ",
+        # Windows : sans elles, ni Python ni Chrome ne démarrent correctement.
+        "SYSTEMROOT",
+        "WINDIR",
+        "COMSPEC",
+        "PATHEXT",
+        "PROGRAMFILES",
+        "PROGRAMFILES(X86)",
+        "PROGRAMW6432",
+        "PROGRAMDATA",
+        "LOCALAPPDATA",
+        "APPDATA",
+        "USERPROFILE",
+        "NUMBER_OF_PROCESSORS",
+        "PROCESSOR_ARCHITECTURE",
+    }
+)
+
+
+class ErreurScript(figures.ErreurFigure):
+    """Script refusé ou en échec ; le message (fin de la sortie d'erreur comprise) est renvoyé à l'agent."""
+
+
+@dataclass
+class Production:
+    scene: dict[str, Any]
+    """Scène vérifiée (figures3d.valider_scene)."""
+    vignette: bytes
+    """PNG de la première image, en vue plongeante."""
+    script: str
+    """Le texte du script exécuté."""
+
+
+def interpreteur() -> str:
+    partage = bunker.binaires_python() / ("python.exe" if os.name == "nt" else "python")
+    return str(partage) if partage.exists() else sys.executable
+
+
+def environnement(tmp: Path, source: dict[str, str] | None = None) -> dict[str, str]:
+    """Variables du script : celles de `SYSTEME` seulement, le Python partagé en tête du PATH, les dossiers
+    temporaires et caches dans `tmp`, et matplotlib sans fenêtre."""
+    source = dict(os.environ) if source is None else source
+    env = {k: v for k, v in source.items() if k.upper() in SYSTEME}
+    env["PATH"] = os.pathsep.join([str(bunker.binaires_python()), source.get("PATH", "")])
+    for nom in ("HOME", "TMPDIR", "TMP", "TEMP", "XDG_CACHE_HOME", "MPLCONFIGDIR"):
+        env[nom] = str(tmp)
+    return env | {"MPLBACKEND": "Agg", "PYTHONIOENCODING": "utf-8", "PYTHONDONTWRITEBYTECODE": "1"}
+
+
+def fin_sortie(texte: str, lignes: int = 40, caracteres: int = 4000) -> str:
+    """Les dernières lignes d'une sortie (la trace d'une exception est à la fin)."""
+    fin = "\n".join(texte.strip().splitlines()[-lignes:])
+    return fin[-caracteres:]
+
+
+def _tuer(proc: subprocess.Popen) -> None:
+    """Tue le processus et ses descendants (le Chrome lancé par kaleido garderait sinon les tubes ouverts)."""
+    try:
+        if os.name == "nt":
+            subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)], capture_output=True, check=False)
+        else:
+            os.killpg(proc.pid, signal.SIGKILL)
+    except OSError:
+        proc.kill()
+
+
+def _lire_script(script: str, session: Path) -> tuple[Path, str]:
+    racine = session.resolve()
+    chemin = (racine / script).resolve()
+    if not chemin.is_relative_to(racine):
+        raise ErreurScript(f"Le script doit être dans le dossier de la session : {script}.")
+    if chemin.suffix != ".py" or not chemin.is_file():
+        raise ErreurScript(f"Script introuvable : {script} (fichier .py, chemin relatif au dossier de la session).")
+    if chemin.stat().st_size > SCRIPT_OCTETS_MAX:
+        raise ErreurScript(f"Script trop long : {SCRIPT_OCTETS_MAX // 1024} Ko au plus (lis les données d'un fichier).")
+    try:
+        return chemin, chemin.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        raise ErreurScript("Le script doit être en UTF-8.") from None
+
+
+def produire(script: str, session: Path, delai: int | None = None) -> Production:
+    """Exécute `script` (chemin relatif à `session`) et renvoie la scène vérifiée, sa vignette et le script."""
+    chemin, texte = _lire_script(script, session)
+    delai = delai or config.DELAI_FIGURE3D
+    sortie = session / ".tmp" / f"figure3d-{uuid.uuid4().hex}"
+    sortie.mkdir(parents=True)
+    try:
+        proc = subprocess.Popen(
+            [interpreteur(), str(LANCEUR), str(chemin), str(sortie)],
+            cwd=session,
+            env=environnement(sortie),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            start_new_session=os.name != "nt",
+            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0,
+        )
+        try:
+            sortie_std, erreurs = proc.communicate(timeout=delai)
+        except subprocess.TimeoutExpired:
+            _tuer(proc)
+            try:
+                proc.communicate(timeout=10)
+            except subprocess.TimeoutExpired:
+                pass
+            raise ErreurScript(
+                f"Script arrêté après {delai} s : allège le calcul (moins d'images, maillage plus grossier)."
+            ) from None
+        if proc.returncode:
+            detail = fin_sortie(erreurs.decode("utf-8", "replace") or sortie_std.decode("utf-8", "replace"))
+            raise ErreurScript(f"Le script a échoué (code {proc.returncode}) :\n{detail}")
+        try:
+            scene = figures3d.valider_scene((sortie / "scene.json").read_bytes())
+            vignette = (sortie / "vignette.png").read_bytes()
+        except FileNotFoundError:
+            raise ErreurScript("Le script s'est terminé sans produire la scène (sys.exit avant la fin ?).") from None
+        figures.examiner_image(vignette)
+        return Production(scene=scene, vignette=vignette, script=texte)
+    finally:
+        shutil.rmtree(sortie, ignore_errors=True)
