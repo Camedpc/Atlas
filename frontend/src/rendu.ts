@@ -3,6 +3,16 @@ import DOMPurify from 'dompurify'
 import katex from 'katex'
 import 'katex/dist/katex.min.css'
 import { marked } from 'marked'
+import { colorer } from './coloration'
+
+marked.use({
+  renderer: {
+    code({ text, lang }) {
+      const langage = (lang ?? '').trim().split(/\s+/)[0]?.toLowerCase() || null
+      return `<pre><code class="hl${langage ? ` language-${langage}` : ''}">${colorer(text, langage)}</code></pre>\n`
+    },
+  },
+})
 
 export function rendre(texte: string): string {
   // Les formules sont rendues à part : marked abîmerait leurs `_` et `*`.

@@ -7,6 +7,7 @@
 // y sont signalés « → Fig. 4 »). Un document introuvable sur le disque est tracé en rouge pointillé.
 
 import type { ApercuDocument, DocumentVue } from './api'
+import { colorer, langageDe } from './coloration'
 import { echapper, enLigne, texteBrut } from './formules'
 import { natureDocument, type Bloc } from './graphe-modele'
 
@@ -121,8 +122,11 @@ function corps(d: DocumentVue, figures: Map<string, string>): string {
     return `<div class="gr-doc-arbo">${lignes.join('')}</div>`
   }
   if (a.extrait?.length && (nature === 'script' || !a.pages)) {
-    const classe = nature === 'script' ? 'gr-doc-code' : 'gr-doc-texte'
-    return `<div class="${classe}">${a.extrait.slice(0, 6).map((l) => `<div>${echapper(l) || '&nbsp;'}</div>`).join('')}</div>`
+    const langage = langageDe(d.chemin)
+    if (nature === 'script' || langage) {
+      return `<div class="gr-doc-code hl">${colorer(a.extrait.slice(0, 6).join('\n'), langage)}</div>`
+    }
+    return `<div class="gr-doc-texte">${a.extrait.slice(0, 6).map((l) => `<div>${echapper(l) || '&nbsp;'}</div>`).join('')}</div>`
   }
   if (a.colonnes?.length) {
     return `<div class="gr-doc-code"><div class="gr-doc-plus">colonnes</div>${a.colonnes.map((c) => `<div>${echapper(c)}</div>`).join('')}</div>`
