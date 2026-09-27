@@ -15,8 +15,9 @@ explicitement. Aucun outil ne supprime un nœud : un doublon reste pour toujours
 - Réutilise par id tout nœud existant dont l'énoncé vaut encore (définitions, lois, hypothèses, résultats qui ne
   dépendent pas de ce qui change), même si le rapport le reformule.
 - Quand le rapport change une hypothèse ou pose une alternative, marque l'embranchement par un nœud `decision`
-  qui nomme le choix (ex. « Réaction du tas : nulle ou non nulle ? »), placé juste avant les deux hypothèses :
-  l'existante garde sa branche telle quelle, la nouvelle ne porte que les nœuds dont une prémisse change.
+  (voir « Décisions ») dont chaque alternative pointe vers sa branche : l'existante garde sa branche telle
+  quelle, la nouvelle ne porte que les nœuds dont une prémisse change. Si les deux branches restent étudiées, les
+  deux alternatives sont `retenue`.
 - Place les nouveaux nœuds dans les cadres existants (la nouvelle hypothèse dans le cadre des hypothèses, le
   nouveau résultat près de l'ancien dans la conclusion) ; un nouveau cadre seulement pour un nouveau
   sous-problème. Jamais de second cadre « Hypothèses de modélisation » ni de seconde « Conclusion ».
@@ -71,6 +72,28 @@ ses conditions), chaque démonstration un argument complet, aussi détaillés qu
 - **Noms** : titre court qui dit ce que le nœud établit (« Tension au point de prise », « Vitesse limite »),
   jamais « Résultat 3 » : la numérotation est automatique. L'énoncé porte la formule.
 
+# Décisions (losanges)
+
+Chaque décision du rapport (section « Décisions », entrées « Décision » du journal) devient un nœud `decision` :
+un losange qui porte son nom ; sa fiche montre la question, les options retenues et les options écartées (×).
+Réservé aux vrais choix du modèle ou de la méthode entre des options explicites ; une simple hypothèse reste un
+nœud `hypothese`.
+
+- `nom` : deux à quatre mots (« Origine de la fontaine », « Estimer α ») ; `enonce` vide (résumé automatique).
+- `details` : `{"question": …, "alternatives": [{"libelle": …, "retenue": true, "groupes": [ids], "noeuds": [ids]},
+  {"libelle": …, "retenue": false, "raison": …, "groupes": [ids], "noeuds": [ids]}], "raison": …}`. Libellés
+  courts, avec leur formule (« Élan seul ($\alpha = 0$) ») ; chaque option écartée dit pourquoi en une phrase.
+- Une branche = un cadre : quand une option ouvre une suite de raisonnement, range cette suite dans son propre
+  cadre et vise-le avec `groupes` ; un losange pointe ainsi vers deux cadres (ex. « Sans réaction du tas »,
+  « Avec réaction du tas »), ou vers le cadre `piste_abandonnee` de l'option écartée. `noeuds` pour une option qui
+  tient en un ou deux nœuds (l'hypothèse qui la traduit, le calcul qu'elle impose).
+- Deux options peuvent être retenues quand le rapport suit les deux pistes en parallèle : formule alors la
+  question en conséquence (« Réaction nulle ou non ? On suit les deux »).
+- Le losange pointe vers ce que visent ses options : flèche pleine vers une retenue, tiretée × vers une écartée.
+- Pas de démonstration pour une décision, et ne la cite pas dans `justifie_par` : elle n'est pas une prémisse,
+  elle pointe. Range-la dans le cadre où le choix se pose (`groupe`) ; la mise en page la met à gauche de ce
+  qu'elle vise.
+
 # Figures
 
 Tout ce que le rapport montre doit apparaître dans le graphe : ajoute chaque figure (section « Figures » du
@@ -85,6 +108,22 @@ fichier introuvable).
   fournit). L'image PNG du script en plus, si elle existe. `lire_figure` te montre une figure existante.
 - Jamais de points inventés : une série « mesures » ne contient que des valeurs mesurées ou calculées par les
   scripts, et `source` dit d'où elles viennent. Des valeurs illustratives le disent dans la légende.
+
+# Illustrations
+
+Illustre le problème et les assertions importantes par des images générées : c'est ce qui fait comprendre le
+graphe d'un coup d'œil. Une fois le graphe posé, lance des sous-agents `experimentateur` (avec
+`fork_turns = "none"`, en parallèle, un par image) pour les générer, puis rattache chaque image avec `creer_figure`.
+- Quoi : le dispositif ou la situation physique (sur l'hypothèse ou la définition qui les pose), et deux à quatre
+  assertions clés (le mécanisme d'un résultat, une configuration limite, la différence entre deux branches d'une
+  décision). Pas une image par nœud.
+- La demande au sous-agent : ce que l'image doit montrer, précisément (objets, grandeurs à annoter avec leurs
+  symboles du graphe), le style (schéma de manuel scientifique, fond blanc, trait noir, peu de couleurs, pas de
+  texte superflu) et le fichier à produire (`docs_session/illustrations/<nom>.png`). Il utilise l'outil natif de
+  génération d'images, regarde le résultat et le refait s'il est faux.
+- Une illustration n'est pas une preuve : `legende` dit ce qu'elle montre et qu'elle est générée (« Illustration
+  générée : … »), `source` « image générée ». Jamais de valeurs chiffrées ou de courbes inventées dessus : les
+  données passent par les figures tracées.
 
 # Règles
 
@@ -105,5 +144,5 @@ fichier introuvable).
 
 - Nœuds créés et nœuds existants réutilisés (ids et nombres), par cadre, et le nœud `decision` d'embranchement.
 - Démonstrations ajoutées (nombre, et celles qui réfutent une piste).
-- Figures ajoutées (id, nœud illustré).
+- Figures ajoutées (id, nœud illustré), dont les illustrations générées.
 - Manques et ambiguïtés du rapport.

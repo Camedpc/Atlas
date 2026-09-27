@@ -9,7 +9,7 @@ from collections.abc import Callable
 
 from postgrest import SyncSelectRequestBuilder
 
-from . import figures, graphe, vue
+from . import decisions, figures, graphe, vue
 from .client import supabase
 from .modeles import (
     Demonstration,
@@ -94,7 +94,10 @@ def charger_etat_vue(projet_id: str) -> vue.EtatVue:
                 # Le rôle le plus fort l'emporte d'une démonstration à l'autre.
                 if p not in roles or vue.ROLES.index(role) < vue.ROLES.index(roles[p]):
                     roles[p] = role
-        noeuds[n.id] = vue.NoeudVue(n.id, n.nom, n.type, n.statut, tuple(roles.items()), n.admis)
+        resume = decisions.resume(n.details) if n.type == "decision" else ""
+        noeuds[n.id] = vue.NoeudVue(n.id, n.nom, n.type, n.statut, tuple(roles.items()), n.admis, resume)
+    # Une décision se place avant les nœuds qui découlent de ses alternatives.
+    vue.relier_decisions(noeuds, {n.id: decisions.commandes(n.details) for n in g.noeuds if n.type == "decision"})
 
     def lignes(table: str) -> list[dict]:
         return supabase().table(table).select("*").eq("projet_id", projet_id).execute().data
@@ -114,7 +117,7 @@ def charger_etat_vue(projet_id: str) -> vue.EtatVue:
                 fid, f["colonne"], f["ligne"], f["groupe_id"], f["largeur"], f["hauteur"], f["fixe"]
             )
 
-    return vue.EtatVue(
+    etat = vue.EtatVue(
         noeuds=noeuds,
         groupes={
             r["id"]: vue.Groupe(r["id"], r["nom"], r["parent_id"], r["genre"], r["couleur"], r["replie"], r["ordre"])
@@ -124,6 +127,9 @@ def charger_etat_vue(projet_id: str) -> vue.EtatVue:
         etiquettes={r["id"]: vue.Etiquette(r["id"], r["nom"], r["couleur"]) for r in lignes("etiquettes")},
         marques={(r["noeud_id"], r["etiquette_id"]) for r in lignes("noeuds_etiquettes")},
     )
+    # Une décision qui vise un cadre se place avant lui.
+    vue.relier_cadres(etat, {n.id: decisions.cadres(n.details) for n in g.noeuds if n.type == "decision"})
+    return etat
 
 
 COLONNES_VUE_FIGURE = "id, noeud_id, titre, groupe_id, colonne, ligne, largeur, hauteur, fixe"
